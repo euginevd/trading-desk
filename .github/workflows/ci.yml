@@ -1,0 +1,141 @@
+name: ci
+
+# Each app's checks on every PR, in pinned images; a job's checks run only once its apps exist.
+# A PR runs only the jobs its changed files need: a docs-only PR skips them all, and a skipped
+# required check counts as passed. Not rerun on main: the ruleset makes each PR test against the
+# latest main before it merges, so the merged code is what was tested.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  # Which apps the PR touches. A file outside the known paths runs every job, and so does a
+  # failure here: the jobs below run unless this job says "false".
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      python: ${{ steps.diff.outputs.python }}
+      web: ${{ steps.diff.outputs.web }}
+      workflows: ${{ steps.diff.outputs.workflows }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 2
+      - id: diff
+        name: Apps changed by this PR
+        run: |
+          # HEAD is the PR merged into main; its first parent is main.
+          files=$(git diff --name-only HEAD^1 HEAD) || { printf 'python=true\nweb=true\nworkflows=true\n' >> "$GITHUB_OUTPUT"; exit 0; }
+          python=false; web=false; workflows=false
+          while IFS= read -r f; do
+            case "$f" in
+              "") ;;
+              apps/web/*) web=true ;;
+              apps/* | *.py | pyproject.toml | uv.lock | .python-version) python=true ;;
+              *.md | docs/* | guides/* | LICENSE | infra/* | .vscode/*) ;;
+              .github/workflows/* | *.sh) workflows=true; python=true; web=true ;;
+              *) python=true; web=true ;;
+            esac
+          done <<< "$files"
+          echo "$files"
+          echo "python=$python web=$web workflows=$workflows"
+          printf 'python=%s\nweb=%s\nworkflows=%s\n' "$python" "$web" "$workflows" >> "$GITHUB_OUTPUT"
+
+  # Kickoff is finished once spec.md names a profile: from then on a leftover *(to fill in)* in docs/
+  # is a decision nobody made, so the PR fails until it's written or the line deleted. It also holds the
+  # docs to their length.
+  kickoff:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: No to-fill-in lines once a profile is set
+        run: |
+          grep -qE '^Profile: .(prototype|production).' docs/spec.md || { echo "No profile yet: kickoff isn't finished, nothing to check."; exit 0; }
+          if grep -rnF --include='*.md' '*(to fill in)*' docs/; then
+            echo "::error::Kickoff left the lines above unfilled (AGENTS.md rule 13): write each one, or delete it."
+            exit 1
+          fi
+          echo "Every to-fill-in line in docs/ is written."
+      # Every session reads AGENTS.md and docs/, so their length is checked, not left to a rule (code-standards 23).
+      - name: Docs within their length
+        run: |
+          code=0
+          check() {
+            words=$(wc -w < "$1")
+            [ "$words" -le "$2" ] || { echo "::error file=$1::$1 is $words words, over its $2 (code-standards 23): cut or link."; code=1; }
+          }
+          check AGENTS.md 2100
+          check README.md 1200
+          for f in docs/*.md; do check "$f" 1000; done
+          for f in guides/*.md; do check "$f" 2500; done
+          exit $code
+
+  # Agents edit the workflows and scripts (AGENTS.md rule 10), so each change is linted: actionlint for
+  # syntax, expressions and the shell in run steps, zizmor for injection, credentials and permissions,
+  # shellcheck for the repo's scripts at warning level. All from pinned images, offline.
+  workflows:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.workflows != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: actionlint, zizmor and shellcheck
+        run: |
+          code=0
+          mapfile -t scripts < <(git ls-files '*.sh')
+          docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color || code=1
+          docker run --rm -v "$PWD:/repo" -w /repo ghcr.io/zizmorcore/zizmor:1.32.0@sha256:3014cc8f68f663935f69b3c3e0e41f5ce102b268d97db13db0f62208747f860d --offline .github/workflows || code=1
+          docker run --rm -v "$PWD:/repo" -w /repo koalaman/shellcheck:v0.11.0@sha256:61862eba1fcf09a484ebcc6feea46f1782532571a34ed51fedf90dd25f925a8d -S warning "${scripts[@]}" || code=1
+          exit $code
+
+  python:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.python != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # uv's own image, so uv is pinned by digest along with Python.
+    container: ghcr.io/astral-sh/uv:0.13.6-python3.13-trixie-slim@sha256:e586c1c65b7071aec78f02c5587c76c5011159cd76b3d6f1255f40e48e850abc
+    env:
+      UV_PYTHON_DOWNLOADS: never
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Format, lint, types and tests
+        if: hashFiles('pyproject.toml') != ''
+        run: |
+          uv sync --locked
+          uv run ruff format --check
+          uv run ruff check
+          uv run pyright
+          uv run pytest -q
+
+  web:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.web != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container: node:24.22.1-bookworm-slim@sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9cbd605c
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Lint, types, tests and build
+        if: hashFiles('apps/web/package-lock.json') != ''
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build

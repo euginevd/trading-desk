@@ -1,0 +1,51 @@
+name: codeql
+
+# CodeQL code scanning, in place of GitHub's default setup so a docs-only PR can skip it.
+# Every other PR, every change to main and a weekly run analyse the whole repo.
+# Free on public repos; a private repo needs GitHub Advanced Security, so it is skipped there.
+on:
+  pull_request:
+    paths-ignore: ["**/*.md", docs/**, guides/**, LICENSE]
+  push:
+    branches: [main]
+  # Operate: weekly (early Monday, Sydney time), so new CodeQL queries reach code that hasn't changed.
+  schedule:
+    - cron: "0 20 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    if: ${{ !github.event.repository.private }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [actions, python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # JavaScript and TypeScript are analysed once a web app exists.
+      - id: present
+        env:
+          LANGUAGE: ${{ matrix.language }}
+        run: |
+          if [ "$LANGUAGE" != javascript-typescript ] || [ -n "$(git ls-files 'apps/*.js' 'apps/*.jsx' 'apps/*.ts' 'apps/*.tsx')" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - if: steps.present.outputs.run == 'true'
+        uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: none
+      - if: steps.present.outputs.run == 'true'
+        uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          category: /language:${{ matrix.language }}

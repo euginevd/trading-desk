@@ -1,0 +1,46 @@
+# Weekly update PRs for pinned versions, one per ecosystem; a release must be 7 days old (AGENTS.md rule 24).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups: { actions: { patterns: ["*"] } }
+  - package-ecosystem: uv
+    directory: /
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups: { python: { patterns: ["*"] } }
+  - package-ecosystem: terraform
+    directories: ["/infra/aws/*"]
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups: { terraform: { patterns: ["*"] } }
+  # Add one entry per ecosystem a new app brings (AGENTS.md rule 10), in the same form. An `ignore` holds
+  # back updates that need a person, with the reason beside it. For example:
+  # - package-ecosystem: npm
+  #   directories: ["/apps/web"]
+  #   schedule: { interval: weekly }
+  #   cooldown: { default-days: 7 }
+  #   groups: { web: { patterns: ["*"] } }
+  #   # Majors wait until the lint plugins support them; upgrade those by hand.
+  #   ignore:
+  #     - dependency-name: "*"
+  #       update-types: ["version-update:semver-major"]
+  # - package-ecosystem: docker
+  #   directories: ["/apps/*"]
+  #   schedule: { interval: weekly }
+  #   cooldown: { default-days: 7 }
+  #   groups: { images: { patterns: ["*"] } }
+  #   # The runtime image's Python must match the build stage's; a minor bump breaks the copied venv.
+  #   ignore:
+  #     - dependency-name: python
+  #       update-types: ["version-update:semver-minor", "version-update:semver-major"]
+  # - package-ecosystem: docker-compose
+  #   directory: /
+  #   schedule: { interval: weekly }
+  #   cooldown: { default-days: 7 }
+  #   # A major PostgreSQL upgrade needs a dump and restore of the data volume; do it deliberately.
+  #   ignore:
+  #     - dependency-name: postgres
+  #       update-types: ["version-update:semver-major"]

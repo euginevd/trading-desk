@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "attribution": {
+    "commit": "",
+    "pr": "",
+    "sessionUrl": false
+  },
+  "permissions": {
+    "allow": [
+      "Bash(uv sync*)",
+      "Bash(uv run *)",
+      "Bash(uv lock*)",
+      "Bash(terraform fmt*)",
+      "Bash(terraform init -backend=false*)",
+      "Bash(terraform validate*)",
+      "Bash(npm ci*)",
+      "Bash(npm test*)",
+      "Bash(npm run *)",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git switch *)",
+      "Bash(git checkout -b *)",
+      "Bash(bash scripts/setup.sh --check*)",
+      "Bash(bash scripts/pr-findings.sh *)",
+      "Bash(bash .lefthook/pre-push-scan.sh*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr checks*)",
+      "Bash(gh pr list*)",
+      "Bash(gh run view*)",
+      "Bash(gh run list*)"
+    ],
+    "deny": [
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)",
+      "Bash(git push *+*)",
+      "Bash(* --no-verify*)",
+      "Bash(terraform apply*)",
+      "Bash(terraform destroy*)",
+      "Bash(terraform * apply*)",
+      "Bash(terraform * destroy*)",
+      "Bash(gh pr review*--approve*)",
+      "Bash(gh api *rulesets*)",
+      "Bash(bash scripts/protect-main.sh*)",
+      "Read(**/*.tfvars)",
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.*.local)",
+      "Read(**/.env.dev)",
+      "Read(**/.env.prod)",
+      "Read(**/.env.production)"
+    ]
+  }
+}

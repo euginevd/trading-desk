@@ -1,4 +1,33 @@
-# Secrets
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
+*.tfvars
+override.tf
+*_override.tf
+crash*.log
+.terraformrc
+terraform.rc
+*.zip
 .env
 .env.*
 !.env.example
+.venv/
+node_modules/
+dist/
+local/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage/
+*.tsbuildinfo
+.claude/settings.local.json
+.claude/worktrees/
+.DS_Store
+# Browser test output
+test-results/
+playwright-report/
+
+# Local notes and drafts, never committed (the SDLC explainer and its diagram renderer)
+.local/
