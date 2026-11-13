@@ -20,7 +20,7 @@ The same for every project; the business and the project are in the docs below. 
 
 ## Commands
 
-6. The developer is on Windows with VS Code; the agent runs local commands itself (PowerShell or Git Bash). A step the developer does by hand is one line of what and why, then a command to paste (bash for AWS CloudShell, known-mistakes 6) or the settings page's link.
+6. The developer is on Windows with VS Code. The agent runs local commands itself (PowerShell or Git Bash). A cloud command for the developer is bash for AWS CloudShell (known-mistakes 6). A script that leaves a step on the web ends by listing it with the page's link.
 7. Setup, once per clone, run by the user: `bash scripts/setup.sh`. In a cloud session, with no user at the machine, the agent runs it. Check only: `bash scripts/setup.sh --check`, at kickoff and whenever a tool or the push hook is missing; report what it found.
 8. On every push: `bash .lefthook/pre-push-scan.sh`.
 9. Terraform, in `infra/aws/<unit>/`: `terraform fmt -recursive && terraform init -backend=false && terraform validate`.
