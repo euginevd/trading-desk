@@ -20,6 +20,8 @@ public=$(gh repo view --json visibility --jq '.visibility == "PUBLIC"')
 
 # Runs one gh api call quietly; a failure shows its error and is counted.
 failed=0
+# What only a person can do, printed last: one line each, what to do and the page to do it on.
+by_hand=()
 api() { gh api "$@" >/dev/null || failed=$((failed + 1)); }
 
 # Squash merges only, and merged branches are deleted.
@@ -43,8 +45,8 @@ JSON
   api -X PATCH "repos/$repo/code-scanning/default-setup" -f state=not-configured
   # Anyone can open a PR on a public repo: their workflow runs wait for your approval.
   api -X PUT "repos/$repo/actions/permissions/fork-pr-contributor-approval" -f approval_policy=all_external_contributors
-  # No API for these, so the script can only remind you.
-  echo "By hand, in Settings > Advanced Security: turn on everything; the AI scans and Agentic autofix use AI credits."
+  # No API for the rest of the page, so the script can only point at it.
+  by_hand+=("Turn on everything (the AI scans and Agentic autofix use AI credits): https://github.com/$repo/settings/security_analysis")
 fi
 
 # Updates the ruleset in place when it exists, so a change here reaches repos made earlier.
@@ -99,7 +101,8 @@ for target in "${targets[@]}"; do
     custom=$(gh api "repos/$repo/environments/$env" --jq '.deployment_branch_policy.custom_branch_policies // false')
     branches=$(gh api "repos/$repo/environments/$env/deployment-branch-policies" --jq '[.branch_policies[].name] | join(",")' 2>/dev/null)
     if [ "$custom" != true ] || [ "$branches" != main ]; then
-      echo "$env deploys from more than main: in Settings > Environments > $env, set Deployment branches to main only."
+      echo "$env deploys from more than main."
+      by_hand+=("Open $env and set Deployment branches to main only: https://github.com/$repo/settings/environments")
       failed=$((failed + 1))
     fi
   else
@@ -110,8 +113,19 @@ JSON
   fi
 done
 
+if [ "$reviews" -gt 0 ]; then
+  by_hand+=("Give the second reviewer write access: https://github.com/$repo/settings/access")
+  by_hand+=("On each apply environment, add them as a required reviewer and tick Prevent self-review: https://github.com/$repo/settings/environments")
+fi
+
 if [ "$failed" -gt 0 ]; then
   echo "$failed settings failed on $repo; see the errors above."
-  exit 1
+else
+  echo "Settings and ruleset 'main' applied to $repo: $reviews approval(s) needed to merge; ${targets[*]/#/aws-} apply from main only."
 fi
-echo "Settings and ruleset 'main' applied to $repo: $reviews approval(s) needed to merge; ${targets[*]/#/aws-} apply from main only."
+if [ "${#by_hand[@]}" -gt 0 ]; then
+  echo
+  echo "Left to do by hand:"
+  for i in "${!by_hand[@]}"; do echo "  $((i + 1)). ${by_hand[$i]}"; done
+fi
+[ "$failed" -eq 0 ]
