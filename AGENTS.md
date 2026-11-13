@@ -46,11 +46,11 @@ The same for every project; the business and the project are in the docs below. 
 ## Workflow
 
 13. Kickoff (G0), once per project made from the template:
-    - Ask the profile, unless the notes give it, and record it in `spec.md`. It's the one question a prototype's kickoff asks.
+    - Ask the profile and the repo type (personal or portfolio: public; work: private), unless the notes give them, and record both in `spec.md`; a prototype's kickoff asks nothing else. Then the user lists what they want in `TODO.md`; draft the spec from it and keep both in step.
     - Replace every *(to fill in)* line in `docs/`, fixing numbered references that move, or delete a doc that doesn't apply. A prototype keeps the starter `threat-model.md` and `costs.md`, deleting only their *(to fill in)* lines.
     - Pick the deploy target by a short spike: list what each managed service refuses or limits, in `decisions.md`.
     - With UI: `design-system.md` and a mockup of the MVP's main screens in `docs/mockups/mvp.html`.
-    - Record a decision on the profile, who owns the code and the trade-offs in guide 03. A prototype accepts them all, deletes the `.env` deny rules from `.claude/settings.json` (rule 26 lets it read `.env`), and keeps building; the user reviews the docs when they like. Production fixes each trade-off or names who accepts it, and the user approves `spec.md` (Business section included), the design system and mockup, `threat-model.md` and `costs.md`.
+    - Record a decision on the profile, who owns the code and the trade-offs in guide 03. A prototype accepts them all, deletes the `.env` deny rules from `.claude/settings.json` (rule 26 lets it read `.env`), and keeps building. Production fixes each trade-off or names who accepts it, and the user approves `spec.md` (Business section included), the design system and mockup, `threat-model.md` and `costs.md`.
 14. Plan (G1), before code: `docs/plan-<name>.md` from [docs/skeleton-plan.md](docs/skeleton-plan.md), a page or two.
     - Production also: for users, data, auth or endpoints, the threat model and its data flow diagram; for a new or changed screen, a mockup in `docs/mockups/<name>.html` with loading, empty and error states.
     - No plan for a few dozen lines that touch no users, data, auth, endpoints, infrastructure or screens.
@@ -60,12 +60,12 @@ The same for every project; the business and the project are in the docs below. 
     - A fresh subagent reviews the diff against `code-standards.md`, the threat model's top risks and, for UI, its mockup and `design-system.md`; fix what it blocks. Prototype: one review of the whole branch, before the PR.
     - Update `docs/features.md` and `TODO.md` in the same change. A prototype commits each finished piece; production waits to be asked (the box at the top).
 16. PR (G2): a prototype opens it once the local checks pass and either a *Build* request is done or the user says the batch is ready; production once the developer asks.
-    - One branch per work session, one PR per branch. Small changes, docs and follow-ups are commits on that branch: they join the open PR or wait for the next one, and never open their own.
+    - One branch per work session, one PR per branch. Small changes, docs and follow-ups are commits on that branch: they join the open PR or wait for the next one.
     - Check the branch has no open PR before opening one.
     - The body has a Security line: threat model changes, new skips, packages or permissions.
     - Findings: `bash scripts/pr-findings.sh <pr>`. Fix critical and high at their cause, medium and low when real; answer the rest and resolve the thread (`bash scripts/pr-findings.sh resolve <thread-id> "<reply>"`). A skip is a last resort, with a one-line reason.
     - Merge: `gh pr update-branch` if `main` has moved, squash-merge (prototype once checks pass, production once approved), then delete the branch locally and on GitHub.
-17. Local first: build and test locally, with stand-ins for cloud services; the user bootstraps AWS once happy with it. Then cloud work deploys early:
+17. Build and test locally first, with stand-ins for cloud services; the user bootstraps AWS once happy with it. Then cloud work deploys early:
     - A new cloud service starts with a walking skeleton: phase 1 applies its smallest resource to `dev` and calls it once.
     - At most one new AWS service per PR until the last one has applied.
     - Test against the target engine's limits, not only its local stand-in (known-mistakes 16 to 18).
@@ -85,7 +85,7 @@ The same for every project; the business and the project are in the docs below. 
 27. Environments: a prototype has `dev` only, in one account, and never names, configures or documents anything as `prod`; its settings tear down cleanly (no deletion protection). Production has `dev` then `prod`, each in its own account. Teardown keeps the bootstrap until the agent confirms the account is empty.
 28. Permissions: every bootstrap has an AWS Budgets alert (`BudgetEmail`) and a read-only troubleshoot role with a CLI user that can only assume it. A prototype's may grant wide while building (whole AI and workflow services, limited by region or project name, commitments denied), recorded as a decision with a permissions audit in `TODO.md`. Production starts at least privilege.
 29. Commits, PRs, PR comments and review replies carry the human author only: no AI co-author, attribution or "Generated with" lines, in the text or a footer. `.claude/settings.json` turns Claude Code's off; another agent's must be turned off too. Commits are one line.
-30. One repo per product: apps in `apps/<app>/`, Terraform in `infra/aws/<unit>/`, an app's unit named after it. `infra/aws/bootstrap/` is CloudFormation only the user deploys. A personal or portfolio repo is public from the start, so nothing secret goes in code or Terraform; a work repo stays private.
+30. One repo per product: apps in `apps/<app>/`, Terraform in `infra/aws/<unit>/`, an app's unit named after it. `infra/aws/bootstrap/` is CloudFormation only the user deploys. A public repo keeps secrets out of code and Terraform.
 
 ## Known mistakes
 

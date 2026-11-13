@@ -36,7 +36,8 @@ Gate G0, once per project. `docs/` starts by describing the health-check API the
 
 | You say | The agent | You |
 |---------|-----------|-----|
-| *"Kick off `<name>`: `<notes on the business, problem, users and stack>`"* | Checks the machine, asks the profile, drafts `spec.md` with its Business section | Correct it until it's right |
+| *"Kick off `<name>`: `<notes on the business, problem, users and stack>`"* | Checks the machine, asks the profile and the repo type | Answer, then list what you want in `TODO.md` |
+| | Drafts `spec.md`, Business section included, from `TODO.md`, and keeps the two in step | Correct it until it's right |
 | | Runs a short spike on the deploy target: what each managed service refuses or limits, into `decisions.md` | Agree the target |
 | | With UI: drafts `design-system.md` and mocks up the MVP's main screens in `docs/mockups/mvp.html` | Open the mockup; ask for changes, then approve |
 | | Extends `threat-model.md` and `costs.md`; a prototype keeps the starter's | `production`: approve each |

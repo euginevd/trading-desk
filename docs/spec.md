@@ -19,6 +19,8 @@ Who the business is, unnumbered so the spec's numbers stay put. The same for eve
 
 Profile: `prototype`, with two limits of its own on top (decisions 1 and 2): the agent never reads an exchange key, and nothing places a real order until a new decision says so.
 
+Repo: `personal`, public (decision 5).
+
 1. Name: `trading-desk`
 2. Problem: the owner's holdings, orders and bots sit in separate exchange apps, each with its own screens and its own idea of profit, so there's no single view of what's held, what it's worth and what's running.
 3. Goal: one sign-in shows everything held and everything running, and each later stage adds a way to act on it from the same place, with the same controls.
