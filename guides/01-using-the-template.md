@@ -76,7 +76,7 @@ The same loop, stopping at gates G1 to G4 ([AGENTS.md](../AGENTS.md) rule 12). T
 
 | When | You say | What happens |
 |------|---------|--------------|
-| A small fix touching no users, data, auth, endpoints, infrastructure or screens | *"Fix `<the problem>`"* | No plan, the same checks |
+| A small fix touching no users, data, auth, endpoints, infrastructure or screens | *"Fix `<the problem>`"* | No plan, the same checks; it waits on the branch for the next PR |
 | Dependabot's weekly PRs | *"Check the Dependabot PRs"* | The agent fixes what the checks find |
 | A scan on `main` or the weekly scan fails | *"Fix the failed scan on main"* | The agent fixes each finding at its cause |
 | A new AWS service | Production: answer when the agent asks. A prototype's agent decides | It adds the permissions to `bootstrap.yaml`; you redeploy the stack before the merge |

@@ -49,3 +49,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 
 26. Two services that create the same tables at start (LangGraph's checkpointer and store) race on Postgres's catalog and one fails with `UniqueViolation` on `pg_type`: retry the setup a few times on `UniqueViolation`, `DuplicateTable` and `DuplicateObject`.
 27. Semgrep blocks `urllib` and `http.client` calls to a URL from a variable, even when the scheme is checked: use `httpx`.
+
+## Pull requests
+
+28. A prototype opened a PR for each small change: commit to the session's branch and open one PR only when the user says the batch is ready, or at the end of the session (AGENTS.md rule 16).
