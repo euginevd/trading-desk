@@ -1,0 +1,6 @@
+* text=auto
+# Hook scripts run in bash; CRLF breaks them on Windows clones.
+*.sh text eol=lf
+# Lock files are generated: collapsed in PR diffs.
+uv.lock linguist-generated=true
+.terraform.lock.hcl linguist-generated=true

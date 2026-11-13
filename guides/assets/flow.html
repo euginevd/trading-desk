@@ -1,0 +1,108 @@
+<!-- Source of flow.png and flow-dark.png. Render at 1200px wide, deviceScaleFactor 2; add #dark to the URL for the dark one. -->
+<!doctype html>
+<html><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=block" rel="stylesheet">
+<style>
+:root{--bg:#ffffff;--ink:#1f2328;--muted:#59636e;--faint:#8c959f;--line:#d8dee4;--card:#f6f8fa;
+ --blue:#0f7b6c;--blue-soft:#e3f4f1;--amber:#d4512a;--amber-soft:#fdeee8;--amber-line:#f3b49f;--track:#c9d1d9}
+body.dark{--bg:#0d1117;--ink:#e6edf3;--muted:#9198a1;--faint:#656c76;--line:#262c36;--card:#151b23;
+ --blue:#3fd1b5;--blue-soft:#0f2a27;--amber:#ff8a65;--amber-soft:#2d1a14;--amber-line:#6e3624;--track:#30363d}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1200px;background:var(--bg);color:var(--ink);font-family:Inter,sans-serif;padding:56px 60px 48px;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace;text-transform:uppercase;letter-spacing:.14em;font-weight:700;font-size:11px}
+.top{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:40px}
+.eyebrow{color:var(--muted);display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.eyebrow:before{content:"";width:28px;height:1.5px;background:var(--faint)}
+h1{font-family:'Instrument Serif',serif;font-weight:400;font-size:58px;line-height:1;letter-spacing:-.01em}
+.sub{color:var(--muted);font-size:17px;margin-top:14px;max-width:620px;line-height:1.45}
+.legend{display:flex;flex-direction:column;gap:10px;font-size:13.5px;color:var(--muted)}
+.legend div{display:flex;align-items:center;gap:10px}
+.grid{display:grid;grid-template-columns:150px repeat(6,1fr);column-gap:0}
+.stage{text-align:center;padding:0 10px 18px;border-bottom:1px solid var(--line)}
+.stage .n{color:var(--faint);font-size:10.5px}
+.stage .t{font-weight:600;font-size:15.5px;margin-top:6px}
+.lane-label{display:flex;flex-direction:column;justify-content:center;padding-right:16px;border-bottom:1px solid var(--line)}
+.lane-label .k{color:var(--blue);font-size:10.5px}
+.lane-label .name{font-family:'Instrument Serif',serif;font-size:34px;line-height:1.05;margin-top:4px}
+.lane{grid-column:2 / span 6;position:relative;display:grid;grid-template-columns:repeat(6,1fr);padding:30px 0 28px;border-bottom:1px solid var(--line)}
+.track{position:absolute;top:50px;left:calc(100%/12);height:3px;background:var(--track);border-radius:2px}
+.track.solid{right:calc(100%/12)}
+.track.short{right:calc(100%/12 + 100%/6)}
+.track.dash{left:calc(100%/12*9);right:calc(100%/12);background:none;border-top:3px dashed var(--track);height:0}
+.cell{position:relative;display:flex;flex-direction:column;align-items:center;text-align:center;padding:0 8px}
+.node{height:42px;display:flex;align-items:center;justify-content:center;z-index:1}
+.dot{width:20px;height:20px;border-radius:50%;background:var(--bg);border:4px solid var(--blue)}
+.gate{width:42px;height:42px;border-radius:11px;background:var(--amber-soft);border:1.5px solid var(--amber-line);display:flex;align-items:center;justify-content:center;color:var(--amber)}
+.none{width:20px;height:20px;border-radius:50%;border:2px dashed var(--faint);background:var(--bg)}
+.who{margin-top:14px}
+.who.g{color:var(--amber)} .who.a{color:var(--blue)} .who.x{color:var(--faint)}
+.what{font-weight:500;font-size:14.5px;margin-top:6px;line-height:1.3}
+.why{color:var(--muted);font-size:13px;margin-top:4px;line-height:1.35}
+.always{margin-top:34px;display:grid;grid-template-columns:150px repeat(5,1fr);gap:12px;align-items:stretch}
+.always .lbl{display:flex;align-items:center;color:var(--muted);line-height:1.7}
+.chk{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.chk .when{color:var(--faint);font-size:10px}
+.chk .tools{font-size:13.5px;margin-top:7px;line-height:1.4;font-weight:500}
+.foot{display:flex;justify-content:space-between;margin-top:30px;color:var(--faint);font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+</style></head>
+<body>
+<div class="top">
+ <div>
+  <div class="eyebrow mono">sdlc-template</div>
+  <h1>Same pipeline. You choose where it stops.</h1>
+  <p class="sub">The profile you pick at kickoff decides which steps wait for a person. A prototype has none: the agent runs it end to end.</p>
+ </div>
+ <div class="legend">
+  <div><span class="gate" style="width:26px;height:26px;border-radius:7px"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>A person approves</div>
+  <div><span style="width:26px;display:flex;justify-content:center"><span class="dot" style="width:16px;height:16px;border-width:3.5px"></span></span>The agent keeps going</div>
+ </div>
+</div>
+
+<div class="grid">
+ <div style="border-bottom:1px solid var(--line)"></div>
+ <div class="stage"><div class="n mono">01</div><div class="t">Kick off</div></div>
+ <div class="stage"><div class="n mono">02</div><div class="t">Plan</div></div>
+ <div class="stage"><div class="n mono">03</div><div class="t">Build</div></div>
+ <div class="stage"><div class="n mono">04</div><div class="t">Merge</div></div>
+ <div class="stage"><div class="n mono">05</div><div class="t">Deploy to dev</div></div>
+ <div class="stage"><div class="n mono">06</div><div class="t">Release to prod</div></div>
+
+ <div class="lane-label"><div class="k mono">Speed first</div><div class="name">Prototype</div></div>
+ <div class="lane">
+  <div class="track short"></div><div class="track dash"></div>
+  <div class="cell"><div class="node"><span class="dot"></span></div><div class="who a mono">Agent</div><div class="what">Drafts the docs</div><div class="why">You review when you like</div></div>
+  <div class="cell"><div class="node"><span class="dot"></span></div><div class="who a mono">Agent</div><div class="what">Writes a short plan</div><div class="why">Decides, then says so</div></div>
+  <div class="cell"><div class="node"><span class="dot"></span></div><div class="who a mono">Agent</div><div class="what">Tests main paths</div><div class="why">50%, one review</div></div>
+  <div class="cell"><div class="node"><span class="dot"></span></div><div class="who a mono">Agent</div><div class="what">Pushes and merges</div><div class="why">Unasked, on green checks</div></div>
+  <div class="cell"><div class="node"><span class="dot"></span></div><div class="who a mono">Pipeline</div><div class="what">Applies on merge</div><div class="why">Then a smoke test</div></div>
+  <div class="cell"><div class="node"><span class="none"></span></div><div class="who x mono">None</div><div class="what" style="color:var(--muted)">No prod</div><div class="why">Real users? Go production</div></div>
+ </div>
+
+ <div class="lane-label"><div class="k mono" style="color:var(--amber)">Approval first</div><div class="name">Production</div></div>
+ <div class="lane">
+  <div class="track solid"></div>
+  <div class="cell"><div class="node"><span class="gate">LOCK</span></div><div class="who g mono">You</div><div class="what">Approve the spec</div><div class="why">Plus threat model, costs</div></div>
+  <div class="cell"><div class="node"><span class="gate">LOCK</span></div><div class="who g mono">You</div><div class="what">Approve the plan</div><div class="why">No code before it</div></div>
+  <div class="cell"><div class="node"><span class="dot"></span></div><div class="who a mono">Agent</div><div class="what">Tests abuse cases</div><div class="why">80%, a review per phase</div></div>
+  <div class="cell"><div class="node"><span class="gate">LOCK</span></div><div class="who g mono">Reviewer</div><div class="what">Approves the PR</div><div class="why">GitHub blocks the merge</div></div>
+  <div class="cell"><div class="node"><span class="gate">LOCK</span></div><div class="who g mono">Reviewer</div><div class="what">Approves the apply</div><div class="why">Then a smoke test</div></div>
+  <div class="cell"><div class="node"><span class="gate">LOCK</span></div><div class="who g mono">Reviewer</div><div class="what">Approves the release</div><div class="why">Run by hand</div></div>
+ </div>
+</div>
+
+<div class="always">
+ <div class="lbl mono">Always on,<br>in both</div>
+ <div class="chk"><div class="when mono">Before push</div><div class="tools">Gitleaks and Trivy on every pushed commit</div></div>
+ <div class="chk"><div class="when mono">Every PR</div><div class="tools">Semgrep, Checkov, CodeQL, workflow lint, tests</div></div>
+ <div class="chk"><div class="when mono">Main and weekly</div><div class="tools">Full rescan and an SBOM</div></div>
+ <div class="chk"><div class="when mono">Deploys</div><div class="tools">Pipeline only, OIDC with no stored keys</div></div>
+ <div class="chk"><div class="when mono">Day after</div><div class="tools">Actual cost checked against costs.md</div></div>
+</div>
+
+<div class="foot"><span>github.com/euginevd/sdlc-template</span><span>AGENTS.md · docs · checks · terraform</span></div>
+<script>
+const lock='<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
+document.querySelectorAll('.gate').forEach(g=>{if(g.textContent==='LOCK')g.innerHTML=lock});
+if(location.hash==='#dark')document.body.classList.add('dark');
+</script>
+</body></html>

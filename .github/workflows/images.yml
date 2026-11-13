@@ -1,0 +1,148 @@
+name: images
+
+# Container images for each app with a Dockerfile (apps/<app>/Dockerfile, built from the repo root;
+# code-standards 22). Nothing runs until an app has one: the starter's api deploys as a zip.
+# PR: build and scan each image, no AWS. main: build, scan, keep an SBOM of the image, then push it to the
+# app's ECR repository, ${PROJECT_NAME}/<app>, tagged with the commit; its Terraform unit creates the
+# repository and deploys the image by that tag. Scanning the built image is what the repo scans in the
+# security workflow can't do: it sees the base image's OS packages.
+on:
+  pull_request:
+    paths: [apps/**, pyproject.toml, uv.lock, .github/workflows/images.yml]
+  push:
+    branches: [main]
+    paths: [apps/**, pyproject.toml, uv.lock, .github/workflows/images.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'ap-southeast-2' }}
+  PROJECT_NAME: ${{ vars.PROJECT_NAME }}
+  # The same Trivy as the security workflow, pinned by digest; multi-arch, so it runs on an arm64 runner too.
+  TRIVY: aquasec/trivy:0.76.2@sha256:8f6bb947dbc528902e11f2f5be52f7b519f6a39d5d148f41166f2040499768fb
+
+jobs:
+  # The apps with a Dockerfile. An app that needs arm64 (as Lambda or AgentCore on Graviton) gets
+  # runner ubuntu-24.04-arm and platform linux/arm64 here.
+  detect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      apps: ${{ steps.list.outputs.apps }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: list
+        run: |
+          apps=$(for f in apps/*/Dockerfile; do [ -f "$f" ] && basename "$(dirname "$f")"; done | jq -R . | jq -cs 'map({app: ., runner: "ubuntu-latest", platform: "linux/amd64"})')
+          echo "apps=$apps" >> "$GITHUB_OUTPUT"
+          echo "Apps with a Dockerfile: $apps"
+
+  # Build: every PR that changes an app builds and scans its image, with no AWS access.
+  scan:
+    needs: detect
+    if: github.event_name == 'pull_request' && needs.detect.outputs.apps != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.apps) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    # Passed to the shell as variables, never pasted into the script.
+    env:
+      APP: ${{ matrix.app }}
+      PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build
+        run: docker build --platform "$PLATFORM" --provenance=false -f "apps/$APP/Dockerfile" -t "scan/$APP" .
+      - name: Trivy, the image
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "scan/$APP"
+
+  # Release: on main, the same build and scan, an SBOM of the image, then the push.
+  publish:
+    needs: detect
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.PROJECT_NAME != '' && needs.detect.outputs.apps != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.apps) }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    # The deploy role, through the dev apply environment: main only, and approved where it has a reviewer.
+    environment: aws-dev-apply
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      APP: ${{ matrix.app }}
+      PLATFORM: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build
+        id: build
+        run: |
+          repo="$PROJECT_NAME/$APP"
+          if ! aws ecr describe-repositories --repository-names "$repo" > /dev/null 2>&1; then
+            echo "::notice::No repository $repo yet: apply its Terraform unit first."
+            exit 0
+          fi
+          # Tags are immutable, so a rerun for the same commit keeps the image it pushed.
+          if aws ecr describe-images --repository-name "$repo" --image-ids imageTag="$GITHUB_SHA" > /dev/null 2>&1; then
+            echo "::notice::$repo:$GITHUB_SHA is already pushed."
+            exit 0
+          fi
+          registry="$(aws sts get-caller-identity --query Account --output text).dkr.ecr.$AWS_REGION.amazonaws.com"
+          image="$registry/$repo:$GITHUB_SHA"
+          # Lambda takes a plain single-platform image, so no attestation index.
+          docker build --platform "$PLATFORM" --provenance=false -f "apps/$APP/Dockerfile" -t "$image" .
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+          echo "registry=$registry" >> "$GITHUB_OUTPUT"
+
+      # A fixable high or critical vulnerability, or a secret, in the image stops the push.
+      - name: Trivy, the image
+        if: steps.build.outputs.image != ''
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY" image --scanners vuln,secret --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE"
+
+      # The SBOM of what ships, from the image rather than the lock files.
+      - name: Trivy, SBOM of the image
+        if: steps.build.outputs.image != ''
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+        run: docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD:/out" "$TRIVY" image --format cyclonedx --output "/out/sbom-$APP.cdx.json" "$IMAGE"
+
+      - if: steps.build.outputs.image != ''
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ matrix.app }}
+          path: sbom-${{ matrix.app }}.cdx.json
+          retention-days: 90
+
+      - name: Push
+        if: steps.build.outputs.image != ''
+        env:
+          IMAGE: ${{ steps.build.outputs.image }}
+          REGISTRY: ${{ steps.build.outputs.registry }}
+        run: |
+          aws ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRY"
+          docker push "$IMAGE"
+          echo "Pushed \`$IMAGE\`, scanned, with its SBOM" >> "$GITHUB_STEP_SUMMARY"

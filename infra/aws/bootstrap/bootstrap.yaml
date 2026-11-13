@@ -1,0 +1,510 @@
+# Once per AWS account (dev, then prod), by a person, never the agent: the apply environment is the deploy gate.
+# 1. CloudFormation: deploy this file as stack <ProjectName>-bootstrap.
+#    Repos created after 2026-07-15 send GitHub's immutable OIDC subject: set GitHubOwnerId and GitHubRepoId
+#    from: gh api repos/<owner>/<repo> --jq '.owner.id, .id'
+#    Set BudgetEmail to be emailed at 80% spent, 100% forecast and 100% spent of MonthlyBudgetUsd.
+#    For the agent's read-only access: make an access key for the <ProjectName>-cli user in the console,
+#    then aws configure --profile <ProjectName>-cli, and a profile that assumes TroubleshootRoleArn with it.
+# 2. GitHub environments: aws-<Target>-plan, and aws-<Target>-apply with a required reviewer, main only
+#    (scripts/protect-main.sh creates the apply environment that way, and checks it on a rerun).
+#    A production project's reviewer is a second person, with Prevent self-review on, so whoever merged can't approve.
+#    A prototype (AGENTS.md rule 12) leaves the reviewer off aws-dev-apply, so a merge deploys to dev unattended.
+# 3. GitHub variables: PROJECT_NAME on the repo; this stack's outputs on the environments (see Outputs).
+# Deploy: a merge to main applies to dev (production: once its reviewer approves); prod is a manual run of the aws workflow.
+# Cleanup: run the aws workflow with destroy for each target, empty the state bucket, delete the CLI user's
+# access keys, then this stack and the environments (guides/05-aws-cleanup.md).
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  Bootstrap for a project from sdlc-template: everything in the AWS account that Terraform
+  needs before it can run. Deployed by hand as stack <ProjectName>-bootstrap; deleting the stack
+  removes all of it.
+
+Parameters:
+  ProjectName:
+    Type: String
+    AllowedPattern: '[a-z][a-z0-9-]{1,30}'
+    Description: Lowercase kebab-case; prefixes every resource name
+  GitHubOwner:
+    Type: String
+    Description: GitHub user or organisation that owns the repo
+  GitHubRepo:
+    Type: String
+    Description: Repository name
+  GitHubOwnerId:
+    Type: String
+    Default: ''
+    AllowedPattern: '[0-9]*'
+    Description: The owner's numeric ID, for a repo with GitHub's immutable OIDC subject; empty for the name-only subject
+  GitHubRepoId:
+    Type: String
+    Default: ''
+    AllowedPattern: '[0-9]*'
+    Description: The repo's numeric ID, for a repo with GitHub's immutable OIDC subject; empty for the name-only subject
+  Target:
+    Type: String
+    Default: dev
+    Description: Deployment target; the GitHub environments are aws-<target>-plan and aws-<target>-apply
+  CreateOidcProvider:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+    Description: An account has one GitHub OIDC provider; set false if another stack already created it
+  BudgetEmail:
+    Type: String
+    Default: ''
+    AllowedPattern: '^$|^[^@\s]+@[^@\s]+$'
+    Description: Address emailed at 80% spent, 100% forecast and 100% spent of the monthly budget; empty for no budget
+  MonthlyBudgetUsd:
+    Type: Number
+    Default: 50
+    MinValue: 1
+    Description: The account's monthly spend limit in US dollars, for the budget emails
+
+Conditions:
+  CreateOidc: !Equals [!Ref CreateOidcProvider, 'true']
+  CreateBudget: !Not [!Equals [!Ref BudgetEmail, '']]
+  ImmutableSubject: !Not [!Equals [!Ref GitHubRepoId, '']]
+  NotDev: !Not [!Equals [!Ref Target, dev]]
+
+Resources:
+
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateOidc
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList: [sts.amazonaws.com]
+      Tags:
+        - { Key: ManagedBy, Value: CloudFormation }
+
+  # Deleted with the stack; empty it first (versions included) or the delete fails.
+  # trivy:ignore:AWS-0132 S3-managed encryption is enough for state; the bucket is private and TLS-only
+  StateBucket:
+    Type: AWS::S3::Bucket
+    Metadata:
+      checkov:
+        skip:
+          - id: CKV_AWS_18
+            comment: Versioning keeps every state change; access logs would need a second bucket. Turn on CloudTrail S3 data events if audits need who made each change
+    Properties:
+      BucketName: !Sub '${ProjectName}-tfstate-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-old-state-versions
+            Status: Enabled
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 90
+      Tags:
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+
+  StateBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref StateBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt StateBucket.Arn
+              - !Sub '${StateBucket.Arn}/*'
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  DeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-github-deploy'
+      Description: !Sub 'GitHub Actions deploy role for ${GitHubRepo}, aws-${Target}-apply environment'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              # The provider's ARN when this stack creates it, so the role waits for it.
+              Federated: !If
+                - CreateOidc
+                - !Ref GitHubOidcProvider
+                - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                # The immutable subject names the owner and repo by ID too, so a recreated repo of the same name can't assume it.
+                token.actions.githubusercontent.com:sub: !If
+                  - ImmutableSubject
+                  - !Sub 'repo:${GitHubOwner}@${GitHubOwnerId}/${GitHubRepo}@${GitHubRepoId}:environment:aws-${Target}-apply'
+                  - !Sub 'repo:${GitHubOwner}/${GitHubRepo}:environment:aws-${Target}-apply'
+      Policies:
+        - PolicyName: terraform-state
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt StateBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix: !Sub '${ProjectName}/*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${StateBucket.Arn}/${ProjectName}/*'
+        # Add each AWS service's permissions here, scoped to ${ProjectName}-* resources, before a unit uses it.
+        - PolicyName: project-resources
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Project roles only, and only with the boundary attached.
+              - Sid: IamProjectRolesWriteWithBoundary
+                Effect: Allow
+                Action:
+                  - iam:AttachRolePolicy
+                  - iam:CreateRole
+                  - iam:DeleteRolePolicy
+                  - iam:DetachRolePolicy
+                  - iam:PutRolePermissionsBoundary
+                  - iam:PutRolePolicy
+                Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-*'
+                Condition:
+                  StringEquals:
+                    iam:PermissionsBoundary: !Ref ProjectBoundary
+              - Sid: IamProjectRoles
+                Effect: Allow
+                Action:
+                  - iam:DeleteRole
+                  - iam:Get*
+                  - iam:List*
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:UpdateAssumeRolePolicy
+                  - iam:UpdateRole
+                  - iam:UpdateRoleDescription
+                Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-*'
+              # Lets Terraform hand project roles to Lambda, nothing else.
+              - Sid: IamPassProjectRoles
+                Effect: Allow
+                Action: iam:PassRole
+                Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-*'
+                Condition:
+                  StringEquals:
+                    iam:PassedToService: lambda.amazonaws.com
+              # infra/aws/api: functions, the HTTP API and their log groups.
+              - Sid: LambdaProjectFunctions
+                Effect: Allow
+                Action: lambda:*
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-*'
+                  - !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-*:*'
+              # API Gateway has no name-based ARNs, so it's limited to this region.
+              - Sid: ApiGatewayRegion
+                Effect: Allow
+                Action: apigateway:*
+                Resource: !Sub 'arn:${AWS::Partition}:apigateway:${AWS::Region}::/*'
+              - Sid: LogsProjectGroups
+                Effect: Allow
+                Action: logs:*
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-*'
+                  - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/apigateway/${ProjectName}-*'
+              # HTTP API access logging and log group listing need these account-wide actions.
+              - Sid: LogsDelivery
+                Effect: Allow
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:DescribeLogGroups
+                  - logs:DescribeResourcePolicies
+                  - logs:GetLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutResourcePolicy
+                  - logs:UpdateLogDelivery
+                Resource: '*'
+              # Container images (.github/workflows/images.yml): the project's repositories, named ${ProjectName}/<app>,
+              # created by Terraform and pushed to by the images workflow; signing in to ECR is account-wide.
+              - Sid: EcrProjectRepositories
+                Effect: Allow
+                Action: ecr:*
+                Resource: !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ProjectName}/*'
+              - Sid: EcrSignIn
+                Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: '*'
+              # The pipeline roles, the troubleshoot role and the CLI user are out of reach, so the pipeline
+              # can't rewrite who may assume them.
+              - Sid: DenyPipelineRoles
+                Effect: Deny
+                Action: iam:*
+                Resource:
+                  - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-github-*'
+                  - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-troubleshoot'
+                  - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:user/${ProjectName}-*'
+              - Sid: DenyBoundaryRemoval
+                Effect: Deny
+                Action: iam:DeleteRolePermissionsBoundary
+                Resource: '*'
+              - Effect: Deny
+                Action: sts:AssumeRole
+                Resource: '*'
+      Tags:
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+
+  # Runs terraform plan without approval, so it can only read.
+  PlanRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-github-plan'
+      Description: !Sub 'GitHub Actions read-only plan role for ${GitHubRepo}, aws-${Target}-plan environment'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              # The provider's ARN when this stack creates it, so the role waits for it.
+              Federated: !If
+                - CreateOidc
+                - !Ref GitHubOidcProvider
+                - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                # The immutable subject names the owner and repo by ID too, so a recreated repo of the same name can't assume it.
+                token.actions.githubusercontent.com:sub: !If
+                  - ImmutableSubject
+                  - !Sub 'repo:${GitHubOwner}@${GitHubOwnerId}/${GitHubRepo}@${GitHubRepoId}:environment:aws-${Target}-plan'
+                  - !Sub 'repo:${GitHubOwner}/${GitHubRepo}:environment:aws-${Target}-plan'
+      Policies:
+        - PolicyName: terraform-plan
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: s3:ListBucket
+                Resource: !GetAtt StateBucket.Arn
+                Condition:
+                  StringLike:
+                    s3:prefix: !Sub '${ProjectName}/*'
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: !Sub '${StateBucket.Arn}/${ProjectName}/*'
+              # Plan takes the state lock.
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub '${StateBucket.Arn}/${ProjectName}/*.tflock'
+              # Add each AWS service's read actions here, scoped to ${ProjectName}-* resources where the service allows it.
+              - Effect: Allow
+                Action:
+                  - iam:Get*
+                  - iam:List*
+                Resource: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:role/${ProjectName}-*'
+              - Effect: Allow
+                Action:
+                  - lambda:Get*
+                  - lambda:List*
+                Resource: !Sub 'arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:${ProjectName}-*'
+              - Effect: Allow
+                Action: apigateway:GET
+                Resource: !Sub 'arn:${AWS::Partition}:apigateway:${AWS::Region}::/*'
+              - Effect: Allow
+                Action:
+                  - logs:Describe*
+                  - logs:ListTagsForResource
+                  - logs:ListTagsLogGroup
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecr:DescribeRepositories
+                  - ecr:DescribeImages
+                  - ecr:GetLifecyclePolicy
+                  - ecr:GetRepositoryPolicy
+                  - ecr:ListTagsForResource
+                Resource: !Sub 'arn:${AWS::Partition}:ecr:${AWS::Region}:${AWS::AccountId}:repository/${ProjectName}/*'
+              - Effect: Deny
+                Action: sts:AssumeRole
+                Resource: '*'
+      Tags:
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+
+  # Read-only, for an agent to troubleshoot from logs and settings (AGENTS.md rules 17 and 28): AWS's
+  # ReadOnlyAccess, so it can't change anything. In dev it reads values too, as every value there is made
+  # up; in any other target it reads logs and settings but not the data itself (AGENTS.md rule 26).
+  # Anyone in this account allowed sts:AssumeRole on it can use it.
+  TroubleshootRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${ProjectName}-troubleshoot'
+      Description: !Sub 'Read-only troubleshooting for ${ProjectName} (AWS ReadOnlyAccess)'
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:root'
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - !Sub 'arn:${AWS::Partition}:iam::aws:policy/ReadOnlyAccess'
+      Policies:
+        - !If
+          - NotDev
+          - PolicyName: no-data-reads
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                # Stored data, secrets, queues, query results and function code. Add a line for each data
+                # store the project adds. Logs stay readable: code-standards 8 keeps personal data out of them.
+                - Effect: Deny
+                  Action:
+                    - athena:GetQueryResults
+                    - dsql:DbConnect*
+                    - dynamodb:BatchGetItem
+                    - dynamodb:GetItem
+                    - dynamodb:GetRecords
+                    - dynamodb:PartiQLSelect
+                    - dynamodb:Query
+                    - dynamodb:Scan
+                    - kms:Decrypt
+                    - lambda:GetFunction
+                    - rds-data:*
+                    - s3:GetObject*
+                    - secretsmanager:GetSecretValue
+                    - sqs:ReceiveMessage
+                    - ssm:GetParameter*
+                  Resource: '*'
+          - !Ref AWS::NoValue
+      Tags:
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+
+  # The developer's machine signs in as this user to assume the troubleshoot role, and can do nothing else.
+  # Its access key is made in the console (one made here would sit in the stack), so a leaked key only reads.
+  # It is the one long-lived key the template keeps (trade-offs 14): rotate it, and delete it when idle.
+  TroubleshootUser:
+    Type: AWS::IAM::User
+    Metadata:
+      checkov:
+        skip:
+          - id: CKV_AWS_273
+            comment: The one CLI user, allowed only to assume the read-only troubleshoot role
+    Properties:
+      UserName: !Sub '${ProjectName}-cli'
+      Policies:
+        - PolicyName: assume-troubleshoot
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: !GetAtt TroubleshootRole.Arn
+      Tags:
+        - { Key: Project, Value: !Ref ProjectName }
+        - { Key: ManagedBy, Value: CloudFormation }
+
+  # Ceiling for every role Terraform creates. Starts with logs only; widen it as the project needs.
+  # Changing Description or ManagedPolicyName replaces the policy, which fails on its fixed name.
+  ProjectBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Sub '${ProjectName}-boundary'
+      Description: !Sub 'Permissions boundary for roles created by ${ProjectName} Terraform'
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-*'
+              - !Sub 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-*:*'
+
+  # Actual spend for the whole account, as cost tags need turning on by hand; a budget is free.
+  # It emails, it doesn't stop anything, and AWS reports spend up to a day late.
+  MonthlyBudget:
+    Type: AWS::Budgets::Budget
+    Condition: CreateBudget
+    Properties:
+      Budget:
+        BudgetName: !Sub '${ProjectName}-monthly'
+        BudgetType: COST
+        TimeUnit: MONTHLY
+        BudgetLimit:
+          Amount: !Ref MonthlyBudgetUsd
+          Unit: USD
+      NotificationsWithSubscribers:
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 80
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - { SubscriptionType: EMAIL, Address: !Ref BudgetEmail }
+        # The forecast warns mid-month, before a runaway resource has spent the budget.
+        - Notification:
+            NotificationType: FORECASTED
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - { SubscriptionType: EMAIL, Address: !Ref BudgetEmail }
+        - Notification:
+            NotificationType: ACTUAL
+            ComparisonOperator: GREATER_THAN
+            Threshold: 100
+            ThresholdType: PERCENTAGE
+          Subscribers:
+            - { SubscriptionType: EMAIL, Address: !Ref BudgetEmail }
+
+Outputs:
+  BoundaryArn:
+    Description: permissions_boundary for roles Terraform creates
+    Value: !Ref ProjectBoundary
+
+  StateBucketName:
+    Description: TF_STATE_BUCKET on both GitHub environments
+    Value: !Ref StateBucket
+
+  DeployRoleArn:
+    Description: AWS_DEPLOY_ROLE_ARN on the aws-<target>-apply environment
+    Value: !GetAtt DeployRole.Arn
+
+  PlanRoleArn:
+    Description: AWS_PLAN_ROLE_ARN on the aws-<target>-plan environment
+    Value: !GetAtt PlanRole.Arn
+
+  TroubleshootRoleArn:
+    Description: role_arn of the read-only profile in ~/.aws/config, with source_profile <ProjectName>-cli
+    Value: !GetAtt TroubleshootRole.Arn
+
+  TroubleshootUserName:
+    Description: The IAM user to make an access key for, then aws configure --profile <ProjectName>-cli
+    Value: !Ref TroubleshootUser
