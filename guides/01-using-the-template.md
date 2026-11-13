@@ -9,7 +9,7 @@ The agent asks for this first ([AGENTS.md](../AGENTS.md) rules 11 to 13). Where 
 | | `prototype`: a working MVP, fast | `production`: gated |
 |---|---|---|
 | For | No real users, customer data or payments | Anything that has them |
-| You approve | Nothing: review whenever you like | Kickoff and every plan; a second reviewer approves each PR and each apply, `dev` and `prod` |
+| You approve | Each TODO item's spec and mockup, before code | Kickoff and every plan; a second reviewer approves each PR and each apply, `dev` and `prod` |
 | Environments | `dev` only | `dev`, then `prod`, each in its own account |
 | Tests | Main paths and anything sensitive, 50% coverage | Abuse cases too, 80% coverage |
 | When unsure | The agent takes the simpler option and says so | The agent asks |
@@ -47,11 +47,11 @@ Gate G0, once per project. `docs/` starts by describing the health-check API the
 
 ## 4. Build a prototype
 
-One prompt builds and ships. Nothing waits for you: the agent decides what production would ask about, records it in `decisions.md`, and tells you in its report.
+One TODO item at a time. Once you approve its spec and mockup, nothing else waits for you: the agent decides what production would ask about, records it in `decisions.md`, and tells you in its report.
 
 | You say | The agent | You |
 |---------|-----------|-----|
-| *"Build `<the work>`"* | Adds it to the spec, writes a short plan and builds on the session's one branch: code, main-path tests, local checks, `features.md` and `TODO.md` | Interrupt if the direction is wrong |
+| *"Build `<the work>`"*, once you approve its spec and mockup | Builds on the session's one branch: code, main-path tests, local checks, `features.md` and `TODO.md` | Interrupt if the direction is wrong |
 | | New cloud service: deploys a walking skeleton to `dev` first, one service at a time ([AGENTS.md](../AGENTS.md) rule 17) | |
 | | A fresh subagent reviews the whole branch; it fixes what it blocks and reports | Try it; ask for more |
 | | Once the work is done and the local checks pass: commits, pushes (the pre-push scan runs), opens one PR, fixes the findings and squash-merges once checks pass | |

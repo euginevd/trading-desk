@@ -1,243 +1,181 @@
 <!doctype html>
-<html lang="en-AU">
+<html lang="en-AU" data-theme="quiet-light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Trading desk: MVP mockup</title>
+<title>Trading desk: portfolio mockup</title>
 <style>
-  :root {
+  :root, [data-theme="quiet-light"] {
     --bg: oklch(0.985 0.002 90); --surface: oklch(1 0 0); --sunken: oklch(0.965 0.003 90);
     --line: oklch(0.91 0.004 90); --ink: oklch(0.21 0.006 90); --ink-2: oklch(0.45 0.006 90);
-    --ink-3: oklch(0.62 0.005 90); --accent: oklch(0.50 0.17 262);
+    --ink-3: oklch(0.62 0.005 90); --accent: oklch(0.50 0.17 262); --on-accent: oklch(1 0 0);
     --positive: oklch(0.52 0.12 155); --caution: oklch(0.62 0.13 75); --critical: oklch(0.55 0.18 28);
-    --sans: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
-    --serif: "Instrument Serif", Georgia, "Times New Roman", serif;
-    --mono: "Geist Mono", ui-monospace, "SF Mono", Consolas, monospace;
+    --figures: "Geist", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --bg: oklch(0.16 0.004 90); --surface: oklch(0.20 0.004 90); --sunken: oklch(0.13 0.004 90);
-      --line: oklch(0.28 0.004 90); --ink: oklch(0.95 0.003 90); --ink-2: oklch(0.74 0.004 90);
-      --ink-3: oklch(0.58 0.004 90); --accent: oklch(0.74 0.12 262);
-      --positive: oklch(0.72 0.12 155); --caution: oklch(0.82 0.13 75); --critical: oklch(0.75 0.18 28);
-    }
-  }
-  :root[data-theme="dark"] {
+  [data-theme="quiet-dark"] {
     --bg: oklch(0.16 0.004 90); --surface: oklch(0.20 0.004 90); --sunken: oklch(0.13 0.004 90);
     --line: oklch(0.28 0.004 90); --ink: oklch(0.95 0.003 90); --ink-2: oklch(0.74 0.004 90);
-    --ink-3: oklch(0.58 0.004 90); --accent: oklch(0.74 0.12 262);
+    --ink-3: oklch(0.58 0.004 90); --accent: oklch(0.74 0.12 262); --on-accent: oklch(0.16 0.004 90);
     --positive: oklch(0.72 0.12 155); --caution: oklch(0.82 0.13 75); --critical: oklch(0.75 0.18 28);
   }
+  [data-theme="terminal"] {
+    --bg: oklch(0.14 0.01 250); --surface: oklch(0.18 0.012 250); --sunken: oklch(0.12 0.01 250);
+    --line: oklch(0.27 0.014 250); --ink: oklch(0.94 0.01 250); --ink-2: oklch(0.72 0.014 250);
+    --ink-3: oklch(0.56 0.014 250); --accent: oklch(0.78 0.12 190); --on-accent: oklch(0.14 0.01 250);
+    --positive: oklch(0.78 0.16 150); --caution: oklch(0.82 0.14 85); --critical: oklch(0.70 0.19 25);
+    --figures: "Geist Mono", ui-monospace, "SF Mono", Consolas, monospace;
+  }
+  [data-theme="paper"] {
+    --bg: oklch(0.97 0.012 85); --surface: oklch(0.99 0.006 85); --sunken: oklch(0.94 0.014 85);
+    --line: oklch(0.87 0.015 85); --ink: oklch(0.24 0.03 260); --ink-2: oklch(0.45 0.025 260);
+    --ink-3: oklch(0.60 0.02 260); --accent: oklch(0.50 0.12 55); --on-accent: oklch(0.99 0.006 85);
+    --positive: oklch(0.50 0.12 150); --caution: oklch(0.58 0.12 75); --critical: oklch(0.52 0.17 28);
+  }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--ink-2); font: 16px/1.5 var(--sans); font-variant-numeric: tabular-nums; }
-  a { color: var(--accent); }
+  body { margin: 0; background: var(--bg); color: var(--ink-2); font: 16px/1.5 "Geist", system-ui, -apple-system, "Segoe UI", sans-serif; font-variant-numeric: tabular-nums; transition: background 200ms, color 200ms; }
   button { font: inherit; color: inherit; cursor: pointer; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
 
-  .note { background: var(--sunken); border-bottom: 1px solid var(--line); font-size: 12px; padding: 8px 16px; text-align: center; }
+  .pick { background: var(--sunken); border-bottom: 1px solid var(--line); font-size: 12px; padding: 8px 16px; display: flex; gap: 8px 12px; align-items: center; justify-content: center; flex-wrap: wrap; }
+  .pick span { color: var(--ink-2); }
+  .pick button { border: 1px solid var(--line); background: var(--surface); border-radius: 4px; padding: 4px 10px; font-size: 12px; }
+  .pick button[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); font-weight: 600; }
+
   .bar { border-bottom: 1px solid var(--line); background: var(--surface); }
   .bar-in { max-width: 1280px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; gap: 8px 24px; flex-wrap: wrap; }
-  .name { font: 25px/1.15 var(--serif); color: var(--ink); margin-right: 8px; }
-  nav { display: flex; gap: 4px; flex-wrap: wrap; }
-  nav button { border: 0; background: none; padding: 8px 12px; border-radius: 8px; font-size: 14px; }
-  nav button[aria-current="page"] { color: var(--ink); background: var(--sunken); }
+  .name { font: 25px/1.15 "Instrument Serif", Georgia, "Times New Roman", serif; color: var(--ink); }
+  [data-theme="terminal"] .name { font: 600 18px/1.15 var(--figures); letter-spacing: 0.02em; }
   .right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
   .status { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; color: var(--ink); white-space: nowrap; }
   .status.positive svg { color: var(--positive); } .status.caution svg { color: var(--caution); }
-  .status.later { color: var(--ink-3); }
-  .ghost { border: 1px solid var(--line); background: none; border-radius: 8px; padding: 6px 10px; font-size: 14px; }
-  .who { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: var(--sunken); font-size: 12px; color: var(--ink); }
 
   main { max-width: 1280px; margin: 0 auto; padding: 32px 16px 96px; }
-  section[hidden] { display: none; }
-  h1 { font: 40px/1.15 var(--serif); letter-spacing: -0.02em; color: var(--ink); margin: 0 0 4px; font-weight: 400; }
-  h2 { font: 600 20px/1.15 var(--sans); color: var(--ink); margin: 48px 0 12px; }
+  .head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+  h1 { font: 400 40px/1.15 "Instrument Serif", Georgia, "Times New Roman", serif; letter-spacing: -0.02em; color: var(--ink); margin: 0 0 4px; }
+  [data-theme="terminal"] h1 { font: 600 28px/1.15 var(--figures); letter-spacing: 0; }
+  h2 { font: 600 20px/1.15 inherit; color: var(--ink); margin: 48px 0 12px; }
   .sub { font-size: 14px; margin: 0; }
-  .total { margin: 32px 0 0; }
-  .total .label { font-size: 14px; }
-  .total .figure { font: 56px/1.15 var(--serif); letter-spacing: -0.02em; color: var(--ink); overflow-wrap: anywhere; }
-  .total .aside { font-size: 14px; }
-  .up { color: var(--positive); } .down { color: var(--critical); }
+  .refresh { display: inline-flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; padding: 8px 14px; background: var(--accent); color: var(--on-accent); font-weight: 600; font-size: 14px; }
 
-  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 16px; }
-  .card { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 16px; display: flex; flex-direction: column; gap: 8px; text-align: left; min-height: 148px; }
-  button.card:hover { border-color: var(--ink-3); }
-  .card.later { background: none; border-style: dashed; }
-  .card h3 { margin: 0; font: 600 16px/1.15 var(--sans); color: var(--ink); }
-  .card.later h3 { color: var(--ink-2); }
-  .card p { margin: 0; font-size: 14px; }
-  .card .foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 14px; }
-  .card .go { color: var(--accent); display: inline-flex; align-items: center; gap: 4px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-top: 24px; }
+  .tile { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 16px; }
+  .tile .label { font-size: 14px; }
+  .tile .figure { font: 32px/1.2 var(--figures); color: var(--ink); letter-spacing: -0.01em; overflow-wrap: anywhere; margin: 4px 0; }
+  .tile.big .figure { font-size: 40px; }
+  .tile .aside { font-size: 14px; }
+  .up { color: var(--positive); } .down { color: var(--critical); }
 
   .scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
   table { border-collapse: collapse; width: 100%; font-size: 14px; }
   th, td { padding: 0 16px; height: 48px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--line); }
-  .compact th, .compact td { height: 40px; }
   tr:last-child td { border-bottom: 0; }
-  th { background: var(--sunken); font-weight: 500; color: var(--ink-2); font-size: 12px; }
+  th { background: var(--sunken); font-weight: 500; color: var(--ink-2); font-size: 12px; position: sticky; top: 0; }
+  td { color: var(--ink); font-family: var(--figures); }
   td.n, th.n { text-align: right; }
-  td { color: var(--ink); }
   td.q { color: var(--ink-2); }
-  .mono { font-family: var(--mono); font-size: 12px; }
-  .share { display: inline-block; width: 64px; height: 4px; background: var(--sunken); border-radius: 2px; margin-right: 8px; vertical-align: middle; }
-  .share i { display: block; height: 100%; background: var(--ink-3); border-radius: 2px; }
-  .filter { display: flex; gap: 8px; flex-wrap: wrap; margin: 24px 0 12px; }
-  .chip { border: 1px solid var(--line); background: none; border-radius: 4px; padding: 4px 10px; font-size: 14px; }
-  .chip[aria-pressed="true"] { background: var(--sunken); color: var(--ink); border-color: var(--ink-3); }
-  .head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; }
+  td.t { font-family: inherit; }
+  .asset { font-weight: 600; }
+  .share { display: inline-block; width: 56px; height: 4px; background: var(--sunken); border-radius: 2px; margin-right: 8px; vertical-align: middle; }
+  .share i { display: block; height: 100%; background: var(--accent); border-radius: 2px; opacity: 0.6; }
+  .partial { display: block; font-size: 12px; color: var(--caution); font-family: inherit; }
+  .foot { font-size: 12px; color: var(--ink-3); margin-top: 8px; }
 </style>
 </head>
 <body>
 <svg style="display:none" aria-hidden="true">
   <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
-  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
-  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 9v4M12 17h.01"/><circle cx="12" cy="12" r="10"/></symbol>
 </svg>
 
-<div class="note">Mockup of the MVP (features 1 to 4). Every figure is sample data.</div>
+<div class="pick" role="group" aria-label="Theme">
+  <span>Mockup of TODO 1 with sample figures. Pick a theme:</span>
+  <button data-set="quiet-light" aria-pressed="true">Quiet light</button>
+  <button data-set="quiet-dark" aria-pressed="false">Quiet dark</button>
+  <button data-set="terminal" aria-pressed="false">Terminal</button>
+  <button data-set="paper" aria-pressed="false">Paper</button>
+</div>
 
 <header class="bar">
   <div class="bar-in">
     <span class="name">Trading desk</span>
-    <nav aria-label="Main">
-      <button data-view="dashboard" aria-current="page">Dashboard</button>
-      <button data-view="portfolio">Portfolio</button>
-      <button data-view="audit">Audit log</button>
-    </nav>
     <div class="right">
       <span class="status positive"><svg aria-hidden="true"><use href="#i-check"/></svg>Binance connected</span>
-      <button class="ghost" id="theme">Dark</button>
-      <button class="who" aria-label="Signed in as the owner. Sign out">EV</button>
     </div>
   </div>
 </header>
 
 <main>
-  <section id="dashboard">
-    <h1>Dashboard</h1>
-    <p class="sub">Updated 14:32, 13 Nov 2026. Read-only: nothing here can trade.</p>
-    <div class="total">
+  <div class="head">
+    <div>
+      <h1>Portfolio</h1>
+      <p class="sub">Binance spot wallet. Fetched 14:32:05, 13 Nov 2026.</p>
+    </div>
+    <button class="refresh"><svg aria-hidden="true"><use href="#i-refresh"/></svg>Refresh</button>
+  </div>
+
+  <div class="tiles">
+    <div class="tile big">
       <div class="label">Total value</div>
       <div class="figure">$84,754.50</div>
-      <div class="aside">A$130,391.54 at 0.6500 · <span class="up">+$1,212.40 (+1.45%) in 24 hours</span></div>
+      <div class="aside">A$124,911.18 at 1.4738, ECB rate for 13 Nov</div>
     </div>
-
-    <h2>Products</h2>
-    <div class="cards">
-      <button class="card" data-view="portfolio">
-        <h3>Binance portfolio</h3>
-        <p>5 holdings, 2 open orders, 4 trades this week.</p>
-        <span class="foot"><span class="status positive"><svg aria-hidden="true"><use href="#i-check"/></svg>Connected</span><span class="go">Open<svg aria-hidden="true"><use href="#i-arrow"/></svg></span></span>
-      </button>
-      <button class="card" data-view="audit">
-        <h3>Audit log</h3>
-        <p>174 exchange reads and 2 sign-ins today.</p>
-        <span class="foot"><span class="status positive"><svg aria-hidden="true"><use href="#i-check"/></svg>Recording</span><span class="go">Open<svg aria-hidden="true"><use href="#i-arrow"/></svg></span></span>
-      </button>
-      <div class="card later"><h3>Manual trades</h3><p>Place and cancel orders, within limits, behind the kill switch.</p><span class="foot"><span class="status later"><svg aria-hidden="true"><use href="#i-minus"/></svg>Later</span></span></div>
-      <div class="card later"><h3>DCA bots</h3><p>Buy a set amount on a schedule.</p><span class="foot"><span class="status later"><svg aria-hidden="true"><use href="#i-minus"/></svg>Later</span></span></div>
-      <div class="card later"><h3>Grid bots</h3><p>Buy and sell across a price range.</p><span class="foot"><span class="status later"><svg aria-hidden="true"><use href="#i-minus"/></svg>Later</span></span></div>
-      <div class="card later"><h3>Bybit and leverage</h3><p>A second exchange, with its own key.</p><span class="foot"><span class="status later"><svg aria-hidden="true"><use href="#i-minus"/></svg>Later</span></span></div>
-      <div class="card later"><h3>DEX leverage</h3><p>Leverage on a decentralised exchange.</p><span class="foot"><span class="status later"><svg aria-hidden="true"><use href="#i-minus"/></svg>Later</span></span></div>
-      <div class="card later"><h3>DeFi</h3><p>Positions held on chain.</p><span class="foot"><span class="status later"><svg aria-hidden="true"><use href="#i-minus"/></svg>Later</span></span></div>
+    <div class="tile">
+      <div class="label">24 hours</div>
+      <div class="figure up">+$1,218.04</div>
+      <div class="aside up">+1.46%</div>
     </div>
-  </section>
-
-  <section id="portfolio" hidden>
-    <div class="head">
-      <div>
-        <h1>Binance portfolio</h1>
-        <p class="sub">Spot account. Updated 14:32, 13 Nov 2026, every five minutes.</p>
-      </div>
-      <div class="total" style="margin:0;text-align:right">
-        <div class="label">Total value</div>
-        <div class="figure" style="font-size:40px">$84,754.50</div>
-      </div>
+    <div class="tile">
+      <div class="label">Unrealised profit or loss</div>
+      <div class="figure up">+$9,420.35</div>
+      <div class="aside"><span class="up">+13.84%</span> on $68,051.50 cost</div>
     </div>
+  </div>
 
-    <h2>Holdings</h2>
-    <div class="scroll"><table>
-      <thead><tr><th>Asset</th><th class="n">Amount</th><th class="n">Price</th><th class="n">Value</th><th>Share</th><th class="n">24 hours</th></tr></thead>
-      <tbody>
-        <tr><td>BTC</td><td class="n q">0.4125</td><td class="n q">$98,420.00</td><td class="n">$40,598.25</td><td><span class="share"><i style="width:47.9%"></i></span>47.9%</td><td class="n up">+2.10%</td></tr>
-        <tr><td>SOL</td><td class="n q">85</td><td class="n q">$212.40</td><td class="n">$18,054.00</td><td><span class="share"><i style="width:21.3%"></i></span>21.3%</td><td class="n up">+3.42%</td></tr>
-        <tr><td>ETH</td><td class="n q">5.2</td><td class="n q">$3,310.50</td><td class="n">$17,214.60</td><td><span class="share"><i style="width:20.3%"></i></span>20.3%</td><td class="n down">−1.18%</td></tr>
-        <tr><td>USDT</td><td class="n q">6,480.15</td><td class="n q">$1.00</td><td class="n">$6,480.15</td><td><span class="share"><i style="width:7.6%"></i></span>7.6%</td><td class="n q">0.00%</td></tr>
-        <tr><td>BNB</td><td class="n q">3.75</td><td class="n q">$642.00</td><td class="n">$2,407.50</td><td><span class="share"><i style="width:2.8%"></i></span>2.8%</td><td class="n down">−0.35%</td></tr>
-      </tbody>
-    </table></div>
+  <h2>Holdings</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Asset</th><th class="n">Amount</th><th class="n">Price</th><th class="n">Value</th><th>Share</th><th class="n">24 hours</th><th class="n">Average cost</th><th class="n">Profit or loss</th></tr></thead>
+    <tbody>
+      <tr><td class="t asset">BTC</td><td class="n q">0.4125</td><td class="n q">$98,420.00</td><td class="n">$40,598.25</td><td class="t"><span class="share"><i style="width:47.9%"></i></span>47.90%</td><td class="n up">+2.10%</td><td class="n q">$81,200.00</td><td class="n up">+$7,103.25 <span class="q">(+21.21%)</span></td></tr>
+      <tr><td class="t asset">SOL</td><td class="n q">85</td><td class="n q">$212.40</td><td class="n">$18,054.00</td><td class="t"><span class="share"><i style="width:21.3%"></i></span>21.30%</td><td class="n up">+3.42%</td><td class="n q">$176.30</td><td class="n up">+$3,068.50 <span class="q">(+20.48%)</span></td></tr>
+      <tr><td class="t asset">ETH</td><td class="n q">5.2</td><td class="n q">$3,310.50</td><td class="n">$17,214.60</td><td class="t"><span class="share"><i style="width:20.3%"></i></span>20.31%</td><td class="n down">−1.18%</td><td class="n q">$3,480.00</td><td class="n down">−$881.40 <span class="q">(−4.87%)</span></td></tr>
+      <tr><td class="t asset">USDT</td><td class="n q">6,480.15</td><td class="n q">$1.00</td><td class="n">$6,480.15</td><td class="t"><span class="share"><i style="width:7.6%"></i></span>7.65%</td><td class="n q">0.00%</td><td class="n q">–</td><td class="n q">–</td></tr>
+      <tr><td class="t asset">BNB</td><td class="n q">3.75</td><td class="n q">$642.00</td><td class="n">$2,407.50</td><td class="t"><span class="share"><i style="width:2.8%"></i></span>2.84%</td><td class="n down">−0.35%</td><td class="n q">$590.00<span class="partial">covers 2.5 of 3.75</span></td><td class="n up">+$130.00 <span class="q">(+8.81%)</span><span class="partial">on 2.5 only</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="foot">Average cost comes from trades against USDT, USDC and FDUSD. Coins deposited or bought through other pairs show what the trades cover.</p>
 
-    <h2>Open orders</h2>
-    <div class="scroll"><table>
-      <thead><tr><th>Placed</th><th>Pair</th><th>Side</th><th>Type</th><th class="n">Price</th><th class="n">Amount</th><th class="n">Filled</th></tr></thead>
-      <tbody>
-        <tr><td class="q">12 Nov 2026, 09:14</td><td>BTC/USDT</td><td class="up">Buy</td><td class="q">Limit</td><td class="n">$94,000.00</td><td class="n q">0.02</td><td class="n q">0%</td></tr>
-        <tr><td class="q">10 Nov 2026, 21:40</td><td>SOL/USDT</td><td class="down">Sell</td><td class="q">Limit</td><td class="n">$240.00</td><td class="n q">20</td><td class="n q">0%</td></tr>
-      </tbody>
-    </table></div>
+  <h2>Open orders</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Placed</th><th>Pair</th><th>Side</th><th>Type</th><th class="n">Price</th><th class="n">Amount</th><th class="n">Filled</th></tr></thead>
+    <tbody>
+      <tr><td class="t q">12 Nov 2026, 09:14</td><td class="t">BTC/USDT</td><td class="t up">Buy</td><td class="t q">Limit</td><td class="n">$94,000.00</td><td class="n q">0.002</td><td class="n q">0%</td></tr>
+      <tr><td class="t q">10 Nov 2026, 21:40</td><td class="t">SOL/USDT</td><td class="t down">Sell</td><td class="t q">Limit</td><td class="n">$240.00</td><td class="n q">2</td><td class="n q">0%</td></tr>
+    </tbody>
+  </table></div>
 
-    <h2>Recent trades</h2>
-    <div class="scroll"><table>
-      <thead><tr><th>Time</th><th>Pair</th><th>Side</th><th class="n">Price</th><th class="n">Amount</th><th class="n">Total</th><th class="n">Fee</th></tr></thead>
-      <tbody>
-        <tr><td class="q">11 Nov 2026, 16:02</td><td>ETH/USDT</td><td class="up">Buy</td><td class="n">$3,280.00</td><td class="n q">1.2</td><td class="n">$3,936.00</td><td class="n q">0.0012 ETH</td></tr>
-        <tr><td class="q">9 Nov 2026, 08:47</td><td>SOL/USDT</td><td class="up">Buy</td><td class="n">$198.50</td><td class="n q">25</td><td class="n">$4,962.50</td><td class="n q">0.025 SOL</td></tr>
-        <tr><td class="q">8 Nov 2026, 22:15</td><td>BNB/USDT</td><td class="down">Sell</td><td class="n">$655.00</td><td class="n q">1.5</td><td class="n">$982.50</td><td class="n q">0.98 USDT</td></tr>
-        <tr><td class="q">7 Nov 2026, 11:30</td><td>BTC/USDT</td><td class="up">Buy</td><td class="n">$96,100.00</td><td class="n q">0.05</td><td class="n">$4,805.00</td><td class="n q">0.00005 BTC</td></tr>
-      </tbody>
-    </table></div>
-  </section>
-
-  <section id="audit" hidden>
-    <h1>Audit log</h1>
-    <p class="sub">Every exchange call and sign-in, newest first. Entries are added and never changed.</p>
-    <div class="filter" role="group" aria-label="Filter by kind">
-      <button class="chip" aria-pressed="true">All</button>
-      <button class="chip" aria-pressed="false">Exchange reads</button>
-      <button class="chip" aria-pressed="false">Sign-ins</button>
-      <button class="chip" aria-pressed="false">Settings</button>
-    </div>
-    <div class="scroll"><table class="compact">
-      <thead><tr><th>Time</th><th>Kind</th><th>Asked by</th><th>Action</th><th>Result</th><th>ID</th></tr></thead>
-      <tbody>
-        <tr><td class="q">13 Nov 2026, 14:32:04</td><td>Exchange read</td><td class="q">Schedule</td><td>Binance: balances, prices, open orders, trades</td><td><span class="status positive"><svg aria-hidden="true"><use href="#i-check"/></svg>OK, 412 ms</span></td><td class="mono q">a7f3c21e</td></tr>
-        <tr><td class="q">13 Nov 2026, 14:27:03</td><td>Exchange read</td><td class="q">Schedule</td><td>Binance: balances, prices, open orders, trades</td><td><span class="status positive"><svg aria-hidden="true"><use href="#i-check"/></svg>OK, 388 ms</span></td><td class="mono q">91be04d7</td></tr>
-        <tr><td class="q">13 Nov 2026, 14:22:05</td><td>Exchange read</td><td class="q">Schedule</td><td>Binance: balances, prices, open orders, trades</td><td><span class="status caution"><svg aria-hidden="true"><use href="#i-clock"/></svg>Timed out, kept last snapshot</span></td><td class="mono q">5c20e9aa</td></tr>
-        <tr><td class="q">13 Nov 2026, 14:19:51</td><td>Sign-in</td><td class="q">Owner</td><td>Signed in with an authenticator code</td><td><span class="status positive"><svg aria-hidden="true"><use href="#i-check"/></svg>OK</span></td><td class="mono q">e3d8817b</td></tr>
-        <tr><td class="q">13 Nov 2026, 14:17:02</td><td>Exchange read</td><td class="q">Schedule</td><td>Binance: balances, prices, open orders, trades</td><td><span class="status positive"><svg aria-hidden="true"><use href="#i-check"/></svg>OK, 397 ms</span></td><td class="mono q">0b6f52c4</td></tr>
-      </tbody>
-    </table></div>
-  </section>
+  <h2>Recent trades</h2>
+  <div class="scroll"><table>
+    <thead><tr><th>Time</th><th>Pair</th><th>Side</th><th class="n">Price</th><th class="n">Amount</th><th class="n">Total</th><th class="n">Fee</th></tr></thead>
+    <tbody>
+      <tr><td class="t q">11 Nov 2026, 16:02</td><td class="t">ETH/USDT</td><td class="t up">Buy</td><td class="n">$3,280.00</td><td class="n q">1.2</td><td class="n">$3,936.00</td><td class="n q">0.0012 ETH</td></tr>
+      <tr><td class="t q">9 Nov 2026, 08:47</td><td class="t">SOL/USDT</td><td class="t up">Buy</td><td class="n">$198.50</td><td class="n q">25</td><td class="n">$4,962.50</td><td class="n q">0.025 SOL</td></tr>
+      <tr><td class="t q">8 Nov 2026, 22:15</td><td class="t">BNB/USDT</td><td class="t down">Sell</td><td class="n">$655.00</td><td class="n q">1.5</td><td class="n">$982.50</td><td class="n q">0.98 USDT</td></tr>
+      <tr><td class="t q">7 Nov 2026, 11:30</td><td class="t">BTC/USDT</td><td class="t up">Buy</td><td class="n">$96,100.00</td><td class="n q">0.05</td><td class="n">$4,805.00</td><td class="n q">0.00005 BTC</td></tr>
+    </tbody>
+  </table></div>
 </main>
 
 <script>
-  const views = document.querySelectorAll("main > section");
-  const tabs = document.querySelectorAll("nav button");
-  function show(id) {
-    views.forEach((v) => { v.hidden = v.id !== id; });
-    tabs.forEach((t) => {
-      if (t.dataset.view === id) t.setAttribute("aria-current", "page");
-      else t.removeAttribute("aria-current");
-    });
-    window.scrollTo(0, 0);
+  const root = document.documentElement;
+  const picks = document.querySelectorAll(".pick button");
+  function setTheme(name) {
+    root.dataset.theme = name;
+    picks.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.set === name)));
   }
-  document.querySelectorAll("[data-view]").forEach((el) => el.addEventListener("click", () => show(el.dataset.view)));
-
-  const theme = document.getElementById("theme");
-  const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
-  function isDark() {
-    const set = document.documentElement.dataset.theme;
-    return set ? set === "dark" : systemDark.matches;
-  }
-  function label() { theme.textContent = isDark() ? "Light" : "Dark"; }
-  theme.addEventListener("click", () => { document.documentElement.dataset.theme = isDark() ? "light" : "dark"; label(); });
-  label();
-
-  document.querySelectorAll(".chip").forEach((chip) => chip.addEventListener("click", () => {
-    document.querySelectorAll(".chip").forEach((c) => c.setAttribute("aria-pressed", String(c === chip)));
-  }));
+  picks.forEach((b) => b.addEventListener("click", () => setTheme(b.dataset.set)));
+  if (window.matchMedia("(prefers-color-scheme: dark)").matches) setTheme("quiet-dark");
 </script>
 </body>
 </html>
