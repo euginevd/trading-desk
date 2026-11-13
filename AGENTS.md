@@ -20,7 +20,7 @@ The same for every project; the business and the project are in the docs below. 
 
 ## Commands
 
-6. The developer is on Windows with VS Code. The agent runs local commands itself (PowerShell or Git Bash). A cloud command for the developer is bash for AWS CloudShell (known-mistakes 6).
+6. The developer is on Windows with VS Code; the agent runs local commands itself (PowerShell or Git Bash). A step the developer does by hand is one line of what and why, then a command to paste (bash for AWS CloudShell, known-mistakes 6) or the settings page's link.
 7. Setup, once per clone, run by the user: `bash scripts/setup.sh`. In a cloud session, with no user at the machine, the agent runs it. Check only: `bash scripts/setup.sh --check`, at kickoff and whenever a tool or the push hook is missing; report what it found.
 8. On every push: `bash .lefthook/pre-push-scan.sh`.
 9. Terraform, in `infra/aws/<unit>/`: `terraform fmt -recursive && terraform init -backend=false && terraform validate`.
@@ -65,7 +65,7 @@ The same for every project; the business and the project are in the docs below. 
     - The body has a Security line: threat model changes, new skips, packages or permissions.
     - Findings: `bash scripts/pr-findings.sh <pr>`. Fix critical and high at their cause, medium and low when real; answer the rest and resolve the thread (`bash scripts/pr-findings.sh resolve <thread-id> "<reply>"`). A skip is a last resort, with a one-line reason.
     - Merge: `gh pr update-branch` if `main` has moved, squash-merge (prototype once checks pass, production once approved), then delete the branch locally and on GitHub.
-17. Cloud work deploys early:
+17. Local first: build and test locally, with stand-ins for cloud services; the user bootstraps AWS once happy with it. Then cloud work deploys early:
     - A new cloud service starts with a walking skeleton: phase 1 applies its smallest resource to `dev` and calls it once.
     - At most one new AWS service per PR until the last one has applied.
     - Test against the target engine's limits, not only its local stand-in (known-mistakes 16 to 18).
@@ -85,7 +85,7 @@ The same for every project; the business and the project are in the docs below. 
 27. Environments: a prototype has `dev` only, in one account, and never names, configures or documents anything as `prod`; its settings tear down cleanly (no deletion protection). Production has `dev` then `prod`, each in its own account. Teardown keeps the bootstrap until the agent confirms the account is empty.
 28. Permissions: every bootstrap has an AWS Budgets alert (`BudgetEmail`) and a read-only troubleshoot role with a CLI user that can only assume it. A prototype's may grant wide while building (whole AI and workflow services, limited by region or project name, commitments denied), recorded as a decision with a permissions audit in `TODO.md`. Production starts at least privilege.
 29. Commits, PRs, PR comments and review replies carry the human author only: no AI co-author, attribution or "Generated with" lines, in the text or a footer. `.claude/settings.json` turns Claude Code's off; another agent's must be turned off too. Commits are one line.
-30. One repo per product: apps in `apps/<app>/`, Terraform in `infra/aws/<unit>/`, an app's unit named after it. `infra/aws/bootstrap/` is CloudFormation only the user deploys.
+30. One repo per product: apps in `apps/<app>/`, Terraform in `infra/aws/<unit>/`, an app's unit named after it. `infra/aws/bootstrap/` is CloudFormation only the user deploys. A personal or portfolio repo is public from the start, so nothing secret goes in code or Terraform; a work repo stays private.
 
 ## Known mistakes
 

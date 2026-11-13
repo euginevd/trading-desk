@@ -54,6 +54,6 @@ bash scripts/setup.sh
 uv run pytest
 ```
 
-`setup.sh` installs the scanners, uv, Terraform and the push hook. Deploys go through the pipeline only, once the AWS account is bootstrapped ([guides/01-using-the-template.md](guides/01-using-the-template.md), section 2).
+`setup.sh` installs the scanners, uv, Terraform and the push hook. It runs locally first. Deploys go through the pipeline only, once it works locally and the AWS account is bootstrapped ([guides/01-using-the-template.md](guides/01-using-the-template.md), section 2).
 
 Report a vulnerability through [SECURITY.md](SECURITY.md). [MIT licence](LICENSE).

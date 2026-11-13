@@ -23,7 +23,7 @@ Profile: `prototype`, with two limits of its own on top (decisions 1 and 2): the
 2. Problem: the owner's holdings, orders and bots sit in separate exchange apps, each with its own screens and its own idea of profit, so there's no single view of what's held, what it's worth and what's running.
 3. Goal: one sign-in shows everything held and everything running, and each later stage adds a way to act on it from the same place, with the same controls.
 4. Users: the owner, alone. They sign in, read the portfolio and, in later stages, place trades, run bots and stop them.
-5. AWS: one account, `ap-southeast-2`, `dev` only. The pipeline deploys `dev` on merge.
+5. Where it runs: locally first, until the owner is happy with it; then AWS, one account, `ap-southeast-2`, `dev` only, deployed by the pipeline on merge (decision 7).
 
 ## Stack
 
@@ -32,17 +32,18 @@ Template defaults: GitHub Actions, Terraform on AWS, the pre-push scan and the P
 6. Two apps (decisions 3 and 4):
    - `api`: Python on Lambda behind an HTTP API. It reads the exchange, keeps the snapshots and the audit log in DynamoDB, and is the only thing that holds an exchange key.
    - `desk`: React, Vite and TypeScript on S3 and CloudFront, with Cognito sign-in. The dashboard and each product's screens.
+   - Locally, `docker compose up` runs both, with stand-ins for Cognito, DynamoDB and Secrets Manager.
 
 ## Done when
 
 7. `GET /health` returns `{"status": "ok"}`.
-8. The MVP: the owner signs in on `dev` and sees their Binance spot balances, each holding's value and the total, open orders and recent trades, no older than five minutes, and every read of the exchange is in the audit log. The owner then uses it for three months before deciding on anything commercial.
+8. The MVP: the owner signs in, locally and then on `dev`, and sees their Binance spot balances, each holding's value and the total, open orders and recent trades, no older than five minutes, and every read of the exchange is in the audit log. The owner then uses it for three months before deciding on anything commercial.
 
 ## Rules
 
 9. `/health` is public and returns nothing from the request. Every other route needs the owner's sign-in.
 10. The limits that hold whatever else changes:
-    - Exchange keys: one per exchange and per purpose, never with withdrawal permission, and limited to this project's fixed IP address before one can trade. A key lives only in Secrets Manager, put there by the owner: never in code, Terraform, state, a log, a PR or the browser.
+    - Exchange keys: one per exchange and per purpose, never with withdrawal permission, and limited to this project's fixed IP address before one can trade. A key lives only in Secrets Manager, or locally in `.env`, put there by the owner: never in code, Terraform, state, a log, a PR or the browser.
     - Money: the MVP's key is read-only, so it can't trade. A later stage trades only within limits the owner sets (per order and per day), checked in code, and only while the kill switch is on; turning it off stops every bot and refuses every new order.
     - Audit log: every exchange call, order, bot action, sign-in and settings change is recorded with its time, who or what asked, and the result. Entries are added, never edited or deleted.
     - Monthly spend: $50 of AWS. Security baseline: OWASP ASVS 5.0 Level 1, with the limits above on top.
