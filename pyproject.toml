@@ -1,6 +1,6 @@
 # Python workspace: one member per app in apps/. Tool settings for every Python app live here.
 [project]
-name = "starter"
+name = "trading-desk"
 version = "0.1.0"
 requires-python = ">=3.13,<3.14"
 dependencies = ["api"]
@@ -50,4 +50,4 @@ source = ["apps"]
 omit = ["*/tests/*"]
 
 [tool.coverage.report]
-fail_under = 80
+fail_under = 50

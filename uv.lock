@@ -1,5 +1,5 @@
 version = 1
-revision = 5
+revision = 3
 requires-python = "==3.13.*"
 
 [options]
@@ -9,7 +9,7 @@ exclude-newer-span = "P7D"
 [manifest]
 members = [
     "api",
-    "starter",
+    "trading-desk",
 ]
 
 [[package]]
@@ -189,7 +189,7 @@ wheels = [
 ]
 
 [[package]]
-name = "starter"
+name = "trading-desk"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
