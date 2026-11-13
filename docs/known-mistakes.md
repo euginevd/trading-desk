@@ -53,3 +53,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 ## Pull requests
 
 28. A prototype opened a PR for each small change: commit to the session's branch and open one PR only when the user says the batch is ready, or at the end of the session (AGENTS.md rule 16).
+
+## Binance
+
+29. Binance refuses the agent's cloud container (HTTP 451, restricted location): test against recorded replies, and the owner makes the first live run.
