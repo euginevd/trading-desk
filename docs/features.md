@@ -4,28 +4,23 @@ The agreed features, by app and audience; the agent adds a row when you approve 
 
 | App | For | Link |
 |---|---|---|
-| [`desk`](#desk) | The owner | Not deployed yet |
-| [`api`](#api) | The `desk` app | Not deployed yet |
+| [`desk`](#desk) | The owner | Not built yet |
+| [`api`](#api) | The `desk` app | Not built yet |
 
 ## `desk`
 
-The MVP's screens are mocked up in [mockups/mvp.html](mockups/mvp.html).
+The portfolio page is mocked up in [mockups/mvp.html](mockups/mvp.html) (Portfolio).
 
 | # | Feature | Status | PR |
 |---|---|---|---|
-| 1 | Sign-in with Cognito: one user, multi-factor, no sign-up (spec 9) | Next | |
-| 2 | Dashboard: the total value, a card per product linking to its screens, and the state of each exchange connection; products not built yet are shown as later | Next | |
-| 3 | Binance portfolio: spot balances with each holding's value and share of the total, open orders and recent trades, with the time of the last update (spec 8) | Next | |
-| 4 | Audit log: every exchange call and sign-in, newest first, filtered by kind (spec 10) | Next | |
+| 1 | Portfolio page (TODO 1): the spot wallet's holdings, each with its amount, price, value, share of the total, 24-hour change, average cost and unrealised profit or loss; the total in US and Australian dollars; open orders; recent trades; the time it was fetched, and Refresh (decision 9) | Building | |
 
 ## `api`
 
 | # | Feature | Status | PR |
 |---|---|---|---|
-| 5 | Health check, `GET /health` (spec 7) | Done | Starter |
-| 6 | Binance read: balances, prices, open orders and trades through a read-only key from Secrets Manager, snapshotted to DynamoDB every five minutes (spec 10) | Next | |
-| 7 | Portfolio routes for `desk`, each checking the owner's token and serving the last snapshot (spec 9) | Next | |
-| 8 | Audit log: an add-only record of every exchange call, sign-in and settings change, and a route to read it (spec 10) | Next | |
+| 2 | Portfolio route (TODO 1): fetches balances, 24-hour prices, open orders and trades from Binance through the owner's key, works out value and profit or loss, and logs each exchange call to the add-only audit log (spec 10) | Building | |
+| 3 | Health check, `GET /health` (spec 7) | Done | Starter |
 
 ## Behind every app
 
@@ -33,6 +28,6 @@ What no single app owns, such as an agent, a check every request goes through, o
 
 | # | Feature | Status | PR |
 |---|---|---|---|
-| 9 | Pipeline: app checks, security scans, and a Terraform plan and apply through the `aws` workflow: a merge to `main` applies to `dev` | Done | Starter |
+| 4 | Pipeline: app checks, security scans, and a Terraform plan and apply through the `aws` workflow: a merge to `main` applies to `dev` | Done | Starter |
 
 Status: Next, Building, Done or Dropped (with the reason).

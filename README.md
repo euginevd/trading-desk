@@ -1,6 +1,6 @@
 # trading-desk
 
-A personal trading desk: one dashboard that links out to each trading product, with the same controls behind all of them. It starts as a read-only view of a Binance account and grows a stage at a time.
+A personal trading desk: one dashboard that links out to each trading product, with the same controls behind all of them. It starts as a dashboard and spot trade terminal for a Binance account and grows a stage at a time.
 
 Built from [sdlc-template](https://github.com/euginevd/sdlc-template): a coding agent works to the numbered rules in [AGENTS.md](AGENTS.md), and a pipeline scans, plans and deploys to AWS. It's a prototype for its owner's own use, not financial advice and not a service.
 
@@ -10,13 +10,12 @@ Kickoff is done and nothing is deployed yet. The repo holds the template's start
 
 | Stage | What it adds | Status |
 |---|---|---|
-| 1 | Binance visibility: balances, value, open orders, recent trades and an audit log | Next |
-| 2 | Manual trades | Later |
-| 3 | Dollar Cost Averaging (DCA) bots | Later |
-| 4 | Grid bots | Later |
-| 5 | Bybit and leverage | Later |
-| 6 | Decentralised exchange (DEX) leverage | Later |
-| 7 | DeFi | Later |
+| 1 | Binance dashboard and spot trade terminal: balances, value, orders, trades, placing and cancelling spot orders, and an audit log | Next |
+| 2 | Dollar Cost Averaging (DCA) bots | Later |
+| 3 | Grid bots | Later |
+| 4 | Bybit and leverage | Later |
+| 5 | Decentralised exchange (DEX) leverage | Later |
+| 6 | DeFi | Later |
 
 The plan is to use the first stage for three months before deciding what comes next.
 
@@ -25,9 +24,9 @@ The plan is to use the first stage for three months before deciding what comes n
 The limits every stage keeps ([spec](docs/spec.md) 10):
 
 1. One key per exchange and per purpose, never with withdrawal permission.
-2. A key that can trade works only from this project's fixed IP address.
-3. Keys live in AWS Secrets Manager and nowhere else: not in code, Terraform, logs or the browser. The coding agent never reads one.
-4. A kill switch stops every bot and refuses every new order.
+2. Every key works only from its allowed IP address. The MVP's reads and trades spot only.
+3. Keys live in AWS Secrets Manager, or locally in `.env`: never in code, Terraform, logs or the browser. The coding agent never reads one.
+4. Every order sits within limits you set, and a kill switch stops every bot and refuses every new order.
 5. Every exchange call, order and sign-in goes in an add-only audit log.
 
 The risks and their controls: [docs/threat-model.md](docs/threat-model.md). The risks accepted for speed: [guides/03-security-trade-offs.md](guides/03-security-trade-offs.md).

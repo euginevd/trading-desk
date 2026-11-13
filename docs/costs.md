@@ -12,9 +12,9 @@ What the MVP costs in `dev`, for one user. Costs are approximate monthly figures
 6. Secrets Manager: $0.40 a secret, one for the MVP. Reads are cached for five minutes.
 7. Cognito: nothing for one user.
 8. S3 and CloudFront (`desk`): under $1, driven by page loads.
-9. Not in the MVP: a fixed IP address for the exchange's allowlist, about $45 for a NAT gateway and its address, due at the manual trades stage (decision 3). It would be most of the bill, so that stage prices a small NAT instance against it first.
+9. Once it's on AWS: a fixed IP address for Binance's allowlist, about $45 for a NAT gateway and its address, since the MVP's key trades (decision 3). It would be most of the bill, so the first deploy prices a small NAT instance against it.
 
-The MVP as a whole: about $2 to $4 a month.
+The MVP on AWS: about $2 to $4 a month, plus the fixed address (9).
 
 ## Budget and alerts
 
