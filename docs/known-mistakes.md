@@ -17,21 +17,9 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 7. A boolean `workflow_dispatch` input is empty on a push, which GitHub counts as `false`: test the event, as in `github.event_name != 'workflow_dispatch' || inputs.deploy`.
 8. The AWS CLI on GitHub's runners reads `--cli-input-json file:///dev/stdin` as empty: pass a request through a private temporary file, and delete it after.
 
-## AWS
+## AWS and Aurora DSQL
 
-9. An internal service on a public URL still needs auth (travel-claims #46): make service-to-service URLs IAM-only.
-10. A new IAM role isn't usable for a few seconds (travel-claims #60): rerun the apply; don't change a trust policy that's right.
-11. Cognito names allow only letters, digits, spaces and `+=,.@-`: keep apostrophes out of AWS names; descriptions are fine.
-12. The base Python image's `pip` bundles old `urllib3`, `msgpack` and `setuptools`, and lags Debian's fixes, failing the image scan: runtime stages uninstall `pip` and run `apt-get upgrade`.
-13. An AgentCore Gateway Lambda target takes `gateway_iam_role {}` with no `service`.
-14. CloudFront's `web_acl_id` is optional and computed, so `null` leaves an attached web ACL in place: set `""` to detach, `null` only where Firewall Manager owns it.
-15. AgentCore Identity checks `GetResourceApiKey` and `GetResourceOauth2Token` against `workload-identity-directory/default` too: grant the directory, the workload and the vault.
-
-## Aurora DSQL
-
-16. DSQL refuses `SAVEPOINT`, and SQLAlchemy's psycopg dialect looks up `hstore` inside one on first connect: DSQL engines set `use_native_hstore=False`.
-17. `sys.wait_for_job` is a procedure: `CALL` it and read its success from the row it returns.
-18. `begin_nested()` opens a `SAVEPOINT`: keep the first row with `insert_if_new` (`INSERT ... ON CONFLICT DO NOTHING`); a test fails if one comes back.
+Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistakes/aws.md](known-mistakes/aws.md).
 
 ## Docs
 
@@ -49,7 +37,6 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 25b. Headless Chrome on Windows lays a page out at 500px at least and crops a narrower screenshot: check phone layouts at `--window-size=500,…`, not 390.
 25c. On Windows, Git Bash at `/c/…` spells the drive `C:` while the project is `c:`: Vitest fails with "failed to find the runner" and `docker compose --build` asks for `--allow=fs.read`. Run both from `cd "c:/…"`.
 26. Replacing a block of `styles.css` by slicing from its comment to the end of the file drops every rule appended after it (the sort headers lost their styles): slice to the next block's comment, then check the rules you didn't mean to touch are still there.
-
 
 ## Python and Postgres
 
