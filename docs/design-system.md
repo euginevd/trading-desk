@@ -64,10 +64,9 @@ Colours in OKLCH, light and dark, following the system setting with a toggle.
 ## This project
 
 25. Locale: Australian English. Values in US dollars, as the exchange quotes them, with the total also in Australian dollars. Dates as 13 Nov 2026, times in 24-hour Sydney time. Money always shows 2 decimal places; a coin amount shows up to 8, with trailing zeros dropped.
-26. Shell: a top bar with the desk's name, Dashboard, Portfolio and Audit log, the connection status, and the owner's initials for sign-out. One column of content, up to 1280px.
-27. Screens, mocked up in [mockups/mvp.html](mockups/mvp.html):
-    - Dashboard: the total value stands out, over a card per product; a product not built yet is a quiet "Later" card with no link.
-    - Portfolio: the total and when it was last updated, then holdings, open orders and recent trades as tables.
-    - Audit log: a compact table, newest first, with a filter by kind.
+26. Shell: a top bar with the desk's name, Dashboard and Trade terminal, the Binance connection status, and the kill switch (Trading on or off). Theme: these tokens, following the system's light or dark (decision 11).
+27. Screens:
+    - Dashboard (TODO 1), mocked up with the Trade terminal in [mockups/mvp.html](mockups/mvp.html): Refresh and the fetch time at the top; total value with its Australian dollar figure and rate, 24-hour change and unrealised profit or loss as tiles; then holdings, open orders and recent trades as tables. A cost the trades only partly cover says so in `caution`.
+    - Trade terminal (TODO 2): the pair, its price and the limits left today on the left; the smart trade ticket on the right, with Market or Limit, the amount in USDT, and the take-profit and stop-loss by price or percent; a confirm step states the trade, its risk and reward in words; smart trades below.
 28. Charts: a line for trends, a bar for comparisons, `ink-3` axes, `accent` for the series in focus, and a table view of the same numbers.
-29. Status: Connected (check, `positive`), Stale, for data older than ten minutes (clock, `caution`), Disconnected (alert, `critical`) and Later (minus, `ink-3`). A gain or a buy is `positive` and a loss or a sell `critical`, always with a plus or minus sign or the word.
+29. Status: Connected (check, `positive`), Stale, for data older than ten minutes (clock, `caution`), and Disconnected (alert, `critical`). Smart trades: Waiting for entry (clock, `ink-2`), Protected, with its exits on Binance (shield, `positive`), Needs exits (alert, `caution`), Closed at take-profit (check, `positive`), Closed at stop-loss (x, `critical`) and Cancelled (minus, `ink-3`). The kill switch: Trading on (`positive`) or Trading off (`critical`).

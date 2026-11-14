@@ -9,7 +9,7 @@ The agent asks for this first ([AGENTS.md](../AGENTS.md) rules 11 to 13). Where 
 | | `prototype`: a working MVP, fast | `production`: gated |
 |---|---|---|
 | For | No real users, customer data or payments | Anything that has them |
-| You approve | Nothing: review whenever you like | Kickoff and every plan; a second reviewer approves each PR and each apply, `dev` and `prod` |
+| You approve | Each TODO item's spec and mockup, before code | Kickoff and every plan; a second reviewer approves each PR and each apply, `dev` and `prod` |
 | Environments | `dev` only | `dev`, then `prod`, each in its own account |
 | Tests | Main paths and anything sensitive, 50% coverage | Abuse cases too, 80% coverage |
 | When unsure | The agent takes the simpler option and says so | The agent asks |
@@ -21,10 +21,10 @@ In both, one branch holds a session's work. A prototype's agent commits, pushes,
 
 Once per project, by you. Steps 1 to 3 need the GitHub CLI, signed in with `gh auth login`.
 
-1. **Create it:** `gh repo create <name> --template euginevd/sdlc-template --private --clone`. Keep a repo that deploys to AWS private: on a public one, anyone signed in can download `main`'s Terraform plans for a day (trade-offs 5). A private repo needs a paid GitHub plan (Pro or Team) for step 3.
+1. **Create it:** `gh repo create <name> --template euginevd/sdlc-template --public --clone` for a personal or portfolio project, built in the open; `--private` for a work project. On a public repo anyone signed in can download `main`'s Terraform plans for a day, so nothing secret goes in code or Terraform (trade-offs 5). A private repo needs a paid GitHub plan (Pro or Team) for step 3.
 2. **Tools and hooks:** `bash scripts/setup.sh` on every fresh clone installs the scanners, uv, Terraform and the push hook: with winget on Windows, Homebrew on macOS, and checked downloads on Linux, where an agent in a cloud container runs it itself. Until it runs, pushes aren't scanned; `bash scripts/setup.sh --check` only reports.
 3. **Protect `main`:** `bash scripts/protect-main.sh` sets the Actions limits, squash-only merges, security features, the `main` ruleset and the `aws-dev-apply` environment, which deploys from `main` only. On a free plan a private repo gets neither the ruleset nor the environment, so nothing is enforced and the script says so; a public one also needs everything under Settings → Advanced Security turned on by hand ([guide 04](04-the-guardrails.md), sections 4 and 7).
-4. **AWS, when the project first needs it:** follow the steps at the top of [bootstrap.yaml](../infra/aws/bootstrap/bootstrap.yaml), once per account: `dev`, and for production `prod` (`Target=prod`) before its first release. Set `BudgetEmail` for spend alerts and `INFRACOST_API_KEY` for a cost comment on each PR; `protect-main.sh` has already limited each `aws-<env>-apply` environment to `main`; run it again to check ([guide 04](04-the-guardrails.md), section 16).
+4. **AWS, once the project works locally and you're happy with it:** follow the steps at the top of [bootstrap.yaml](../infra/aws/bootstrap/bootstrap.yaml), once per account: `dev`, and for production `prod` (`Target=prod`) before its first release. Set `BudgetEmail` for spend alerts and `INFRACOST_API_KEY` for a cost comment on each PR; `protect-main.sh` has already limited each `aws-<env>-apply` environment to `main`; run it again to check ([guide 04](04-the-guardrails.md), section 16).
 5. **Reviewers**, the one step that differs by profile:
    - `prototype`: none. Leave the reviewer off `aws-dev-apply`, so a merge deploys to `dev` unattended.
    - `production`: give a second reviewer write access, run `bash scripts/protect-main.sh production`, and make them the required reviewer on each apply environment, with *Prevent self-review* on.
@@ -36,7 +36,8 @@ Gate G0, once per project. `docs/` starts by describing the health-check API the
 
 | You say | The agent | You |
 |---------|-----------|-----|
-| *"Kick off `<name>`: `<notes on the business, problem, users and stack>`"* | Checks the machine, asks the profile, drafts `spec.md` with its Business section | Correct it until it's right |
+| *"Kick off `<name>`: `<notes on the business, problem, users and stack>`"* | Checks the machine, asks the profile and the repo type | Answer, then list what you want in `TODO.md` |
+| | Drafts `spec.md`, Business section included, from `TODO.md`, and keeps the two in step | Correct it until it's right |
 | | Runs a short spike on the deploy target: what each managed service refuses or limits, into `decisions.md` | Agree the target |
 | | With UI: drafts `design-system.md` and mocks up the MVP's main screens in `docs/mockups/mvp.html` | Open the mockup; ask for changes, then approve |
 | | Extends `threat-model.md` and `costs.md`; a prototype keeps the starter's | `production`: approve each |
@@ -46,11 +47,11 @@ Gate G0, once per project. `docs/` starts by describing the health-check API the
 
 ## 4. Build a prototype
 
-One prompt builds and ships. Nothing waits for you: the agent decides what production would ask about, records it in `decisions.md`, and tells you in its report.
+One TODO item at a time. Once you approve its spec and mockup, nothing else waits for you: the agent decides what production would ask about, records it in `decisions.md`, and tells you in its report.
 
 | You say | The agent | You |
 |---------|-----------|-----|
-| *"Build `<the work>`"* | Adds it to the spec, writes a short plan and builds on the session's one branch: code, main-path tests, local checks, `features.md` and `TODO.md` | Interrupt if the direction is wrong |
+| *"Build `<the work>`"*, once you approve its spec and mockup | Builds on the session's one branch: code, main-path tests, local checks, `features.md` and `TODO.md` | Interrupt if the direction is wrong |
 | | New cloud service: deploys a walking skeleton to `dev` first, one service at a time ([AGENTS.md](../AGENTS.md) rule 17) | |
 | | A fresh subagent reviews the whole branch; it fixes what it blocks and reports | Try it; ask for more |
 | | Once the work is done and the local checks pass: commits, pushes (the pre-push scan runs), opens one PR, fixes the findings and squash-merges once checks pass | |
@@ -76,7 +77,7 @@ The same loop, stopping at gates G1 to G4 ([AGENTS.md](../AGENTS.md) rule 12). T
 
 | When | You say | What happens |
 |------|---------|--------------|
-| A small fix touching no users, data, auth, endpoints, infrastructure or screens | *"Fix `<the problem>`"* | No plan, the same checks |
+| A small fix touching no users, data, auth, endpoints, infrastructure or screens | *"Fix `<the problem>`"* | No plan, the same checks; it waits on the branch for the next PR |
 | Dependabot's weekly PRs | *"Check the Dependabot PRs"* | The agent fixes what the checks find |
 | A scan on `main` or the weekly scan fails | *"Fix the failed scan on main"* | The agent fixes each finding at its cause |
 | A new AWS service | Production: answer when the agent asks. A prototype's agent decides | It adds the permissions to `bootstrap.yaml`; you redeploy the stack before the merge |

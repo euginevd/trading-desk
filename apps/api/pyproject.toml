@@ -1,9 +1,12 @@
 [project]
 name = "api"
 version = "0.1.0"
-description = "Sample API: the health check behind infra/aws/api's /health route"
+description = "The desk API: health check and the Binance portfolio"
 requires-python = ">=3.13,<3.14"
-dependencies = []
+dependencies = [
+    "httpx==0.28.1",
+    "tzdata==2025.3",
+]
 
 [build-system]
 requires = ["uv_build==0.13.7"]
