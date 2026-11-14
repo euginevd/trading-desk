@@ -39,7 +39,12 @@ FIELDS = (
     "note",
     "updated",
 )
-OPEN = ("placing", "waiting", "needs_exits", "protected", "open")
+# Every column a trade can change, written out whole: no SQL is built from strings.
+UPDATE = (
+    "UPDATE trades SET status = :status, buy_id = :buy_id, qty = :qty, "
+    "entry_price = :entry_price, exit_kind = :exit_kind, exit_id = :exit_id, "
+    "exit_price = :exit_price, note = :note, updated = :updated WHERE id = :id"
+)
 
 
 class Store:
@@ -92,10 +97,9 @@ class Store:
         unknown = set(changes) - set(FIELDS)
         if unknown:
             raise ValueError(unknown)
-        sets = ", ".join(f"{k} = :{k}" for k in changes)
+        row = {**self.trade(trade_id), **changes}
         with self._db:
-            query = f"UPDATE trades SET {sets} WHERE id = :id"  # noqa: S608 - names from FIELDS
-            self._db.execute(query, {**changes, "id": trade_id})
+            self._db.execute(UPDATE, {field: row[field] for field in (*FIELDS, "id")})
         return self.trade(trade_id)
 
     def trades(self, limit: int = 50) -> list[dict[str, Any]]:
@@ -103,8 +107,10 @@ class Store:
         return [dict(r) for r in rows]
 
     def open_trades(self) -> list[dict[str, Any]]:
-        marks = ", ".join("?" for _ in OPEN)
-        rows = self._db.execute(f"SELECT * FROM trades WHERE status IN ({marks})", OPEN)  # noqa: S608 - fixed placeholders
+        rows = self._db.execute(
+            "SELECT * FROM trades "
+            "WHERE status IN ('placing', 'waiting', 'needs_exits', 'protected', 'open')"
+        )
         return [dict(r) for r in rows]
 
     def spent_since(self, since_ms: int) -> Decimal:

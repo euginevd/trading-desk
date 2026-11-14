@@ -57,3 +57,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 ## Binance
 
 29. Binance refuses the agent's cloud container (HTTP 451, restricted location): test against recorded replies, and the owner makes the first live run.
+
+## SQLite
+
+30. Semgrep blocks SQL built with an f-string, even from fixed names: write each query whole, as in `apps/api/src/api/store.py`.
