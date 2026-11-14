@@ -158,6 +158,8 @@ export interface Signal {
   summary: string;
   reasons: string[];
   model: string;
+  /** How it reached Claude: "API key" or "Claude subscription" (decision 48). */
+  via?: string;
   ranAt: number;
   stale: boolean;
   // The position-aware plan (decision 46); missing on a signal from before it.

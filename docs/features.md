@@ -13,7 +13,7 @@ Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 3
 
 | # | Feature | Status | PR |
 |---|---|---|---|
-| 37 | Trade page: resizable watchlist; order form, limits and orders under the chart | Done | |
+| 37 | Trade page: resizable watchlist; order form and orders under the chart | Done | |
 | 38 | Enter your own average cost for a holding with no trades, such as the TAO wallet (decision 27) | Done | |
 | 39 | Key levels over the chart: month, week and day opens, previous week and day highs and lows, support and resistance (decision 28) | Done | |
 | 40 | USDC deposits into Binance for the financial year, a bar a month in AUD: paid where recorded, estimated at the day's rate otherwise (decision 31); Dashboard refresh is an icon, and the connect buttons are gone | Done | |
@@ -32,7 +32,11 @@ Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 3
 
 ## `api`
 
-Every feature so far is in [features/01-36.md](features/01-36.md).
+Features 7 to 25: [features/01-36.md](features/01-36.md).
+
+| # | Feature | Status | PR |
+|---|---|---|---|
+| 53 | AI provider switch (decision 48): `AI_AUTH_MODE` picks the API key or the owner's Claude subscription (Claude Agent SDK) at each run; the panel and audit log name the source; optional fall back to the key | Done | |
 
 ## Behind every app
 

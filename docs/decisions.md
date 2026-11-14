@@ -51,3 +51,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 45. The TAO wallet reading is kept: reused for a minute, and standing in for six hours when Taostats refuses. [Record](decisions/33-47.md)
 46. The AI panel is a plan for the owner's own position: numbers from code, choices and words from the model. [Record](decisions/33-47.md)
 47. An order sent without an answer is looked up, never assumed lost; one lock for everything that sends orders. [Record](decisions/33-47.md)
+48. The AI plan can run on the owner's Claude subscription, for their own testing. [Record](decisions/from-48.md)

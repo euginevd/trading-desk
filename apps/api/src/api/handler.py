@@ -18,6 +18,7 @@ import httpx
 
 from api import demo
 from api.advisor import futures, gather, history_candles, rules_of, set_rules
+from api.ai_client import capped, subscription, switched
 from api.ai_signal import Ask, SignalError, Signals, claude
 from api.audit import Audit
 from api.binance import Binance, BinanceError
@@ -330,8 +331,20 @@ def _grid_route(
 
 
 def _ask() -> Ask:
+    """The plan's Ask: an API key or the owner's Claude subscription, by `AI_AUTH_MODE`."""
     if _demo():
-        return demo.ask
+
+        def demo_ask(
+            system: str, text: str, shape: dict[str, Any]
+        ) -> tuple[dict[str, Any], Decimal]:
+            reply, cost = demo.ask(system, text, shape)
+            return reply | {"_via": "Demo"}, cost
+
+        return demo_ask
+    return switched(_api_ask, subscription())
+
+
+def _api_ask() -> Ask:
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not key:
 
@@ -366,7 +379,9 @@ def live_services() -> Generator[Services]:
     audit = _audit()
     try:
         with _binance() as binance:
-            yield Services(binance, store, Signals(_ask(), store, audit, _cap()), audit)
+            yield Services(
+                binance, store, Signals(_ask(), store, audit, _cap(), capped=capped), audit
+            )
     finally:
         store.close()
 
