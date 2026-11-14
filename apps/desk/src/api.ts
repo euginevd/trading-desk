@@ -1,4 +1,6 @@
 import type {
+  AiMode,
+  AiSettings,
   Interval,
   Market,
   OrderRequest,
@@ -63,6 +65,9 @@ export const getSentimentDetail = () => call<SentimentDetail>("GET", "/sentiment
 export const getTerminal = (symbol: string) =>
   call<Terminal>("GET", `/trade?symbol=${encodeURIComponent(symbol)}`);
 export const getSettings = () => call<Settings>("GET", "/settings");
+export const getAiSettings = () => call<AiSettings>("GET", "/settings/ai");
+export const setAiSettings = (mode: AiMode, fallback: boolean) =>
+  call<AiSettings>("PUT", "/settings/ai", { mode, fallback });
 export const setTrading = (on: boolean) => call<Settings>("PUT", "/trading", { on });
 export const setLimits = (perOrder: string, perDay: string) =>
   call<Settings>("PUT", "/limits", { perOrder, perDay });

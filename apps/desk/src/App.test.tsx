@@ -167,7 +167,7 @@ describe("side panel", () => {
     expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeTruthy();
     const nav = screen.getByRole("navigation", { name: "Main" });
     const links = Array.from(nav.querySelectorAll("a")).map((a) => a.textContent);
-    expect(links).toEqual(["Dashboard", "Trade", "DCA Bot", "Grid Bot"]);
+    expect(links).toEqual(["Dashboard", "Trade", "DCA Bot", "Grid Bot", "Settings"]);
     fireEvent.click(screen.getByRole("button", { name: "Collapse side panel" }));
     expect(screen.getByRole("button", { name: "Expand side panel" })).toBeTruthy();
     expect(window.localStorage.getItem("desk.side.folded")).toBe("1");

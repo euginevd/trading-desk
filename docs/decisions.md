@@ -53,3 +53,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 47. An order sent without an answer is looked up, never assumed lost; one lock for everything that sends orders. [Record](decisions/33-47.md)
 48. The AI plan can run on the owner's Claude subscription, for their own testing. [Record](decisions/from-48.md)
 49. A prototype's PR waits for the owner's "batch ready" or the session's end, never a single request. [Record](decisions/from-48.md)
+50. A Settings page holds the desk's choices, starting with the AI provider, saved in SQLite over `.env`. [Record](decisions/from-48.md)

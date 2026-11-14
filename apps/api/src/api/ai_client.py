@@ -1,4 +1,5 @@
-"""How the AI plan reaches Claude (TODO 4, decision 48), read from `.env` at every call:
+"""How the AI plan reaches Claude (TODO 4, decisions 48 and 50), read at every call: the
+choice on the Settings page, else `AI_AUTH_MODE` in `.env`:
 
 - `api_key` (the default): the Anthropic API, paid per use (decision 16).
 - `subscription`: the owner's Claude plan, through the Claude Agent SDK and
@@ -20,7 +21,10 @@ from decimal import Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from api.ai_signal import MAX_SEARCHES, MODEL, Ask, SignalError
+from api.ai_signal import MAX_SEARCHES, MODEL, Ask, SignalError, Signals
+from api.audit import Audit
+from api.store import Store
+from api.trading import Refused
 
 API_KEY = "api_key"
 SUBSCRIPTION = "subscription"
@@ -35,29 +39,60 @@ TIMEOUT_SECONDS = 180  # a plan with searches takes a minute or two; nginx waits
 Query = Callable[..., AsyncGenerator[Any]]
 
 
-def mode() -> str:
-    chosen = os.environ.get("AI_AUTH_MODE", API_KEY).strip().lower()
+MODE_KEY = "ai_auth_mode"
+FALLBACK_KEY = "ai_fallback"
+
+
+def mode(store: Store | None = None) -> str:
+    """The Settings page's choice, else `.env`'s, else the API key."""
+    saved = store.setting(MODE_KEY, "") if store else ""
+    chosen = saved or os.environ.get("AI_AUTH_MODE", API_KEY).strip().lower()
     return chosen if chosen in SOURCE else API_KEY
 
 
-def _fallback() -> bool:
-    return os.environ.get("AI_FALLBACK_TO_API_KEY", "0").strip() == "1"
+def _fallback(store: Store | None = None) -> bool:
+    saved = store.setting(FALLBACK_KEY, "") if store else ""
+    return (saved or os.environ.get("AI_FALLBACK_TO_API_KEY", "0").strip()) == "1"
 
 
-def capped() -> bool:
+def capped(store: Store | None = None) -> bool:
     """Whether the monthly API cap applies: not to a subscription run that can't fall back."""
-    return mode() != SUBSCRIPTION or _fallback()
+    return mode(store) != SUBSCRIPTION or _fallback(store)
 
 
-def switched(api: Callable[[], Ask], subscription: Ask) -> Ask:
+def view(store: Store, signals: Signals) -> dict[str, Any]:
+    """The Settings page's AI section: the choice and whether each credential is set, never
+    the credential itself."""
+    return {
+        "mode": mode(store),
+        "fallback": _fallback(store),
+        "apiKeySet": bool(os.environ.get("ANTHROPIC_API_KEY", "").strip()),
+        "tokenSet": bool(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "").strip()),
+        "model": MODEL,
+        "budget": signals.budget(),
+    }
+
+
+def choose(store: Store, audit: Audit, signals: Signals, body: dict[str, Any]) -> dict[str, Any]:
+    chosen, fallback = body.get("mode"), body.get("fallback")
+    if chosen not in SOURCE or not isinstance(fallback, bool):
+        raise Refused("Choose api_key or subscription, and whether to fall back.")
+    store.set_setting(MODE_KEY, str(chosen))
+    store.set_setting(FALLBACK_KEY, "1" if fallback else "0")
+    back = ", falling back to the API key" if fallback and chosen == SUBSCRIPTION else ""
+    audit.record("settings", "AI provider", f"Set to {SOURCE[str(chosen)]}{back}")
+    return view(store, signals)
+
+
+def switched(api: Callable[[], Ask], subscription: Ask, store: Store | None = None) -> Ask:
     """One Ask for the plan, whichever way it goes; its reply names the source in `_via`."""
 
     def ask(system: str, text: str, shape: dict[str, Any]) -> tuple[dict[str, Any], Decimal]:
-        if mode() == SUBSCRIPTION:
+        if mode(store) == SUBSCRIPTION:
             try:
                 reply, cost = subscription(system, text, shape)
             except SignalError:
-                if not _fallback():
+                if not _fallback(store):
                     raise
                 reply, cost = api()(system, text, shape)
                 return reply | {"_via": "API key (the subscription failed)"}, cost

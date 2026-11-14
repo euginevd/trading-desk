@@ -615,3 +615,14 @@ export interface GridRequest {
   buyFirst: boolean;
   stopBelow: string;
 }
+
+// The Settings page's AI section (decision 50): the choice and whether each credential is set.
+export type AiMode = "api_key" | "subscription";
+export interface AiSettings {
+  mode: AiMode;
+  fallback: boolean;
+  apiKeySet: boolean;
+  tokenSet: boolean;
+  model: string;
+  budget: { spent: string; cap: string };
+}

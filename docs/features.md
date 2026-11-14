@@ -9,15 +9,10 @@ The agreed features, by app and audience; the agent adds a row when you approve 
 
 ## `desk`
 
-Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 36, built before the bots: [features/01-36.md](features/01-36.md).
+Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 41: [features/01-41.md](features/01-41.md).
 
 | # | Feature | Status | PR |
 |---|---|---|---|
-| 37 | Trade page: resizable watchlist; order form and orders under the chart | Done | |
-| 38 | Enter your own average cost for a holding with no trades, such as the TAO wallet (decision 27) | Done | |
-| 39 | Key levels over the chart: month, week and day opens, previous week and day highs and lows, support and resistance (decision 28) | Done | |
-| 40 | USDC deposits into Binance for the financial year, a bar a month in AUD: paid where recorded, estimated at the day's rate otherwise (decision 31); Dashboard refresh is an icon, and the connect buttons are gone | Done | |
-| 41 | Eight compact Dashboard widgets: total, accounts, PnL, Fear & Greed, allocation, deposits, top movers, AI signals; Invested column and totals row in balances (decision 36) | Done | |
 | 42 | DCA bots (decision 37): a four-step wizard (pair; Bollinger Band entry on 15m, 1h or 4h; base order, DCA order, deviation %, max DCA orders, DCA size and deviation multipliers, presets; take profit % and what follows it) beside the ladder, a chart of the band and ladder, the limit checks and a backtest. Limit orders only; created off, switched on after a confirm; the kill switch stops them | Done | |
 | 43 | Grid bots (decision 38): a three-step wizard (pair; range from the last 14 days, grids, geometric or arithmetic; investment, buy first, stop below) beside profit per grid, the opening buys, the limit checks, a week's chart with the lines and a backtest against holding. Limit orders only; created off, switched on after a confirm; the kill switch cancels their buys | Done | |
 | 44 | Ladder buys on the order form (decision 39): 2 to 20 limit buys from a top to a bottom price, sized equally or more at lower prices, each a smart trade with the same exits, checked whole and confirmed once; Hide chart on the Trade page | Done | |
@@ -29,10 +24,11 @@ Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 3
 | 50 | Cancelling an open order asks first (Keep order is the default; the cancel is red and set apart); deposits details list the newest 20, scroll, and show more; the Dashboard's filter and Fetched share one row; Top movers shows the biggest gains or losses, biggest first, by a Gained / Lost toggle | Done | |
 | 51 | Header: BTC, BTC dominance and market cap with 24h change (decision 44); times in am and pm; Top movers panel by Gained or Lost | Done | |
 | 52 | AI panel as a plan for the owner's position (decision 46): position strip, action and horizons, zones with Prefill, what-if, why, context, watch-for alerts, track record, editable risk rules; swing support and resistance; level chips in words; draggable detail panels; smart trade spends in USDC or coins with Place now | Done | |
+| 54 | Settings page in the side panel; its AI section switches between the API key and the Claude subscription, with the fallback, each credential's status and a hint on getting it (decision 50) | Done | |
 
 ## `api`
 
-Features 7 to 25: [features/01-36.md](features/01-36.md).
+Features 7 to 25: [features/01-41.md](features/01-41.md).
 
 | # | Feature | Status | PR |
 |---|---|---|---|
@@ -40,6 +36,6 @@ Features 7 to 25: [features/01-36.md](features/01-36.md).
 
 ## Behind every app
 
-What no single app owns, such as an agent, a check every request goes through, or a deployment. Every feature so far is in [features/01-36.md](features/01-36.md).
+What no single app owns, such as an agent, a check every request goes through, or a deployment. Every feature so far is in [features/01-41.md](features/01-41.md).
 
 Status: Next, Building, Done or Dropped (with the reason).

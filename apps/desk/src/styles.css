@@ -2820,3 +2820,76 @@ dialog.in-place .detail-head {
   user-select: none;
   touch-action: none;
 }
+
+/* Settings (decision 50) */
+.settings {
+  max-width: 760px;
+}
+.settings-card {
+  padding: 16px;
+}
+.settings-card h2 {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.settings-row {
+  display: grid;
+  gap: 6px;
+}
+.settings-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.settings-seg button.on {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.settings-creds {
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+.settings-creds li {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.settings-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--up);
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.settings-dot.off {
+  background: var(--down);
+}
+.settings-hint {
+  margin: 4px 0 0 15px;
+  font-size: 12px;
+}
+.settings-note {
+  margin: 16px 0 0;
+  font-size: 12px;
+}
+.settings-error {
+  color: var(--down);
+  font-size: 13px;
+}
+@media (max-width: 640px) {
+  .settings-seg {
+    grid-template-columns: 1fr;
+  }
+}

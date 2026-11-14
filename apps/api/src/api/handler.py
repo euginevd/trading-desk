@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from api import demo
+from api import ai_client, demo
 from api.advisor import futures, gather, history_candles, rules_of, set_rules
 from api.ai_client import capped, subscription, switched
 from api.ai_signal import Ask, SignalError, Signals, claude
@@ -330,7 +330,7 @@ def _grid_route(
         return _reply(200, done)
 
 
-def _ask() -> Ask:
+def _ask(store: Store | None = None) -> Ask:
     """The plan's Ask: an API key or the owner's Claude subscription, by `AI_AUTH_MODE`."""
     if _demo():
 
@@ -341,7 +341,7 @@ def _ask() -> Ask:
             return reply | {"_via": "Demo"}, cost
 
         return demo_ask
-    return switched(_api_ask, subscription())
+    return switched(_api_ask, subscription(), store)
 
 
 def _api_ask() -> Ask:
@@ -379,9 +379,8 @@ def live_services() -> Generator[Services]:
     audit = _audit()
     try:
         with _binance() as binance:
-            yield Services(
-                binance, store, Signals(_ask(), store, audit, _cap(), capped=capped), audit
-            )
+            signals = Signals(_ask(store), store, audit, _cap(), capped=lambda: capped(store))
+            yield Services(binance, store, signals, audit)
     finally:
         store.close()
 
@@ -602,6 +601,8 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
         "alerts": s.store.alerts(_coin(q["coin"]) if q.get("coin") else None)
     },
     ("POST", "/alerts"): lambda s, _, b: _add_alert(s, b),
+    ("GET", "/settings/ai"): lambda s, _q, _b: ai_client.view(s.store, s.signals),
+    ("PUT", "/settings/ai"): lambda s, _, b: ai_client.choose(s.store, s.audit, s.signals, b),
 }
 
 

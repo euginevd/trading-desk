@@ -3,6 +3,7 @@ import { getGlobal, getPortfolio, getSettings, getTickers, setTrading } from "./
 import { percent, price, trend, usdShort } from "./format";
 import DcaBots from "./DcaBots";
 import GridBots from "./GridBots";
+import SettingsPage from "./SettingsPage";
 import {
   CollapseIcon,
   DashboardIcon,
@@ -10,6 +11,7 @@ import {
   GridIcon,
   MenuIcon,
   PowerIcon,
+  SettingsIcon,
   TradeIcon,
   WalletIcon,
 } from "./icons";
@@ -19,7 +21,7 @@ import Trade from "./Trade";
 import type { MarketGlobal, Settings, TaoWallet, Ticker } from "./types";
 import type { Status } from "./ui";
 
-type Page = "dashboard" | "trade" | "dca" | "grid";
+type Page = "dashboard" | "trade" | "dca" | "grid" | "settings";
 const TICK_MS = 30_000;
 const CURRENCY_KEY = "desk.currency";
 function readCurrency(): Currency {
@@ -41,10 +43,16 @@ const BOT_PAGES: typeof PAGES = [
   { page: "dca", hash: "#/dca", name: "DCA Bot", Icon: DcaIcon },
   { page: "grid", hash: "#/grid", name: "Grid Bot", Icon: GridIcon },
 ];
+const SETTINGS_PAGE: (typeof PAGES)[number] = {
+  page: "settings",
+  hash: "#/settings",
+  name: "Settings",
+  Icon: SettingsIcon,
+};
 
 function pageFromHash(): Page {
   const hash = window.location.hash.split("?")[0]; // "#/dca?new" opens the DCA wizard
-  const found = [...PAGES, ...BOT_PAGES].find((p) => p.hash === hash);
+  const found = [...PAGES, ...BOT_PAGES, SETTINGS_PAGE].find((p) => p.hash === hash);
   return found?.page ?? "dashboard";
 }
 
@@ -231,6 +239,8 @@ export default function App() {
           <div className="side-rule" />
           <div className="side-label side-word">Bots</div>
           {BOT_PAGES.map(link)}
+          <div className="side-rule" />
+          {link(SETTINGS_PAGE)}
         </nav>
         <div className="side-status">
           <span className="pill" title={folded ? binance.word : undefined}>
@@ -362,6 +372,8 @@ export default function App() {
           <DcaBots />
         ) : page === "grid" ? (
           <GridBots />
+        ) : page === "settings" ? (
+          <SettingsPage />
         ) : (
           <Portfolio onStatus={onStatus} onTao={onTao} currency={currency} />
         )}

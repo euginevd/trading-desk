@@ -4,12 +4,16 @@ import asyncio
 import dataclasses
 from collections.abc import AsyncGenerator
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import pytest
 from api import ai_client
 from api.ai_client import subscription, switched
-from api.ai_signal import Ask, SignalError
+from api.ai_signal import Ask, SignalError, Signals
+from api.audit import Audit
+from api.store import Store
+from api.trading import Refused
 from claude_agent_sdk import (
     AssistantMessage,
     ClaudeAgentOptions,
@@ -248,3 +252,29 @@ def test_the_api_cap_skips_a_subscription_run_that_cannot_fall_back(
     assert not ai_client.capped()
     env.setenv("AI_FALLBACK_TO_API_KEY", "1")
     assert ai_client.capped()
+
+
+def test_the_settings_choice_overrides_env_and_shows_no_secret(
+    env: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    store = Store(tmp_path / "desk.sqlite")
+    audit = Audit(tmp_path / "audit.jsonl")
+    signals = Signals(api_ask([]), store, audit)
+    env.setenv("ANTHROPIC_API_KEY", "made-up-key")
+    try:
+        assert ai_client.view(store, signals)["mode"] == "api_key"
+        shown = ai_client.choose(store, audit, signals, {"mode": "subscription", "fallback": False})
+        assert shown["mode"] == "subscription"
+        assert ai_client.mode(store) == "subscription"
+        assert not ai_client.capped(store)
+        assert shown["apiKeySet"] is True
+        assert shown["tokenSet"] is False
+        assert "made-up-key" not in str(shown)
+        env.setenv("AI_AUTH_MODE", "api_key")  # the page's choice wins over .env
+        assert ai_client.mode(store) == "subscription"
+        lines = (tmp_path / "audit.jsonl").read_text(encoding="utf-8")
+        assert "Set to Claude subscription" in lines
+        with pytest.raises(Refused):
+            ai_client.choose(store, audit, signals, {"mode": "free", "fallback": False})
+    finally:
+        store.close()

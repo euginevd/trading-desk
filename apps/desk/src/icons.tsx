@@ -20,6 +20,13 @@ export const DashboardIcon = () => (
   </svg>
 );
 
+export const SettingsIcon = () => (
+  <svg {...base}>
+    <circle cx="12" cy="12" r="3" />
+    <path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" />
+  </svg>
+);
+
 export const TradeIcon = () => (
   <svg {...base}>
     <path d="M7 3v4M7 17v4M17 6v3M17 17v3" />
