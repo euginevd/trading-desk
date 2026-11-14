@@ -44,11 +44,11 @@ Template defaults: GitHub Actions, the pre-push scan and the PR security checks.
 
 9. `/health` returns nothing from the request. Both containers publish on `127.0.0.1` only, and nothing is reachable from another machine; sign-in comes with hosting (decision 10).
 10. The limits that hold whatever else changes:
-    - Keys: one per service and purpose, with only the permissions it needs; Binance's trades spot only (no withdrawal, margin or futures), from the owner's IP address. The TAO wallet is read by its public address. A key lives only in `.env`: never in code, a log, a PR, the browser or a prompt.
+    - Keys: one per service and purpose, with only the permissions it needs; Binance's trades spot only (no withdrawal, margin or futures), from the owner's IP address. The TAO wallet is read by its public address. A key lives only in `.env`, never in code, a log, a PR or a prompt; only Claude's pass the browser, inbound once (decision 51).
     - Money: spot limit orders only. An order goes only from the owner's order form, after a confirm step, or from a DCA or grid bot the owner switched on, after a confirm stating the orders it may place (decisions 37 and 38). Every order stays within limits the owner sets (per order and per day, zero until set; bot buys count towards the day), checked in code, and only while the kill switch is on; turning it off stops every bot, cancels their open buys and refuses every new order.
     - AI: the plan advises and never acts. Its output is checked against a schema built for each call and held to the owner's risk rules in code; it can't place, change or cancel an order (its buttons only fill the form), and sees the owner's position in the coin but never keys, account ids or order ids (decisions 16 and 46).
-    - Audit log: every exchange call, AI signal, order, bot action and settings change is recorded with its time, who or what asked, and the result. Entries are added, never edited or deleted.
-    - Monthly spend: $20 of Anthropic API, checked in code; no cloud spend. Security baseline: OWASP ASVS 5.0 Level 1, with the limits above on top.
+    - Audit log: every exchange call, AI plan, order, bot action and settings change, with its time, who asked and the result; added, never edited or deleted.
+    - Monthly spend: $20 of Anthropic API, checked in code. Security baseline: OWASP ASVS 5.0 Level 1, with the limits above on top.
 
 ## Not for now
 

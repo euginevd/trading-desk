@@ -16,10 +16,11 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from api import ai_client, demo
+from api import ai_client, demo, env_file
 from api.advisor import futures, gather, history_candles, rules_of, set_rules
 from api.ai_client import capped, subscription, switched
 from api.ai_signal import Ask, SignalError, Signals, claude
+from api.ai_signin import SignIn
 from api.audit import Audit
 from api.binance import Binance, BinanceError
 from api.bots import Bots
@@ -330,6 +331,32 @@ def _grid_route(
         return _reply(200, done)
 
 
+SIGNIN = SignIn()  # one subscription sign-in at a time, held between its two requests
+
+
+def _save_key(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    env_file.save("ANTHROPIC_API_KEY", str(body.get("key", "")))
+    s.audit.record("settings", "Anthropic API key", "Saved to .env")
+    return ai_client.view(s.store, s.signals)
+
+
+def _signin_start(s: Services) -> dict[str, Any]:
+    url = SIGNIN.start()
+    s.audit.record("settings", "Claude subscription sign-in", "Started")
+    return {"url": url}
+
+
+def _signin_finish(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    try:
+        token = SIGNIN.finish(str(body.get("code", "")))
+    except Refused as error:
+        s.audit.record("settings", "Claude subscription sign-in", f"Failed: {error}")
+        raise
+    env_file.save("CLAUDE_CODE_OAUTH_TOKEN", token)
+    s.audit.record("settings", "Claude subscription sign-in", "Signed in; token saved to .env")
+    return ai_client.view(s.store, s.signals)
+
+
 def _ask(store: Store | None = None) -> Ask:
     """The plan's Ask: an API key or the owner's Claude subscription, by `AI_AUTH_MODE`."""
     if _demo():
@@ -603,6 +630,9 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("POST", "/alerts"): lambda s, _, b: _add_alert(s, b),
     ("GET", "/settings/ai"): lambda s, _q, _b: ai_client.view(s.store, s.signals),
     ("PUT", "/settings/ai"): lambda s, _, b: ai_client.choose(s.store, s.audit, s.signals, b),
+    ("PUT", "/settings/ai/key"): lambda s, _, b: _save_key(s, b),
+    ("POST", "/settings/ai/signin"): lambda s, _q, _b: _signin_start(s),
+    ("POST", "/settings/ai/signin/finish"): lambda s, _, b: _signin_finish(s, b),
 }
 
 

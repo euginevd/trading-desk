@@ -2876,6 +2876,54 @@ dialog.in-place .detail-head {
 .settings-dot.off {
   background: var(--down);
 }
+.settings-cred-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.settings-cred-head .link,
+.settings-cred-head .settings-primary {
+  margin-left: auto;
+}
+.settings-primary {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  cursor: pointer;
+}
+.settings-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0 0 15px;
+}
+.settings-input input {
+  flex: 1 1 220px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+}
+.settings-input button:not(.link) {
+  height: 32px;
+  padding: 0 12px;
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.settings-signin p {
+  margin: 8px 0 0 15px;
+}
 .settings-hint {
   margin: 4px 0 0 15px;
   font-size: 12px;

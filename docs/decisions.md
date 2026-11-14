@@ -54,3 +54,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 48. The AI plan can run on the owner's Claude subscription, for their own testing. [Record](decisions/from-48.md)
 49. A prototype's PR waits for the owner's "batch ready" or the session's end, never a single request. [Record](decisions/from-48.md)
 50. A Settings page holds the desk's choices, starting with the AI provider, saved in SQLite over `.env`. [Record](decisions/from-48.md)
+51. The Settings page signs in to Claude and takes the API key, as Claude Code does, and saves both to `.env`. [Record](decisions/from-48.md)

@@ -1,23 +1,16 @@
-// Settings (decision 50): the desk's choices in one place, starting with how the AI reaches
-// Claude. Keys and tokens stay in .env; this page only shows whether each is set.
+// Settings (decisions 50 and 51): the desk's choices in one place, starting with how the AI
+// reaches Claude. Sign in or paste a key here, as in Claude Code; the api saves it to .env and
+// this page only ever shows whether each is set.
 import { useEffect, useState } from "react";
-import { getAiSettings, setAiSettings } from "./api";
+import { finishSignIn, getAiSettings, saveAiKey, setAiSettings, startSignIn } from "./api";
 import type { AiMode, AiSettings } from "./types";
 
-const MODES: { mode: AiMode; name: string; credential: string; hint: string }[] = [
-  {
-    mode: "api_key",
-    name: "API key (pay per use)",
-    credential: "ANTHROPIC_API_KEY",
-    hint: "Create a key at console.anthropic.com under API keys, put it in .env as ANTHROPIC_API_KEY, then restart the api.",
-  },
-  {
-    mode: "subscription",
-    name: "Claude subscription (personal use)",
-    credential: "CLAUDE_CODE_OAUTH_TOKEN",
-    hint: "Run `claude setup-token` in a terminal, put the token in .env as CLAUDE_CODE_OAUTH_TOKEN, then restart the api.",
-  },
+const MODES: { mode: AiMode; name: string }[] = [
+  { mode: "api_key", name: "API key (pay per use)" },
+  { mode: "subscription", name: "Claude subscription (personal use)" },
 ];
+
+const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export default function SettingsPage() {
   const [ai, setAi] = useState<AiSettings | null>(null);
@@ -25,22 +18,23 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    getAiSettings().then(setAi, (e: unknown) =>
-      setError(e instanceof Error ? e.message : "Settings couldn't be read."),
-    );
+    getAiSettings().then(setAi, (e: unknown) => setError(message(e, "Settings couldn't be read.")));
   }, []);
 
-  const save = (mode: AiMode, fallback: boolean) => {
+  // Every change goes through here: one at a time, with the reply as the new state.
+  const run = (action: () => Promise<AiSettings>, failed: string) => {
     setSaving(true);
     setError(null);
-    setAiSettings(mode, fallback).then(
+    return action().then(
       (next) => {
         setAi(next);
         setSaving(false);
+        return true;
       },
       (e: unknown) => {
-        setError(e instanceof Error ? e.message : "Not saved. Try again.");
+        setError(message(e, failed));
         setSaving(false);
+        return false;
       },
     );
   };
@@ -67,7 +61,7 @@ export default function SettingsPage() {
                     className={ai.mode === mode ? "on" : ""}
                     aria-pressed={ai.mode === mode}
                     disabled={saving}
-                    onClick={() => save(mode, ai.fallback)}
+                    onClick={() => void run(() => setAiSettings(mode, ai.fallback), "Not saved.")}
                   >
                     {name}
                   </button>
@@ -80,38 +74,166 @@ export default function SettingsPage() {
                   type="checkbox"
                   checked={ai.fallback}
                   disabled={saving}
-                  onChange={(e) => save(ai.mode, e.target.checked)}
+                  onChange={(e) =>
+                    void run(() => setAiSettings(ai.mode, e.target.checked), "Not saved.")
+                  }
                 />
                 Use the API key if the subscription fails
               </label>
             )}
             <ul className="settings-creds">
-              {MODES.map(({ mode, name, credential, hint }) => {
-                const set = mode === "api_key" ? ai.apiKeySet : ai.tokenSet;
-                return (
-                  <li key={mode}>
-                    <div>
-                      <span className={`settings-dot${set ? "" : " off"}`} aria-hidden="true" />
-                      <strong>{name}</strong>
-                      <span className="muted">
-                        {set ? ` · ${credential} is set` : ` · ${credential} isn't set`}
-                        {mode === "api_key" &&
-                          ` · $${ai.budget.spent} of $${ai.budget.cap} this month`}
-                      </span>
-                    </div>
-                    <p className="settings-hint muted">{hint}</p>
-                  </li>
-                );
-              })}
+              <ApiKey ai={ai} saving={saving} run={run} />
+              <Subscription ai={ai} saving={saving} run={run} onError={setError} />
             </ul>
             <p className="settings-note muted">
               Model: {ai.model === "claude-opus-5-5" ? "Claude Opus 5.5" : ai.model}. Applies to
-              every AI feature: plans, Analyse all and the Dashboard&apos;s signals. Keys and tokens
-              stay in .env; the desk never shows them.
+              every AI feature: plans, Analyse all and the Dashboard&apos;s signals. What you enter
+              is saved to .env and never shown again.
             </p>
           </>
         )}
       </section>
     </main>
+  );
+}
+
+type Run = (action: () => Promise<AiSettings>, failed: string) => Promise<boolean>;
+
+function ApiKey({ ai, saving, run }: { ai: AiSettings; saving: boolean; run: Run }) {
+  const [key, setKey] = useState("");
+  const [open, setOpen] = useState(false);
+  const editing = !ai.apiKeySet || open;
+  const save = () =>
+    void run(() => saveAiKey(key), "The key wasn't saved.").then((ok) => {
+      if (ok) {
+        setKey("");
+        setOpen(false);
+      }
+    });
+  return (
+    <li>
+      <div className="settings-cred-head">
+        <span className={`settings-dot${ai.apiKeySet ? "" : " off"}`} aria-hidden="true" />
+        <strong>API credits</strong>
+        <span className="muted">
+          {ai.apiKeySet
+            ? ` · Key set · $${ai.budget.spent} of $${ai.budget.cap} this month`
+            : " · No key yet"}
+        </span>
+        {ai.apiKeySet && !open && (
+          <button className="link" type="button" onClick={() => setOpen(true)}>
+            Replace
+          </button>
+        )}
+      </div>
+      {editing && (
+        <div className="settings-input">
+          <input
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="sk-ant-api03-…"
+            aria-label="Anthropic API key"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+          />
+          <button type="button" disabled={saving || !key.trim()} onClick={save}>
+            Save key
+          </button>
+        </div>
+      )}
+      <p className="settings-hint muted">
+        Create a key at console.anthropic.com under API keys, then paste it here.
+      </p>
+    </li>
+  );
+}
+
+function Subscription({
+  ai,
+  saving,
+  run,
+  onError,
+}: {
+  ai: AiSettings;
+  saving: boolean;
+  run: Run;
+  onError: (error: string | null) => void;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [code, setCode] = useState("");
+  const [starting, setStarting] = useState(false);
+
+  const start = () => {
+    setStarting(true);
+    onError(null);
+    startSignIn().then(
+      (reply) => {
+        setUrl(reply.url);
+        setStarting(false);
+        window.open(reply.url, "_blank", "noopener,noreferrer");
+      },
+      (e: unknown) => {
+        onError(message(e, "The sign-in didn't start."));
+        setStarting(false);
+      },
+    );
+  };
+  const finish = () =>
+    void run(() => finishSignIn(code), "The sign-in didn't finish.").then((ok) => {
+      if (ok) {
+        setUrl(null);
+        setCode("");
+      }
+    });
+
+  return (
+    <li>
+      <div className="settings-cred-head">
+        <span className={`settings-dot${ai.tokenSet ? "" : " off"}`} aria-hidden="true" />
+        <strong>Claude subscription</strong>
+        <span className="muted">{ai.tokenSet ? " · Signed in" : " · Not signed in"}</span>
+        {!url && (
+          <button
+            className={ai.tokenSet ? "link" : "settings-primary"}
+            type="button"
+            disabled={starting || saving}
+            onClick={start}
+          >
+            {starting ? "Starting…" : ai.tokenSet ? "Sign in again" : "Sign in with Claude"}
+          </button>
+        )}
+      </div>
+      {url && (
+        <div className="settings-signin">
+          <p>
+            Approve the desk on claude.ai (
+            <a href={url} target="_blank" rel="noopener noreferrer">
+              open it again
+            </a>
+            ), then paste the code it shows:
+          </p>
+          <div className="settings-input">
+            <input
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="Code from claude.ai"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+            <button type="button" disabled={saving || !code.trim()} onClick={finish}>
+              {saving ? "Signing in…" : "Finish sign-in"}
+            </button>
+            <button className="link" type="button" onClick={() => setUrl(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      <p className="settings-hint muted">
+        Needs a Pro or Max plan. Signs in the way Claude Code does; the token lasts a year.
+      </p>
+    </li>
   );
 }
