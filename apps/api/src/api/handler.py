@@ -111,7 +111,10 @@ def _trading_route(
         return None
     with trading() as desk:
         if route is not None:
-            return _reply(200, route(desk, params, _body(event)))
+            data = route(desk, params, _body(event))
+            if path == "/trade" and _demo():
+                data["demo"] = True
+            return _reply(200, data)
         assert action is not None  # noqa: S101 - checked above
         trade_id = int(action.group(1))
         done = desk.cancel(trade_id) if action.group(2) == "cancel" else desk.close(trade_id)

@@ -6,11 +6,11 @@ Built from [sdlc-template](https://github.com/euginevd/sdlc-template): a coding 
 
 ## Status
 
-The portfolio page runs locally against Binance or on demo data. Nothing is deployed yet.
+Two pages run locally, against Binance or on demo data: the Dashboard and the Trade terminal. Nothing is deployed yet.
 
 | Stage | What it adds | Status |
 |---|---|---|
-| 1 | Binance dashboard and spot trade terminal: balances, value, orders, trades, placing and cancelling spot orders, and an audit log | Next |
+| 1 | Binance dashboard and spot trade terminal: balances, value, orders, trades, smart trades with a take-profit and stop-loss, limits, a kill switch and an audit log | Built, being tested |
 | 2 | Dollar Cost Averaging (DCA) bots | Later |
 | 3 | Grid bots | Later |
 | 4 | Bybit and leverage | Later |
@@ -55,7 +55,7 @@ bash scripts/setup.sh
 cd apps/desk && npm ci && cd ../..
 ```
 
-Copy `.env.example` to `.env`. For made-up figures, set `DEMO=1`; for your account, add a Binance key that can read and trade spot only, with no withdrawal, restricted to your IP address.
+Copy `.env.example` to `.env`. For made-up figures and a pretend exchange, set `DEMO=1`; for your account, add a Binance key that can read and trade spot only, with no withdrawal, restricted to your IP address.
 
 Then, in two terminals from the repo root:
 
@@ -67,6 +67,6 @@ uv run python -m api.local
 cd apps/desk && npm run dev
 ```
 
-Open http://127.0.0.1:5173. Every call to Binance is logged in `local/audit.jsonl`. Deploys come later, through the pipeline, once it works locally and the AWS account is bootstrapped ([guides/01-using-the-template.md](guides/01-using-the-template.md), section 2).
+Open http://127.0.0.1:5173. Set your per-order and daily limits on the Trade terminal before it will trade. Every call to Binance, every order and every settings change is logged in `local/audit.jsonl`; smart trades and limits are kept in `local/desk.sqlite`. Deploys come later, through the pipeline, once it works locally and the AWS account is bootstrapped ([guides/01-using-the-template.md](guides/01-using-the-template.md), section 2).
 
 Report a vulnerability through [SECURITY.md](SECURITY.md). [MIT licence](LICENSE).

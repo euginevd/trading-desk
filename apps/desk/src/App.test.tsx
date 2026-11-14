@@ -66,7 +66,7 @@ describe("portfolio page", () => {
     expect(screen.getByText(/Demo mode/)).toBeTruthy();
     expect(screen.getByText("No open orders.")).toBeTruthy();
     expect(screen.getByText(/ECB rate for 13 Nov/)).toBeTruthy();
-    expect(screen.getByText("Demo data")).toBeTruthy();
+    expect(await screen.findByText("Demo data")).toBeTruthy();
   });
 
   it("shows the api's error with a way to try again", async () => {

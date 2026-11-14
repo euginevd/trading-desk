@@ -52,3 +52,66 @@ export interface Portfolio {
   openOrders: Order[];
   recentTrades: Trade[];
 }
+
+// The api's trade terminal replies (apps/api/src/api/trading.py).
+export interface Settings {
+  tradingOn: boolean;
+  perOrder: string;
+  perDay: string;
+  spentToday: string;
+  leftToday: string;
+}
+
+export type TradeStatus =
+  | "placing"
+  | "waiting"
+  | "needs_exits"
+  | "protected"
+  | "open"
+  | "closed_tp"
+  | "closed_sl"
+  | "closed_market"
+  | "cancelled";
+
+export interface SmartTrade {
+  id: number;
+  created: number;
+  pair: string;
+  entry: "market" | "limit";
+  entryPrice: Num;
+  amount: Num;
+  spend: string;
+  takeProfit: Num;
+  stopLoss: Num;
+  status: TradeStatus;
+  exitPrice: Num;
+  profit: Num;
+  note: Num;
+}
+
+export interface Terminal {
+  demo?: boolean;
+  symbol: string;
+  pair: string;
+  pairs: { symbol: string; pair: string }[];
+  price: string;
+  change24h: string;
+  base: string;
+  quoteFree: string;
+  baseFree: string;
+  step: string;
+  tick: string;
+  minOrder: string;
+  settings: Settings;
+  trades: SmartTrade[];
+}
+
+export interface SmartTradeRequest {
+  clientId: string;
+  symbol: string;
+  entry: "market" | "limit";
+  limitPrice?: string;
+  spend: string;
+  takeProfit?: string;
+  stopLoss?: string;
+}
