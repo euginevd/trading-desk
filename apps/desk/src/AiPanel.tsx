@@ -113,6 +113,7 @@ export default function AiPanel({
       <div className="ai-foot">
         <span className="muted">
           {signal ? `Updated ${ago(signal.ranAt)}` : "Not run yet"}
+          {signal?.via && ` · via ${signal.via}`}
           {signal?.stale && " · older than 4 hours"}
           {plan?.changedSince && ` · ${plan.changedSince}`}
         </span>

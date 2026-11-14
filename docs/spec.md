@@ -4,14 +4,14 @@
 
 ## Business
 
-Unnumbered, so the spec's numbers stay put; the same for every project of this business.
+Unnumbered; the same for every project of this business.
 
 - Business: ArcVault AI, an Australian AI and security consultancy. This is one of its portfolio projects, and its owner's own trading tool.
 - Size: one person, the owner, developer and only user. A few trades a day; plain Australian English, figures first.
 - Regulators and laws: none while it trades only its owner's money. Trading for anyone else would need an Australian financial services licence and AUSTRAC registration, so commercialising starts with legal advice (decision 6). An AI signal shown to others could count as financial advice too.
 - Data: no customer data. The owner's balances, trades, watchlist and keys stay on the owner's own machine. The AI plan sends Anthropic a coin's computed figures and the owner's position in it (amount, average cost, PnL, share, cash, open orders' prices), never keys, account ids or order ids (decision 46).
 - Risk appetite: none for losing funds through the software (no key can withdraw; no order the owner didn't confirm or switch on); low for showing balances to others.
-- Systems: Binance is the system of record for balances, orders and trades; Taostats for the TAO wallet; this keeps an audit log. The AI signal comes from Claude through the Anthropic API. The Australian dollar rate comes from the European Central Bank's daily rates (Frankfurter). No payments.
+- Systems: Binance is the system of record for balances, orders and trades; Taostats for the TAO wallet; this keeps an audit log. The AI plan comes from Claude, by API key or the owner's subscription (decision 48). The Australian dollar rate comes from the European Central Bank's daily rates (Frankfurter). No payments.
 - People: the owner sets the trading rules and limits, and approves any new exchange, key permission or data flow.
 
 ## Project

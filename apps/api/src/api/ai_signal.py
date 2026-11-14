@@ -307,19 +307,22 @@ def context(facts: dict[str, Any], action: str) -> list[str]:
 
 
 class Signals:
-    def __init__(
+    def __init__(  # noqa: PLR0913 - the clock and the cap check are keyword-only, for tests
         self,
         ask: Ask,
         store: Store,
         audit: Audit,
         cap: Decimal = DEFAULT_CAP,
+        *,
         clock: Callable[[], float] = time.time,
+        capped: Callable[[], bool] = lambda: True,
     ) -> None:
         self._ask = ask
         self._store = store
         self._audit = audit
         self._cap = cap
         self._clock = clock
+        self._capped = capped  # a subscription run that can't fall back isn't capped
 
     def _now(self) -> int:
         return int(self._clock() * 1000)
@@ -349,7 +352,7 @@ class Signals:
         kept = self.last(coin)
         if kept is not None and not kept["stale"] and not force:
             return kept
-        if self.spent() >= self._cap:
+        if self._capped() and self.spent() >= self._cap:
             self._audit.record("signal", f"Claude: signal {coin}", "Refused: monthly cap reached")
             raise SignalError(
                 f"This month's AI spend has reached its ${self._cap:,.2f} cap. "
@@ -360,15 +363,16 @@ class Signals:
         except SignalError as error:
             self._audit.record("signal", f"Claude: signal {coin}", f"Failed: {error}")
             raise
+        via = str(reply.pop("_via", "API key"))
         self._store.set_setting(self._month_key(), plain(self.spent() + cost))
         try:
-            signal = checked(reply, facts, kept)
+            signal = checked(reply, facts, kept) | {"via": via}
         except SignalError as error:
-            self._audit.record("signal", f"Claude: signal {coin}", f"Refused: {error}")
+            self._audit.record("signal", f"Claude: signal {coin} via {via}", f"Refused: {error}")
             raise
         self._audit.record(
             "signal",
-            f"Claude: signal {coin}",
+            f"Claude: signal {coin} via {via}",
             f"{signal['action']}, {signal['confidence']}%, about ${cost:.3f}",
         )
         self._store.save_signal(coin, self._now(), json.dumps(signal))
