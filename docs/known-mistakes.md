@@ -10,6 +10,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 4. Run the web apps' tests from an upper-case `C:\` path (`Set-Location C:\<repo>\apps\<app>`): from `c:` Vitest loads twice and every jest-dom matcher fails as "Invalid Chai property".
 5. Never rewrite a source file with Windows PowerShell `Get-Content`/`Set-Content`: it reads UTF-8 as ANSI and writes a BOM (`·` became `Â·`). Use the Edit tool, or Python with `encoding="utf-8"`.
 6. A script pasted into CloudShell runs interactively, where `!word` is history expansion (`!starts_with` dropped a check): write ``== `false` `` instead.
+7. The repo is public: never copy the owner's real balances, costs, deposits, wallet addresses or emails into tests, demo data or docs (real BTC, TAO and SOL amounts and a TAO cost reached test fixtures; later an available balance read off the owner's screenshot reached a mockup and a test). Use made-up numbers, including in mockups built from the owner's screenshots; the owner's data lives only in `local/` (SQLite, audit log) and `.env`, both git-ignored.
 
 ## CI
 
@@ -44,11 +45,18 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 23. A `file:` dependency's path in `package-lock.json` is relative to the app's folder (`../../packages/<pkg>`): build in the image at the repo's depth (`/web/apps/<app>`), or `npm ci` can't find it and prints only its usage.
 24. npm 10 drops the `libc` fields that npm 11 writes, so CI's `npm ci` on Node 24 sees a changed lock: write lock files with the npm CI uses (`npx npm@11 install`).
 25. axe flags low contrast on text caught mid fade-in: run accessibility checks with `reducedMotion: "reduce"` so they see the settled page.
+25a. A web font linked from Google Fonts breaks code-standards 27 and the desk's content security policy: install it from npm (`@fontsource/<font>`) and import it in `main.tsx`.
+25b. Headless Chrome on Windows lays a page out at 500px at least and crops a narrower screenshot: check phone layouts at `--window-size=500,…`, not 390.
+25c. On Windows, Git Bash at `/c/…` spells the drive `C:` while the project is `c:`: Vitest fails with "failed to find the runner" and `docker compose --build` asks for `--allow=fs.read`. Run both from `cd "c:/…"`.
+26. Replacing a block of `styles.css` by slicing from its comment to the end of the file drops every rule appended after it (the sort headers lost their styles): slice to the next block's comment, then check the rules you didn't mean to touch are still there.
+
 
 ## Python and Postgres
 
 26. Two services that create the same tables at start (LangGraph's checkpointer and store) race on Postgres's catalog and one fails with `UniqueViolation` on `pg_type`: retry the setup a few times on `UniqueViolation`, `DuplicateTable` and `DuplicateObject`.
 27. Semgrep blocks `urllib` and `http.client` calls to a URL from a variable, even when the scheme is checked: use `httpx`.
+27b. A second reader of the same rate-limited source (the header's total beside the Dashboard) doubled the calls and tripped Taostats' 429, and a failed read showed the wallet as empty: keep the last good reading for outside sources and fall back to it (`apps/api/src/api/tao.py`).
+27a. Opening a log file in append mode for each line lost about 2% of lines when threads wrote at once on Windows, even under a lock: keep one handle per file, shared under the lock (`apps/api/src/api/audit.py`, tested in `test_audit.py`).
 
 ## Pull requests
 
@@ -57,6 +65,8 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 ## Binance
 
 29. Binance refuses the agent's cloud container (HTTP 451, restricted location): test against recorded replies, and the owner makes the first live run.
+
+29a. A timed-out order call (status 0) was treated as "not placed", so a live order could be lost or sent again: keep the row "placing" and look it up by its client id, and record a market sale before sending it (decision 47).
 
 ## SQLite
 
