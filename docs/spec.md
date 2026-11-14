@@ -33,13 +33,13 @@ Template defaults: GitHub Actions, Terraform on AWS, the pre-push scan and the P
 
 6. Two apps (decisions 3 and 4):
    - `api`: Python on Lambda behind an HTTP API. It reads the exchange, places the owner's orders, keeps the audit log in DynamoDB, and is the only thing that holds an exchange key.
-   - `desk`: React, Vite and TypeScript on S3 and CloudFront, with Cognito sign-in. The dashboard and each product's screens.
+   - `desk`: React, Vite and TypeScript on S3 and CloudFront, with Cognito sign-in. Two pages so far: Dashboard (TODO 1) and Trade terminal (TODO 2).
    - Locally, one command each, the `api` on `127.0.0.1` with the key from `.env` and no sign-in (decision 10); stand-ins for Cognito, DynamoDB and Secrets Manager come when a feature needs them.
 
 ## Done when
 
 7. `GET /health` returns `{"status": "ok"}`.
-8. The MVP: the owner signs in, locally and then on `dev`, and sees their Binance spot balances, each holding's value and the total, open orders and recent trades, no older than five minutes; places and cancels spot market and limit orders within their limits; and finds every exchange call and order in the audit log. Orders are proved on Binance's spot testnet first (decision 8). The owner then uses it for three months before deciding on anything commercial.
+8. The MVP: the owner signs in, locally and then on `dev`, and sees their Binance spot balances, each holding's value and the total, open orders and recent trades, no older than five minutes; places and cancels spot market and limit orders within their limits; and finds every exchange call and order in the audit log. Orders are tested live, within the owner's limits (decision 12). The owner then uses it for three months before deciding on anything commercial.
 
 ## Rules
 
