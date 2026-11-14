@@ -4,8 +4,8 @@ The agreed features, by app and audience; the agent adds a row when you approve 
 
 | App | For | Link |
 |---|---|---|
-| [`desk`](#desk) | The owner | Not built yet |
-| [`api`](#api) | The `desk` app | Not built yet |
+| [`desk`](#desk) | The owner | http://127.0.0.1:5173, locally |
+| [`api`](#api) | The `desk` app | http://127.0.0.1:8000, locally |
 
 ## `desk`
 
@@ -13,13 +13,13 @@ The portfolio page is mocked up in [mockups/mvp.html](mockups/mvp.html) (Portfol
 
 | # | Feature | Status | PR |
 |---|---|---|---|
-| 1 | Portfolio page (TODO 1): the spot wallet's holdings, each with its amount, price, value, share of the total, 24-hour change, average cost and unrealised profit or loss; the total in US and Australian dollars; open orders; recent trades; the time it was fetched, and Refresh (decision 9) | Building | |
+| 1 | Portfolio page (TODO 1): the spot wallet's holdings, each with its amount, price, value, share of the total, 24-hour change, average cost and unrealised profit or loss; the total in US and Australian dollars; open orders; recent trades; the time it was fetched, and Refresh (decision 9); `DEMO=1` shows made-up figures | Done | |
 
 ## `api`
 
 | # | Feature | Status | PR |
 |---|---|---|---|
-| 2 | Portfolio route (TODO 1): fetches balances, 24-hour prices, open orders and trades from Binance through the owner's key, works out value and profit or loss, and logs each exchange call to the add-only audit log (spec 10) | Building | |
+| 2 | Portfolio route (TODO 1): fetches balances, 24-hour prices, open orders and trades from Binance through the owner's key, works out value and profit or loss, and logs each exchange call to the add-only audit log (spec 10) | Done | |
 | 3 | Health check, `GET /health` (spec 7) | Done | Starter |
 
 ## Behind every app

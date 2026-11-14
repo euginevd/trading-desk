@@ -34,7 +34,7 @@ jobs:
           while IFS= read -r f; do
             case "$f" in
               "") ;;
-              apps/web/*) web=true ;;
+              apps/desk/*) web=true ;;
               apps/* | *.py | pyproject.toml | uv.lock | .python-version) python=true ;;
               *.md | docs/* | guides/* | LICENSE | infra/* | .vscode/*) ;;
               .github/workflows/* | *.sh) workflows=true; python=true; web=true ;;
@@ -131,8 +131,8 @@ jobs:
         with:
           persist-credentials: false
       - name: Lint, types, tests and build
-        if: hashFiles('apps/web/package-lock.json') != ''
-        working-directory: apps/web
+        if: hashFiles('apps/desk/package-lock.json') != ''
+        working-directory: apps/desk
         run: |
           npm ci
           npm run lint

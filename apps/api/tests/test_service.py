@@ -106,3 +106,12 @@ def test_load_env_sets_only_what_is_unset(tmp_path: Path, monkeypatch: Any) -> N
     assert os.environ["TD_ONE"] == "first"
     assert os.environ["TD_TWO"] == "kept"
     load_env(tmp_path / "missing")
+
+
+def test_demo_mode_runs_the_whole_path(tmp_path: Path, monkeypatch: Any) -> None:
+    monkeypatch.setenv("DEMO", "1")
+    monkeypatch.setenv("AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
+    reply = handler({"rawPath": "/portfolio"}, None)
+    assert reply["statusCode"] == 200
+    assert '"demo": true' in str(reply["body"])
+    assert '"value": "84754.5"' in str(reply["body"])

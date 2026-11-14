@@ -16,6 +16,17 @@ updates:
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
     groups: { terraform: { patterns: ["*"] } }
+  - package-ecosystem: npm
+    directories: ["/apps/desk"]
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
+    groups: { desk: { patterns: ["*"] } }
+    # ESLint 10 waits until eslint-plugin-jsx-a11y supports it; upgrade by hand then.
+    ignore:
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/js"
+        update-types: ["version-update:semver-major"]
   # Add one entry per ecosystem a new app brings (AGENTS.md rule 10), in the same form. An `ignore` holds
   # back updates that need a person, with the reason beside it. For example:
   # - package-ecosystem: npm

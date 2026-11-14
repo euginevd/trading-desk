@@ -6,7 +6,7 @@ Built from [sdlc-template](https://github.com/euginevd/sdlc-template): a coding 
 
 ## Status
 
-Kickoff is done and nothing is deployed yet. The repo holds the template's starter, a Lambda with a `/health` route and its Terraform, and the docs for the first stage.
+The portfolio page runs locally against Binance or on demo data. Nothing is deployed yet.
 
 | Stage | What it adds | Status |
 |---|---|---|
@@ -45,14 +45,28 @@ The risks and their controls: [docs/threat-model.md](docs/threat-model.md). The 
 
 ## Run it
 
+Locally, on `127.0.0.1` only. Once per clone:
+
 ```bash
 bash scripts/setup.sh
 ```
 
 ```bash
-uv run pytest
+cd apps/desk && npm ci && cd ../..
 ```
 
-`setup.sh` installs the scanners, uv, Terraform and the push hook. It runs locally first. Deploys go through the pipeline only, once it works locally and the AWS account is bootstrapped ([guides/01-using-the-template.md](guides/01-using-the-template.md), section 2).
+Copy `.env.example` to `.env`. For made-up figures, set `DEMO=1`; for your account, add a Binance key that can read and trade spot only, with no withdrawal, restricted to your IP address.
+
+Then, in two terminals from the repo root:
+
+```bash
+uv run python -m api.local
+```
+
+```bash
+cd apps/desk && npm run dev
+```
+
+Open http://127.0.0.1:5173. Every call to Binance is logged in `local/audit.jsonl`. Deploys come later, through the pipeline, once it works locally and the AWS account is bootstrapped ([guides/01-using-the-template.md](guides/01-using-the-template.md), section 2).
 
 Report a vulnerability through [SECURITY.md](SECURITY.md). [MIT licence](LICENSE).

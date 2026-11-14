@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 
+from api import demo
 from api.audit import Audit
 from api.binance import Binance, BinanceError
 from api.service import fetch
@@ -26,8 +27,22 @@ def _reply(status: int, body: object) -> dict[str, object]:
     }
 
 
+def demo_portfolio() -> dict[str, Any]:
+    """Made-up replies through the same code path (DEMO=1), for trying the desk without a key."""
+    audit = Audit(Path(os.environ.get("AUDIT_LOG_PATH", "local/audit.jsonl")))
+    with (
+        httpx.Client(base_url=BINANCE_URL, transport=httpx.MockTransport(demo.binance)) as client,
+        httpx.Client(transport=httpx.MockTransport(demo.fx)) as fx,
+    ):
+        portfolio = fetch(Binance(client, ("demo", "demo"), audit), fx)
+    portfolio["demo"] = True
+    return portfolio
+
+
 def live_portfolio() -> dict[str, Any]:
     """Reads the key from the environment, which locally is the owner's .env; never logged."""
+    if os.environ.get("DEMO") == "1":
+        return demo_portfolio()
     key = os.environ.get("BINANCE_API_KEY", "")
     secret = os.environ.get("BINANCE_API_SECRET", "")
     if not key or not secret:
