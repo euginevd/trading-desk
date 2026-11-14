@@ -47,7 +47,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 ## Pull requests
 
-28. A prototype opened a PR for each small change: commit to the session's branch and open one PR only when the user says the batch is ready, or at the end of the session (AGENTS.md rule 16).
+28. A prototype opened a PR for each small change: commit to the session's branch and open one PR only when the user says the batch is ready, or at the end of the session (AGENTS.md rule 16). It recurred when rule 16 let a finished request count; it no longer does.
 
 ## Binance
 

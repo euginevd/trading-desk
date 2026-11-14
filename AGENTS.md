@@ -59,7 +59,7 @@ The same for every project; the business and the project are in the docs below. 
     - Run the changed app's tests, lint and type checks locally; CI runs the full suite.
     - A fresh subagent reviews the diff against `code-standards.md`, the threat model's top risks and, for UI, its mockup and `design-system.md`; fix what it blocks. Prototype: one review of the whole branch, before the PR.
     - Update `docs/features.md` and `TODO.md` in the same change. A prototype commits each finished piece; production waits to be asked (the box at the top).
-16. PR (G2): a prototype opens it once the local checks pass and either a *Build* request is done or the user says the batch is ready; production once the developer asks.
+16. PR (G2): a prototype opens it only when the user says the batch is ready or the session ends, never per request; production once the developer asks.
     - One branch per work session, one PR per branch. Small changes, docs and follow-ups are commits on that branch: they join the open PR or wait for the next one.
     - Check the branch has no open PR before opening one.
     - The body has a Security line: threat model changes, new skips, packages or permissions.
