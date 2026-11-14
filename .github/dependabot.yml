@@ -11,11 +11,16 @@ updates:
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
     groups: { python: { patterns: ["*"] } }
-  - package-ecosystem: terraform
-    directories: ["/infra/aws/*"]
+  # Terraform comes back with the first unit in infra/aws/ when hosting is decided (decision 14).
+  - package-ecosystem: docker
+    directories: ["/apps/*"]
     schedule: { interval: weekly }
     cooldown: { default-days: 7 }
-    groups: { terraform: { patterns: ["*"] } }
+    groups: { images: { patterns: ["*"] } }
+    # The api's runtime Python must match uv's build image; a minor bump breaks the copied venv.
+    ignore:
+      - dependency-name: python
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
   - package-ecosystem: npm
     directories: ["/apps/desk"]
     schedule: { interval: weekly }

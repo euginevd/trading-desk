@@ -9,7 +9,7 @@ import httpx
 import pytest
 from api import demo
 from api.audit import Audit
-from api.binance import Binance
+from api.binance import Binance, BinanceError
 from api.handler import handler
 from api.local import allowed
 from api.store import Store
@@ -89,7 +89,8 @@ def test_the_same_request_twice_places_one_trade(desk: Trading) -> None:
     first = ready(desk).place(order())
     again = desk.place(order())
     assert again["id"] == first["id"]
-    assert len(demo.EXCHANGE.orders) == 3  # the buy and two exit legs, once
+    placed = [i for i in demo.EXCHANGE.orders if i > len(demo.ORDERS)]  # past the standing ones
+    assert len(placed) == 3  # the buy and two exit legs, once
 
 
 def test_a_limit_buy_waits_and_can_be_cancelled(desk: Trading) -> None:
@@ -182,3 +183,122 @@ def test_the_local_api_takes_changes_only_from_the_desk() -> None:
     other = {"host": "127.0.0.1:5173", "origin": "https://evil.example"}
     assert allowed("POST", {**other, "content-type": "application/json"}) == "Unknown origin."
     assert allowed("GET", {"host": "evil.example:8000"}) == "Unknown host."
+
+
+def ladder(**fields: Any) -> dict[str, Any]:
+    base: dict[str, Any] = {
+        "clientId": "a1b2c3d4-0000-0000-0000-00000000aaaa",
+        "symbol": "BTCUSDT",
+        "top": "98000",
+        "bottom": "90000",
+        "count": "5",
+        "spend": "200",
+        "weighting": "equal",
+        "takeProfit": "101000",
+        "stopLoss": "85000",
+    }
+    return {**base, **fields}
+
+
+def test_a_ladder_places_one_limit_buy_a_rung_with_the_same_exits(desk: Trading) -> None:
+    ready(desk)
+    done = desk.ladder_order(ladder())
+    assert "5 limit buys" in done["message"]
+    prices = [t["limit_price"] for t in done["trades"]]
+    assert prices == ["98000", "96000", "94000", "92000", "90000"]
+    assert all(t["take_profit"] == "101000" and t["stop_loss"] == "85000" for t in done["trades"])
+    ids = {o["clientOrderId"] for o in demo.EXCHANGE.orders.values() if o["orderId"] > 100}
+    assert len(ids) == 5  # each rung its own id on Binance
+    again = desk.ladder_order(ladder())  # a double submit places nothing new
+    assert [t["id"] for t in again["trades"]] == [t["id"] for t in done["trades"]]
+
+
+def test_a_ladder_weighted_lower_buys_more_at_lower_prices(desk: Trading) -> None:
+    ready(desk)
+    trades = desk.ladder_order(ladder(weighting="lower", count="4", spend="100"))["trades"]
+    spends = [Decimal(t["spend"]) for t in trades]
+    assert spends == sorted(spends)
+    assert spends[-1] > 3 * spends[0]
+
+
+def test_a_ladder_is_checked_whole_before_anything_is_sent(desk: Trading) -> None:
+    ready(desk)  # 100 an order, 500 a day
+    with pytest.raises(Refused, match="per-order limit"):
+        desk.ladder_order(ladder(count="2", spend="300"))
+    with pytest.raises(Refused, match="daily limit"):
+        desk.ladder_order(ladder(count="10", spend="600"))
+    with pytest.raises(Refused, match="at least"):
+        desk.ladder_order(ladder(count="20", spend="50"))
+    with pytest.raises(Refused, match="under the top"):
+        desk.ladder_order(ladder(bottom="99000"))
+    assert [o for o in demo.EXCHANGE.orders.values() if o["orderId"] > 100] == []
+    assert Decimal(desk.settings()["spentToday"]) == 0
+
+
+def test_an_open_order_can_be_changed_in_one_step(desk: Trading) -> None:
+    ready(desk)
+    standing = demo.EXCHANGE.orders[1]  # the demo's BTC limit buy at 94,000
+    done = desk.edit_order(
+        {
+            "symbol": "BTCUSDT",
+            "orderId": "1",
+            "price": "93000",
+            "amount": "0.001",
+            "clientId": "a1b2c3d4-0000-0000-0000-0000000000ed",
+        }
+    )
+    assert done["message"] == "Order changed: buy 0.001 BTC/USDT at 93000."
+    assert standing["status"] == "CANCELED"
+    new = demo.EXCHANGE.orders[done["orderId"]]
+    assert (new["price"], new["origQty"], new["status"]) == ("93000", "0.001", "NEW")
+
+
+def test_a_change_keeps_to_the_limits_and_leaves_bot_orders_alone(desk: Trading) -> None:
+    ready(desk)  # 100 an order
+    change = {
+        "symbol": "BTCUSDT",
+        "orderId": "1",
+        "price": "94000",
+        "amount": "0.002",
+        "clientId": "a1b2c3d4-0000-0000-0000-0000000000ee",
+    }
+    with pytest.raises(Refused, match="per-order limit"):
+        desk.edit_order(change)
+    placed = desk.place(order(entry="limit", limitPrice="97000"))
+    with pytest.raises(Refused, match="belongs to ST-"):
+        desk.edit_order({**change, "orderId": str(placed["buy_id"]), "amount": "0.001"})
+    desk.set_trading(False)
+    with pytest.raises(Refused, match="Trading is off"):
+        desk.edit_order({**change, "amount": "0.001"})
+
+
+def test_a_double_submitted_sell_sells_once(desk: Trading) -> None:
+    ready(desk)
+    sale = {
+        "clientId": "a1b2c3d4-0000-0000-0000-0000000005e1",
+        "symbol": "SOLUSDT",
+        "side": "sell",
+        "price": "200",
+        "amount": "0.3",
+    }
+    desk.place_order(sale)
+    again = desk.place_order(sale)
+    assert "already placed" in again["message"]
+    sells = [o for o in demo.EXCHANGE.orders.values() if o["side"] == "SELL" and o["orderId"] > 100]
+    assert len(sells) == 1
+
+
+def test_a_buy_sent_without_an_answer_is_kept_not_cancelled(
+    desk: Trading, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ready(desk)
+    real = desk._binance.buy_limit  # pyright: ignore[reportPrivateUsage]
+
+    def lost(*args: Any, **kwargs: Any) -> Any:
+        real(*args, **kwargs)
+        raise BinanceError(0, "Binance didn't answer.")
+
+    monkeypatch.setattr(desk._binance, "buy_limit", lost)  # pyright: ignore[reportPrivateUsage]
+    trade = desk.place(order(entry="limit", limitPrice="97000"))
+    assert trade["status"] == "protected" or trade["status"] == "waiting"
+    assert trade["buy_id"] is not None

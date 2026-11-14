@@ -1,9 +1,10 @@
 [project]
 name = "api"
 version = "0.1.0"
-description = "The desk API: health check and the Binance portfolio"
+description = "The desk API: portfolio, watchlist, AI signals and spot orders"
 requires-python = ">=3.13,<3.14"
 dependencies = [
+    "anthropic==2.6.0",
     "httpx==0.28.1",
     "tzdata==2026.6",
 ]

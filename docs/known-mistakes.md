@@ -10,27 +10,16 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 4. Run the web apps' tests from an upper-case `C:\` path (`Set-Location C:\<repo>\apps\<app>`): from `c:` Vitest loads twice and every jest-dom matcher fails as "Invalid Chai property".
 5. Never rewrite a source file with Windows PowerShell `Get-Content`/`Set-Content`: it reads UTF-8 as ANSI and writes a BOM (`·` became `Â·`). Use the Edit tool, or Python with `encoding="utf-8"`.
 6. A script pasted into CloudShell runs interactively, where `!word` is history expansion (`!starts_with` dropped a check): write ``== `false` `` instead.
+7. The repo is public: never copy the owner's real balances, costs, deposits, wallet addresses or emails into tests, demo data or docs (real BTC, TAO and SOL amounts and a TAO cost reached test fixtures; later an available balance read off the owner's screenshot reached a mockup and a test). Use made-up numbers, including in mockups built from the owner's screenshots; the owner's data lives only in `local/` (SQLite, audit log) and `.env`, both git-ignored.
 
 ## CI
 
 7. A boolean `workflow_dispatch` input is empty on a push, which GitHub counts as `false`: test the event, as in `github.event_name != 'workflow_dispatch' || inputs.deploy`.
 8. The AWS CLI on GitHub's runners reads `--cli-input-json file:///dev/stdin` as empty: pass a request through a private temporary file, and delete it after.
 
-## AWS
+## AWS and Aurora DSQL
 
-9. An internal service on a public URL still needs auth (travel-claims #46): make service-to-service URLs IAM-only.
-10. A new IAM role isn't usable for a few seconds (travel-claims #60): rerun the apply; don't change a trust policy that's right.
-11. Cognito names allow only letters, digits, spaces and `+=,.@-`: keep apostrophes out of AWS names; descriptions are fine.
-12. The base Python image's `pip` bundles old `urllib3`, `msgpack` and `setuptools`, and lags Debian's fixes, failing the image scan: runtime stages uninstall `pip` and run `apt-get upgrade`.
-13. An AgentCore Gateway Lambda target takes `gateway_iam_role {}` with no `service`.
-14. CloudFront's `web_acl_id` is optional and computed, so `null` leaves an attached web ACL in place: set `""` to detach, `null` only where Firewall Manager owns it.
-15. AgentCore Identity checks `GetResourceApiKey` and `GetResourceOauth2Token` against `workload-identity-directory/default` too: grant the directory, the workload and the vault.
-
-## Aurora DSQL
-
-16. DSQL refuses `SAVEPOINT`, and SQLAlchemy's psycopg dialect looks up `hstore` inside one on first connect: DSQL engines set `use_native_hstore=False`.
-17. `sys.wait_for_job` is a procedure: `CALL` it and read its success from the row it returns.
-18. `begin_nested()` opens a `SAVEPOINT`: keep the first row with `insert_if_new` (`INSERT ... ON CONFLICT DO NOTHING`); a test fails if one comes back.
+Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistakes/aws.md](known-mistakes/aws.md).
 
 ## Docs
 
@@ -44,11 +33,17 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 23. A `file:` dependency's path in `package-lock.json` is relative to the app's folder (`../../packages/<pkg>`): build in the image at the repo's depth (`/web/apps/<app>`), or `npm ci` can't find it and prints only its usage.
 24. npm 10 drops the `libc` fields that npm 11 writes, so CI's `npm ci` on Node 24 sees a changed lock: write lock files with the npm CI uses (`npx npm@11 install`).
 25. axe flags low contrast on text caught mid fade-in: run accessibility checks with `reducedMotion: "reduce"` so they see the settled page.
+25a. A web font linked from Google Fonts breaks code-standards 27 and the desk's content security policy: install it from npm (`@fontsource/<font>`) and import it in `main.tsx`.
+25b. Headless Chrome on Windows lays a page out at 500px at least and crops a narrower screenshot: check phone layouts at `--window-size=500,…`, not 390.
+25c. On Windows, Git Bash at `/c/…` spells the drive `C:` while the project is `c:`: Vitest fails with "failed to find the runner" and `docker compose --build` asks for `--allow=fs.read`. Run both from `cd "c:/…"`.
+26. Replacing a block of `styles.css` by slicing from its comment to the end of the file drops every rule appended after it (the sort headers lost their styles): slice to the next block's comment, then check the rules you didn't mean to touch are still there.
 
 ## Python and Postgres
 
 26. Two services that create the same tables at start (LangGraph's checkpointer and store) race on Postgres's catalog and one fails with `UniqueViolation` on `pg_type`: retry the setup a few times on `UniqueViolation`, `DuplicateTable` and `DuplicateObject`.
 27. Semgrep blocks `urllib` and `http.client` calls to a URL from a variable, even when the scheme is checked: use `httpx`.
+27b. A second reader of the same rate-limited source (the header's total beside the Dashboard) doubled the calls and tripped Taostats' 429, and a failed read showed the wallet as empty: keep the last good reading for outside sources and fall back to it (`apps/api/src/api/tao.py`).
+27a. Opening a log file in append mode for each line lost about 2% of lines when threads wrote at once on Windows, even under a lock: keep one handle per file, shared under the lock (`apps/api/src/api/audit.py`, tested in `test_audit.py`).
 
 ## Pull requests
 
@@ -57,6 +52,8 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 ## Binance
 
 29. Binance refuses the agent's cloud container (HTTP 451, restricted location): test against recorded replies, and the owner makes the first live run.
+
+29a. A timed-out order call (status 0) was treated as "not placed", so a live order could be lost or sent again: keep the row "placing" and look it up by its client id, and record a market sale before sending it (decision 47).
 
 ## SQLite
 

@@ -110,3 +110,36 @@ def test_open_orders_and_trades_read_plainly() -> None:
 def test_no_aud_rate_leaves_the_aud_total_out() -> None:
     data = build([{"asset": "USDT", "free": "1", "locked": "0"}], {}, {}, [], None)
     assert data["total"]["aud"] is None
+
+
+def test_a_stablecoin_has_a_cost_only_when_one_is_entered() -> None:
+    usdc = {"asset": "USDC", "free": "100", "locked": "0"}
+    plain = build([usdc], {}, {}, [], None)["holdings"][0]
+    assert plain["averageCost"] is None
+    costed = build([{**usdc, "cost": "1.02"}], {}, {}, [], None)["holdings"][0]
+    assert costed["averageCost"] == "1.02"
+    assert costed["profit"] == "-2"
+
+
+def test_a_fee_token_costs_the_average_of_its_buys_for_all_that_is_held() -> None:
+    bnb = {"asset": "BNB", "free": "0.05", "locked": "0"}
+    tickers = {"BNBUSDT": {"lastPrice": "600", "priceChangePercent": "0"}}
+    trades = {
+        "BNB": [
+            trade(symbol="BNBUSDC", id=1, time=1, price="500", qty="0.2", quoteQty="100"),
+            trade(symbol="BNBUSDC", id=2, time=2, price="700", qty="0.2", quoteQty="140"),
+            trade(
+                symbol="BNBUSDC",
+                id=3,
+                time=3,
+                price="650",
+                qty="0.4",
+                quoteQty="260",
+                isBuyer=False,
+            ),
+        ]
+    }
+    h = build([bnb], tickers, trades, [], None)["holdings"][0]
+    assert h["averageCost"] == "600"  # (100 + 140) / 0.4; the sale doesn't change it
+    assert h["covered"] == "0.05"
+    assert h["profit"] == "0"

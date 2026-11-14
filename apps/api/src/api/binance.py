@@ -119,6 +119,21 @@ class Binance:
         rows = self._get("/api/v3/ticker/24hr", query, "24-hour prices")
         return {str(row["symbol"]): row for row in rows}
 
+    def klines(self, symbol: str, interval: str, limit: int) -> list[list[Any]]:
+        query = urlencode({"symbol": symbol, "interval": interval, "limit": str(limit)})
+        return list(self._get("/api/v3/klines", query, f"candles {symbol} {interval}"))
+
+    def deposits(self, coin: str, start_ms: int, end_ms: int) -> list[dict[str, Any]]:
+        """Completed deposits of one coin in a window of at most 90 days (decision 31)."""
+        params = {
+            "coin": coin,
+            "status": "1",
+            "startTime": str(start_ms),
+            "endTime": str(end_ms),
+            "limit": "1000",
+        }
+        return list(self._signed("/sapi/v1/capital/deposit/hisrec", params, f"{coin} deposits"))
+
     def open_orders(self) -> list[dict[str, Any]]:
         return list(self._signed("/api/v3/openOrders", {}, "open orders"))
 
@@ -167,14 +182,25 @@ class Binance:
         params |= {"quantity": plain(qty), "price": plain(price), "newClientOrderId": client_id}
         return self._order(params, f"limit buy {plain(qty)} {symbol} at {plain(price)}")
 
-    def sell_market(self, symbol: str, qty: Decimal) -> dict[str, Any]:
+    def sell_market(
+        self, symbol: str, qty: Decimal, client_id: str | None = None
+    ) -> dict[str, Any]:
         params = {"symbol": symbol, "side": "SELL", "type": "MARKET", "quantity": plain(qty)}
+        if client_id:
+            params["newClientOrderId"] = client_id
         return self._order(params, f"market sell {plain(qty)} {symbol}")
 
     def sell_limit(self, symbol: str, qty: Decimal, price: Decimal) -> dict[str, Any]:
         params = {"symbol": symbol, "side": "SELL", "type": "LIMIT", "timeInForce": "GTC"}
         params |= {"quantity": plain(qty), "price": plain(price)}
         return self._order(params, f"take-profit sell {plain(qty)} {symbol} at {plain(price)}")
+
+    def limit_sell(
+        self, symbol: str, qty: Decimal, price: Decimal, client_id: str
+    ) -> dict[str, Any]:
+        params = {"symbol": symbol, "side": "SELL", "type": "LIMIT", "timeInForce": "GTC"}
+        params |= {"quantity": plain(qty), "price": plain(price), "newClientOrderId": client_id}
+        return self._order(params, f"limit sell {plain(qty)} {symbol} at {plain(price)}")
 
     def sell_stop(self, symbol: str, qty: Decimal, stop: Decimal) -> dict[str, Any]:
         params = {"symbol": symbol, "side": "SELL", "type": "STOP_LOSS"}
@@ -192,6 +218,27 @@ class Binance:
     def order(self, symbol: str, order_id: int) -> dict[str, Any]:
         params = {"symbol": symbol, "orderId": str(order_id)}
         return dict(self._signed("/api/v3/order", params, f"order {symbol} {order_id}"))
+
+    def order_by_client(self, symbol: str, client_id: str) -> dict[str, Any]:
+        """An order found by the id the desk gave it, for one whose reply never arrived."""
+        params = {"symbol": symbol, "origClientOrderId": client_id}
+        return dict(self._signed("/api/v3/order", params, f"order {symbol} {client_id}"))
+
+    def replace_limit(self, symbol: str, order_id: int, new: dict[str, str]) -> dict[str, Any]:
+        """Cancels an open limit order and places its replacement (`side`, `quantity`, `price`,
+        `newClientOrderId`) in one call; if the cancel fails (it filled meanwhile), nothing new
+        is placed."""
+        params = {
+            "symbol": symbol,
+            "type": "LIMIT",
+            "timeInForce": "GTC",
+            "cancelReplaceMode": "STOP_ON_FAILURE",
+            "cancelOrderId": str(order_id),
+            **new,
+        }
+        what = f"{new['side'].lower()} {new['quantity']} at {new['price']}"
+        label = f"replace {symbol} {order_id}: {what}"
+        return dict(self._signed("/api/v3/order/cancelReplace", params, label, "POST"))
 
     def cancel(self, symbol: str, order_id: int) -> dict[str, Any]:
         params = {"symbol": symbol, "orderId": str(order_id)}

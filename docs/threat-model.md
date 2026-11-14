@@ -1,54 +1,58 @@
 # Threat model
 
-The MVP: a dashboard and spot trade terminal for one Binance account, for one owner. Each later stage extends it before it ships. STRIDE on the data flow below; each risk maps to the OWASP lists that fit the app: Top 10:2025 (A), API Security Top 10:2023 (API), LLM Top 10:2025 (LLM) and Agentic Top 10:2026 (ASI).
+The desk on the owner's machine, in Docker, for one owner; each later stage extends this before it ships. STRIDE on the data flow below, mapped to OWASP Top 10:2025 (A), API Security 2023 (API), LLM 2025 (LLM) and Agentic 2026 (ASI).
 
 ## Data flow
 
 ```mermaid
 flowchart LR
-  subgraph internet ["Internet: untrusted"]
-    caller[Anyone]
+  subgraph machine ["Owner's machine: 127.0.0.1 only"]
     owner[Owner's browser]
+    web((desk container))
+    api((api container))
+    env[(.env keys)]
+    db[(local/: SQLite and audit log)]
+  end
+  subgraph internet ["Internet: untrusted"]
     binance[Binance API]
+    taostats[Taostats API]
+    anthropic[Anthropic API and web search]
+    fx[Frankfurter]
+    gecko[CoinGecko]
   end
-  subgraph aws ["AWS account"]
-    web((desk on CloudFront))
-    cognito((Cognito))
-    gateway((HTTP API))
-    api((api))
-    secret[(Secrets Manager)]
-    table[(DynamoDB)]
-    logs[(Logs)]
-  end
-  caller -- "TB1: GET /health" --> gateway
-  owner -- "TB1: pages" --> web
-  owner -- "TB2: sign-in" --> cognito
-  owner -- "TB2: token on every call" --> gateway
-  gateway --> api
-  api -- "TB3: signed reads and orders" --> binance
-  secret -- "spot key" --> api
-  api --> table
-  gateway --> logs
-  api --> logs
+  owner -- "pages" --> web
+  owner -- "TB1: calls" --> api
+  env -- "keys" --> api
+  api --> db
+  api -- "TB2: signed reads and orders" --> binance
+  api -- "TB3: coldkey address" --> taostats
+  api -- "TB4: figures, position" --> anthropic
+  api -- "TB2: daily rate" --> fx
+  api -- "TB5: coin tickers, USDT/AUD" --> gecko
   classDef boundary fill:none,stroke:#d33,stroke-width:2px,stroke-dasharray:6 4
-  class internet,aws boundary
+  class internet,machine boundary
 ```
 
-Rectangles are external entities, circles processes, cylinders data stores, red dashed boxes trust boundaries; TB labels mark the flows that cross a boundary.
+Circles are processes, cylinders data stores, red dashed boxes trust boundaries; TB labels mark flows that cross one.
 
 | ID | Data | Class | Where |
 |:-:|------|-------|-------|
-| D1 | Access logs: caller IP, route, status | Internal | CloudWatch, kept 30 days |
-| D2 | Binance API key and secret: read and spot trading, no withdrawal | Secret | Secrets Manager only (spec 10) |
-| D3 | Balances, orders and trades | Confidential | DynamoDB, encrypted; the browser while signed in |
-| D4 | Audit log | Confidential | DynamoDB, add-only |
-| D5 | The owner's sign-in: email, password hash, authenticator secret | Confidential | Cognito |
+| D1 | Binance key: read and spot trading | Secret | `.env` only |
+| D2 | Anthropic and Taostats API keys | Secret | `.env` only |
+| D3 | Balances, orders, trades, the TAO balance | Confidential | Fetched on demand |
+| D4 | Watchlists, limits, bots, trades, plans, history | Internal | `local/desk.sqlite` |
+| D5 | Audit log | Confidential | `local/audit.jsonl`, add-only |
+| D6 | The TAO coldkey address | Internal (public on chain) | `.env`, sent to Taostats |
 
 ## Trust boundaries
 
-- **TB1** Internet to AWS: `/health` takes no sign-in, so everything a caller sends is untrusted.
-- **TB2** Browser to AWS: the owner signs in to Cognito with a password and an authenticator code, and the HTTP API checks the token on every other route (spec 9). Sign-up is off.
-- **TB3** AWS to Binance: the `api` calls out over TLS and signs each read and order; what comes back is untrusted, so it's parsed against a fixed shape and shown as text.
+In full, with other read-only sources: [threat-model/boundaries.md](threat-model/boundaries.md).
+
+- **TB1** Browser to `api`: `127.0.0.1` only, no sign-in (decision 10); the `api` allows only the desk's origin and checks `Content-Type` on every write.
+- **TB2** `api` to Binance and Frankfurter: TLS, Binance calls signed; replies untrusted, parsed to a fixed shape.
+- **TB3** `api` to Taostats: TLS, the public address only.
+- **TB4** `api` to Anthropic: a coin's computed figures and the owner's position in it (decision 46), never keys, account ids or order ids; replies untrusted, checked against a schema.
+- **TB5** `api` to CoinGecko: tickers for logos and rates, never amounts; logos checked for host, type and size.
 
 ## Top risks
 
@@ -56,17 +60,18 @@ STRIDE: Spoofing, Tampering, Repudiation, Information disclosure, Denial of serv
 
 | ID | Risk | STRIDE | OWASP | Rating | Controls | Enforced at |
 |:-:|------|:------:|-------|:------:|----------|-------------|
-| R1 | A flood of requests to the public route runs up the bill | D | API4 | Low | Throttling on every route, the budget emails when set (costs 10) | Deploy, Operate |
-| R2 | The public route leaks something from the request or the service | I | A01, API3 | Low | It returns a fixed body (spec 9), with a test that it echoes nothing | Code, Test |
-| R3 | A new route ships without sign-in | S, E | A01, API2 | Medium | Authorisation on every request (code-standards 10); Checkov fails a route with no authorisation | Code, Build |
-| R4 | A compromised package or image | T | A03, LLM03 | Medium | Pinned week-old versions, SHA-pinned allowed actions only, Dependabot, Trivy on every push and PR and weekly | Code, Build, Operate |
-| R5 | A secret is committed | I | A07 | Medium | The pre-push scan, GitHub push protection, OIDC with no long-lived keys | Code, Deploy |
-| R6 | The exchange key leaks, through code, state, a log or the agent | I, E | A02, A07 | High | The key can't withdraw or use margin or futures and works only from its allowed IP address; it lives only in Secrets Manager or the local `.env`, readable by the `api` alone (spec 10); the agent never reads it (decision 2); nothing secret in Terraform (decision 5) *(planned)* | Code, Deploy |
-| R7 | Someone else signs in, sees the portfolio and places orders | S, I, E | A07, API2 | High | One user, no sign-up, multi-factor sign-in, short-lived tokens checked on every route (spec 9) *(planned)* | Deploy, Test |
-| R8 | An order the owner didn't mean: a bug, a double submit or a stolen session | T, E | API6 | High | Spot only; orders only from the terminal after a confirm step; per-order and daily limits, zero until set, and the kill switch, all checked in code (spec 10); one idempotency key per order; limits zero until the owner sets them, and the exits held on Binance (decision 12) *(planned)* | Code, Test, Operate |
-| R9 | An action can't be traced afterwards | R | A09 | Medium | The add-only audit log (spec 10), CloudTrail for the account *(planned)* | Code, Monitor |
-| R10 | Text from the exchange, such as an asset name, runs as markup in the browser | T | A05 | Low | Responses parsed to a fixed shape; React escapes text; a content security policy *(planned)* | Code |
+| R1 | A web page in the owner's browser calls the local `api` (cross-site request) | S, E | A01, API2 | High | Ports on `127.0.0.1` only; CORS allows only the desk's origin; writes need `application/json`, which forces a preflight; limits and the kill switch still apply *(planned)* | Code, Test |
+| R2 | The `api` or `desk` is reachable from the network | I, E | A05 | High | Compose publishes on `127.0.0.1` only, tested *(planned)* | Code, Test |
+| R3 | A compromised package or image | T | A03, LLM03 | Medium | Pinned week-old versions and base images, Dependabot, Trivy on every push, PR and week | Code, Build, Operate |
+| R4 | A secret is committed | I | A07 | Medium | `.env` git-ignored; pre-push scan; push protection | Code |
+| R5 | A key leaks through code, a log, the browser, a prompt or the agent | I, E | A02, A07 | High | Binance's can't withdraw or use margin or futures, and works only from the owner's address; keys live only in `.env`, read by the `api` alone, never logged or sent on (spec 10); the agent never reads one (decision 2) | Code, Operate |
+| R6 | An order the owner didn't mean: a bug, a double submit, a bot buying more than meant, or a timed-out order resent | T, E | API6 | High | A confirm step in words for every order and every bot (which starts off); per-order and daily limits, zero until set, and the kill switch, checked in code; an idempotency key per order and rung, recorded before it's sent; a timed-out order looked up by its client id, never assumed lost; a bot pauses on a Binance error; market orders only to sell, taking risk away (decisions 18, 37 to 43, 47) | Code, Test, Operate |
+| R7 | A searched web page steers the plan (indirect prompt injection), or the model is wrong | T | LLM01, LLM09 | Medium | The plan only advises (spec 10): it can't call anything that trades; it picks levels computed in code, its JSON is checked against a per-call schema and held to the owner's risk rules, and the panel shows its reasons (decisions 16, 46) *(planned)* | Code, Test |
+| R8 | The AI signal runs up the Anthropic bill | D | LLM10 | Medium | A cache, runs only when asked, the monthly cap in code, and a Console spend limit (costs 6) *(planned)* | Code, Operate |
+| R9 | An action can't be traced afterwards | R | A09 | Medium | The add-only audit log (spec 10) | Code |
+| R10 | Text from an outside service runs as markup in the browser | T | A05 | Low | Replies parsed to a fixed shape; React escapes text; a content security policy *(planned)* | Code |
+| R11 | TradingView's widget, or a fake, acts on the desk | T, I | A08 | Low | Framed from TradingView's widget site, another origin, so the browser keeps it from the desk and its api; no TradingView script runs on the desk; the policy allows framing that site only (decision 22) | Code |
 
 ## Compliance
 
-- None while the desk trades only its owner's money. Tax records are the owner's own job. Before anyone else uses it: an Australian financial services licence and AUSTRAC registration are checked with a lawyer (decision 6).
+- None while the desk trades only its owner's money; tax records are the owner's job. Before anyone else uses it, a lawyer checks licensing and AUSTRAC registration (decision 6).

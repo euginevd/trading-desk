@@ -1,24 +1,34 @@
-"""Runs the api locally on 127.0.0.1 only (decision 10): `uv run python -m api.local`."""
+"""Runs the api locally (decisions 10 and 14): `uv run python -m api.local`, on 127.0.0.1.
 
+In Docker it listens inside its container (API_HOST=0.0.0.0) with no port published: only the
+desk container reaches it, and the desk is published on 127.0.0.1 only (spec 9)."""
+
+import base64
 import json
 import os
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import cast
 from urllib.parse import parse_qsl, urlsplit
 
+from api.advisor import check_alerts
 from api.binance import BinanceError
-from api.handler import handler, live_trading, store_path
+from api.handler import handler, live_bots, live_grids, live_services, live_trading, store_path
 
-HOST = "127.0.0.1"
+HOST = os.environ.get("API_HOST", "127.0.0.1")
 PORT = 8000
 WATCH_SECONDS = 30
 MAX_BODY = 10_000
 # The desk's own pages, and the api itself. Anything else is refused, so a web page open in
 # another tab can't reach the api (cross-site requests) or rename itself to it (DNS rebinding).
-HOSTS = {f"{HOST}:{PORT}", f"localhost:{PORT}", "127.0.0.1:5173", "localhost:5173"}
-ORIGINS = {"http://127.0.0.1:5173", "http://localhost:5173"}
+ORIGINS = {"http://127.0.0.1:5173", "http://localhost:5173"} | {
+    o.strip().rstrip("/")
+    for o in os.environ.get("DESK_ORIGINS", "").split(",")
+    if o.strip().startswith(("http://127.0.0.1:", "http://localhost:"))  # local pages only
+}
+HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"} | {o.split("://", 1)[1] for o in ORIGINS}
 
 
 def load_env(path: Path) -> None:
@@ -66,7 +76,8 @@ class Local(BaseHTTPRequestHandler):
                 "body": body,
             }
             reply = handler(event, None)
-        data = str(reply["body"]).encode()
+        text = str(reply["body"])
+        data = base64.b64decode(text) if reply.get("isBase64Encoded") else text.encode()
         self.send_response(int(str(reply["statusCode"])))
         for name, value in cast(dict[str, str], reply["headers"]).items():
             self.send_header(name, value)
@@ -77,17 +88,27 @@ class Local(BaseHTTPRequestHandler):
     do_GET = _handle  # noqa: N815
     do_POST = _handle  # noqa: N815
     do_PUT = _handle  # noqa: N815
+    do_DELETE = _handle  # noqa: N815
 
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002
         print(f"{self.command} {urlsplit(self.path).path}")
 
 
 def watch(stop: threading.Event) -> None:
-    """Every 30 seconds: places exits for filled buys and records trades that closed."""
+    """Every 30 seconds: places exits for filled buys, records trades that closed, and steps
+    each DCA and grid bot (decisions 37 and 38)."""
     while not stop.wait(WATCH_SECONDS):
         try:
             with live_trading() as desk:
                 desk.watch()
+            with live_bots() as bots:
+                bots.step()
+            with live_grids() as grids:
+                grids.step()
+            with live_services() as services:
+                check_alerts(
+                    services.binance, services.store, services.audit, int(time.time() * 1000)
+                )
         except (LookupError, BinanceError) as error:
             print(f"watcher: {type(error).__name__}")
 

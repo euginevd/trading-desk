@@ -11,5 +11,5 @@ export default defineConfig({
       "/api": { target: "http://127.0.0.1:8000", rewrite: (path) => path.replace(/^\/api/, "") },
     },
   },
-  test: { environment: "jsdom" },
+  test: { environment: "jsdom", setupFiles: ["src/test-setup.ts"] },
 });

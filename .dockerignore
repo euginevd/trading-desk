@@ -1,0 +1,13 @@
+# Kept out of every image (code-standards 22): secrets, history and local state.
+.env
+.env.*
+.git
+**/node_modules
+**/dist
+**/.venv
+local
+.local
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/tsconfig.tsbuildinfo

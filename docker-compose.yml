@@ -1,0 +1,30 @@
+# The desk on your machine (decision 14): docker compose up --build, then http://127.0.0.1:5180
+# (or the DESK_PORT you set in .env).
+# Only the desk is published, and only on 127.0.0.1; the api is reachable from the desk alone.
+name: trading-desk
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      # The api answers only the desk's own page, on whichever port it's published.
+      DESK_ORIGINS: http://127.0.0.1:${DESK_PORT:-5180},http://localhost:${DESK_PORT:-5180}
+    volumes:
+      - ./local:/app/local # SQLite and the audit log stay on your disk
+    restart: unless-stopped
+
+  desk:
+    build:
+      context: .
+      dockerfile: apps/desk/Dockerfile
+    ports:
+      - "127.0.0.1:${DESK_PORT:-5180}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped

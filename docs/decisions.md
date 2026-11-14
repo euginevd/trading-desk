@@ -1,28 +1,53 @@
 # Decisions
 
-The decisions in force, newest last. A superseded decision keeps its number as a one-line pointer (*Superseded by N:* what it was), so citations still work; git keeps the full text.
+The decisions in force, newest last, one line each; the full record (date, why, instead of) is in the linked file. A superseded decision keeps its number as a pointer, so citations still work.
 
-Each is one or two lines: **The decision** (date). Why: the reason. Instead of: what it replaced or ruled out.
+To add one: its line here, and its record, in the same form, at the end of the newest file in [decisions/](decisions/) (a new file past about 2,000 words).
 
-1. **Profile `prototype`; euginevd owns the code and accepts every trade-off in [guides/03-security-trade-offs.md](../guides/03-security-trade-offs.md)** (2026-11-13). `dev` only, 50% coverage, and trading is bounded by decision 8. Why: one owner, no customers, and only the owner's own money. Instead of: `production`, which needs a second reviewer and a second AWS account.
-2. **The agent never reads an exchange key, and the `.env` deny rules stay in `.claude/settings.json`** (2026-11-13). The owner puts each key in Secrets Manager; the agent troubleshoots from logs. Why: a prototype's secrets are meant to be made up, and these guard real money. Instead of: AGENTS.md rule 13's default, which drops the deny rules, and rule 26's leave to read `.env`.
-3. **Deploy target: Lambda, HTTP API, DynamoDB, Secrets Manager, Cognito, S3 and CloudFront in `ap-southeast-2`** (2026-11-13). Why: near nothing when idle, and the template's pipeline already deploys it. The limits, from the services' documented behaviour and still to be proved by each walking skeleton (AGENTS.md rule 17):
-   - Lambda has no fixed outbound address, so Binance's IP allowlist needs a VPC and a NAT with an Elastic IP, about $45 a month. Locally, the key is limited to the owner's home address; the NAT comes with the first deploy to AWS, since the MVP's key trades.
-   - Lambda runs 15 minutes at most and holds no socket open between runs, so prices are polled and bots run on a schedule, a minute apart at the closest.
-   - HTTP API cuts a request off at 30 seconds, so a slow exchange read is served from the last snapshot.
-   - DynamoDB has no joins and a 400 KB item limit: one table, keyed by kind and time.
-   - Secrets Manager charges $0.40 a secret a month and can't hide a secret from a role allowed to read it: only the `api` role may.
-   - Cognito: sign-up off, one user made by the owner, multi-factor sign-in required.
-   - CloudFront serves the web app from a private bucket; its certificate must be in `us-east-1` once there's a domain.
-
-   Instead of: a container that's always on (a fixed address and live sockets, but about $30 a month before it does anything), revisited at the bots stage.
-4. **One web app, `desk`, with a dashboard that links to each product's screens** (2026-11-13). Why: one user and one sign-in. Instead of: an app per audience, as in travel-claims.
-5. **The repo is public, as every personal or portfolio project is, so nothing secret goes in code, Terraform or its state** (2026-11-13). Why: it's built in the open (AGENTS.md rule 30), and anyone signed in to GitHub can download `main`'s saved plan for a day (trade-offs 5). Account IDs and resource names are accepted as visible. Instead of: a private repo, kept for work projects.
-6. **Personal use for three months, then a decision on commercialising** (2026-11-13). Why: prove it on the owner's own account first; trading for others brings licensing (spec, Business). Instead of: building for other users from the start.
-7. **Local first, then AWS** (2026-11-13). Every feature is built and tested locally; the owner bootstraps AWS once happy with it, and walking skeletons start then (AGENTS.md rule 17). Why: prove it on a laptop before it costs AWS money. Instead of: deploying each new service to `dev` from its first phase.
-8. **The MVP is a dashboard and spot trade terminal; the Binance key reads and trades spot only** (2026-11-13). No withdrawal, margin or futures, and limited to the IP address it calls from. Testing is on the live account, within the owner's limits (decision 12). Why: the owner wants to trade from the desk from the start. Instead of: a read-only MVP, with manual trades as the next stage.
-9. **Portfolio page: spot wallet only, valued in US dollars with an Australian dollar total, profit or loss by average cost** (2026-11-13). Prices are each coin's USDT pair, with USDT, USDC and FDUSD at $1. Average cost comes from the coin's trades against those three; coins deposited, or bought through another pair, show what the trades cover and say so. Fetched on opening the page and on Refresh, not stored. Why: the owner's answers to TODO 1; average cost is the simplest method that's still honest. Instead of: Funding and Earn wallets, first-in first-out cost, or stored snapshots.
-10. **Locally, the `api` listens on `127.0.0.1` only and needs no sign-in** (2026-11-13). Cognito comes with the move to AWS (spec 9). Why: one owner on their own machine, and nothing else can reach it. Instead of: a sign-in stand-in from the first feature.
-11. **Theme: the house tokens, following the system's light or dark** (2026-11-13). Why: the owner approved TODO 1's mockup without picking one of its four themes, and this is the default. Instead of: Terminal (dark, mono figures) or Paper (warm light), a token swap if wanted later.
-12. **Smart trade, first version: a market or limit buy with one take-profit and one stop-loss, on the live account** (2026-11-14). The exits go to Binance as one OCO order once the buy fills, so they hold while the desk is off; a limit buy that fills while the desk is off gets its exits when the desk next runs, and the page says so. Tested live within the owner's per-order and daily limits, zero until the owner sets them. Why: the owner's answers to TODO 2. Instead of: several targets, trailing or breakeven stops, or the testnet first.
-13. **Locally, smart trades, limits and the kill switch are kept in a SQLite file in `local/`** (2026-11-14). Why: Python has it built in, and it survives a restart. Instead of: a DynamoDB stand-in before AWS (decision 7).
+1. Profile `prototype`; euginevd owns the code and accepts every trade-off in [guides/03-security-trade-offs.md](../guides/03-security-trade-offs.md). [Record](decisions/01-16.md)
+2. The agent never reads an exchange key, and the `.env` deny rules stay in `.claude/settings.json`. [Record](decisions/01-16.md)
+3. *Superseded by 14:* deploy to Lambda, HTTP API, DynamoDB, Secrets Manager, Cognito, S3 and CloudFront in `ap-southeast-2`. [Record](decisions/01-16.md)
+4. One web app, `desk`, with a dashboard that links to each product's screens. [Record](decisions/01-16.md)
+5. The repo is public, as every personal or portfolio project is, so nothing secret goes in code, Terraform or its state. [Record](decisions/01-16.md)
+6. Personal use for three months, then a decision on commercialising. [Record](decisions/01-16.md)
+7. *Superseded by 14:* local first, then AWS. [Record](decisions/01-16.md)
+8. The MVP is a dashboard and spot trade terminal; the Binance key reads and trades spot only. [Record](decisions/01-16.md)
+9. Portfolio page: spot wallet only, valued in US dollars with an Australian dollar total, profit or loss by average cost. [Record](decisions/01-16.md)
+10. Locally, the `api` listens on `127.0.0.1` only and needs no sign-in. [Record](decisions/01-16.md)
+11. *Superseded by 15:* the house tokens, following the system's light or dark. [Record](decisions/01-16.md)
+12. Smart trade, first version: a market or limit buy with one take-profit and one stop-loss, on the live account. [Record](decisions/01-16.md)
+13. Locally, smart trades, limits and the kill switch are kept in a SQLite file in `local/`. [Record](decisions/01-16.md)
+14. Runs locally in Docker; hosting is decided later. The AWS app (`infra/aws/api`) is removed; the `aws` workflow and the bootstrap stay, idle until a unit comes back. [Record](decisions/01-16.md)
+15. Theme: dark only, after the owner's mockup: near-black panels, a teal accent, green and red for up and down, Inter with tabular figures. [Record](decisions/01-16.md)
+16. AI signal: Claude Opus 5.5 (`claude-opus-5-5`) through the Anthropic API, advisory only. [Record](decisions/01-16.md)
+17. TAO wallet: read-only, by its public coldkey address, through the Taostats API. [Record](decisions/17-32.md)
+18. Trade page, first version: a watchlist of up to 10 coins on the left, the chart and AI signal in the middle, a limit buy or limit sell form on the right. [Record](decisions/17-32.md)
+19. Two pages, Portfolio and Trade, after the owner's mockup. [Record](decisions/17-32.md)
+20. At the owner's request, the agent may move keys from a file the owner names into `.env` with a script that never shows them. [Record](decisions/17-32.md)
+21. The Trade page trades in one stablecoin, set by `DESK_QUOTE`: USDC for the owner. [Record](decisions/17-32.md)
+22. The Trade page's chart is TradingView's free Advanced Chart widget. [Record](decisions/17-32.md)
+23. Several named watchlists, up to 20, each of up to 10 coins; the first is "Portfolio". [Record](decisions/17-32.md)
+24. A folding side panel replaces the top bar's links; Portfolio is renamed Dashboard; DCA and Grid bots get placeholder pages. [Record](decisions/17-32.md)
+25. Coin logos come from CoinGecko through the api, kept in `local/icons/`. [Record](decisions/17-32.md)
+26. The Dashboard filters by source and keeps its table sleek. [Record](decisions/17-32.md)
+27. The owner can enter an average cost for a holding with no trades here. [Record](decisions/17-32.md)
+28. Key levels sit in a quiet ladder over the TradingView chart. [Record](decisions/17-32.md)
+29. Australian dollars use a live USDT rate, with the ECB's daily rate as fallback. [Record](decisions/17-32.md)
+30. The Dashboard shows money in AUD, USD, INR or BTC, picked by a switch. [Record](decisions/17-32.md)
+31. USDC deposits into Binance show by month for the financial year, in AUD. [Record](decisions/17-32.md)
+32. The wallet line shows the TAO total, with unclaimed root rewards in brackets. [Record](decisions/17-32.md)
+33. A stablecoin can carry an average cost the owner enters, and percentages show 1 decimal place. [Record](decisions/33-47.md)
+34. Average cost counts only trades from the start of FY 2026-27. [Record](decisions/33-47.md)
+35. BNB, the fee token, costs the average of the year's BNB buys, for all that's held. [Record](decisions/33-47.md)
+36. The Dashboard's top is eight compact widgets, four a row, including the Crypto Fear & Greed Index. [Record](decisions/33-47.md)
+37. DCA bots: a Bollinger Band entry, a ladder of limit buys and a limit take profit, switched on by the owner. [Record](decisions/33-47.md)
+38. Grid bots: a range of limit orders that buys low and sells one line up, switched on by the owner. [Record](decisions/33-47.md)
+39. Ladder buys on the smart trade, and a switch to hide the TradingView chart. [Record](decisions/33-47.md)
+40. Bots work like a consumer app: presets from the last 30 days, a real chart with the levels, references for everything, and a page per bot. [Record](decisions/33-47.md)
+41. A smart trade is a one-off DCA deal, made by a four-step New trade; key levels keep only what an entry needs. [Record](decisions/33-47.md)
+42. The header carries prices, the total and the currency; every Dashboard widget opens a details panel. [Record](decisions/33-47.md)
+43. Open orders open on their chart and can be changed in one step; details open where they're clicked; page headings go. [Record](decisions/33-47.md)
+44. The header shows the market, not a list of coins; times read am and pm. [Record](decisions/33-47.md)
+45. The TAO wallet reading is kept: reused for a minute, and standing in for six hours when Taostats refuses. [Record](decisions/33-47.md)
+46. The AI panel is a plan for the owner's own position: numbers from code, choices and words from the model. [Record](decisions/33-47.md)
+47. An order sent without an answer is looked up, never assumed lost; one lock for everything that sends orders. [Record](decisions/33-47.md)
