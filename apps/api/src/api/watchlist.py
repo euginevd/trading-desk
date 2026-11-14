@@ -39,8 +39,9 @@ class Watchlist:
         if not coins and self._store.setting("watchlist_started", "0") == "0":
             listed = self._binance.symbols()
             coins = [c for c in STARTERS if f"{c}{QUOTE}" in listed]
+        start = _now() - len(coins)  # in order, and all before any coin added after
         for n, coin in enumerate(coins):
-            self._store.watch_coin(list_id, coin, _now() + n)
+            self._store.watch_coin(list_id, coin, start + n)
         self._store.set_setting("watchlist_started", "1")
         return self._store.lists()
 

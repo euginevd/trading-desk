@@ -10,11 +10,13 @@ COPY apps/desk/ ./
 RUN npm run build
 
 # Serve: nginx as a non-root user, with the api behind /api on the compose network.
-FROM nginxinc/nginx-unprivileged:1.29-alpine@sha256:0c79d56aee561a1d81c63f00eee5fb5fe29279560cdc55e91425133104c7fbe6
+FROM nginxinc/nginx-unprivileged:1.30-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
+# Alpine's security fixes, which the base image doesn't carry yet; then back to the non-root user.
+USER root
+RUN apk upgrade --no-cache
+USER 101
 COPY apps/desk/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /web/apps/desk/dist /usr/share/nginx/html
-# The base image's own unprivileged nginx user, named so the image says it runs as non-root.
-USER 101
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s \
     CMD wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1
