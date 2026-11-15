@@ -401,6 +401,77 @@ describe("trade page", () => {
     expect(await screen.findByText("TR-5 placed: 4 limit buys on SOL/USDT.")).toBeTruthy();
   });
 
+  it("holds a buy that breaks a rule, and places it anyway only on request", async () => {
+    const served = serve(limits);
+    // The pre-trade check refuses the first buy (decision 58); the override goes through.
+    const fetch = vi.fn((url: string, init?: RequestInit) => {
+      const body = init?.body ? (JSON.parse(String(init.body)) as Record<string, unknown>) : {};
+      if (url === "/api/orders" && init?.method === "POST" && body.override !== true) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: "This buy breaks your rule: Per trade.",
+              ruleBreaks: [
+                { rule: "per_trade_aud", label: "Per trade", message: "A$600 is over A$500." },
+              ],
+            }),
+            { status: 409 },
+          ),
+        );
+      }
+      return served(url, init);
+    });
+    vi.stubGlobal("fetch", fetch);
+    show(limits);
+    fireEvent.click(await screen.findByRole("button", { name: "New trade" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Or place this one buy now/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Place limit buy" }));
+    const banner = await screen.findByRole("alert");
+    expect(banner.textContent).toContain("Breaks a rule: Per trade");
+    expect(banner.textContent).toContain("A$600 is over A$500.");
+    expect(document.activeElement).toBe(screen.getByRole("button", { name: "Keep to my rules" }));
+    fireEvent.click(screen.getByRole("button", { name: "Place anyway (logged)" }));
+    expect(await screen.findByText("Limit buy placed on SOLUSDT.")).toBeTruthy();
+    const sent = posts(fetch, "/orders").map(
+      ([, init]) => JSON.parse(String(init?.body)) as Record<string, unknown>,
+    );
+    expect(sent).toHaveLength(2);
+    const [first, second] = sent;
+    expect(first?.override).toBeUndefined();
+    expect(second).toEqual({ ...first, override: true });
+  });
+
+  it("keeps to the rules from the banner, sending nothing more", async () => {
+    const served = serve(limits);
+    const fetch = vi.fn((url: string, init?: RequestInit) =>
+      url === "/api/orders" && init?.method === "POST"
+        ? Promise.resolve(
+            new Response(
+              JSON.stringify({
+                error: "This buy breaks your rule: Max % per coin.",
+                ruleBreaks: [
+                  {
+                    rule: "max_pct_per_coin",
+                    label: "Max % per coin",
+                    message: "SOL would be 31%.",
+                  },
+                ],
+              }),
+              { status: 409 },
+            ),
+          )
+        : served(url, init),
+    );
+    vi.stubGlobal("fetch", fetch);
+    show(limits);
+    fireEvent.click(await screen.findByRole("button", { name: "New trade" }));
+    fireEvent.click(await screen.findByRole("button", { name: /Or place this one buy now/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Place limit buy" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Keep to my rules" }));
+    expect(screen.queryByText(/Breaks a rule/)).toBeNull();
+    expect(posts(fetch, "/orders")).toHaveLength(1);
+  });
+
   it("sells from resistance, with Max from what's held", async () => {
     const fetch = serve(limits);
     show(limits);

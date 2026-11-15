@@ -678,7 +678,7 @@ class Bots:
         filters = self._binance.filters(symbol)
         price = Decimal(self._binance.tickers([symbol])[symbol]["lastPrice"])
         rows = ladder(config, price, filters)
-        held = self.rule_hold(rows[-1]["total"]) if rows else None
+        held = self.rule_hold(rows[-1]["total"], int(bot["id"])) if rows else None
         if held:  # the same signal is tried again next step: last_signal isn't saved
             self._hold(self._store.bot(int(bot["id"])), held)
             return
@@ -698,9 +698,10 @@ class Bots:
         assert config.entry_price is not None  # noqa: S101 - a trade has one
         filters = self._binance.filters(str(bot["symbol"]))
         rows = ladder(config, config.entry_price, filters)
-        held = self.rule_hold(rows[-1]["total"]) if rows else None
+        held = self.rule_hold(rows[-1]["total"], int(bot["id"])) if rows else None
         if held:
             self._hold(bot, held)
+
             return
         problem = self._cannot_start(config, rows, filters)
         if problem:
@@ -708,8 +709,26 @@ class Bots:
             return
         self._open_deal(bot, rows)
 
-    def rule_hold(self, spend: Decimal) -> str | None:
+    def trade_budget(self, bot_id: int) -> tuple[str, Decimal] | None:
+        """A smart trade's coin and whole ladder, in the quote; None for a recurring bot."""
+        bot = self._store.bot(bot_id)
+        config = config_of(bot)
+        if config.entry_price is None:
+            return None
+        rows = ladder(config, config.entry_price, self._binance.filters(str(bot["symbol"])))
+        return str(bot["symbol"]).removesuffix(QUOTE), rows[-1]["total"] if rows else ZERO
+
+    def store_and_audit(self) -> tuple[Store, Audit]:
+        return self._store, self._audit
+
+    def allow_past_rules(self, bot_id: int) -> None:
+        """The owner confirmed this smart trade past a Profile rule: its buys aren't held."""
+        self._store.set_setting(f"bot_past_rules_{bot_id}", "1")
+
+    def rule_hold(self, spend: Decimal, bot_id: int) -> str | None:
         """A buy that breaks a set Profile rule waits: a bot can't confirm past it (decision 58)."""
+        if self._store.setting(f"bot_past_rules_{bot_id}", "") == "1":
+            return None
         _, doc = profile.current(self._store)
         now = datetime.fromtimestamp(self._clock(), profile_live.SYDNEY)
         return profile_live.bot_problem(self._store, doc, spend, now)

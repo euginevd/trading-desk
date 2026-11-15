@@ -138,6 +138,11 @@ export function fetchedAt(iso: string): string {
   return `${time}, ${day(d)}`;
 }
 
+// A calendar day with its year, as 15 Nov 2026 (design-system 18).
+export function longDate(isoDay: string): string {
+  return day(new Date(`${isoDay}T12:00:00Z`));
+}
+
 export function shortDate(isoDay: string): string {
   return new Date(`${isoDay}T12:00:00Z`).toLocaleDateString("en-AU", {
     day: "numeric",

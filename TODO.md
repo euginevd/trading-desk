@@ -7,6 +7,8 @@ Your requirements, features and ideas, numbered, in your own words. In `producti
 3. Redesign the project to match my brief and mockup (`local/project-brief.md`, `local/trading-desk-mockup.html`): an AI-native crypto trading desk in local Docker. Portfolio tab with Binance and my TAO wallet; Trading tab with a watchlist, an AI signal per coin (price, indicators, news and sentiment in; buy now or not, reason and confidence out), and limit buy and sell orders on Binance spot. Keys encrypted, spot only, withdrawals never on, IP-whitelisted, nothing exposed. *(Built: features 12 to 26, decisions 14 to 19. Done once your first live run with your Binance, Taostats and Anthropic keys works.)*
 4. Cheaper on the API key: fewer web searches, lower effort for routine re-runs, prompt caching, and a count of runs this month. *(Built: the subscription switch, feature 53, and the model choice, decision 53.)*
 
+5. Rebuild the Profile as my Investment Policy Statement (`local/updates/claude-code-prompt-profile.md`): typed and versioned, a command bar, a pre-trade check, a scorecard, a what-if, a weekly recap; agents as a team of five; a Dashboard refresh; a clearer Settings. *(Built: features 61 to 64, decisions 58 and 59. Done once your profile.md is in as v1 and the first Sunday recap arrives.)*
+
 Later, from the project ideas doc, not started until listed above:
 
 - Bybit and leverage.

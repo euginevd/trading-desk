@@ -426,3 +426,33 @@ def test_the_scorecard_counts_kept_and_broken_buys_for_set_rules() -> None:
             "brokenResultPct": "10",
         }
     ]
+
+
+class FakeTradeBots:
+    """A smart trade of A$300 (US$200 at 1.5) on BTC, and what the check does with it."""
+
+    def __init__(self, store: Store, audit: Audit, trade: bool = True) -> None:
+        self.store, self.audit, self.trade, self.allowed = store, audit, trade, False
+
+    def trade_budget(self, _bot_id: int) -> tuple[str, D] | None:
+        return ("BTC", D(200)) if self.trade else None
+
+    def store_and_audit(self) -> tuple[Store, Audit]:
+        return self.store, self.audit
+
+    def allow_past_rules(self, _bot_id: int) -> None:
+        self.allowed = True
+
+
+def test_switching_on_a_smart_trade_gets_the_same_check(store: Store, audit: Audit) -> None:
+    doc = profile.clean(sample())
+    doc["rules"]["per_trade_aud"] = "250"
+    profile.save(store, audit, doc, author=profile.OWNER, now=NOW)
+    bots = FakeTradeBots(store, audit)
+    held_back = handler._trade_bot_check(bots, 1, {"on": True}, held)  # type: ignore[arg-type]  # noqa: SLF001
+    assert held_back is not None
+    assert json.loads(str(held_back["body"]))["ruleBreaks"][0]["label"] == "Per-trade size"
+    assert handler._trade_bot_check(bots, 1, {"on": True, "override": True}, held) is None  # type: ignore[arg-type]  # noqa: SLF001
+    assert bots.allowed  # its buys won't be held later
+    recurring = FakeTradeBots(store, audit, trade=False)
+    assert handler._trade_bot_check(recurring, 2, {"on": True}, held) is None  # type: ignore[arg-type]  # noqa: SLF001

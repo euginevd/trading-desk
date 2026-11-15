@@ -1,0 +1,518 @@
+/* The Profile page (decision 58), on design-system.md's tokens. Prefixed pf- throughout. */
+.pf-page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.pf-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pf-title h1 {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.pf-spacer {
+  flex: 1;
+}
+.pf-intro {
+  margin: 0;
+  max-width: 760px;
+}
+.pf-version {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.pf-note {
+  color: var(--up);
+  margin: 0;
+}
+.pf-empty {
+  padding: 14px 16px;
+}
+.pf-empty p {
+  margin: 0;
+}
+
+/* The top strip. */
+.pf-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.pf-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  min-height: 96px;
+}
+.pf-tile .muted {
+  font-size: 12px;
+}
+.pf-big {
+  font-size: 18px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.pf-big.warn {
+  color: var(--wait);
+}
+.pf-big.bad {
+  color: var(--down);
+}
+.pf-skeleton {
+  min-height: 96px;
+  background: var(--panel-2);
+}
+.pf-meter {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  overflow: hidden;
+  margin-top: 4px;
+}
+.pf-meter i {
+  display: block;
+  height: 100%;
+  background: var(--up);
+}
+.pf-meter.warn i {
+  background: var(--wait);
+}
+.pf-meter.bad i {
+  background: var(--down);
+}
+
+/* The command bar. */
+.pf-command-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 6px 6px 6px 14px;
+}
+.pf-command-bar:focus-within {
+  border-color: var(--accent);
+}
+.pf-command-bar input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  padding: 6px 0;
+}
+.pf-command-bar input:focus {
+  outline: none;
+}
+.pf-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+.pf-chip-btn {
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-size: 12px;
+  min-height: 28px;
+}
+.pf-answer {
+  margin-top: 10px;
+  border-left: 2px solid var(--accent);
+  background: var(--panel);
+  padding: 8px 12px;
+  border-radius: 0 8px 8px 0;
+}
+.pf-answer p {
+  margin: 0 0 4px;
+}
+
+/* Cards. */
+.pf-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.pf-card {
+  padding: 14px 16px;
+  min-width: 0;
+}
+.pf-card.wide {
+  grid-column: 1 / -1;
+}
+.pf-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.pf-head h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0;
+}
+.pf-updated {
+  font-size: 11px;
+  color: var(--dim);
+  margin-left: auto;
+}
+.pf-pencil {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  min-width: 28px;
+  min-height: 28px;
+  padding: 2px 6px;
+}
+.pf-pencil:hover {
+  color: var(--accent);
+}
+.pf-badge {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-radius: 5px;
+  font-size: 11px;
+  padding: 2px 7px;
+}
+.pf-lock {
+  font-size: 11px;
+  min-height: 24px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--muted);
+}
+.pf-lock.on {
+  color: var(--text);
+  border-color: var(--muted);
+}
+.pf-dl {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pf-dl-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 0.9fr) minmax(0, 1.4fr) auto;
+  gap: 12px;
+  align-items: baseline;
+}
+.pf-dl dt {
+  color: var(--muted);
+}
+.pf-dl dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.pf-dl-extra {
+  justify-self: end;
+}
+.pf-unset {
+  color: var(--dim);
+  font-style: italic;
+}
+.pf-hint {
+  color: var(--dim);
+  font-size: 11px;
+}
+.pf-prose {
+  margin: 0 0 8px;
+  white-space: pre-wrap;
+}
+.pf-tag {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  border-radius: 5px;
+  font-size: 11px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
+.pf-tag.ok {
+  background: var(--up-soft);
+  color: var(--up);
+}
+.pf-tag.warn {
+  background: var(--wait-soft);
+  color: var(--wait);
+}
+.pf-tag.bad {
+  background: var(--down-soft);
+  color: var(--down);
+}
+.pf-tag.dim {
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.pf-chip {
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 12px;
+}
+.pf-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 14px;
+  border-left: 1px solid var(--line-2);
+}
+.pf-timeline li {
+  margin-bottom: 8px;
+}
+.pf-timeline strong {
+  margin-right: 6px;
+}
+.pf-quotes {
+  margin: 0;
+  padding-left: 18px;
+}
+.pf-more,
+.pf-pre {
+  white-space: pre-wrap;
+  font: inherit;
+}
+.pf-more {
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 10px 0 0;
+}
+.pf-table-wrap {
+  overflow-x: auto;
+}
+.pf-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.pf-table th,
+.pf-table td {
+  text-align: left;
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+.pf-table th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 11px;
+}
+.pf-table .n {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.pf-link {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  padding: 0;
+  min-height: 24px;
+}
+
+/* Editing. */
+.pf-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pf-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pf-field label {
+  font-size: 12px;
+  color: var(--muted);
+}
+.pf-field input,
+.pf-field select,
+.pf-field textarea {
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  border-radius: 7px;
+  padding: 6px 8px;
+  font: inherit;
+}
+.pf-check {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.pf-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px 12px;
+}
+.pf-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.pf-actions .primary,
+.pf-command-bar .primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+/* A proposed change on its card. */
+.pf-diff {
+  margin-top: 12px;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pf-diff-head {
+  margin: 0;
+}
+.pf-diff-list {
+  margin: 0;
+  padding-left: 18px;
+}
+.pf-old {
+  color: var(--muted);
+}
+.pf-new {
+  color: var(--up);
+  font-weight: 600;
+  text-decoration: none;
+}
+.pf-conflict {
+  margin: 0;
+  background: var(--wait-soft);
+  color: var(--wait);
+  border-radius: 7px;
+  padding: 6px 10px;
+}
+.pf-conflict.bad {
+  background: var(--down-soft);
+  color: var(--down);
+}
+
+/* History. */
+.pf-drawer {
+  padding: 14px 16px;
+}
+.pf-versions {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-versions li {
+  display: grid;
+  grid-template-columns: 70px 150px 120px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+}
+.pf-compare {
+  margin-top: 12px;
+}
+.pf-compare h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+/* Scorecard, what-if, review. */
+.pf-score {
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.pf-score-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.pf-seg {
+  font-size: 11px;
+  min-height: 24px;
+  padding: 2px 8px;
+}
+.pf-seg.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.pf-sim {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 16px;
+}
+.pf-sim .pf-field {
+  margin-bottom: 10px;
+}
+.pf-sim-result {
+  margin: 4px 0;
+}
+.pf-sim-goals {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pf-path {
+  stroke: var(--accent);
+  stroke-width: 2;
+}
+.pf-goal-line {
+  stroke: var(--wait);
+}
+.pf-axis-line {
+  stroke: var(--line-2);
+}
+.pf-axis {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.pf-gaps {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+.pf-gaps li {
+  margin-bottom: 6px;
+}
+
+@media (max-width: 760px) {
+  .pf-strip,
+  .pf-grid,
+  .pf-sim {
+    grid-template-columns: 1fr;
+  }
+  .pf-dl-row {
+    grid-template-columns: 1fr auto;
+  }
+  .pf-dl-row dt {
+    grid-column: 1 / -1;
+  }
+  .pf-versions li {
+    grid-template-columns: 1fr 1fr;
+  }
+}

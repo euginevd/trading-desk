@@ -6,8 +6,16 @@ import type {
   TelegramSettings,
   AgentThread,
   Coach,
-  PlanSection,
-  TradingPlan,
+  AgentInfo,
+  CommandReply,
+  ProfileDoc,
+  ProfilePage,
+  ProfileSection,
+  ProfileVersion,
+  PlannerReview,
+  Recap,
+  RuleBreak,
+  ScoreRow,
   AiMode,
   AiSettings,
   Interval,
@@ -40,7 +48,14 @@ import type {
   LadderRequest,
 } from "./types";
 
-export class ApiError extends Error {}
+export class ApiError extends Error {
+  // A buy that breaks a Profile rule is held with each rule named (decision 58).
+  readonly ruleBreaks: RuleBreak[];
+  constructor(message: string, ruleBreaks: RuleBreak[] = []) {
+    super(message);
+    this.ruleBreaks = ruleBreaks;
+  }
+}
 
 // The one place that reaches the api (code-standards 4); the dev server proxies /api to it.
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
@@ -60,7 +75,11 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
       reply && typeof reply === "object" && "error" in reply
         ? String(reply.error)
         : "The api couldn't answer. Check it's running, then try again.";
-    throw new ApiError(message);
+    const breaks =
+      reply && typeof reply === "object" && "ruleBreaks" in reply && Array.isArray(reply.ruleBreaks)
+        ? (reply.ruleBreaks as RuleBreak[])
+        : [];
+    throw new ApiError(message, breaks);
   }
   return reply as T;
 }
@@ -128,8 +147,12 @@ export const createBot = (request: DcaRequest) => call<DcaBots>("POST", "/bots",
 export const editBot = (id: number, request: DcaRequest) =>
   call<DcaBots>("PUT", `/bots/${id}`, request);
 export const deleteBot = (id: number) => call<DcaBots>("DELETE", `/bots/${id}`, {});
-export const switchBot = (id: number, on: boolean) =>
-  call<DcaBots>("POST", `/bots/${id}/switch`, { on, confirmed: on });
+export const switchBot = (id: number, on: boolean, override = false) =>
+  call<DcaBots>("POST", `/bots/${id}/switch`, {
+    on,
+    confirmed: on,
+    ...(override ? { override } : {}),
+  });
 
 // Grid bots (decision 38): created switched off, like the DCA bots.
 export const getGrids = () => call<GridBots>("GET", "/grids");
@@ -174,13 +197,10 @@ export const addAlert = (alert: {
 export const deleteAlert = (id: number) =>
   call<{ alerts: PriceAlert[] }>("DELETE", `/alerts/${id}`, {});
 
-// The coach, the Plan and the agents (decision 52).
+// The coach and the agents (decisions 52 and 59).
 export const getCoach = () => call<Coach>("GET", "/coach");
 export const writeCoach = () => call<Coach>("POST", "/coach/message", {});
-export const getTradingPlan = () => call<TradingPlan>("GET", "/trading-plan");
-export const saveTradingPlan = (section: PlanSection, body: unknown) =>
-  call<TradingPlan>("PUT", `/trading-plan/${section}`, body);
-export const getAgents = () => call<{ agents: { id: string; name: string }[] }>("GET", "/agents");
+export const getAgents = () => call<{ agents: AgentInfo[] }>("GET", "/agents");
 export const getAgent = (id: string) => call<AgentThread>("GET", `/agents/${id}`);
 export const sendAgent = (id: string, text: string) =>
   call<AgentThread>("POST", `/agents/${id}`, { text });
@@ -208,3 +228,32 @@ export const saveTelegramToken = (token: string) =>
   call<TelegramSettings>("PUT", "/settings/telegram/token", { token });
 export const testTelegram = () => call<TelegramSettings>("POST", "/settings/telegram/test", {});
 export const linkTelegram = () => call<TelegramSettings>("POST", "/settings/telegram/link", {});
+
+// The Profile (decision 58).
+export const getProfilePage = () => call<ProfilePage>("GET", "/profile");
+export const saveProfileSection = <K extends ProfileSection | "locks">(
+  section: K,
+  value: ProfileDoc[K],
+  reason = "",
+) => call<ProfilePage>("PUT", `/profile/${section}`, { value, reason });
+export const getProfileVersions = () =>
+  call<{ versions: ProfileVersion[] }>("GET", "/profile/versions");
+export const getProfileVersion = (n: number) =>
+  call<ProfileVersion & { profile: ProfileDoc }>("GET", `/profile/versions/${n}`);
+export const restoreProfile = (n: number) => call<ProfilePage>("POST", "/profile/restore", { n });
+export const importProfile = (markdown: string) =>
+  call<ProfilePage>("POST", "/profile/import", { markdown });
+export const exportProfile = () =>
+  call<{ markdown: string; version: number }>("GET", "/profile/export");
+export const askProfile = (text: string) =>
+  call<CommandReply>("POST", "/profile/command", { text });
+export const acceptSuggestion = (id: string, reason = "") =>
+  call<ProfilePage>("POST", `/profile/suggestions/${id}/accept`, { reason });
+export const rejectSuggestion = (id: string) =>
+  call<unknown>("POST", `/profile/suggestions/${id}/reject`, {});
+export const reviewAllocation = () =>
+  call<{ planner: PlannerReview }>("POST", "/profile/planner", {});
+export const getScorecard = () =>
+  call<{ windows: Record<string, ScoreRow[]> }>("GET", "/profile/scorecard");
+export const getRecaps = () => call<{ recaps: Recap[] }>("GET", "/recaps");
+export const writeRecap = () => call<{ recap: Recap }>("POST", "/recaps", {});

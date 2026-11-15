@@ -133,6 +133,8 @@ export interface SmartTradeRequest {
   spend: string;
   takeProfit?: string;
   stopLoss?: string;
+  // Past a Profile rule the pre-trade check named, by the owner's choice (decision 58).
+  override?: boolean;
 }
 
 // The AI desk (TODO 3): tickers, the watchlist, charts and signals (apps/api/src/api/handler.py).
@@ -178,14 +180,17 @@ export interface Signal {
   changedSince?: string;
   context?: string[];
   rulesNotes?: string[];
+  profileVersion?: number | null;
+  outOfDate?: boolean;
 }
 
 export type PlanAction = "Buy" | "Add" | "Hold" | "Trim" | "Sell" | "Wait";
 
+// The Profile's three risk rules; null where the owner hasn't set one (decision 58).
 export interface RiskRules {
-  maxCoinPct: string;
-  tradeBudgetAud: string;
-  maxLossPct: string;
+  maxCoinPct: string | null;
+  tradeBudgetAud: string | null;
+  maxLossPct: string | null;
 }
 
 export interface PriceAlert {
@@ -300,6 +305,7 @@ export interface OrderRequest {
   amount: string;
   takeProfit?: string;
   stopLoss?: string;
+  override?: boolean;
 }
 
 // Ladder buys (decision 39): limit buys from top to bottom, each a smart trade.
@@ -313,6 +319,7 @@ export interface LadderRequest {
   weighting: "equal" | "lower";
   takeProfit?: string;
   stopLoss?: string;
+  override?: boolean;
 }
 
 // The api's /deposits reply (apps/api/src/api/deposits.py, decision 31).
@@ -636,17 +643,6 @@ export type KeyPoint =
   | { kind: "mover"; coin: string; pct: string; rule: false }
   | { kind: "addZone"; coin: string; low: string; high: string; rule: false }
   | { kind: "nearInvalidation"; coin: string; pct: string; price: string; rule: false };
-export interface Lesson {
-  id?: string;
-  date: string;
-  happened: string;
-  learned: string;
-}
-export interface Quote {
-  id?: string;
-  text: string;
-  author: string;
-}
 export interface Coach {
   greeting: string;
   mood: Mood;
@@ -665,7 +661,7 @@ export interface Coach {
     leftAud: string | null;
     overAud: string | null;
     usedPct: string | null;
-    lesson: Lesson | null;
+    lesson: ProfileLesson | null;
   };
   keyPoints: KeyPoint[];
   day: string;
@@ -675,36 +671,174 @@ export interface Coach {
     quote: { text: string; author: string } | null;
     link: "trade" | null;
     source: "plain" | "model";
+    outOfDate?: boolean;
   };
   pending: boolean;
 }
 
-// The Plan page (decision 52): the source every agent reads.
-export interface RuleChange {
-  time: number;
-  rule: string;
+// The Profile (decision 58): the owner's Investment Policy Statement, every agent's source.
+// Field names are the api's own, so the document goes back and forth unchanged.
+export interface ProfileGoal {
+  label: string | null;
+  amount: string;
+  currency: "AUD" | "USD" | null;
+  date: string | null;
+  then_rule: string | null;
+}
+export interface ProfileHolding {
+  name: string;
+  source: "binance" | "taostats" | "manual" | null;
+  invested_aud: Num;
+  value_aud: Num;
+  cash: boolean;
+  counts: boolean;
+}
+export interface ProfileLesson {
+  year: string | null;
+  text: string;
+}
+export interface ProfileQuote {
+  text: string;
+  author: string | null;
+}
+export interface ProfileRules {
+  monthly_deposit_cap_aud: Num;
+  deposit_cadence: "weekly" | "fortnightly" | "monthly" | null;
+  max_pct_per_coin: Num;
+  per_trade_aud: Num;
+  max_loss_pct: Num;
+  rebalance_band: Num;
+  take_profit_rule: string | null;
+  entry_strategy: string | null;
+  behaviour_rules: string[];
+}
+export interface ProfileDoc {
+  identity: { name: string | null; date_of_birth: string | null };
+  income: {
+    gross_monthly_aud: Num;
+    after_tax_monthly_aud: Num;
+    living_monthly_aud: Num;
+    available_monthly_aud: Num;
+    notes: string | null;
+  };
+  goals: ProfileGoal[];
+  foundations: {
+    emergency_fund_aud: Num;
+    emergency_months: Num;
+    parked_funds_aud: Num;
+    min_cash_aud: Num;
+    insurance: string[];
+    health_cover_status: "none" | "parked" | "active" | null;
+    health_cover_monthly_aud: Num;
+    debt: string | null;
+    wills: string | null;
+  };
+  strategy: { text: string | null; focus: string | null; targets: { coin: string; pct: string }[] };
+  rules: ProfileRules;
+  holdings: ProfileHolding[];
+  lessons: ProfileLesson[];
+  quotes: ProfileQuote[];
+  additional_info: string;
+  locks: { goals: boolean; min_cash: boolean; deposit_cap: boolean };
+}
+export type ProfileSection = Exclude<keyof ProfileDoc, "locks">;
+export type CheckStatus = "ok" | "attention" | "broken" | "unset";
+export interface ProfileChange {
+  section: string;
+  key: string;
+  label: string;
   from: string;
   to: string;
 }
-export interface TradingPlan {
-  goals: { text: string; targets: { coin: string; pct: string }[]; updated: number | null };
-  strategy: { text: string; updated: number | null };
-  rules: {
-    monthlyCapAud: string | null;
-    maxCoinPct: string;
-    tradeBudgetAud: string;
-    maxLossPct: string;
-    takeProfit: string;
-    behaviour: string[];
-    notes: string;
-    driftBand: string;
-    updated: number | null;
-    history: RuleChange[];
-  };
-  lessons: { items: Lesson[]; updated: number | null };
-  quotes: { items: Quote[]; updated: number | null };
+export interface ProfileSuggestion {
+  id: string;
+  time: number;
+  author: string;
+  baseVersion: number;
+  sections: Partial<ProfileDoc>;
+  changes: ProfileChange[];
+  summary: string;
+  reason: string;
+  conflicts: string[];
+  blocked: string | null;
 }
-export type PlanSection = keyof TradingPlan;
+export interface Dated {
+  profileVersion: number | null;
+  outOfDate: boolean;
+}
+export interface PlannerReview extends Dated {
+  time: number;
+  summary: string;
+  gaps: string[];
+  suggestionId: string | null;
+}
+export interface Recap extends Dated {
+  week: string;
+  time: number;
+  source: "plain" | "model";
+  headline: string;
+  lines: string[];
+}
+export interface LiveHolding extends ProfileHolding {
+  now_aud: Num;
+  pnl_aud: Num;
+  pnl_pct: Num;
+}
+export interface ProfileStrip {
+  totalAud: string;
+  totalUsd: string;
+  nextGoal: (ProfileGoal & { pct: string; have: string }) | null;
+  cash: { now: Num; floor: Num; pct: Num; status: CheckStatus };
+  month: { spent: string; cap: Num; pct: Num; status: CheckStatus };
+}
+export type FoundationStatus = "done" | "parked" | "below" | "unset";
+export interface ProfilePage {
+  version: number;
+  time: number | null;
+  profile: ProfileDoc;
+  updated: Record<ProfileSection, number | null>;
+  live: {
+    known: boolean;
+    strip: ProfileStrip;
+    holdings: LiveHolding[];
+    checks: Partial<Record<keyof ProfileRules, { status: CheckStatus; text: string }>>;
+    foundations: Record<string, FoundationStatus>;
+  };
+  suggestions: ProfileSuggestion[];
+  planner: PlannerReview | null;
+  recap: Recap | null;
+}
+export interface ProfileVersion {
+  n: number;
+  time: number;
+  author: string;
+  summary: string;
+  reason: string;
+}
+export type CommandReply =
+  | { kind: "answer"; answer: string; question: string; profileVersion: number }
+  | { kind: "change"; suggestion: ProfileSuggestion };
+export interface ScoreRow {
+  rule: string;
+  label: string;
+  kept: number;
+  broken: number;
+  brokenResultPct: string | null;
+}
+export interface RuleBreak {
+  rule: string;
+  label: string;
+  message: string;
+}
+
+// The agents (decision 59): a team of five under the Desk Coordinator.
+export interface AgentInfo {
+  id: string;
+  name: string;
+  title: string;
+  remit: string;
+  reportsTo: string | null;
+}
 
 export interface AgentMessage {
   role: "owner" | "agent";
@@ -714,6 +848,7 @@ export interface AgentMessage {
 export interface AgentThread {
   id: string;
   name: string;
+  title: string;
   messages: AgentMessage[];
 }
 

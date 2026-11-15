@@ -275,7 +275,7 @@ BOT_ROUTES: dict[tuple[str, str], Callable[[Bots, dict[str, Any]], dict[str, Any
 
 
 def _bot_route(
-    method: str, path: str, event: dict[str, object], factory: BotsFactory
+    method: str, path: str, event: dict[str, object], factory: BotsFactory, portfolio: Portfolio
 ) -> dict[str, object] | None:
     """DCA bots (decision 37): the list, the wizard's preview, and each bot's changes."""
     one = re.fullmatch(r"/bots/(\d{1,9})(/switch|/close)?", path)
@@ -291,6 +291,9 @@ def _bot_route(
         if one.group(2) == "/close" and method == "POST":
             done = bots.close_now(bot_id)
         elif one.group(2) and method == "POST":
+            held = _trade_bot_check(bots, bot_id, body, portfolio)
+            if held is not None:
+                return held
             done = bots.switch(bot_id, body.get("on") is True, body.get("confirmed") is True)
         elif not one.group(2) and method == "GET":
             done = bots.detail(bot_id)
@@ -301,6 +304,25 @@ def _bot_route(
         else:
             return _reply(404, {"error": "Not found."})
         return _reply(200, done)
+
+
+def _trade_bot_check(
+    bots: Bots, bot_id: int, body: dict[str, Any], portfolio: Portfolio
+) -> dict[str, object] | None:
+    """Switching on a smart trade is the owner placing it: the same pre-trade check as an order,
+    on its whole ladder. Past it, the override is logged and that trade's buys aren't held."""
+    if body.get("on") is not True:
+        return None
+    found = bots.trade_budget(bot_id)
+    if found is None:  # a recurring DCA bot: its buys wait on a broken rule instead
+        return None
+    coin, spend = found
+    store, audit = bots.store_and_audit()
+    override = body.get("override") is True
+    held = _rule_check(store, audit, coin, spend, override, portfolio)
+    if held is None and override:
+        bots.allow_past_rules(bot_id)
+    return held
 
 
 @contextmanager
@@ -512,10 +534,17 @@ def _pretrade(
     if spend is None or not spend.is_finite() or spend <= 0:
         return None
     _, store, audit, _ = desk.parts()
+    coin = coin_symbol(body.get("symbol", "")).removesuffix(QUOTE)
+    return _rule_check(store, audit, coin, spend, body.get("override") is True, portfolio)
+
+
+def _rule_check(  # noqa: PLR0913, PLR0917 - each is a separate fact about the buy
+    store: Store, audit: Audit, coin: str, spend: Decimal, override: bool, portfolio: Portfolio
+) -> dict[str, object] | None:
+    """A 409 naming each set Profile rule the buy breaks; None when it may go."""
     _, doc = profile.current(store)
     if all(profile.rule(doc, key) is None for key in PRETRADE_RULES):
         return None
-    coin = coin_symbol(body.get("symbol", "")).removesuffix(QUOTE)
     try:
         held: dict[str, Any] | None = portfolio()
     except profile_routes.LIVE_ERRORS:
@@ -542,7 +571,7 @@ def _pretrade(
         )
     if not found:
         return None
-    if body.get("override") is True:
+    if override:
         profile_ai.record_override(store, audit, found, coin, spend * rate)
         return None
     audit.record(
@@ -1034,7 +1063,8 @@ def handler(  # noqa: PLR0913, PLR0917 - each factory is a seam the tests replac
         if method == "PUT" and path == "/cost":
             return _reply(200, live_set_cost(_body(event)))
         routed = (
-            _bot_route(method, path, event, bots)
+            _bot_route(method, path, event, bots, portfolio)
+
             or _grid_route(method, path, event, grids)
             or _trading_route(method, path, params, event, trading, portfolio)
             or _profile_route(method, path, event, services)
