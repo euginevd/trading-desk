@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { amount, amountSleek, percent, price, priceSleek, usd, usdShort, usdWhole } from "./format";
 import type { Portfolio, Settings } from "./types";
@@ -164,10 +164,18 @@ describe("side panel", () => {
   it("links Dashboard, Trade and the bots, and folds to icons", async () => {
     serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
     render(<App />);
-    expect(await screen.findByRole("heading", { name: "Dashboard" })).toBeTruthy();
-    const nav = screen.getByRole("navigation", { name: "Main" });
+    const nav = await screen.findByRole("navigation", { name: "Main" });
     const links = Array.from(nav.querySelectorAll("a")).map((a) => a.textContent);
-    expect(links).toEqual(["Dashboard", "Trade", "DCA Bot", "Grid Bot"]);
+    expect(links).toEqual([
+      "Dashboard",
+      "Portfolio",
+      "Journal",
+      "Trade",
+      "DCA Bot",
+      "Grid Bot",
+      "Profile",
+      "Settings",
+    ]);
     fireEvent.click(screen.getByRole("button", { name: "Collapse side panel" }));
     expect(screen.getByRole("button", { name: "Expand side panel" })).toBeTruthy();
     expect(window.localStorage.getItem("desk.side.folded")).toBe("1");
@@ -179,10 +187,15 @@ describe("side panel", () => {
 });
 
 describe("portfolio page", () => {
+  beforeEach(() => {
+    window.location.hash = "#/portfolio"; // today's content, moved off the Dashboard
+  });
+
   it("shows Binance and the TAO wallet, the total and the value line", async () => {
     serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
     render(<App />);
-    expect(await screen.findByText("A$62,762")).toBeTruthy(); // AUD first: 42,585 at 1.4738
+    // AUD first: 42,585 at 1.4738, in the card and the header
+    expect((await screen.findAllByText("A$62,762")).length).toBeGreaterThan(0);
     expect(screen.getByText(/98\.9 τ/)).toBeTruthy(); // 85 staked + 12.4 free + 1.5 rewards
     expect(screen.getByText(/· incl\. 1\.5 τ in baskets/)).toBeTruthy();
     expect(screen.getByText("A$870")).toBeTruthy(); // BNB average cost 590 in AUD, whole at 100 up
@@ -434,6 +447,10 @@ describe("portfolio page", () => {
 });
 
 describe("widget details", () => {
+  beforeEach(() => {
+    window.location.hash = "#/portfolio"; // today's content, moved off the Dashboard
+  });
+
   it("opens Fear & Greed's details from its card", async () => {
     HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
       this.setAttribute("open", "");

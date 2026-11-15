@@ -306,9 +306,35 @@ export default function Trade({
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
   // The AI panel's Prefill: a side and price for the smart trade form; nothing is sent.
-  const [prefill, setPrefill] = useState<{ side: "buy" | "sell"; price: string; n: number } | null>(
-    null,
-  );
+  const [prefill, setPrefill] = useState<{
+    side: "buy" | "sell";
+    price: string;
+    n: number;
+    qty?: string;
+    why?: string;
+  } | null>(null);
+
+  // A link from elsewhere (the Portfolio's drift card, decision 55) opens a coin with its order
+  // filled in: #/trade?coin=TAO&side=sell&price=410&qty=0.8&why=rebalance. Nothing is sent.
+  useEffect(() => {
+    const read = () => {
+      const query = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+      const coin = query.get("coin")?.toUpperCase();
+      const side = query.get("side");
+      if (!coin || !/^[A-Z0-9]{1,15}$/.test(coin) || (side !== "buy" && side !== "sell")) return;
+      setSelected(coin);
+      setPrefill((p) => ({
+        side,
+        price: query.get("price") ?? "",
+        qty: query.get("qty") ?? undefined,
+        why: query.get("why") ?? undefined,
+        n: (p?.n ?? 0) + 1,
+      }));
+    };
+    read();
+    window.addEventListener("hashchange", read);
+    return () => window.removeEventListener("hashchange", read);
+  }, []);
 
   const shownList = useRef(0); // the watchlist on screen, so a reload keeps it
   const loadList = useCallback(

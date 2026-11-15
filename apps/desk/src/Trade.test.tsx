@@ -206,6 +206,27 @@ function serve(settings: Settings, withSignal = true, held = true) {
     if (path === "/smart") body = { quote: "USDC", tradingOn: true, bots: [] };
     if (path === "/plan") body = plan(held);
     if (path === "/alerts") body = { alerts: [] };
+    if (path === "/tax/sell-check") {
+      body = {
+        coin: "SOL",
+        qty: "10",
+        young: true,
+        unknown: false,
+        gainAud: "120",
+        lots: [],
+        youngest: {
+          coin: "SOL",
+          bought: "2026-08-19",
+          qty: "10",
+          costAud: "2700",
+          nowAud: "2820",
+          gainAud: "120",
+          heldDays: 88,
+          qualifiesOn: "2027-08-20",
+          daysToDiscount: 278,
+        },
+      };
+    }
     if (path === "/bots/suggest") {
       body = {
         symbol: "SOLUSDC",
@@ -389,6 +410,25 @@ describe("trade page", () => {
     expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("42.500");
     fireEvent.click(screen.getByRole("button", { name: "Place limit sell" }));
     await waitFor(() => expect(posts(fetch, "/orders")).toHaveLength(1));
+  });
+
+  it("warns before a sale that uses a lot under 12 months", async () => {
+    serve(limits);
+    show(limits);
+    fireEvent.click(await screen.findByRole("button", { name: "Sell" }));
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "10" } });
+    expect(await screen.findByText("Under 12 months.", undefined, { timeout: 2000 })).toBeTruthy();
+    expect(screen.getByText(/Held another 278 days/)).toBeTruthy();
+  });
+
+  it("opens a prefilled sell from a link, sized to what's held", async () => {
+    window.location.hash = "#/trade?coin=SOL&side=sell&price=400&qty=999&why=rebalance";
+    serve(limits);
+    show(limits);
+    expect(await screen.findByText("Back toward your target allocation")).toBeTruthy();
+    expect((screen.getByLabelText("Amount") as HTMLInputElement).value).toBe("42.500");
+    expect(screen.getByText("Far from the market.")).toBeTruthy();
+    window.location.hash = "";
   });
 
   it("won't place a trade until the limits are set", async () => {

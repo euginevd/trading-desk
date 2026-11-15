@@ -1,3 +1,4 @@
+import { DriftCard, TaxTab } from "./Tax";
 import { useCallback, useEffect, useState } from "react";
 import { ApiError, cancelOrder, getPortfolio, setCost } from "./api";
 import CoinIcon from "./CoinIcon";
@@ -31,7 +32,7 @@ export function isDust(h: Holding): boolean {
 }
 
 const COLOURS = [1, 2, 3, 4, 5, 6].map((n) => `var(--alloc-${n})`);
-type Tab = "bal" | "ord" | "trd";
+type Tab = "bal" | "ord" | "trd" | "tax";
 
 // Where a holding is kept; the Dashboard can show one source or all of them.
 export type Source = "all" | Holding["source"];
@@ -492,6 +493,7 @@ function Tables({
     ["bal", "Balances"],
     ["ord", `Open orders (${data.openOrders.length})`],
     ["trd", "Recent trades"],
+    ["tax", "Tax"],
   ];
   return (
     <div className="card" style={{ marginTop: 10 }}>
@@ -633,6 +635,7 @@ function Tables({
         onClose={() => setOpenOrder(null)}
         onDone={(_note, problem) => onReload(problem)}
       />
+      {tab === "tax" && <TaxTab />}
       {tab === "trd" &&
         (data.recentTrades.length === 0 ? (
           <p className="empty">No trades against USDT, USDC or FDUSD yet.</p>
@@ -869,6 +872,7 @@ export default function Portfolio({
             ]}
           />
 
+          <DriftCard />
           <Tables data={data} holdings={shown} source={source} m={m} onReload={reload} />
         </>
       ) : (

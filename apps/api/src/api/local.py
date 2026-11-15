@@ -15,7 +15,15 @@ from urllib.parse import parse_qsl, urlsplit
 
 from api.advisor import check_alerts
 from api.binance import BinanceError
-from api.handler import handler, live_bots, live_grids, live_services, live_trading, store_path
+from api.handler import (
+    handler,
+    live_bots,
+    live_grids,
+    live_services,
+    live_trading,
+    morning_summary,
+    store_path,
+)
 
 HOST = os.environ.get("API_HOST", "127.0.0.1")
 PORT = 8000
@@ -32,7 +40,9 @@ HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"} | {o.split("://", 1)[1] for o
 
 
 def load_env(path: Path) -> None:
-    """Sets KEY=VALUE lines from .env that aren't already set. Values are never printed."""
+    """Sets KEY=VALUE lines from .env that aren't already set, or are set but empty (compose
+    fixes the environment when the container is made; a key saved later from Settings is in the
+    mounted .env only). Values are never printed."""
     if not path.is_file():
         return
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -40,7 +50,9 @@ def load_env(path: Path) -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+        name, value = key.strip(), value.strip().strip("\"'")
+        if value and not os.environ.get(name, "").strip():
+            os.environ[name] = value
 
 
 def allowed(method: str, headers: dict[str, str]) -> str | None:
@@ -109,6 +121,7 @@ def watch(stop: threading.Event) -> None:
                 check_alerts(
                     services.binance, services.store, services.audit, int(time.time() * 1000)
                 )
+                morning_summary(services)  # Telegram, once a day (decision 57)
         except (LookupError, BinanceError) as error:
             print(f"watcher: {type(error).__name__}")
 

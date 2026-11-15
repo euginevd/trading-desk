@@ -8,7 +8,7 @@ import time
 from collections.abc import Callable, Generator
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, cast
@@ -16,10 +16,23 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from api import demo
-from api.advisor import futures, gather, history_candles, rules_of, set_rules
+from api import (
+    agents,
+    ai_client,
+    coach,
+    demo,
+    env_file,
+    journal,
+    ledger,
+    rebalance,
+    tax,
+    telegram,
+    trading_plan,
+)
+from api.advisor import futures, gather, history_candles, rules_of
 from api.ai_client import capped, subscription, switched
 from api.ai_signal import Ask, SignalError, Signals, claude
+from api.ai_signin import SignIn
 from api.audit import Audit
 from api.binance import Binance, BinanceError
 from api.bots import Bots
@@ -330,7 +343,33 @@ def _grid_route(
         return _reply(200, done)
 
 
-def _ask() -> Ask:
+SIGNIN = SignIn()  # one subscription sign-in at a time, held between its two requests
+
+
+def _save_key(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    env_file.save("ANTHROPIC_API_KEY", str(body.get("key", "")))
+    s.audit.record("settings", "Anthropic API key", "Saved to .env")
+    return ai_client.view(s.store, s.signals)
+
+
+def _signin_start(s: Services) -> dict[str, Any]:
+    url = SIGNIN.start()
+    s.audit.record("settings", "Claude subscription sign-in", "Started")
+    return {"url": url}
+
+
+def _signin_finish(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    try:
+        token = SIGNIN.finish(str(body.get("code", "")))
+    except Refused as error:
+        s.audit.record("settings", "Claude subscription sign-in", f"Failed: {error}")
+        raise
+    env_file.save("CLAUDE_CODE_OAUTH_TOKEN", token)
+    s.audit.record("settings", "Claude subscription sign-in", "Signed in; token saved to .env")
+    return ai_client.view(s.store, s.signals)
+
+
+def _ask(store: Store | None = None) -> Ask:
     """The plan's Ask: an API key or the owner's Claude subscription, by `AI_AUTH_MODE`."""
     if _demo():
 
@@ -341,10 +380,11 @@ def _ask() -> Ask:
             return reply | {"_via": "Demo"}, cost
 
         return demo_ask
-    return switched(_api_ask, subscription())
+    chosen = lambda: ai_client.model(store)  # noqa: E731 - read at each run
+    return switched(lambda: _api_ask(chosen), subscription(model=chosen), store)
 
 
-def _api_ask() -> Ask:
+def _api_ask(model: Callable[[], str] = ai_client.model) -> Ask:
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not key:
 
@@ -362,7 +402,7 @@ def _api_ask() -> Ask:
     client = anthropic.Anthropic(
         api_key=key, timeout=SIGNAL_TIMEOUT_SECONDS, default_headers=headers
     )
-    return claude(client)
+    return claude(client, model)
 
 
 def _cap() -> Decimal:
@@ -379,9 +419,8 @@ def live_services() -> Generator[Services]:
     audit = _audit()
     try:
         with _binance() as binance:
-            yield Services(
-                binance, store, Signals(_ask(), store, audit, _cap(), capped=capped), audit
-            )
+            signals = Signals(_ask(store), store, audit, _cap(), capped=lambda: capped(store))
+            yield Services(binance, store, signals, audit)
     finally:
         store.close()
 
@@ -514,7 +553,7 @@ def _coin(raw: object) -> str:
 
 
 def _run_signal(s: Services, body: dict[str, Any]) -> dict[str, Any]:
-    facts = _facts(s, _coin(body.get("coin")))
+    facts = _facts(s, _coin(body.get("coin"))) | {"plan": trading_plan.for_agents(s.store)}
     return {"signal": s.signals.run(facts, body.get("force") is True)}
 
 
@@ -597,11 +636,34 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("POST", "/signal"): lambda s, _, b: _run_signal(s, b),
     ("GET", "/plan"): lambda s, q, _: _plan(s, q),
     ("GET", "/risk"): lambda s, _q, _b: rules_of(s.store).view(),
-    ("PUT", "/risk"): lambda s, _, b: set_rules(s.store, b),
     ("GET", "/alerts"): lambda s, q, _: {
         "alerts": s.store.alerts(_coin(q["coin"]) if q.get("coin") else None)
     },
     ("POST", "/alerts"): lambda s, _, b: _add_alert(s, b),
+    ("GET", "/settings/ai"): lambda s, _q, _b: ai_client.view(s.store, s.signals),
+    ("PUT", "/settings/ai"): lambda s, _, b: ai_client.choose(s.store, s.audit, s.signals, b),
+    ("PUT", "/settings/ai/key"): lambda s, _, b: _save_key(s, b),
+    ("GET", "/settings/profile"): lambda s, _q, _b: _profile(s),
+    ("PUT", "/settings/profile"): lambda s, _, b: _set_profile(s, b),
+    ("GET", "/trading-plan"): lambda s, _q, _b: trading_plan.view(s.store),
+    ("GET", "/coach"): lambda s, _q, _b: _coach(s, write=False),
+    ("POST", "/coach/message"): lambda s, _q, _b: _coach(s, write=True),
+    ("GET", "/agents"): lambda _s, _q, _b: agents.listing(),
+    ("GET", "/tax"): lambda s, _q, _b: _tax(s),
+    ("GET", "/tax/sell-check"): lambda s, q, _b: _sell_check(s, q),
+    ("GET", "/rebalance"): lambda s, _q, _b: rebalance.drift(
+        (s.portfolio or live_portfolio)(), trading_plan.view(s.store)
+    ),
+    ("GET", "/journal"): lambda s, _q, _b: _journal(s),
+    ("PUT", "/journal/tags"): lambda s, _, b: journal.tag(s.store, b),
+    ("PUT", "/journal/lists"): lambda s, _, b: journal.set_lists(s.store, b),
+    ("GET", "/settings/telegram"): lambda s, _q, _b: telegram.view(s.store),
+    ("PUT", "/settings/telegram"): lambda s, _, b: telegram.set_time(s.store, b),
+    ("PUT", "/settings/telegram/token"): lambda s, _, b: _telegram_token(s, b),
+    ("POST", "/settings/telegram/test"): lambda s, _q, _b: _telegram_test(s),
+    ("POST", "/settings/telegram/link"): lambda s, _q, _b: _telegram_link(s),
+    ("POST", "/settings/ai/signin"): lambda s, _q, _b: _signin_start(s),
+    ("POST", "/settings/ai/signin/finish"): lambda s, _, b: _signin_finish(s, b),
 }
 
 
@@ -617,6 +679,10 @@ def _service_route(
         with services() as s:
             s.store.delete_alert(int(alert.group(1)))
             return _reply(200, {"alerts": s.store.alerts()})
+    named = _named_route(method, path)
+    if named is not None:
+        with services() as s:
+            return _reply(200, named(s, _body(event)))
     removing = re.fullmatch(r"/watchlist/([A-Za-z0-9]{1,16})", path)
     dropping = re.fullmatch(r"/watchlists/(\d{1,9})", path)
     route = SERVICE_ROUTES.get((method, path))
@@ -631,8 +697,168 @@ def _service_route(
         return _reply(200, s.watchlist().remove(removing.group(1), params.get("list")))
 
 
+def _named_route(
+    method: str, path: str
+) -> Callable[[Services, dict[str, Any]], dict[str, Any]] | None:
+    """Routes with a name in the path: a section of the Plan, an agent's thread."""
+    section = re.fullmatch(r"/trading-plan/([a-z]{1,12})", path)
+    if section and method == "PUT":
+        name = section.group(1)
+        return lambda s, b: trading_plan.save(s.store, s.audit, name, b, int(time.time() * 1000))
+    agent = re.fullmatch(r"/agents/([a-z]{1,12})", path)
+    if agent and method == "GET":
+        return lambda s, _b: agents.thread(s.store, agent.group(1))
+    if agent and method == "POST":
+        return lambda s, b: agents.send(s.store, s.audit, agent.group(1), b)
+    return None
+
+
+def _profile(s: Services) -> dict[str, str]:
+    return {"name": s.store.setting(coach.NAME_KEY, "")}
+
+
+def _set_profile(s: Services, body: dict[str, Any]) -> dict[str, str]:
+    """The owner's name for the greeting, kept only in the local database (decision 52)."""
+    name = " ".join(str(body.get("name", "")).split())[:40]
+    s.store.set_setting(coach.NAME_KEY, name)
+    s.audit.record("settings", "Your name", "Saved" if name else "Cleared")
+    return _profile(s)
+
+
+def _coach(s: Services, *, write: bool) -> dict[str, Any]:
+    """The Dashboard: facts from code, and the message kept for today and this mood. GET is
+    quick, with the plain wording until the model's is kept; POST has the model write it."""
+    plan = trading_plan.view(s.store)
+    try:
+        report: dict[str, Any] | None = _deposits(s, {})
+    except (BinanceError, httpx.HTTPError, LookupError, ValueError):
+        report = None  # the coach still shows; the card says deposits couldn't be read
+    facts = coach.facts(
+        portfolio=(s.portfolio or live_portfolio)(),
+        history=[(day, Decimal(value)) for day, value in s.store.history(coach.STREAK_DAYS + 1)],
+        report=report,
+        plan=plan,
+        now=datetime.now(SYDNEY),
+        name=s.store.setting(coach.NAME_KEY, ""),
+        last_plan=s.signals.last,
+    )
+    raw = s.store.setting(coach.CACHE_KEY, "")
+    kept: dict[str, Any] | None = json.loads(raw) if raw else None
+    # Only the model's words are kept: the plain ones are tried again next time.
+    if kept and kept.get("message", {}).get("source") != "model":
+        kept = None
+    fresh = bool(kept and kept.get("key") == coach.cache_key(facts))
+    if not write:
+        message = coach.message(facts, plan, {}, kept, None)
+        return facts | {"message": message, "pending": not fresh}
+
+    def ask(system: str, text: str, shape: dict[str, Any]) -> dict[str, Any]:
+        return s.signals.write(system, text, shape, "coach message")
+
+    message = coach.message(facts, plan, trading_plan.for_agents(s.store), kept, ask)
+    if message["source"] == "model":
+        s.store.set_setting(
+            coach.CACHE_KEY, json.dumps({"key": coach.cache_key(facts), "message": message})
+        )
+    return facts | {"message": message, "pending": False}
+
+
+def _ledger(s: Services) -> tuple[list[ledger.Fill], dict[str, Any], date]:
+    """The fills behind the Tax tab and the Journal, with the portfolio they're held against."""
+    portfolio = (s.portfolio or live_portfolio)()
+    today = tax.today_sydney()
+    coins = ledger.coins_seen(s.store, set(tax.held_of(portfolio)))
+    fx_transport = httpx.MockTransport(demo.fx) if _demo() else None
+    with httpx.Client(timeout=TIMEOUT_SECONDS, transport=fx_transport) as fx:
+        fills = ledger.fills(s.binance, fx, coins, cost_from_ms(), today)
+    return fills, portfolio, today
+
+
+def _tax(s: Services) -> dict[str, Any]:
+    fills, portfolio, today = _ledger(s)
+    return tax.report(fills, portfolio, today)
+
+
+def _sell_check(s: Services, q: dict[str, str]) -> dict[str, Any]:
+    coin = _coin(q.get("coin", ""))
+    try:
+        qty = Decimal(q.get("qty", ""))
+    except InvalidOperation:
+        raise Refused("The amount must be a number.") from None
+    if not qty.is_finite() or qty <= 0:
+        raise Refused("The amount must be more than zero.")
+    fills, portfolio, today = _ledger(s)
+    return tax.sell_check(fills, portfolio, coin, qty, today)
+
+
+def _journal(s: Services) -> dict[str, Any]:
+    fills, portfolio, today = _ledger(s)
+    _, sales = tax.build(fills, tax.held_of(portfolio))
+    plan = trading_plan.view(s.store)
+    total = Decimal(portfolio["total"]["value"] or "0")
+    cap = Decimal(plan["rules"]["maxCoinPct"])
+    over = {
+        r["coin"] for r in coach.coins_held(portfolio) if total and r["value"] / total * 100 > cap
+    }
+    try:
+        report = _deposits(s, {})
+        months = {m["month"]: Decimal(m["aud"]) for m in report["months"]}
+    except (BinanceError, httpx.HTTPError, LookupError, ValueError):
+        months = {}
+    return journal.view(s.store, fills, sales, plan, over, months, today)
+
+
+def _telegram_token(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    env_file.save("TELEGRAM_BOT_TOKEN", str(body.get("token", "")))
+    telegram.new_link(s.store)  # a new bot links afresh, by the code shown in Settings
+    s.audit.record("settings", "Telegram bot token", "Saved to .env")
+    return telegram.view(s.store)
+
+
+def _telegram_link(s: Services) -> dict[str, Any]:
+    """Looks for the code the owner sent the bot, and links that chat."""
+    with telegram.client() as client:
+        found = telegram.find_chat(s.store, client)
+    if found:
+        s.audit.record("settings", "Telegram chat", "Linked")
+    return telegram.view(s.store)
+
+
+def _telegram_test(s: Services) -> dict[str, Any]:
+    text = telegram.summary(_coach(s, write=False))
+    with telegram.client() as client:
+        telegram.send(s.store, client, text)
+    s.audit.record("telegram", "Test summary", "Sent")
+    return telegram.view(s.store)
+
+
+def morning_summary(s: Services, now: datetime | None = None) -> bool:
+    """Sends today's summary once it's due (decision 57). One try a day: a failure is recorded
+    in the audit log, not retried every 30 seconds."""
+    now = now or datetime.now(SYDNEY)
+    if not telegram.due(s.store, now):
+        return False
+    telegram.mark_sent(s.store, now)
+    try:
+        text = telegram.summary(_coach(s, write=False))
+        with telegram.client() as client:
+            telegram.send(s.store, client, text)
+    except Exception as error:  # noqa: BLE001 - the watcher must keep running; no token in this
+        said = (
+            str(error)
+            if isinstance(error, (telegram.TelegramError, Refused))
+            else type(error).__name__
+        )
+        s.audit.record("telegram", "Morning summary", f"Failed: {said}")
+        return False
+    s.audit.record("telegram", "Morning summary", "Sent")
+    return True
+
+
 def _failure(error: Exception) -> tuple[int, dict[str, str]]:
     """What the owner sees when a route can't finish, in words they can act on."""
+    if isinstance(error, telegram.TelegramError):
+        return 502, {"error": str(error)}
     if isinstance(error, BinanceError):
         return 502, {"error": f"Binance said: {error.message}"}
     if isinstance(error, (Refused, MarketError)):
@@ -691,6 +917,13 @@ def handler(  # noqa: PLR0913, PLR0917 - each factory is a seam the tests replac
             or _trading_route(method, path, params, event, trading)
             or _service_route(method, path, params, event, services)
         )
-    except (LookupError, Refused, MarketError, SignalError, BinanceError) as error:
+    except (
+        LookupError,
+        Refused,
+        MarketError,
+        SignalError,
+        BinanceError,
+        telegram.TelegramError,
+    ) as error:
         return _reply(*_failure(error))
     return routed or _reply(404, {"error": "Not found."})

@@ -14,8 +14,11 @@ services:
     environment:
       # The api answers only the desk's own page, on whichever port it's published.
       DESK_ORIGINS: http://127.0.0.1:${DESK_PORT:-5180},http://localhost:${DESK_PORT:-5180}
+      # The Settings page saves the Claude API key and sign-in token here (decision 51).
+      DESK_ENV_FILE: /app/.env
     volumes:
       - ./local:/app/local # SQLite and the audit log stay on your disk
+      - ./.env:/app/.env # read at start; the Settings page writes the AI credentials back
     restart: unless-stopped
 
   desk:
