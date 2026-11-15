@@ -41,6 +41,13 @@ export const PortfolioIcon = () => (
   </svg>
 );
 
+export const JournalIcon = () => (
+  <svg {...base}>
+    <path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6z" />
+    <path d="M6 3v18M10 8h5M10 12h5" />
+  </svg>
+);
+
 export const TradeIcon = () => (
   <svg {...base}>
     <path d="M7 3v4M7 17v4M17 6v3M17 17v3" />

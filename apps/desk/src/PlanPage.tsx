@@ -36,8 +36,8 @@ export default function PlanPage() {
   return (
     <main className="wrap plan-page">
       <p className="muted plan-intro">
-        Your trading plan. Every agent reads it, and says when a suggestion would break one of your
-        rules.
+        Your profile and trading plan. Every agent reads it, and says when a suggestion would break
+        one of your rules.
       </p>
       <div className="plan-grid">
         <Goals plan={plan} onSaved={setPlan} />
@@ -213,12 +213,13 @@ function Rules({ plan, onSaved }: Props) {
     maxLossPct: r.maxLossPct,
     takeProfit: r.takeProfit,
     notes: r.notes,
+    driftBand: r.driftBand,
   });
   const [behaviour, setBehaviour] = useState(r.behaviour);
   const [history, setHistory] = useState(false);
   const { saving, note, save } = useSave("rules", onSaved);
   const field = (
-    key: "monthlyCapAud" | "maxCoinPct" | "tradeBudgetAud" | "maxLossPct",
+    key: "monthlyCapAud" | "maxCoinPct" | "tradeBudgetAud" | "maxLossPct" | "driftBand",
     label: string,
   ) => (
     <label className="plan-field">
@@ -260,6 +261,7 @@ function Rules({ plan, onSaved }: Props) {
         {field("maxCoinPct", "Max % per coin")}
         {field("tradeBudgetAud", "Per-trade size (A$)")}
         {field("maxLossPct", "Max loss per position (%)")}
+        {field("driftBand", "Rebalance band (± points)")}
       </div>
       <span className="plan-label">Take-profit rule</span>
       <textarea

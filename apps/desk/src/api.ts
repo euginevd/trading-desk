@@ -1,4 +1,9 @@
 import type {
+  Drift,
+  JournalData,
+  SellCheck,
+  TaxReport,
+  TelegramSettings,
   AgentThread,
   Coach,
   PlanSection,
@@ -182,3 +187,23 @@ export const sendAgent = (id: string, text: string) =>
 export const getProfile = () => call<{ name: string }>("GET", "/settings/profile");
 export const setProfile = (name: string) =>
   call<{ name: string }>("PUT", "/settings/profile", { name });
+
+// Tax lots, drift, the Journal and Telegram (decisions 54 to 57).
+export const getTax = () => call<TaxReport>("GET", "/tax");
+export const sellCheck = (coin: string, qty: string) =>
+  call<SellCheck>(
+    "GET",
+    `/tax/sell-check?coin=${encodeURIComponent(coin)}&qty=${encodeURIComponent(qty)}`,
+  );
+export const getDrift = () => call<Drift>("GET", "/rebalance");
+export const getJournal = () => call<JournalData>("GET", "/journal");
+export const tagTrade = (key: string, setups: string[], mistakes: string[]) =>
+  call<{ setups: string[]; mistakes: string[] }>("PUT", "/journal/tags", { key, setups, mistakes });
+export const setJournalLists = (setups: string[], mistakes: string[]) =>
+  call<JournalData["lists"]>("PUT", "/journal/lists", { setups, mistakes });
+export const getTelegram = () => call<TelegramSettings>("GET", "/settings/telegram");
+export const setTelegramTime = (time: string) =>
+  call<TelegramSettings>("PUT", "/settings/telegram", { time });
+export const saveTelegramToken = (token: string) =>
+  call<TelegramSettings>("PUT", "/settings/telegram/token", { token });
+export const testTelegram = () => call<TelegramSettings>("POST", "/settings/telegram/test", {});

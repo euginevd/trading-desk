@@ -6,12 +6,16 @@ import {
   finishSignIn,
   getAiSettings,
   getProfile,
+  getTelegram,
+  saveTelegramToken,
+  setTelegramTime,
+  testTelegram,
   saveAiKey,
   setAiSettings,
   setProfile,
   startSignIn,
 } from "./api";
-import type { AiMode, AiSettings } from "./types";
+import type { AiMode, AiSettings, TelegramSettings } from "./types";
 
 const MODES: { mode: AiMode; name: string }[] = [
   { mode: "api_key", name: "API key (pay per use)" },
@@ -126,6 +130,7 @@ export default function SettingsPage() {
           </>
         )}
       </section>
+      <Telegram />
     </main>
   );
 }
@@ -318,6 +323,116 @@ function You() {
       </div>
       <p className="settings-hint muted">
         For the Dashboard&apos;s greeting. Kept on this machine only, never in the code.
+      </p>
+    </section>
+  );
+}
+
+// Telegram's morning summary (decision 57): your own bot; its token goes to .env.
+function Telegram() {
+  const [tg, setTg] = useState<TelegramSettings | null>(null);
+  const [token, setToken] = useState("");
+  const [time, setTime] = useState("07:30");
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    getTelegram().then(
+      (t) => {
+        setTg(t);
+        setTime(t.time);
+      },
+      () => setTg(null),
+    );
+  }, []);
+  const act = (action: () => Promise<TelegramSettings>, done: string) => {
+    setBusy(true);
+    setNote(null);
+    action().then(
+      (t) => {
+        setTg(t);
+        setBusy(false);
+        setNote({ ok: true, text: done });
+      },
+      (e: unknown) => {
+        setBusy(false);
+        setNote({ ok: false, text: e instanceof Error ? e.message : "That didn't work." });
+      },
+    );
+  };
+  if (!tg) return null;
+  const status = !tg.tokenSet
+    ? "Not connected"
+    : tg.chatFound
+      ? "Connected"
+      : "Bot saved: send it a message in Telegram";
+  return (
+    <section className="card settings-card" aria-labelledby="settings-telegram">
+      <h2 id="settings-telegram">Telegram</h2>
+      <p className="settings-cred-head">
+        <span
+          className={`settings-dot${tg.tokenSet && tg.chatFound ? "" : " off"}`}
+          aria-hidden="true"
+        />
+        <strong>{status}</strong>
+        {tg.lastSent && <span className="muted"> · last summary {tg.lastSent}</span>}
+      </p>
+      <div className="settings-input settings-you">
+        <input
+          type="password"
+          autoComplete="off"
+          spellCheck={false}
+          aria-label="Telegram bot token"
+          placeholder={tg.tokenSet ? "Replace the bot token" : "Bot token from @BotFather"}
+          value={token}
+          onChange={(e) => setToken(e.target.value)}
+        />
+        <button
+          type="button"
+          disabled={busy || !token.trim()}
+          onClick={() =>
+            act(() => saveTelegramToken(token).finally(() => setToken("")), "Bot token saved")
+          }
+        >
+          Save
+        </button>
+      </div>
+      <p className="settings-hint muted settings-flush">
+        Create a bot with @BotFather in Telegram, paste its token here, then send your bot any
+        message so the desk can find your chat. Saved to .env, never shown again.
+      </p>
+      <div className="settings-input settings-you">
+        <label className="settings-label" htmlFor="tg-time">
+          Morning summary at
+        </label>
+        <input
+          id="tg-time"
+          type="time"
+          value={time}
+          onChange={(e) => setTime(e.target.value)}
+          style={{ flex: "0 0 120px" }}
+        />
+        <button
+          type="button"
+          disabled={busy || time === tg.time}
+          onClick={() => act(() => setTelegramTime(time), "Time saved")}
+        >
+          Save time
+        </button>
+        <button
+          type="button"
+          disabled={busy || !tg.tokenSet}
+          onClick={() => act(() => testTelegram(), "Test summary sent")}
+        >
+          Send a test
+        </button>
+      </div>
+      {note && (
+        <p className={note.ok ? "muted" : "settings-error"} role={note.ok ? "status" : "alert"}>
+          {note.text}
+        </p>
+      )}
+      <p className="settings-hint muted settings-flush">
+        One message a day, Sydney time: the coach&apos;s mood line, key points and deposits left.
       </p>
     </section>
   );

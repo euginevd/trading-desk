@@ -52,4 +52,4 @@ Template defaults: GitHub Actions, the pre-push scan and the PR security checks.
 
 ## Not for now
 
-11. Hosting, sign-in and other users; Bybit and leverage, decentralised exchange (DEX) leverage and DeFi, waiting in [TODO.md](../TODO.md); an AI agent that builds, backtests or runs strategies (the brief's later direction); market buys; other wallets and exchanges; billing, tax reports, alerts sent off the desk, and a phone app.
+11. Hosting, sign-in and other users; Bybit and leverage, decentralised exchange (DEX) leverage and DeFi, waiting in [TODO.md](../TODO.md); an AI agent that builds, backtests or runs strategies (the brief's later direction); market buys; other wallets and exchanges; billing, tax reports, alerts off the desk beyond the morning summary (decision 57), and a phone app.

@@ -159,8 +159,8 @@ function Deposits({ coach }: { coach: CoachData }) {
         </p>
       )}
       {!d.capAud && (
-        <a className="coach-set" href="#/plan">
-          Set a monthly cap on your Plan →
+        <a className="coach-set" href="#/profile">
+          Set a monthly cap on your Profile →
         </a>
       )}
     </section>
@@ -240,7 +240,7 @@ function Agents() {
         <h3 id="coach-agents">
           Agents{" "}
           <span className="muted coach-sub">
-            · each reads your Plan and flags a suggestion that would break a rule
+            · each reads your Profile and flags a suggestion that would break a rule
           </span>
         </h3>
         <div className="coach-chips" role="group" aria-label="Agents">

@@ -697,6 +697,7 @@ export interface TradingPlan {
     takeProfit: string;
     behaviour: string[];
     notes: string;
+    driftBand: string;
     updated: number | null;
     history: RuleChange[];
   };
@@ -714,4 +715,94 @@ export interface AgentThread {
   id: string;
   name: string;
   messages: AgentMessage[];
+}
+
+// Tax lots and the 12-month countdown (decision 54).
+export interface TaxLot {
+  coin: string;
+  bought: string | null;
+  qty: string;
+  costAud: string | null;
+  nowAud: string | null;
+  gainAud: string | null;
+  heldDays: number | null;
+  qualifiesOn: string | null;
+  daysToDiscount: number | null;
+}
+export interface TaxReport {
+  fy: string;
+  realisedGainsAud: string;
+  realisedLossesAud: string;
+  sales: number;
+  unknownSales: number;
+  discountedAud: string;
+  next: TaxLot | null;
+  lots: TaxLot[];
+  underWater: { coin: string; lossAud: string; afterAud: string }[];
+}
+export interface SellCheck {
+  coin: string;
+  qty: string;
+  lots: TaxLot[];
+  young: boolean;
+  youngest: TaxLot | null;
+  gainAud: string | null;
+  unknown: boolean;
+}
+
+// Drift from the Profile's target allocation (decision 55).
+export interface DriftRow {
+  coin: string;
+  targetPct: string;
+  nowPct: string;
+  outside: boolean;
+  side: "buy" | "sell" | null;
+  toTargetAud?: string;
+  orderAud?: string;
+  price?: string | null;
+  qty?: string | null;
+  capped?: boolean;
+}
+export interface Drift {
+  band: string;
+  rows: DriftRow[];
+  outside: number;
+  hasTargets: boolean;
+}
+
+// The Journal (decision 56).
+export interface JournalEntry {
+  key: string;
+  time: number;
+  coin: string;
+  side: "buy" | "sell";
+  qty: string;
+  price: string;
+  aud: string;
+  from: string;
+  resultAud: string | null;
+  broke: string[];
+  setups: string[];
+  mistakes: string[];
+}
+export interface JournalData {
+  entries: JournalEntry[];
+  score: {
+    days: number;
+    trades: number;
+    kept: number;
+    keptPct: string | null;
+    mostBroken: { what: string; times: number }[];
+    withMistakeAud: string;
+    withoutMistakeAud: string;
+  };
+  lists: { setups: string[]; mistakes: string[] };
+}
+
+// Telegram's morning summary (decision 57).
+export interface TelegramSettings {
+  tokenSet: boolean;
+  chatFound: boolean;
+  time: string;
+  lastSent: string | null;
 }

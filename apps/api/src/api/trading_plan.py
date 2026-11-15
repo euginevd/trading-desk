@@ -27,6 +27,7 @@ LABELS = {
     "maxCoinPct": "Max % per coin",
     "tradeBudgetAud": "Per-trade size (A$)",
     "maxLossPct": "Max loss per position (%)",
+    "driftBand": "Rebalance band (± points)",
     "takeProfit": "Take-profit rule",
     "behaviour": "Behaviour rules",
     "notes": "Rule notes",
@@ -91,6 +92,7 @@ def view(store: Store) -> dict[str, Any]:
             "maxCoinPct": risk["maxCoinPct"],
             "tradeBudgetAud": risk["tradeBudgetAud"],
             "maxLossPct": risk["maxLossPct"],
+            "driftBand": rules.get("driftBand", "5"),
             "takeProfit": rules.get("takeProfit", ""),
             "behaviour": rules.get("behaviour", []),
             "notes": rules.get("notes", ""),
@@ -152,7 +154,10 @@ def _rules(store: Store, body: dict[str, Any], now: int) -> dict[str, Any]:
     set_rules(store, body)  # the three risk rules, checked where the AI plan reads them
     store.set_setting(CAP_KEY, plain(cap) if cap is not None else "")
     behaviour = [_text(b, 120) for b in _items(body.get("behaviour", []), 20) if _text(b, 120)]
+    raw_band = str(body.get("driftBand") or "5").strip()
+    band = _number(raw_band, "The rebalance band", Decimal(1), Decimal(50))
     data = {
+        "driftBand": plain(band),
         "takeProfit": _text(body.get("takeProfit"), 500),
         "behaviour": behaviour,
         "notes": _text(body.get("notes"), 2000),

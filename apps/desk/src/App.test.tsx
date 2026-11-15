@@ -168,11 +168,12 @@ describe("side panel", () => {
     const links = Array.from(nav.querySelectorAll("a")).map((a) => a.textContent);
     expect(links).toEqual([
       "Dashboard",
-      "Plan",
       "Portfolio",
+      "Journal",
       "Trade",
       "DCA Bot",
       "Grid Bot",
+      "Profile",
       "Settings",
     ]);
     fireEvent.click(screen.getByRole("button", { name: "Collapse side panel" }));

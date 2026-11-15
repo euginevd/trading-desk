@@ -103,7 +103,7 @@ def deposits(
     }
 
 
-def _coins(portfolio: dict[str, Any]) -> list[dict[str, Any]]:
+def coins_held(portfolio: dict[str, Any]) -> list[dict[str, Any]]:
     """One row per coin held, Binance and the wallet together, without stablecoins or dust."""
     by_coin: dict[str, dict[str, Any]] = {}
     for h in portfolio["holdings"]:
@@ -186,7 +186,7 @@ def key_points(
 ) -> list[dict[str, Any]]:
     """Up to four points from real data: rule breaches first, then the day's biggest mover,
     then coins in their add zone or near their invalidation on their last plan."""
-    rows = _coins(portfolio)
+    rows = coins_held(portfolio)
     points = _breaches(rows, Decimal(portfolio["total"]["value"] or "0"), rules)
     moved = [r for r in rows if r.get("change24h") is not None]
     if moved:

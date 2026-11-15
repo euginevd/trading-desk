@@ -76,6 +76,7 @@ const plan: TradingPlan = {
     takeProfit: "Trim at +15% in a week.",
     behaviour: ["No FOMO"],
     notes: "",
+    driftBand: "5",
     updated: 1_794_000_000_000,
     history: [
       { time: 1_794_000_000_000, rule: "Monthly deposit cap (A$)", from: "4000", to: "6000" },

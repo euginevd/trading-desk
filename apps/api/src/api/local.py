@@ -15,7 +15,15 @@ from urllib.parse import parse_qsl, urlsplit
 
 from api.advisor import check_alerts
 from api.binance import BinanceError
-from api.handler import handler, live_bots, live_grids, live_services, live_trading, store_path
+from api.handler import (
+    handler,
+    live_bots,
+    live_grids,
+    live_services,
+    live_trading,
+    morning_summary,
+    store_path,
+)
 
 HOST = os.environ.get("API_HOST", "127.0.0.1")
 PORT = 8000
@@ -109,6 +117,7 @@ def watch(stop: threading.Event) -> None:
                 check_alerts(
                     services.binance, services.store, services.audit, int(time.time() * 1000)
                 )
+                morning_summary(services)  # Telegram, once a day (decision 57)
         except (LookupError, BinanceError) as error:
             print(f"watcher: {type(error).__name__}")
 

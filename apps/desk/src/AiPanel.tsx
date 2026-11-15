@@ -433,7 +433,7 @@ function RulesLine({ rules }: { rules: RiskRules }) {
     <div className="ai-rules muted">
       Your rules: max {rules.maxCoinPct}% a coin · A$
       {Number(rules.tradeBudgetAud).toLocaleString("en-AU")} a trade · max loss {rules.maxLossPct}%
-      a position · <a href="#/plan">Edit in Plan</a>
+      a position · <a href="#/profile">Edit in Profile</a>
     </div>
   );
 }

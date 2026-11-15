@@ -24,6 +24,14 @@ const saveAiKey = vi.fn((key: string) => key && Promise.resolve({ ...saved, apiK
 const startSignIn = vi.fn(() => Promise.resolve({ url: LINK }));
 const finishSignIn = vi.fn((code: string) => code && Promise.resolve({ ...saved, tokenSet: true }));
 vi.mock("./api", () => ({
+  getTelegram: () =>
+    Promise.resolve({ tokenSet: false, chatFound: false, time: "07:30", lastSent: null }),
+  saveTelegramToken: () =>
+    Promise.resolve({ tokenSet: true, chatFound: false, time: "07:30", lastSent: null }),
+  setTelegramTime: (time: string) =>
+    Promise.resolve({ tokenSet: true, chatFound: true, time, lastSent: null }),
+  testTelegram: () =>
+    Promise.resolve({ tokenSet: true, chatFound: true, time: "07:30", lastSent: "2026-11-15" }),
   getProfile: () => Promise.resolve({ name: "" }),
   setProfile: (name: string) => Promise.resolve({ name }),
   getAiSettings: () => Promise.resolve(saved),
@@ -92,5 +100,17 @@ describe("Settings", () => {
     expect(await screen.findByText(/Signed in/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign in again" })).toBeTruthy();
     open.mockRestore();
+  });
+
+  it("connects Telegram with a bot token, then sends a test", async () => {
+    render(<SettingsPage />);
+    expect(await screen.findByText("Not connected")).toBeTruthy();
+    const input = screen.getByLabelText("Telegram bot token");
+    expect(input.getAttribute("type")).toBe("password");
+    fireEvent.change(input, { target: { value: "123456789:made-up" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText("Bot saved: send it a message in Telegram")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Send a test" }));
+    expect(await screen.findByText("Test summary sent")).toBeTruthy();
   });
 });

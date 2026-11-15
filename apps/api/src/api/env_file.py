@@ -12,6 +12,12 @@ from api.trading import Refused
 SHAPES = {
     "ANTHROPIC_API_KEY": re.compile(r"sk-ant-api\d{2}-[A-Za-z0-9_-]{20,300}"),
     "CLAUDE_CODE_OAUTH_TOKEN": re.compile(r"sk-ant-oat\d{2}-[A-Za-z0-9_-]{20,300}"),
+    "TELEGRAM_BOT_TOKEN": re.compile(r"\d{5,15}:[A-Za-z0-9_-]{30,60}"),  # decision 57
+}
+WORDS = {
+    "ANTHROPIC_API_KEY": "Claude API key",
+    "CLAUDE_CODE_OAUTH_TOKEN": "Claude sign-in token",
+    "TELEGRAM_BOT_TOKEN": "Telegram bot token",
 }
 
 
@@ -43,4 +49,4 @@ def save(name: str, value: str) -> None:
 
 
 def _word(name: str) -> str:
-    return "Claude API key" if name == "ANTHROPIC_API_KEY" else "Claude sign-in token"
+    return WORDS.get(name, "credential")
