@@ -8,19 +8,25 @@ const saved: AiSettings = {
   apiKeySet: false,
   tokenSet: false,
   model: "claude-opus-5-5",
+  models: [
+    { id: "claude-opus-5-5", name: "Claude Opus 5.5" },
+    { id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
+    { id: "claude-haiku-5-5", name: "Claude Haiku 5.5" },
+  ],
   budget: { spent: "4.1", cap: "20" },
 };
 const LINK = "https://claude.com/cai/oauth/authorize?code=true";
 
-const setAiSettings = vi.fn((mode: AiSettings["mode"], fallback: boolean) =>
-  Promise.resolve({ ...saved, mode, fallback }),
+const setAiSettings = vi.fn((mode: AiSettings["mode"], fallback: boolean, model: string) =>
+  Promise.resolve({ ...saved, mode, fallback, model }),
 );
 const saveAiKey = vi.fn((key: string) => key && Promise.resolve({ ...saved, apiKeySet: true }));
 const startSignIn = vi.fn(() => Promise.resolve({ url: LINK }));
 const finishSignIn = vi.fn((code: string) => code && Promise.resolve({ ...saved, tokenSet: true }));
 vi.mock("./api", () => ({
   getAiSettings: () => Promise.resolve(saved),
-  setAiSettings: (mode: AiSettings["mode"], fallback: boolean) => setAiSettings(mode, fallback),
+  setAiSettings: (mode: AiSettings["mode"], fallback: boolean, model: string) =>
+    setAiSettings(mode, fallback, model),
   saveAiKey: (key: string) => saveAiKey(key),
   startSignIn: () => startSignIn(),
   finishSignIn: (code: string) => finishSignIn(code),
@@ -37,11 +43,25 @@ describe("Settings", () => {
     expect(key.getAttribute("aria-pressed")).toBe("true");
     expect(screen.queryByRole("checkbox")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Claude subscription (personal use)" }));
-    expect(setAiSettings).toHaveBeenCalledWith("subscription", false);
+    expect(setAiSettings).toHaveBeenCalledWith("subscription", false, "claude-opus-5-5");
     fireEvent.click(
       await screen.findByRole("checkbox", { name: "Use the API key if the subscription fails" }),
     );
-    expect(setAiSettings).toHaveBeenLastCalledWith("subscription", true);
+    expect(setAiSettings).toHaveBeenLastCalledWith("subscription", true, "claude-opus-5-5");
+  });
+
+  it("switches the model", async () => {
+    render(<SettingsPage />);
+    expect(
+      (await screen.findByRole("button", { name: "Opus 5.5" })).getAttribute("aria-pressed"),
+    ).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Haiku 5.5" }));
+    expect(setAiSettings).toHaveBeenLastCalledWith("api_key", false, "claude-haiku-5-5");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Haiku 5.5" }).getAttribute("aria-pressed")).toBe(
+        "true",
+      ),
+    );
   });
 
   it("saves a pasted API key, then shows only that it's set", async () => {

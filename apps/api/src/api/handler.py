@@ -368,10 +368,11 @@ def _ask(store: Store | None = None) -> Ask:
             return reply | {"_via": "Demo"}, cost
 
         return demo_ask
-    return switched(_api_ask, subscription(), store)
+    chosen = lambda: ai_client.model(store)  # noqa: E731 - read at each run
+    return switched(lambda: _api_ask(chosen), subscription(model=chosen), store)
 
 
-def _api_ask() -> Ask:
+def _api_ask(model: Callable[[], str] = ai_client.model) -> Ask:
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not key:
 
@@ -389,7 +390,7 @@ def _api_ask() -> Ask:
     client = anthropic.Anthropic(
         api_key=key, timeout=SIGNAL_TIMEOUT_SECONDS, default_headers=headers
     )
-    return claude(client)
+    return claude(client, model)
 
 
 def _cap() -> Decimal:

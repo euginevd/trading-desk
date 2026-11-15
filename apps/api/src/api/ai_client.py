@@ -21,7 +21,7 @@ from decimal import Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from api.ai_signal import MAX_SEARCHES, MODEL, Ask, SignalError, Signals
+from api.ai_signal import MAX_SEARCHES, MODEL, MODELS, Ask, SignalError, Signals
 from api.audit import Audit
 from api.store import Store
 from api.trading import Refused
@@ -41,6 +41,14 @@ Query = Callable[..., AsyncGenerator[Any]]
 
 MODE_KEY = "ai_auth_mode"
 FALLBACK_KEY = "ai_fallback"
+MODEL_KEY = "ai_model"
+
+
+def model(store: Store | None = None) -> str:
+    """The Settings page's model, else `AI_MODEL` in `.env`, else Claude Opus 5.5."""
+    saved = store.setting(MODEL_KEY, "") if store else ""
+    chosen = saved or os.environ.get("AI_MODEL", MODEL).strip()
+    return chosen if chosen in MODELS else MODEL
 
 
 def mode(store: Store | None = None) -> str:
@@ -68,7 +76,8 @@ def view(store: Store, signals: Signals) -> dict[str, Any]:
         "fallback": _fallback(store),
         "apiKeySet": bool(os.environ.get("ANTHROPIC_API_KEY", "").strip()),
         "tokenSet": bool(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "").strip()),
-        "model": MODEL,
+        "model": model(store),
+        "models": [{"id": key, "name": m.name} for key, m in MODELS.items()],
         "budget": signals.budget(),
     }
 
@@ -77,10 +86,16 @@ def choose(store: Store, audit: Audit, signals: Signals, body: dict[str, Any]) -
     chosen, fallback = body.get("mode"), body.get("fallback")
     if chosen not in SOURCE or not isinstance(fallback, bool):
         raise Refused("Choose api_key or subscription, and whether to fall back.")
+    picked = body.get("model", model(store))
+    if picked not in MODELS:
+        raise Refused("Choose one of the listed models.")
+    store.set_setting(MODEL_KEY, str(picked))
     store.set_setting(MODE_KEY, str(chosen))
     store.set_setting(FALLBACK_KEY, "1" if fallback else "0")
     back = ", falling back to the API key" if fallback and chosen == SUBSCRIPTION else ""
-    audit.record("settings", "AI provider", f"Set to {SOURCE[str(chosen)]}{back}")
+    audit.record(
+        "settings", "AI provider", f"Set to {SOURCE[str(chosen)]}{back}, {MODELS[str(picked)].name}"
+    )
     return view(store, signals)
 
 
@@ -103,7 +118,7 @@ def switched(api: Callable[[], Ask], subscription: Ask, store: Store | None = No
     return ask
 
 
-def subscription(query: Query | None = None) -> Ask:
+def subscription(query: Query | None = None, model: Callable[[], str] = lambda: MODEL) -> Ask:
     """The plan through the owner's Claude subscription. Costs nothing per call; it counts
     against the plan's usage limits instead."""
 
@@ -115,8 +130,9 @@ def subscription(query: Query | None = None) -> Ask:
                 "to use your Claude subscription."
             )
         try:
-            run = asyncio.wait_for(_run(query, system, text, shape, token), TIMEOUT_SECONDS)
-            return asyncio.run(run), Decimal(0)
+            chosen = model() if model() in MODELS else MODEL
+            run = asyncio.wait_for(_run(query, system, text, shape, token, chosen), TIMEOUT_SECONDS)
+            return asyncio.run(run) | {"_model": chosen}, Decimal(0)
         except TimeoutError:
             raise SignalError("Claude took too long through the subscription. Re-run it.") from None
         except SignalError as error:
@@ -140,8 +156,8 @@ def _env(token: str, home: str) -> dict[str, str]:
     }
 
 
-async def _run(
-    query: Query | None, system: str, text: str, shape: dict[str, Any], token: str
+async def _run(  # noqa: PLR0913, PLR0917 - the call's parts, each needed
+    query: Query | None, system: str, text: str, shape: dict[str, Any], token: str, model: str
 ) -> dict[str, Any]:
     import claude_agent_sdk as sdk  # noqa: PLC0415 - only loaded for the subscription
 
@@ -149,7 +165,7 @@ async def _run(
     with tempfile.TemporaryDirectory(prefix="desk-claude-", ignore_cleanup_errors=True) as home:
         options = sdk.ClaudeAgentOptions(
             system_prompt=system,
-            model=MODEL,
+            model=model,
             tools=["WebSearch"],
             allowed_tools=["WebSearch"],
             permission_mode="dontAsk",

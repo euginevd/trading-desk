@@ -79,7 +79,7 @@ class FakeTerminal:
 
     def write(self, text: str) -> None:
         self.typed.append(text)
-        if self.token:
+        if self.token and text == "\r":
             self.screens += ["Your token:\r\n\x1b[32m", self.token, "\x1b[0m\r\n"]
 
     def close(self) -> None:
@@ -91,13 +91,14 @@ def test_the_sign_in_hands_over_the_link_types_the_code_and_returns_the_token() 
     signin = SignIn(spawn=lambda: terminal)
     assert signin.start() == LINK
     assert signin.finish("  abc123#state-xyz ") == TOKEN
-    assert terminal.typed == ["abc123#state-xyz\r"]
+    assert terminal.typed == ["abc123#state-xyz", "\r"]
     assert terminal.closed
 
 
 def test_a_sign_in_without_a_link_or_a_token_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(ai_signin, "START_SECONDS", 0.05)
     monkeypatch.setattr(ai_signin, "FINISH_SECONDS", 0.05)
+    monkeypatch.setattr(ai_signin, "PAUSE_SECONDS", 0)
     with pytest.raises(Refused, match="sign-in link"):
         SignIn(spawn=lambda: FakeTerminal(link="no link here")).start()
     signin = SignIn(spawn=lambda: FakeTerminal(token=None))

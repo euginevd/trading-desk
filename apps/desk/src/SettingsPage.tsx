@@ -61,12 +61,37 @@ export default function SettingsPage() {
                     className={ai.mode === mode ? "on" : ""}
                     aria-pressed={ai.mode === mode}
                     disabled={saving}
-                    onClick={() => void run(() => setAiSettings(mode, ai.fallback), "Not saved.")}
+                    onClick={() =>
+                      void run(() => setAiSettings(mode, ai.fallback, ai.model), "Not saved.")
+                    }
                   >
                     {name}
                   </button>
                 ))}
               </div>
+            </div>
+            <div className="settings-row settings-model">
+              <span className="settings-label">Model</span>
+              <div className="seg dca-seg settings-seg" role="group" aria-label="Model">
+                {ai.models.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    className={ai.model === m.id ? "on" : ""}
+                    aria-pressed={ai.model === m.id}
+                    disabled={saving}
+                    onClick={() =>
+                      void run(() => setAiSettings(ai.mode, ai.fallback, m.id), "Not saved.")
+                    }
+                  >
+                    {m.name.replace("Claude ", "")}
+                  </button>
+                ))}
+              </div>
+              <p className="settings-hint muted">
+                Opus: the deepest reasoning. Sonnet: about half Opus&apos;s price. Haiku: the
+                cheapest and fastest.
+              </p>
             </div>
             {ai.mode === "subscription" && (
               <label className="settings-check">
@@ -75,7 +100,7 @@ export default function SettingsPage() {
                   checked={ai.fallback}
                   disabled={saving}
                   onChange={(e) =>
-                    void run(() => setAiSettings(ai.mode, e.target.checked), "Not saved.")
+                    void run(() => setAiSettings(ai.mode, e.target.checked, ai.model), "Not saved.")
                   }
                 />
                 Use the API key if the subscription fails
@@ -86,9 +111,8 @@ export default function SettingsPage() {
               <Subscription ai={ai} saving={saving} run={run} onError={setError} />
             </ul>
             <p className="settings-note muted">
-              Model: {ai.model === "claude-opus-5-5" ? "Claude Opus 5.5" : ai.model}. Applies to
-              every AI feature: plans, Analyse all and the Dashboard&apos;s signals. What you enter
-              is saved to .env and never shown again.
+              Applies to every AI feature: plans, Analyse all and the Dashboard&apos;s signals. What
+              you enter is saved to .env and never shown again.
             </p>
           </>
         )}

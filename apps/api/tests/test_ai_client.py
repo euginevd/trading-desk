@@ -90,7 +90,7 @@ def test_the_mode_is_read_at_each_call_and_the_reply_names_its_source(
     env.setenv("AI_AUTH_MODE", "subscription")
     env.setenv("CLAUDE_CODE_OAUTH_TOKEN", OAUTH)
     reply, cost = ask("system", "the facts", SHAPE)
-    assert reply == PLAN | {"_via": "Claude subscription"}
+    assert reply == PLAN | {"_via": "Claude subscription", "_model": "claude-opus-5-5"}
     assert cost == 0  # the plan's usage, not the API bill
     assert calls == ["api"]
 
@@ -278,3 +278,65 @@ def test_the_settings_choice_overrides_env_and_shows_no_secret(
             ai_client.choose(store, audit, signals, {"mode": "free", "fallback": False})
     finally:
         store.close()
+
+
+def test_the_model_is_chosen_on_settings_priced_and_passed_on(
+    env: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from api.ai_signal import claude, usage_cost  # noqa: PLC0415
+
+    store = Store(tmp_path / "desk.sqlite")
+    audit = Audit(tmp_path / "audit.jsonl")
+    signals = Signals(api_ask([]), store, audit)
+    try:
+        assert ai_client.model(store) == "claude-opus-5-5"
+        shown = ai_client.choose(
+            store,
+            audit,
+            signals,
+            {"mode": "api_key", "fallback": False, "model": "claude-haiku-5-5"},
+        )
+        assert shown["model"] == "claude-haiku-5-5"
+        assert {m["name"] for m in shown["models"]} == {
+            "Claude Opus 5.5",
+            "Claude Sonnet 5.5",
+            "Claude Haiku 5.5",
+        }
+        with pytest.raises(Refused):
+            ai_client.choose(
+                store, audit, signals, {"mode": "api_key", "fallback": False, "model": "gpt"}
+            )
+    finally:
+        store.close()
+
+    class Usage:
+        input_tokens = 1_000_000
+        output_tokens = 1_000_000
+        server_tool_use = None
+
+    assert usage_cost(Usage(), "claude-haiku-5-5") == Decimal("0.6")
+    assert usage_cost(Usage(), "claude-sonnet-5-5") == Decimal(12)
+
+    sent: dict[str, Any] = {}
+
+    class Reply:
+        stop_reason = "end_turn"
+        usage = Usage()
+        content = [type("Text", (), {"type": "text", "text": '{"action": "Wait"}'})()]
+
+    class Messages:
+        def create(self, **request: Any) -> Reply:
+            sent.update(request)
+            return Reply()
+
+    client = type("Client", (), {"beta": type("Beta", (), {"messages": Messages()})()})()
+    reply, _ = claude(client, lambda: "claude-haiku-5-5")("system", "the facts", SHAPE)
+    assert sent["model"] == "claude-haiku-5-5"
+    assert sent["tools"][0]["type"] == "web_search_20250305"  # Haiku's search tool
+    assert reply["_model"] == "claude-haiku-5-5"
+
+    env.setenv("CLAUDE_CODE_OAUTH_TOKEN", OAUTH)
+    query = FakeQuery(result())
+    subscription(query, model=lambda: "claude-sonnet-5-5")("system", "the facts", SHAPE)
+    assert query.options is not None
+    assert query.options.model == "claude-sonnet-5-5"

@@ -66,8 +66,8 @@ export const getTerminal = (symbol: string) =>
   call<Terminal>("GET", `/trade?symbol=${encodeURIComponent(symbol)}`);
 export const getSettings = () => call<Settings>("GET", "/settings");
 export const getAiSettings = () => call<AiSettings>("GET", "/settings/ai");
-export const setAiSettings = (mode: AiMode, fallback: boolean) =>
-  call<AiSettings>("PUT", "/settings/ai", { mode, fallback });
+export const setAiSettings = (mode: AiMode, fallback: boolean, model: string) =>
+  call<AiSettings>("PUT", "/settings/ai", { mode, fallback, model });
 // Credentials go to .env through the api and never come back (decision 51).
 export const saveAiKey = (key: string) => call<AiSettings>("PUT", "/settings/ai/key", { key });
 export const startSignIn = () => call<{ url: string }>("POST", "/settings/ai/signin", {});

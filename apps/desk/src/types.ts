@@ -624,5 +624,6 @@ export interface AiSettings {
   apiKeySet: boolean;
   tokenSet: boolean;
   model: string;
+  models: { id: string; name: string }[];
   budget: { spent: string; cap: string };
 }

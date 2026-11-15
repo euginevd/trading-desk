@@ -2845,6 +2845,12 @@ dialog.in-place .detail-head {
   background: var(--accent);
   color: var(--accent-ink);
 }
+.settings-model {
+  margin-top: 14px;
+}
+.settings-model .settings-hint {
+  margin-left: 0;
+}
 .settings-check {
   display: flex;
   align-items: center;

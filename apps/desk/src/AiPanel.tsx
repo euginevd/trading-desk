@@ -35,6 +35,12 @@ function ago(ms: number): string {
   return hours < 48 ? `${hours} h ago` : dateTime(ms);
 }
 
+const MODEL_NAMES: Record<string, string> = {
+  "claude-opus-5-5": "Opus 5.5",
+  "claude-sonnet-5-5": "Sonnet 5.5",
+  "claude-haiku-5-5": "Haiku 5.5",
+};
+
 export default function AiPanel({
   coin,
   signal,
@@ -114,6 +120,7 @@ export default function AiPanel({
         <span className="muted">
           {signal ? `Updated ${ago(signal.ranAt)}` : "Not run yet"}
           {signal?.via && ` · via ${signal.via}`}
+          {signal?.model && ` · ${MODEL_NAMES[signal.model] ?? signal.model}`}
           {signal?.stale && " · older than 4 hours"}
           {plan?.changedSince && ` · ${plan.changedSince}`}
         </span>

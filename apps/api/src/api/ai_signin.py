@@ -22,6 +22,7 @@ CODE = re.compile(r"[A-Za-z0-9#_.~-]{8,500}")
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07]*\x07|\x1b[=>()][0-9A-B]?")
 START_SECONDS = 30
 FINISH_SECONDS = 60
+PAUSE_SECONDS = 0.5
 KEEP_SECONDS = 600  # an unfinished sign-in is dropped after ten minutes
 CLI = "claude_agent_sdk/_bundled/claude"
 
@@ -51,7 +52,7 @@ class SignIn:
         with self._lock:
             self._close()
             terminal = self._spawn()
-            seen = _until(terminal, URL, START_SECONDS)
+            seen, _ = _until(terminal, URL, START_SECONDS)
             if seen is None:
                 terminal.close()
                 raise Refused("Claude Code didn't offer a sign-in link. Try again.")
@@ -69,11 +70,15 @@ class SignIn:
                 self._close()
                 raise Refused("That sign-in has expired. Start it again.")
             try:
-                terminal.write(code + "\r")
-                token = _until(terminal, TOKEN, FINISH_SECONDS)
+                terminal.write(code)
+                time.sleep(PAUSE_SECONDS)  # Enter on its own, not inside the pasted code
+                terminal.write("\r")
+                token, screen = _until(terminal, TOKEN, FINISH_SECONDS)
             finally:
                 self._close()
             if token is None:
+                # What Claude Code said instead, for the api's log, with anything secret blanked.
+                print(f"Claude sign-in: no token. Claude Code showed: {_redacted(screen)}")  # noqa: T201
                 raise Refused("Claude didn't accept that code. Start the sign-in again.")
             return token
 
@@ -83,8 +88,9 @@ class SignIn:
             self._terminal = None
 
 
-def _until(terminal: Terminal, pattern: re.Pattern[str], seconds: float) -> str | None:
-    """Reads the terminal until the pattern shows, on the screen's text without its colours."""
+def _until(terminal: Terminal, pattern: re.Pattern[str], seconds: float) -> tuple[str | None, str]:
+    """Reads the terminal until the pattern shows, on the screen's text without its colours;
+    returns the match, if any, and the text seen."""
     seen = ""
     end = time.monotonic() + seconds
     while time.monotonic() < end:
@@ -93,8 +99,14 @@ def _until(terminal: Terminal, pattern: re.Pattern[str], seconds: float) -> str 
             seen += chunk
             found = pattern.search(ANSI.sub("", seen))
             if found:
-                return found.group(0)
-    return None
+                return found.group(0), ""
+    return None, ANSI.sub("", seen)
+
+
+def _redacted(screen: str) -> str:
+    """The end of the screen's text, with tokens, codes and links blanked, on one line."""
+    text = re.sub(r"sk-ant-\S+|https?://\S+|[A-Za-z0-9#_.~-]{24,}", "[blanked]", screen)
+    return " ".join(text.split())[-600:]
 
 
 def _setup_token() -> Terminal:  # pragma: no cover - needs Linux and the real CLI
