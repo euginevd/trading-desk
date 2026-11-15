@@ -2,7 +2,7 @@
 # The desk (decision 14). Built from the repo root: docker build -f apps/desk/Dockerfile .
 
 # Build: the same Node as CI, pinned by digest, at the repo's depth (known-mistakes 23).
-FROM node:24.22.1-bookworm-slim@sha256:be8204d4bd327363357f532187b752ff62759c31bedf98e9e18fc08c9cbd605c AS build
+FROM node:26.13.0-bookworm-slim@sha256:add5c17c14752c54d2f3d519ec46a3815684d41c33f198bcb09fb998f7dcbf68 AS build
 WORKDIR /web/apps/desk
 COPY apps/desk/package.json apps/desk/package-lock.json apps/desk/.npmrc ./
 RUN npm ci --no-audit --no-fund
@@ -10,7 +10,7 @@ COPY apps/desk/ ./
 RUN npm run build
 
 # Serve: nginx as a non-root user, with the api behind /api on the compose network.
-FROM nginxinc/nginx-unprivileged:1.30-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
+FROM nginxinc/nginx-unprivileged:1.31-alpine@sha256:b5047b9b76845eac124358373c6852377c52e4b05834a47647e955dd91cb8f1e
 # Alpine's security fixes, which the base image doesn't carry yet; then back to the non-root user.
 USER root
 RUN apk upgrade --no-cache
