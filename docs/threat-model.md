@@ -1,6 +1,6 @@
 # Threat model
 
-The desk on the owner's machine, in Docker; each later stage extends this before it ships. STRIDE on the data flow below, mapped to OWASP Top 10:2025 (A), API Security 2023 (API), LLM 2025 (LLM) and Agentic 2026 (ASI).
+The desk on the owner's machine, in Docker; each later stage extends this first. STRIDE on the data flow below, mapped to OWASP Top 10:2025 (A), API Security 2023 (API), LLM 2025 (LLM) and Agentic 2026 (ASI).
 
 ## Data flow
 
@@ -33,7 +33,7 @@ flowchart LR
   class internet,machine boundary
 ```
 
-Circles are processes, cylinders data stores, red dashed boxes trust boundaries; TB labels mark flows that cross one.
+Circles are processes, cylinders stores, red dashed boxes trust boundaries; TB labels mark crossing flows.
 
 | ID | Data | Class | Where |
 |:-:|------|-------|-------|
@@ -67,8 +67,8 @@ STRIDE: Spoofing, Tampering, Repudiation, Information disclosure, Denial of serv
 | R4 | A secret committed | I | A07 | Medium | `.env` git-ignored; pre-push scan; push protection | Code |
 | R5 | A key leaks via code, a log, the browser, a prompt or the agent | I, E | A02, A07 | High | Binance's can't withdraw or use margin or futures, and works only from the owner's address; keys live only in `.env`, never logged or sent on; those saved from Settings enter once, never returned (decisions 51, 57); the agent never reads one | Code, Operate |
 | R6 | An order the owner didn't mean: a bug, a double submit, a bot buying more than meant, or a timed-out order resent | T, E | API6 | High | A confirm step in words for every order and every bot (which starts off); per-order and daily limits, zero until set, and the kill switch, checked in code; an idempotency key per order and rung, recorded before it's sent; a timed-out order looked up by its client id, never assumed lost; a bot pauses on a Binance error; market orders only to sell, taking risk away (decisions 18, 37 to 43, 47) | Code, Test, Operate |
-| R7 | A searched page steers the plan (prompt injection), or the model is wrong | T | LLM01, LLM09 | Medium | The plan only advises (spec 10): it can't call anything that trades; it picks levels computed in code, its JSON is checked against a per-call schema and held to the owner's risk rules, and the panel shows its reasons (decisions 16, 46) *(planned)* | Code, Test |
-| R8 | The AI runs up the bill | D | LLM10 | Medium | A cache, runs when asked, the monthly cap, a Console limit (costs 6) *(planned)* | Code, Operate |
+| R7 | A searched page steers the plan (prompt injection), or the model is wrong | T | LLM01, LLM09 | Medium | The plan and agent run only advise (spec 10): nothing they call trades; it picks levels computed in code, its JSON is checked against a per-call schema and held to the owner's risk rules, and the panel shows its reasons (decisions 16, 46) | Code, Test |
+| R8 | The AI runs up the bill | D | LLM10 | Medium | A cache, runs when asked, the monthly cap checked before each step, a Console limit (costs 6) | Code, Operate |
 | R9 | An action can't be traced | R | A09 | Medium | The add-only audit log | Code |
 | R10 | Outside text runs as markup | T | A05 | Low | Fixed-shape parsing; React escapes text; a content security policy *(planned)* | Code |
 | R11 | TradingView's widget, or a fake, acts on the desk | T, I | A08 | Low | Framed from TradingView's own site, another origin, the only one the policy allows; no TradingView script runs on the desk (decision 22) | Code |

@@ -1,289 +1,53 @@
+// The Trade page (TODO 6): a workspace with the trading agent, in three columns. Left, the coins
+// with the agent's last call on each; centre, the agent: Analyse, its steps as they land, its
+// call and a follow-up question; right, the chart with the agent's levels and the Profile's
+// guardrails. Orders open in a sheet the owner reviews and confirms.
 import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { useChartHeight, useColumns } from "./columns";
-import { ResetIcon } from "./icons";
 import {
   ApiError,
-  createWatchlist,
-  deleteWatchlist,
+  addAlert,
+  askAnalysis,
+  deleteAlert,
+  getAlerts,
+  chooseTicket,
+  getAnalysisCalls,
+  getLastAnalysis,
   getMarket,
   getTerminal,
+  getTradingAgent,
   getWatchlist,
-  runSignal,
-  unwatchCoin,
-  watchCoin,
+  nextAnalysisStep,
+  rankCoins,
+  startAnalysis,
 } from "./api";
-import KeyLevels from "./KeyLevels";
-import TradingViewChart from "./TradingViewChart";
-import { percent, price, trend, usd, usdShort } from "./format";
-import AiPanel from "./AiPanel";
+import Coins from "./Coins";
+import { amount, percent, price, trend, usd } from "./format";
+import OrderSheet, { type SheetStart } from "./OrderSheet";
 import SmartTradePanel from "./SmartTrade";
-import type { Interval, Market, Settings, Terminal, Verdict, Watchlist } from "./types";
+import { AgentHero, Asks, RunHeader, TicketCard, Timeline } from "./TradeAgent";
+import { AlertsCard, GuardrailsCard, LevelsCard, PriceCard } from "./TradeContext";
+import type {
+  AgentCall,
+  AgentPage,
+  AgentRun,
+  CoinRank,
+  Market,
+  PriceAlert,
+  Settings,
+  Terminal,
+  TicketChoice,
+  Watchlist,
+} from "./types";
 import type { Status } from "./ui";
-import CoinIcon from "./CoinIcon";
+import "./trade.css";
 
 const WATCH_MS = 30_000;
-// The market stats beside the chart come from 4h candles; the chart itself is TradingView's.
-const INTERVAL: Interval = "4h";
-
-const TAG: Record<Verdict, string> = { "Buy now": "buy", Wait: "wait", Avoid: "sell" };
+// Another request holding a run's step: wait and ask again, up to about a minute.
+const BUSY_MS = 2_000;
+const BUSY_TRIES = 30;
 
 function message(error: unknown): string {
   return error instanceof ApiError ? error.message : "Something went wrong.";
-}
-
-function WatchlistPanel({
-  list,
-  selected,
-  analysing,
-  onSelect,
-  onChange,
-  onAnalyseAll,
-}: {
-  list: Watchlist | null;
-  selected: string;
-  analysing: { done: number; total: number } | null;
-  onSelect: (coin: string) => void;
-  onChange: (next: Watchlist, added?: string) => void;
-  onAnalyseAll: () => void;
-}) {
-  const [typed, setTyped] = useState("");
-  const [error, setError] = useState("");
-  const [naming, setNaming] = useState(false);
-  const [newName, setNewName] = useState("");
-  const [dropping, setDropping] = useState(false);
-  const [menu, setMenu] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const menuBox = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!menu) return;
-    const away = (e: MouseEvent) => {
-      if (menuBox.current && !menuBox.current.contains(e.target as Node)) setMenu(false);
-    };
-    window.addEventListener("mousedown", away);
-    return () => window.removeEventListener("mousedown", away);
-  }, [menu]);
-  const listId = list?.list.id ?? 0;
-
-  const settle = (pending: Promise<Watchlist>, after?: (next: Watchlist) => void) => {
-    setError("");
-    pending.then(
-      (next) => {
-        if (after) after(next);
-        else onChange(next);
-      },
-      (err: unknown) => setError(message(err)),
-    );
-  };
-
-  const add = (e: FormEvent) => {
-    e.preventDefault();
-    const coin = typed.trim().toUpperCase();
-    if (!coin || !listId) return;
-    settle(watchCoin(coin, listId), (next) => {
-      setTyped("");
-      onChange(next, coin.replace(/(USDT|USDC|FDUSD)$/, ""));
-    });
-  };
-  const remove = (coin: string) => settle(unwatchCoin(coin, listId));
-  const create = (e: FormEvent) => {
-    e.preventDefault();
-    settle(createWatchlist(newName), (next) => {
-      setNaming(false);
-      setNewName("");
-      onChange(next);
-    });
-  };
-  const drop = () =>
-    settle(deleteWatchlist(listId), (next) => {
-      setDropping(false);
-      onChange(next);
-    });
-
-  return (
-    <section aria-label="Watchlist">
-      <div className="wl-head" ref={menuBox}>
-        <button
-          type="button"
-          className="wl-title"
-          aria-haspopup="menu"
-          aria-expanded={menu}
-          onClick={() => setMenu(!menu)}
-        >
-          {list?.list.name ?? "Watchlist"} <span aria-hidden="true">▾</span>
-        </button>
-        <button
-          type="button"
-          className="btn btn-small wl-analyse"
-          disabled={!list?.coins.length || analysing !== null}
-          title="A fresh AI analysis of every coin in this list"
-          onClick={onAnalyseAll}
-        >
-          {analysing ? `Analysing ${analysing.done + 1} of ${analysing.total}` : "Analyse all"}
-        </button>
-        {menu && (
-          <div className="create-list wl-menu" role="menu" aria-label="Watchlists">
-            {list?.lists.map((l) => (
-              <button
-                key={l.id}
-                type="button"
-                role="menuitem"
-                className={l.id === listId ? "on" : ""}
-                onClick={() => {
-                  setMenu(false);
-                  setEditing(false);
-                  settle(getWatchlist(l.id));
-                }}
-              >
-                {l.name}
-                <span className="muted">{l.count}</span>
-              </button>
-            ))}
-            <hr />
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenu(false);
-                setEditing(true);
-              }}
-            >
-              Edit {list?.list.name ?? "list"}
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenu(false);
-                setNaming(true);
-              }}
-            >
-              New list
-            </button>
-            {list && list.lists.length > 1 && (
-              <button
-                type="button"
-                role="menuitem"
-                onClick={() => {
-                  setMenu(false);
-                  setDropping(true);
-                }}
-              >
-                Delete {list.list.name}
-              </button>
-            )}
-          </div>
-        )}
-      </div>
-      {naming && (
-        <form className="wl-add" onSubmit={create}>
-          <label htmlFor="wl-name" className="visually-hidden">
-            New watchlist name
-          </label>
-          <input
-            id="wl-name"
-            placeholder="Name, e.g. Memes"
-            autoComplete="off"
-            maxLength={30}
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-          />
-          <button className="btn" type="submit">
-            Create
-          </button>
-          <button className="link" type="button" onClick={() => setNaming(false)}>
-            Cancel
-          </button>
-        </form>
-      )}
-      {dropping && list && (
-        <p className="wl-note">
-          Delete {list.list.name}?{" "}
-          <button className="link" type="button" onClick={drop}>
-            Delete
-          </button>{" "}
-          <button className="link" type="button" onClick={() => setDropping(false)}>
-            Keep
-          </button>
-        </p>
-      )}
-      {editing && (
-        <>
-          <form className="wl-add" onSubmit={add}>
-            <label htmlFor="wl-in" className="visually-hidden">
-              Add coin
-            </label>
-            <input
-              id="wl-in"
-              placeholder="Add a coin, e.g. AVAX"
-              autoComplete="off"
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-            />
-            <button className="btn" type="submit">
-              Add
-            </button>
-          </form>
-          <div className="wl-note muted wl-meta">
-            <span>{list ? `${list.coins.length} of ${list.max} coins` : ""}</span>
-            <button className="link" type="button" onClick={() => setEditing(false)}>
-              Done
-            </button>
-          </div>
-        </>
-      )}
-      {error && (
-        <p className="wl-note down" role="alert">
-          {error}
-        </p>
-      )}
-      {list && list.coins.length === 0 && (
-        <p className="wl-note muted">Add a coin to get its chart and an AI signal.</p>
-      )}
-      <ul className="wl">
-        {list?.coins.map((c) => (
-          <li key={c.coin} className={c.coin === selected ? "sel" : ""}>
-            <button
-              className="wl-main"
-              type="button"
-              aria-current={c.coin === selected ? "true" : undefined}
-              onClick={() => onSelect(c.coin)}
-            >
-              <span className="coin">
-                <CoinIcon coin={c.coin} />
-              </span>
-              <span className="n">
-                <span style={{ display: "block", fontWeight: 500 }}>{c.pair}</span>
-                <span className="num muted" style={{ fontSize: 12 }}>
-                  {price(c.price)}{" "}
-                  <span className={trend(c.change24h)}>{percent(c.change24h)}</span>
-                </span>
-              </span>
-              {c.signal ? (
-                <span className={`tag ${TAG[c.signal.verdict]}`}>{c.signal.verdict}</span>
-              ) : (
-                <span className="tag none">No signal</span>
-              )}
-            </button>
-            {editing && (
-              <button
-                className="wl-rm"
-                type="button"
-                aria-label={`Remove ${c.coin}`}
-                onClick={() => remove(c.coin)}
-              >
-                ✕
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-      {list && (
-        <p className="budget muted">
-          AI spend this month: {usd(list.aiBudget.spent)} of {usd(list.aiBudget.cap)}
-        </p>
-      )}
-    </section>
-  );
 }
 
 export default function Trade({
@@ -297,22 +61,34 @@ export default function Trade({
 }) {
   const [list, setList] = useState<Watchlist | null>(null);
   const [selected, setSelected] = useState("");
-  const interval = INTERVAL;
-  const [resets, setResets] = useState(0); // the Reset chart button: reloads or refits the chart
-  const [loaded, setMarket] = useState<Market | null>(null);
-  const [terminal, setTerminal] = useState<Terminal | null>(null);
-  const [running, setRunning] = useState(false);
-  const [signalError, setSignalError] = useState("");
+  const [calls, setCalls] = useState<AgentCall[]>([]);
+  const [ranked, setRanked] = useState<{ ranked: CoinRank[]; cost: string } | null>(null);
+  const [ranking, setRanking] = useState(false);
+  const [rankError, setRankError] = useState("");
+  const [market, setMarket] = useState<Market | null>(null);
+  const [terminal, setTerminal] = useState<{ coin: string; data: Terminal } | null>(null);
+  const [agent, setAgent] = useState<AgentPage | null>(null);
+  const [run, setRun] = useState<AgentRun | null>(null);
+  const [lastFor, setLastFor] = useState(""); // the coin whose last run has been read
+  const [working, setWorking] = useState(false);
+  const [runError, setRunError] = useState("");
+  const [question, setQuestion] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [askError, setAskError] = useState("");
+  const [choosing, setChoosing] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
-  // The AI panel's Prefill: a side and price for the smart trade form; nothing is sent.
-  const [prefill, setPrefill] = useState<{
+  const [view, setView] = useState<"agent" | "orders">("agent");
+  const [sheet, setSheet] = useState<SheetStart | null>(null);
+  const [smartPrefill, setSmartPrefill] = useState<{
     side: "buy" | "sell";
     price: string;
     n: number;
-    qty?: string;
-    why?: string;
   } | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const [alerts, setAlerts] = useState<{ coin: string; list: PriceAlert[] } | null>(null);
+  const [alertError, setAlertError] = useState("");
+  const opened = useRef(0); // numbers each sheet, so a new one starts fresh
 
   // A link from elsewhere (the Portfolio's drift card, decision 55) opens a coin with its order
   // filled in: #/trade?coin=TAO&side=sell&price=410&qty=0.8&why=rebalance. Nothing is sent.
@@ -323,17 +99,24 @@ export default function Trade({
       const side = query.get("side");
       if (!coin || !/^[A-Z0-9]{1,15}$/.test(coin) || (side !== "buy" && side !== "sell")) return;
       setSelected(coin);
-      setPrefill((p) => ({
+      opened.current += 1;
+      setSheet({
+        n: opened.current,
         side,
         price: query.get("price") ?? "",
-        qty: query.get("qty") ?? undefined,
+        qty: query.get("qty") ?? "",
+        from: "link",
         why: query.get("why") ?? undefined,
-        n: (p?.n ?? 0) + 1,
-      }));
+      });
     };
     read();
     window.addEventListener("hashchange", read);
     return () => window.removeEventListener("hashchange", read);
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const shownList = useRef(0); // the watchlist on screen, so a reload keeps it
@@ -352,12 +135,22 @@ export default function Trade({
       ),
     [onStatus],
   );
-
+  const loadCalls = useCallback(
+    () =>
+      getAnalysisCalls().then(
+        (r) => {
+          setCalls(r.calls);
+          setNow(Date.now());
+        },
+        () => setCalls([]),
+      ),
+    [],
+  );
   const loadTerminal = useCallback(
     (coin: string) =>
       getTerminal(coin).then(
         (data) => {
-          setTerminal(data);
+          setTerminal({ coin, data });
           onSettings(data.settings);
           onStatus(data.demo ? "demo" : "connected");
         },
@@ -371,215 +164,455 @@ export default function Trade({
 
   useEffect(() => {
     void loadList();
-  }, [loadList]);
+    void loadCalls();
+    getTradingAgent().then(setAgent, () => setAgent(null));
+  }, [loadList, loadCalls]);
 
   useEffect(() => {
     if (!selected) return;
-    getMarket(selected, interval).then(setMarket, (e: unknown) => setError(message(e)));
-  }, [selected, interval]);
-
-  useEffect(() => {
-    if (!selected) return;
+    getMarket(selected, "4h").then(setMarket, (e: unknown) => setError(message(e)));
     void loadTerminal(selected);
     const timer = window.setInterval(() => void loadTerminal(selected), WATCH_MS);
     return () => window.clearInterval(timer);
   }, [selected, loadTerminal]);
 
-  // Analyse all: a fresh signal for each coin in the list, one at a time.
-  const [analysing, setAnalysing] = useState<{ done: number; total: number } | null>(null);
-  const analyseAll = async () => {
-    const coins = list?.coins.map((c) => c.coin) ?? [];
-    setSignalError("");
-    for (const [n, coin] of coins.entries()) {
-      setAnalysing({ done: n, total: coins.length });
+  // A run is driven from here, one step a call, until it isn't running, and only after the
+  // owner presses Analyse or Continue. Switching coin or leaving the page stops the loop; a run
+  // found part way shows as paused.
+  const token = useRef(0);
+  const drive = useCallback(
+    async (start: () => Promise<AgentRun>) => {
+      const mine = ++token.current;
+      setWorking(true);
+      setRunError("");
       try {
-        await runSignal(coin, true);
+        let next = await start();
+        if (token.current !== mine) return;
+        setRun(next);
+        let waits = 0;
+        while (next.status === "running") {
+          if (next.busy) {
+            waits += 1;
+            if (waits > BUSY_TRIES) {
+              setRunError(
+                "Another window is still working on this run. Wait a minute, then press Continue.",
+              );
+              return;
+            }
+            await new Promise((done) => window.setTimeout(done, BUSY_MS));
+            if (token.current !== mine) return;
+          } else waits = 0;
+          next = await nextAnalysisStep(next.id);
+          if (token.current !== mine) return;
+          setRun(next);
+        }
+        void loadCalls();
       } catch (e: unknown) {
-        setSignalError(message(e));
-        break;
+        if (token.current === mine) setRunError(message(e));
+      } finally {
+        if (token.current === mine) setWorking(false);
       }
-      void loadList();
-    }
-    setAnalysing(null);
-  };
+    },
+    [loadCalls],
+  );
+  useEffect(
+    () => () => {
+      token.current += 1;
+    },
+    [],
+  );
 
-  const run = (coin: string, force: boolean) => {
-    setRunning(true);
-    setSignalError("");
-    runSignal(coin, force).then(
-      () => {
-        setRunning(false);
-        void loadList();
+  useEffect(() => {
+    if (!selected) return;
+    let live = true;
+    getLastAnalysis(selected).then(
+      (r) => {
+        if (!live) return;
+        setLastFor(selected);
+        setRun(r.run);
       },
-      (e: unknown) => {
-        setRunning(false);
-        setSignalError(message(e));
-      },
+      () => live && setLastFor(selected),
     );
+    getAlerts(selected).then(
+      (r) => live && setAlerts({ coin: selected, list: r.alerts }),
+      (e: unknown) => live && setAlertError(message(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [selected]);
+
+  const alertsDone = (coin: string) => (r: { alerts: PriceAlert[] }) => {
+    setAlertError("");
+    setAlerts({ coin, list: r.alerts.filter((a) => a.coin === coin) });
+  };
+  const setAlert = (w: { price: string; direction: "above" | "below"; note: string }) =>
+    addAlert({ coin: selected, ...w }).then(alertsDone(selected), (e: unknown) =>
+      setAlertError(message(e)),
+    );
+  const removeAlert = (id: number) =>
+    deleteAlert(id).then(alertsDone(selected), (e: unknown) => setAlertError(message(e)));
+
+  const select = (coin: string) => {
+    if (coin === selected) return;
+    token.current += 1; // the old coin's run stops driving
+    setSelected(coin);
+    setRun(null);
+    setWorking(false);
+    setRunError("");
+    setAskError("");
+    setDone("");
+    setMarket(null);
+    setAlertError("");
   };
 
   const changed = (next: Watchlist, added?: string) => {
     shownList.current = next.list.id;
     setList(next);
-    if (added) {
-      setSelected(added);
-      run(added, false); // a new coin gets its first signal straight away
-    } else if (!next.coins.some((c) => c.coin === selected)) {
-      setSelected(next.coins[0]?.coin ?? "BTC");
-    }
+    if (added) select(added);
+    else if (!next.coins.some((c) => c.coin === selected)) select(next.coins[0]?.coin ?? "BTC");
+  };
+
+  const rank = () => {
+    setRanking(true);
+    setRankError("");
+    rankCoins(list?.coins.map((c) => c.coin) ?? [])
+      .then(setRanked, (e: unknown) => setRankError(message(e)))
+      .finally(() => setRanking(false));
+  };
+
+  const shown = run?.coin === selected ? run : null;
+  const term = terminal?.coin === selected ? terminal.data : null;
+  const shownMarket = market?.coin === selected ? market : null;
+  const live = settings ?? term?.settings ?? null;
+  const name = shown?.agent.name || agent?.agent.name || "your agent";
+  const shownAlerts = alerts?.coin === selected ? alerts.list : null;
+
+  const choose = (choice: TicketChoice) => {
+    if (!shown) return;
+    setChoosing(true);
+    chooseTicket(shown.id, choice)
+      .then(setRun, (e: unknown) => setRunError(`Your choice wasn't logged: ${message(e)}`))
+      .finally(() => setChoosing(false));
+  };
+  // Use and Edit only fill the sheet; the choice is logged once that order is placed.
+  const openTicket = (choice: "used" | "edited") => {
+    const t = shown?.ticket;
+    if (!shown || !t) return;
+    opened.current += 1;
+    setSheet({
+      n: opened.current,
+      side: t.side,
+      price: t.price,
+      qty: t.qty,
+      from: "agent",
+      ticket: t,
+      choice: { runId: shown.id, choice },
+      audPerUsd: shown.guardrails.audPerUsd,
+    });
+  };
+  const openOwn = () => {
+    opened.current += 1;
+    setSheet({
+      n: opened.current,
+      side: "buy",
+      price: "",
+      qty: "",
+      from: "own",
+      audPerUsd: shown?.guardrails.audPerUsd,
+    });
+  };
+
+  const ask = (e: FormEvent) => {
+    e.preventDefault();
+    const q = question.trim();
+    if (!shown || !q) return;
+    setAsking(true);
+    setAskError("");
+    askAnalysis(shown.id, q)
+      .then(
+        (next) => {
+          setRun(next);
+          setQuestion("");
+        },
+        (err: unknown) => setAskError(message(err)),
+      )
+      .finally(() => setAsking(false));
   };
 
   const after = (problem?: string, note?: string) => {
     setError(problem ?? "");
     setDone(note ?? "");
-    void loadTerminal(selected);
+    if (selected) void loadTerminal(selected);
   };
 
-  const columns = useColumns();
-  const chartHeight = useChartHeight();
-  const [chartShown, setChartShown] = useState(() => {
-    try {
-      return window.localStorage.getItem("desk.trade.chart") !== "hidden";
-    } catch {
-      return true;
-    }
-  });
-  const showChart = (shown: boolean) => {
-    setChartShown(shown);
-    try {
-      window.localStorage.setItem("desk.trade.chart", shown ? "shown" : "hidden");
-    } catch {
-      // private window: the choice lasts this visit only
-    }
-  };
-  const signal = list?.coins.find((c) => c.coin === selected)?.signal ?? null;
-  // The chart shows only once it's the selected coin's.
-  const market = loaded?.coin === selected && loaded.interval === interval ? loaded : null;
-  const live = settings ?? terminal?.settings ?? null;
+  const canAsk = shown !== null && shown.status !== "running" && !asking;
+  const coin = selected || "…";
+  const pos = shown?.position;
+  const ordersCount = term?.openOrders.length ?? 0;
 
   return (
-    <main className="trade" style={columns.style}>
-      {columns.grip}
-      <WatchlistPanel
+    <main className="tr">
+      <Coins
         list={list}
         selected={selected}
-        analysing={analysing}
-        onAnalyseAll={() => void analyseAll()}
-        onSelect={(coin) => {
-          setSelected(coin);
-          setSignalError("");
-          setDone("");
-        }}
+        calls={calls}
+        ranked={ranked}
+        ranking={ranking}
+        rankError={rankError}
+        now={now}
+        onSelect={select}
         onChange={changed}
+        onRank={rank}
       />
 
-      <section aria-label="Chart and analysis">
-        {error && (
-          <div className="alert" role="alert" style={{ margin: 14 }}>
-            <span>{error}</span>
-          </div>
-        )}
-        {market ? (
-          <>
-            <div className="mkt">
-              <div className="pair">{market.pair}</div>
-              <div>
-                <div className="s">Price</div>
-                <div className="num">{price(market.price)}</div>
-              </div>
-              <div>
-                <div className="s">24h change</div>
-                <div className={`num ${trend(market.change24h)}`}>{percent(market.change24h)}</div>
-              </div>
-              <div>
-                <div className="s">24h high / low</div>
-                <div className="num">
-                  {price(market.high24h)} / {price(market.low24h)}
-                </div>
-              </div>
-              <div>
-                <div className="s">24h volume</div>
-                <div className="num">{usdShort(market.volume24h)}</div>
-              </div>
-              {terminal?.demo && <span className="tag wait">Demo exchange</span>}
-            </div>
-            <div className="chart-bar">
+      <section className="tr-col tr-centre" aria-label="Trading agent">
+        <div className="tr-scroll">
+          <div className="tr-wrap">
+            <div className="tr-pair">
+              <h1>{coin}</h1>
+              {shownMarket ? (
+                <>
+                  <span className="tr-price num">{price(shownMarket.price)}</span>
+                  <span className={`num ${trend(shownMarket.change24h)}`}>
+                    {percent(shownMarket.change24h)} today
+                  </span>
+                </>
+              ) : (
+                <span className="skeleton tr-price-skeleton" aria-hidden="true" />
+              )}
+              {term?.demo && <span className="tag wait">Demo exchange</span>}
               <span className="spacer" />
+              <button type="button" className="link" disabled={!term || !live} onClick={openOwn}>
+                Place my own order
+              </button>
+            </div>
+
+            {pos || term ? (
+              <dl className="tr-strip" aria-label="Your position">
+                {pos ? (
+                  <>
+                    <div>
+                      <dt>You hold</dt>
+                      <dd className="num">
+                        {pos.held ? `${amount(pos.qty)} ${shown.coin}` : "None"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Value</dt>
+                      <dd className="num">{usd(pos.value)}</dd>
+                    </div>
+                    <div>
+                      <dt>Average</dt>
+                      <dd className="num">
+                        {price(pos.avgCost)}{" "}
+                        {pos.pnlPct !== null && (
+                          <span className={trend(pos.pnlPct)}>{percent(pos.pnlPct)}</span>
+                        )}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Of portfolio</dt>
+                      <dd className="num">{pos.weightPct !== null ? `${pos.weightPct}%` : "–"}</dd>
+                    </div>
+                    <div>
+                      <dt>Cash</dt>
+                      <dd className="num">{usd(shown.cashUsd)}</dd>
+                    </div>
+                  </>
+                ) : (
+                  term && (
+                    <>
+                      <div>
+                        <dt>Free on Binance</dt>
+                        <dd className="num">
+                          {amount(term.baseFree)} {term.base}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Cash</dt>
+                        <dd className="num">
+                          {amount(term.quoteFree)} {term.quote}
+                        </dd>
+                      </div>
+                    </>
+                  )
+                )}
+              </dl>
+            ) : (
+              <div className="skeleton tr-strip-skeleton" aria-hidden="true" />
+            )}
+
+            <div className="tabs tr-tabs" role="tablist" aria-label="Agent or orders">
               <button
                 type="button"
-                className="chart-reset"
-                aria-pressed={!chartShown}
-                onClick={() => showChart(!chartShown)}
+                role="tab"
+                aria-selected={view === "agent"}
+                onClick={() => setView("agent")}
               >
-                {chartShown ? "Hide chart" : "Show chart"}
+                {shown?.agent.name || agent?.agent.name || "Agent"}
               </button>
-              {chartShown && (
-                <button
-                  type="button"
-                  className="chart-reset"
-                  title="Right-click reset isn't available in the embedded chart"
-                  onClick={() => setResets((n) => n + 1)}
-                >
-                  <ResetIcon />
-                  Reset chart
-                </button>
-              )}
+              <button
+                type="button"
+                role="tab"
+                aria-selected={view === "orders"}
+                onClick={() => setView("orders")}
+              >
+                Orders and smart trades ({ordersCount})
+              </button>
             </div>
-            <KeyLevels market={market} />
-            {chartShown && (
-              <div className="chart-box" style={chartHeight.style}>
-                <TradingViewChart
-                  key={`${market.symbol}-${resets}`}
-                  symbol={market.symbol}
-                  pair={market.pair}
-                />
-                {chartHeight.grip}
+
+            {error && (
+              <div className="alert" role="alert">
+                <span>{error}</span>
               </div>
             )}
-          </>
-        ) : (
-          !error && (
-            <div aria-hidden="true" className="skeleton" style={{ height: 420, margin: 14 }} />
-          )
-        )}
-        {selected && (
-          <AiPanel
-            coin={selected}
-            signal={signal}
-            running={running}
-            error={signalError}
-            onRun={() => run(selected, true)}
-            onPrefill={(side, at) => setPrefill((p) => ({ side, price: at, n: (p?.n ?? 0) + 1 }))}
-          />
+            {done && (
+              <div className="alert done" role="status">
+                <span>{done}</span>
+              </div>
+            )}
+
+            {view === "orders" ? (
+              term && live ? (
+                <SmartTradePanel
+                  prefill={smartPrefill}
+                  terminal={term}
+                  settings={live}
+                  signal={shown?.signal ?? null}
+                  market={shownMarket}
+                  onPlaced={(note) => after(undefined, note)}
+                  onSettings={(next) => {
+                    onSettings(next);
+                    after();
+                  }}
+                  onDone={(problem) => after(problem)}
+                />
+              ) : (
+                <div className="skeleton tr-block-skeleton" aria-hidden="true" />
+              )
+            ) : !selected || lastFor !== selected ? (
+              <div className="skeleton tr-block-skeleton" aria-hidden="true" />
+            ) : (
+              <>
+                {shown ? (
+                  <RunHeader
+                    run={shown}
+                    working={working}
+                    onAnalyse={() => void drive(() => startAnalysis(selected))}
+                    onContinue={() => void drive(() => Promise.resolve(shown))}
+                  />
+                ) : (
+                  <AgentHero
+                    coin={selected}
+                    agent={agent}
+                    working={working}
+                    onAnalyse={() => void drive(() => startAnalysis(selected))}
+                    onChip={setQuestion}
+                  />
+                )}
+                {runError && (
+                  <div className="alert tr-run-error" role="alert">
+                    <span>
+                      {runError} Check Settings for the AI cap and connection, then try again.{" "}
+                      <a href="#/settings">Open Settings</a>
+                    </span>
+                    <button
+                      className="btn btn-small"
+                      type="button"
+                      disabled={working}
+                      onClick={() => void drive(() => startAnalysis(selected))}
+                    >
+                      Try again
+                    </button>
+                  </div>
+                )}
+                {shown && <Timeline run={shown} working={working} />}
+                {shown && (
+                  <TicketCard
+                    run={shown}
+                    busy={choosing || !term || !live}
+                    alerts={shownAlerts ?? []}
+                    onSetAlert={(w) => void setAlert(w)}
+                    onUse={() => openTicket("used")}
+                    onEdit={() => openTicket("edited")}
+                    onDismiss={() => choose("dismissed")}
+                  />
+                )}
+                {shown && <Asks run={shown} />}
+              </>
+            )}
+          </div>
+        </div>
+
+        {view === "agent" && (
+          <form className="tr-ask" onSubmit={ask}>
+            <div className="tr-ask-in">
+              <input
+                aria-label={`Ask ${name}`}
+                placeholder={
+                  shown
+                    ? `Ask ${name} about ${coin}…`
+                    : `Analyse ${coin} first, then ask ${name} about the call`
+                }
+                value={question}
+                maxLength={500}
+                disabled={!canAsk}
+                onChange={(e) => setQuestion(e.target.value)}
+              />
+              <button
+                className="btn btn-small"
+                type="submit"
+                disabled={!canAsk || !question.trim()}
+              >
+                {asking ? "Asking…" : "Ask"}
+              </button>
+            </div>
+            {askError && (
+              <p className="error-text tr-ask-error" role="alert">
+                {askError}
+              </p>
+            )}
+          </form>
         )}
       </section>
 
-      <section aria-label="Order form">
-        {done && (
-          <div className="alert done" role="status" style={{ margin: "14px 14px 0" }}>
-            <span>{done}</span>
-          </div>
-        )}
-        {terminal && live ? (
-          <>
-            <SmartTradePanel
-              prefill={prefill}
-              terminal={terminal}
-              settings={live}
-              signal={signal}
-              market={market}
-              onPlaced={(note) => after(undefined, note)}
-              onSettings={(next) => {
-                onSettings(next);
-                after();
-              }}
-              onDone={(problem) => after(problem)}
-            />
-          </>
-        ) : (
-          <div aria-hidden="true" className="skeleton" style={{ height: 300, margin: 14 }} />
-        )}
-      </section>
+      <aside className="tr-col tr-ctx" aria-label="Context">
+        <PriceCard market={shownMarket} run={shown} symbol={term?.symbol ?? null} />
+        <LevelsCard run={shown} />
+        <GuardrailsCard run={shown} />
+        <AlertsCard
+          coin={coin}
+          alerts={shownAlerts}
+          error={alertError}
+          onRemove={(id) => void removeAlert(id)}
+        />
+      </aside>
+
+      {sheet && term && live && (
+        <OrderSheet
+          key={sheet.n}
+          start={sheet}
+          terminal={term}
+          settings={live}
+          agentName={name}
+          onClose={() => setSheet(null)}
+          onPlaced={(note) => {
+            after(undefined, note);
+            const logged = sheet.choice;
+            if (logged)
+              chooseTicket(logged.runId, logged.choice).then(
+                (next) => setRun((r) => (r?.id === next.id ? next : r)),
+                (e: unknown) => setRunError(`Your choice wasn't logged: ${message(e)}`),
+              );
+          }}
+          onSettings={onSettings}
+          onSmartTrade={(side, at) => {
+            setSmartPrefill((p) => ({ side, price: at, n: (p?.n ?? 0) + 1 }));
+            setView("orders");
+          }}
+        />
+      )}
     </main>
   );
 }

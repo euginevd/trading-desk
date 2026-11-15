@@ -567,3 +567,288 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* The Profile's two tabs: My policy and Trading agent. */
+.pf-h1 {
+  margin: 0;
+}
+.pf-tabs {
+  gap: 20px;
+  padding: 0;
+}
+.pf-page .pf-tabs button {
+  min-height: 0;
+  border-radius: 0;
+  padding: 10px 0;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+}
+.pf-page .pf-tabs button[aria-selected="true"] {
+  border-bottom-color: var(--accent);
+}
+
+/* The trading agent tab (TODO 6). Prefixed ag-. */
+.ag-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px;
+  align-items: start;
+}
+.ag-sec {
+  padding: 16px;
+  margin-bottom: 12px;
+}
+.ag-sec h2 {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.ag-sec h3 {
+  margin: 12px 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.ag-sub {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ag-h2-gap {
+  margin-top: 16px;
+}
+.ag-note {
+  margin: 0 0 12px;
+}
+.ag-hint {
+  margin: 12px 0 0;
+  font-size: 12px;
+}
+.ag-skeleton {
+  height: 140px;
+  margin-bottom: 12px;
+}
+.ag-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+.ag-persona {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+.ag-ava {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex: none;
+}
+.ag-ava-lg {
+  width: 52px;
+  height: 52px;
+  font-size: 18px;
+}
+.ag-two {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.ag-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.ag-inp {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  padding: 8px 10px;
+  color: var(--text);
+  font: inherit;
+}
+.ag-inp:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.ag-inp::placeholder {
+  color: var(--dim);
+}
+.ag-brief {
+  min-height: 84px;
+  resize: vertical;
+}
+.ag-count {
+  margin: 4px 0 0;
+  font-size: 11px;
+  text-align: right;
+}
+.ag-select {
+  width: auto;
+  padding: 5px 8px;
+}
+.ag-opts {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.pf-page .ag-opt {
+  min-height: 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--bg);
+  text-align: left;
+}
+.pf-page .ag-opt.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.ag-opt small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.ag-lst {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ag-lst li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line);
+}
+.ag-lst li:first-child {
+  border-top: 0;
+}
+.ag-rm {
+  min-width: 24px;
+  min-height: 24px;
+  color: var(--dim);
+  font-size: 16px;
+}
+.ag-none {
+  margin: 0;
+  font-size: 12px;
+}
+.ag-add {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+.ag-steps th,
+.ag-steps td {
+  padding: 9px 8px;
+}
+.ag-steps th {
+  font-size: 11px;
+}
+.pf-page .ag-steps .toggle {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+}
+.ag-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 4px;
+  font-size: 12px;
+}
+.ag-row label {
+  color: var(--muted);
+}
+.ag-range {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.ag-save {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.ag-save .dim {
+  font-size: 12px;
+}
+.ag-vers {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pf-page .ag-ver {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 0;
+  padding: 8px;
+  border-radius: 7px;
+  border-color: transparent;
+  background: none;
+  text-align: left;
+  font-size: 12px;
+}
+.pf-page .ag-ver.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.pf-page .ag-ver:disabled {
+  opacity: 1;
+  cursor: default;
+}
+.ag-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+.ag-compare {
+  margin-top: 10px;
+}
+.ag-told {
+  white-space: pre-wrap;
+  font:
+    12px/1.5 ui-monospace,
+    Consolas,
+    monospace;
+  color: var(--muted);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+}
+
+@media (max-width: 1100px) {
+  .ag-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .ag-two {
+    grid-template-columns: 1fr;
+  }
+  .ag-persona {
+    align-items: flex-start;
+  }
+}

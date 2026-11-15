@@ -4,13 +4,51 @@ import { BotChart, type Level } from "./BotKit";
 import ConfirmCancel from "./ConfirmCancel";
 import CoinIcon from "./CoinIcon";
 import { amount as coinAmount, dateTime, price } from "./format";
-import { entryLevels } from "./KeyLevels";
 import type { Market, Order } from "./types";
 import { dragPanel, placed } from "./WidgetDetails";
 
 // An open order on the pair's chart (decision 43): where it sits against the price and the
 // levels that matter, how far the price has to move to fill it, and its price or amount
 // changed in one step.
+
+// The few levels that matter around an order: the nearest ceiling above the price and the
+// nearest floor below it (from resistance, support and yesterday's and last week's highs and
+// lows), and the day and week opens. Anything more than 10% away is left out.
+
+const NEAR = 10; // %
+const CEILINGS = ["Resistance", "Prev day high", "Prev week high"];
+const FLOORS = ["Support", "Prev day low", "Prev week low"];
+
+interface Lv {
+  name: string;
+  value: number;
+  price: string;
+}
+
+function entryLevels(market: Market): Lv[] {
+  const now = Number(market.price);
+  if (!(now > 0)) return [];
+  const all: Lv[] = [
+    ...(market.levels ?? []),
+    ...(market.indicators.support ? [{ name: "Support", price: market.indicators.support }] : []),
+    ...(market.indicators.resistance
+      ? [{ name: "Resistance", price: market.indicators.resistance }]
+      : []),
+  ]
+    .map((l) => ({ ...l, value: Number(l.price) }))
+    .filter((l) => l.value > 0 && Math.abs((l.value - now) / now) * 100 <= NEAR);
+  const nearest = (names: string[], above: boolean) =>
+    all
+      .filter((l) => names.includes(l.name) && (above ? l.value > now : l.value <= now))
+      .sort((a, b) => Math.abs(a.value - now) - Math.abs(b.value - now))[0];
+  const picked = [
+    nearest(CEILINGS, true),
+    nearest(FLOORS, false),
+    all.find((l) => l.name === "Week open"),
+    all.find((l) => l.name === "Day open"),
+  ].filter((l): l is Lv => l !== undefined);
+  return [...new Map(picked.map((l) => [l.name, l])).values()].sort((a, b) => b.value - a.value);
+}
 
 const two = new Intl.NumberFormat("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 

@@ -21,7 +21,7 @@ from decimal import Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from api.ai_signal import MAX_SEARCHES, MODEL, MODELS, Ask, SignalError, Signals
+from api.ai_signal import MODEL, MODELS, STEP, Ask, SignalError, Signals, chosen_model
 from api.audit import Audit
 from api.store import Store
 from api.trading import Refused
@@ -130,7 +130,7 @@ def subscription(query: Query | None = None, model: Callable[[], str] = lambda: 
                 "to use your Claude subscription."
             )
         try:
-            chosen = model() if model() in MODELS else MODEL
+            chosen = chosen_model(model)
             run = asyncio.wait_for(_run(query, system, text, shape, token, chosen), TIMEOUT_SECONDS)
             return asyncio.run(run) | {"_model": chosen}, Decimal(0)
         except TimeoutError:
@@ -162,16 +162,18 @@ async def _run(  # noqa: PLR0913, PLR0917 - the call's parts, each needed
     import claude_agent_sdk as sdk  # noqa: PLC0415 - only loaded for the subscription
 
     run = query or cast(Query, sdk.query)
+    searches = STEP.get().searches
+    tools = ["WebSearch"] if searches > 0 else []
     with tempfile.TemporaryDirectory(prefix="desk-claude-", ignore_cleanup_errors=True) as home:
         options = sdk.ClaudeAgentOptions(
             system_prompt=system,
             model=model,
-            tools=["WebSearch"],
-            allowed_tools=["WebSearch"],
+            tools=tools,
+            allowed_tools=tools,
             permission_mode="dontAsk",
             setting_sources=[],
             strict_mcp_config=True,
-            max_turns=MAX_SEARCHES + 4,
+            max_turns=searches + 4,
             effort="medium",
             output_format={"type": "json_schema", "schema": shape},
             cwd=home,

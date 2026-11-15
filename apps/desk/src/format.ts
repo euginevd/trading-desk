@@ -150,3 +150,22 @@ export function shortDate(isoDay: string): string {
     timeZone: TZ,
   });
 }
+
+// A time of day, as 8:12 pm, Sydney time.
+export function clock(ms: number): string {
+  return new Date(ms).toLocaleTimeString("en-AU", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: TZ,
+  });
+}
+
+// How long ago, in brief: "just now", "12 min ago", "2h ago", "3d ago".
+export function ago(ms: number, now: number): string {
+  const minutes = Math.round((now - ms) / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+}

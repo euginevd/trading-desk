@@ -689,166 +689,6 @@ td.r {
 }
 
 /* Trade (design-system 20) */
-.trade {
-  position: relative;
-  display: grid;
-  grid-template-columns: var(--col-left, 260px) minmax(0, 1fr);
-  grid-template-rows: auto 1fr;
-  gap: 1px;
-  background: var(--line);
-  min-height: calc(100vh - 56px);
-}
-.trade > section {
-  background: var(--bg);
-  min-width: 0;
-}
-.wl-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 14px 14px 10px;
-}
-.wl-add {
-  display: flex;
-  gap: 6px;
-  padding: 0 14px 10px;
-}
-.wl-add input {
-  flex: 1;
-  min-width: 0;
-  height: 36px;
-  border-radius: 8px;
-  border: 1px solid var(--line-2);
-  background: var(--panel);
-  padding: 0 10px;
-}
-.wl-add input::placeholder {
-  color: var(--dim);
-}
-.wl-note {
-  padding: 0 14px 10px;
-  font-size: 12px;
-}
-.wl-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.wl-pick {
-  flex: 1;
-  min-width: 0;
-  margin-right: 10px;
-  height: 32px;
-  padding: 0 8px;
-  border-radius: 8px;
-  border: 1px solid var(--line-2);
-  background: var(--panel);
-  font-weight: 600;
-}
-.wl {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.wl li {
-  display: flex;
-  align-items: center;
-  border-top: 1px solid var(--line);
-}
-.wl li.sel {
-  background: var(--panel);
-}
-.wl li.sel .wl-main {
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-.wl-main {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  background: none;
-  border: 0;
-  cursor: pointer;
-  text-align: left;
-  min-height: 52px;
-}
-.wl-main .n {
-  flex: 1;
-  min-width: 0;
-}
-.wl-rm {
-  width: 32px;
-  height: 32px;
-  margin-right: 6px;
-  border: 0;
-  background: none;
-  color: var(--dim);
-  cursor: pointer;
-  border-radius: 6px;
-}
-.wl-rm:hover {
-  color: var(--text);
-  background: var(--panel-2);
-}
-.budget {
-  padding: 12px 14px;
-  border-top: 1px solid var(--line);
-  font-size: 12px;
-}
-.mkt {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 28px;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--line);
-}
-.mkt .pair {
-  font-size: 18px;
-  font-weight: 600;
-}
-.mkt .s {
-  font-size: 11px;
-  color: var(--muted);
-}
-.chart-bar {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  padding: 8px 14px;
-  border-bottom: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--muted);
-}
-.chart-bar button {
-  background: none;
-  border: 0;
-  color: var(--muted);
-  padding: 4px 8px;
-  border-radius: 5px;
-  cursor: pointer;
-}
-.chart-bar button[aria-pressed="true"] {
-  color: var(--accent);
-}
-.chart-bar button.chart-reset {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--line-2);
-  border-radius: 6px;
-  color: var(--text);
-  font-weight: 500;
-  white-space: nowrap;
-}
-.chart-bar button.chart-reset:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-}
 .tv-chart {
   display: block;
   width: 100%;
@@ -865,75 +705,7 @@ td.r {
   border: 1px solid var(--line-2);
   border-radius: 6px;
 }
-.analysis {
-  border-top: 1px solid var(--line);
-  padding: 16px 18px;
-  display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
-  gap: 24px;
-}
-.verdict {
-  border-radius: var(--r);
-  padding: 16px;
-  border: 1px solid var(--line-2);
-  background: var(--panel);
-}
-.verdict .v {
-  font-size: 24px;
-  font-weight: 600;
-  margin-top: 2px;
-}
-.verdict .v.buy {
-  color: var(--up);
-}
-.verdict .v.wait {
-  color: var(--wait);
-}
-.verdict .v.sell {
-  color: var(--down);
-}
-.bar {
-  height: 4px;
-  background: var(--line-2);
-  border-radius: 2px;
-  margin-top: 10px;
-  overflow: hidden;
-}
-.bar > div {
-  height: 100%;
-  background: var(--accent);
-}
-.facts {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 1px;
-  background: var(--line);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 14px;
-}
-.facts div {
-  background: var(--panel);
-  padding: 10px 12px;
-}
-.facts b {
-  display: block;
-  font-weight: 500;
-  margin-top: 2px;
-}
-.why {
-  margin: 0;
-  padding-left: 16px;
-  color: var(--body);
-}
-.why li {
-  margin: 4px 0;
-}
 
-.form {
-  padding: 14px;
-}
 .seg {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -988,11 +760,6 @@ td.r {
   background: none;
   outline: none;
 }
-.hint {
-  font-size: 11px;
-  color: var(--accent);
-  margin-top: 6px;
-}
 .pcts {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1008,80 +775,15 @@ td.r {
   cursor: pointer;
   font-size: 12px;
 }
-.opt {
-  margin-top: 14px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 0 12px;
-}
-.opt summary {
-  cursor: pointer;
-  padding: 10px 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-.opt .field {
-  margin-top: 0;
-  margin-bottom: 12px;
-}
 .sum {
   border-top: 1px solid var(--line);
   margin-top: 16px;
   padding-top: 12px;
 }
-.cta {
-  width: 100%;
-  height: 44px;
-  border: 0;
-  border-radius: 8px;
-  margin-top: 14px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.cta.buy {
-  background: var(--up);
-  color: var(--buy-ink);
-}
-.cta.sell {
-  background: var(--down);
-  color: var(--sell-ink);
-}
-.cta:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-.note {
-  font-size: 11px;
-  color: var(--dim);
-  margin-top: 10px;
-}
 .error-text {
   font-size: 12px;
   color: var(--down);
   margin-top: 10px;
-}
-.limits {
-  border-top: 1px solid var(--line);
-  padding: 14px;
-}
-.limits .row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.limits .row .field {
-  min-width: 0;
-}
-.bottom {
-  border-top: 1px solid var(--line);
-}
-.mini {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--line);
 }
 
 dialog {
@@ -1118,13 +820,8 @@ dialog p {
 }
 
 @media (max-width: 1100px) {
-  .grid-stats,
-  .trade,
-  .analysis {
+  .grid-stats {
     grid-template-columns: minmax(0, 1fr);
-  }
-  .facts {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .tickers {
     display: none;
@@ -1342,103 +1039,6 @@ td.partial {
   font-size: 11px;
 }
 
-/* Column grips on the Trade page: an 8px hit area over the 1px divider, lit on hover or focus. */
-.col-grip {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 8px;
-  z-index: 3;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: col-resize;
-  touch-action: none;
-}
-.col-grip {
-  left: calc(var(--col-left, 260px) - 4px);
-}
-/* The watchlist runs the full height; the order form sits under the chart, its three parts side
-   by side where they fit, so the chart gets the page's width (design-system 20). */
-.trade > section[aria-label="Watchlist"] {
-  grid-row: span 2;
-}
-.trade > section[aria-label="Order form"] {
-  display: block;
-  background: var(--bg);
-}
-.col-grip::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 3px;
-  width: 2px;
-  background: transparent;
-  transition: background 120ms var(--ease);
-}
-.col-grip:hover::after,
-.col-grip:focus-visible::after,
-.resizing-x .col-grip::after {
-  background: var(--accent);
-}
-.col-grip:focus-visible {
-  outline: none;
-}
-body.resizing {
-  user-select: none;
-}
-body.resizing-x {
-  cursor: col-resize;
-}
-body.resizing-y {
-  cursor: row-resize;
-}
-/* The chart's height grip: an 8px bar under the chart, lit on hover, focus or drag. */
-.chart-box {
-  position: relative;
-}
-.row-grip {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -4px;
-  height: 8px;
-  z-index: 3;
-  padding: 0;
-  border: 0;
-  background: none;
-  cursor: row-resize;
-  touch-action: none;
-}
-.row-grip::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 3px;
-  height: 2px;
-  background: transparent;
-  transition: background 120ms var(--ease);
-}
-.row-grip:hover::after,
-.row-grip:focus-visible::after,
-.resizing-y .row-grip::after {
-  background: var(--accent);
-}
-.row-grip:focus-visible {
-  outline: none;
-}
-/* The chart is an iframe: let the drag pass over it. */
-body.resizing iframe {
-  pointer-events: none;
-}
-@media (max-width: 1100px) {
-  .col-grip {
-    display: none;
-  }
-}
-
 /* PnL by account: a compact table in the card. */
 .pnl-accounts {
   width: 100%;
@@ -1475,49 +1075,6 @@ body.resizing iframe {
   height: 28px;
   padding: 0 8px;
   text-align: right;
-}
-
-/* Key levels over the chart (decision 28): one quiet line, highest first, the price in its place;
-   above it in `down` (resistance), below in `up` (support). Scrolls sideways when narrow. */
-.key-levels {
-  display: flex;
-  gap: 6px;
-  margin: 0;
-  padding: 6px 14px;
-  list-style: none;
-  overflow-x: auto;
-  border-bottom: 1px solid var(--line);
-  font-size: 11px;
-  color: var(--dim);
-  white-space: nowrap;
-  scrollbar-width: none;
-}
-.key-levels li {
-  padding: 2px 8px;
-  border-radius: 5px;
-  background: var(--panel);
-}
-.key-levels b {
-  font-weight: 500;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-.key-levels em {
-  font-style: normal;
-  font-variant-numeric: tabular-nums;
-}
-.key-levels li.above em {
-  color: var(--dim);
-}
-.key-levels li.below em {
-  color: var(--dim);
-}
-.key-levels li.now {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.key-levels li.now b {
-  color: var(--accent);
 }
 
 /* Where a holding is kept, when it isn't Binance: a small tag after the coin (no Source column). */
@@ -2067,11 +1624,6 @@ tfoot td {
   padding: 6px 4px;
   font-size: 12px;
 }
-.form .row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
 
 /* Bots, consumer layout: the Create bot menu, table, details page and the bot chart. */
 .create-menu {
@@ -2321,49 +1873,6 @@ tfoot td {
 }
 .bot-table .row-actions .btn-small {
   padding: 0 8px;
-}
-
-/* The watchlist's header: the list name opens a menu; Analyse all beside it. */
-.wl-head {
-  position: relative;
-}
-.wl-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 1;
-  min-width: 0;
-  height: 36px;
-  padding: 0 4px;
-  border: 0;
-  background: none;
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  text-align: left;
-}
-.wl-title span {
-  color: var(--muted);
-  font-size: 11px;
-}
-.wl-analyse {
-  flex: none;
-}
-.wl-menu {
-  top: calc(100% + 2px);
-  width: 220px;
-}
-.wl-menu button {
-  justify-content: space-between;
-}
-.wl-menu button.on {
-  color: var(--accent);
-}
-.wl-menu hr {
-  margin: 6px 0;
-  border: 0;
-  border-top: 1px solid var(--line-2);
 }
 
 /* Smart trade: one-off DCA deals under the chart. */
@@ -2691,13 +2200,7 @@ dialog.detail-panel.in-place::backdrop {
   color: var(--text);
 }
 
-/* Audit fixes: levels wrap on a narrow screen; status in tables reads as text, not a button. */
-@media (max-width: 760px) {
-  .key-levels {
-    flex-wrap: wrap;
-    white-space: normal;
-  }
-}
+/* Audit fixes: status in tables reads as text, not a button. */
 .bot-table .dca-pill,
 .st-trades .dca-pill {
   height: auto;
@@ -2706,121 +2209,6 @@ dialog.detail-panel.in-place::backdrop {
   font-size: 11px;
   border-color: transparent;
   background: var(--panel-2);
-}
-
-/* The AI panel (decision 46). */
-.ai-panel {
-  padding: 14px;
-  border-top: 1px solid var(--line);
-}
-.ai-position {
-  margin: 0 0 12px;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-}
-.ai-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 20px;
-}
-.ai-verb {
-  font-size: 26px;
-  font-weight: 700;
-}
-.ai-horizons {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin-top: 12px;
-}
-.ai-horizons div {
-  display: grid;
-  gap: 2px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  background: var(--panel-2);
-  font-size: 12px;
-}
-.ai-rule {
-  margin: 8px 0 0;
-  font-size: 12px;
-}
-.ai-panel .kv {
-  padding: 6px 0;
-  border-bottom: 1px solid var(--line);
-  gap: 10px;
-}
-.ai-whatif-in {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-}
-.ai-whatif-in .in {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  height: 32px;
-  width: 120px;
-  padding: 0 8px;
-  border: 1px solid var(--line-2);
-  border-radius: 8px;
-  background: var(--panel);
-}
-.ai-whatif-in input {
-  width: 100%;
-  border: 0;
-  background: none;
-  outline: none;
-}
-.ai-why p {
-  margin: 0 0 6px;
-  color: var(--body);
-}
-.ai-why b {
-  display: inline-block;
-  width: 14px;
-}
-.ai-context {
-  margin: 10px 0;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--wait-soft);
-  background: var(--wait-soft);
-  font-size: 12px;
-}
-.ai-context p {
-  margin: 0;
-}
-.ai-alerts {
-  margin-top: 8px;
-  font-size: 12px;
-}
-.ai-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px;
-  margin-top: 16px;
-  font-size: 12px;
-}
-.ai-rules {
-  margin-top: 8px;
-  font-size: 12px;
-}
-.ai-rules-edit {
-  margin-top: 8px;
-}
-.ai-note {
-  margin: 8px 0 0;
-  font-size: 11px;
-}
-@media (max-width: 1000px) {
-  .ai-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Smart trade: spend in the quote or in coins; fields never spill out of the wizard. */
@@ -2848,16 +2236,6 @@ dialog.detail-panel.in-place::backdrop {
 .st-now {
   margin-top: 10px;
   font-size: 12px;
-}
-
-/* Level chips: neutral, the distance in words. */
-.key-levels li em {
-  color: var(--dim);
-  font-style: normal;
-}
-.key-levels li.above b,
-.key-levels li.below b {
-  color: var(--body);
 }
 
 /* Panels move by their title bar. */

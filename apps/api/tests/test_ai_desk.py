@@ -452,12 +452,17 @@ def test_a_full_watchlist_refuses_another_coin(
     assert "Portfolio is full at 10" in error["error"]
 
 
-def test_a_signal_runs_on_request_and_is_shown_on_the_watchlist(services: Any) -> None:
+def test_an_analyse_run_ends_in_a_call_shown_on_the_watchlist(services: Any) -> None:
     status, none = services("GET", "/signal", coin="SOL")
     assert status == 200
     assert none == {"signal": None}
-    status, ran = services("POST", "/signal", {"coin": "SOL"})
+    status, run = services("POST", "/analyse", {"coin": "SOL"})
     assert status == 200
+    for _ in range(10):  # bounded, so a regression fails rather than hangs
+        if run["status"] != "running":
+            break
+        run = services("POST", "/analyse/next", {"id": run["id"]})[1]
+    ran = {"signal": run["signal"]}
     assert ran["signal"]["verdict"] in ("Buy now", "Wait", "Avoid")
     _, view = services("GET", "/watchlist")
     sol = next(c for c in view["coins"] if c["coin"] == "SOL")

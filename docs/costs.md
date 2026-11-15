@@ -7,6 +7,7 @@ What the MVP costs to run on the owner's machine, for one user. Approximate mont
 1. Docker on the owner's machine: nothing.
 2. Binance API: nothing. Requests stay well inside Binance's weight limits: the portfolio on open and Refresh, prices every few seconds for 10 coins at most.
 3. Anthropic API, the AI signal (decision 16): Claude Opus 5.5 at $4 a million tokens in and $20 out, plus web search at $10 a thousand searches. One signal reads about 15,000 tokens (the prompt, indicators and search results), writes about 1,500 and searches up to 3 times: about $0.12. Ten coins, each run twice a day, is about $72 a month; once a day, about $36. The 4-hour cache and the $20 cap (spec 10) keep it in bounds: past the cap, Re-run says so and the last signal stays. Cut it with fewer searches, Claude Sonnet 5.5 at half the price, or a cheaper pass that only re-runs a coin when its price has moved.
+3a. The trading agent's Analyse (decision 60) replaces the signal: four Haiku 5.5 steps (about 5,000 tokens in and 700 out each, plus up to 3 searches) and an Opus 5.5 decision (about 12,000 in, 2,500 out) is about $0.13 a run, most of it the decision and the searches; bull against bear on Sonnet adds about $0.02. The page shows each run's own cost and an estimate on the agent profile; Analyse all is one Haiku call, under a cent.
 4. Taostats API: nothing on its free plan, at one read on open and Refresh.
 5. Frankfurter, the Australian dollar rate: nothing.
 

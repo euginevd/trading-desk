@@ -19,6 +19,7 @@ import httpx
 from api import (
     agents,
     ai_client,
+    analyse,
     coach,
     demo,
     env_file,
@@ -31,20 +32,20 @@ from api import (
     rebalance,
     tax,
     telegram,
+    trading_agent,
 )
-from api.advisor import futures, gather, history_candles, rules_of
+from api.advisor import futures, gather, rules_of
 from api.ai_client import capped, subscription, switched
 from api.ai_signal import Ask, SignalError, Signals, claude
 from api.ai_signin import SignIn
 from api.audit import Audit
-from api.binance import Binance, BinanceError
+from api.binance import Binance, BinanceError, plain
 from api.bots import Bots
 from api.deposits import amount_key
 from api.deposits import report as deposit_report
 from api.grid import Grids
 from api.icons import Icons
 from api.market import QUOTE, MarketError, coin_symbol, market
-from api.plan import track
 from api.profile_md import for_agents
 from api.sentiment import SentimentError, fear_and_greed, fear_and_greed_detail, market_global
 from api.service import CostRules, TradeCache, Wallet, fetch
@@ -660,30 +661,12 @@ def _coin(raw: object) -> str:
     return coin_symbol(raw).removesuffix(QUOTE)
 
 
-def _run_signal(s: Services, body: dict[str, Any]) -> dict[str, Any]:
-    n, _ = profile.current(s.store)
-    facts = _facts(s, _coin(body.get("coin"))) | {
-        "plan": for_agents(s.store),
-        "profileVersion": n,
-    }
-    return {"signal": _dated_signal(s, s.signals.run(facts, body.get("force") is True))}
-
-
 def _dated_signal(s: Services, signal: dict[str, Any] | None) -> dict[str, Any] | None:
     """A signal, marked out of date once the Profile has moved past the version it read."""
     if signal is None:
         return None
     n, _ = profile.current(s.store)
     return signal | {"outOfDate": signal.get("profileVersion") not in (None, n)}
-
-
-def _plan(s: Services, q: dict[str, str]) -> dict[str, Any]:
-    """The live half of the panel: position, what-if, rules, levels, track record, alerts."""
-    coin = _coin(q.get("coin", "BTC"))
-    facts = gather(s.binance, s.store, (s.portfolio or live_portfolio)(), coin)
-    history = s.store.signal_history(coin)
-    record = track(history, history_candles(s.binance, coin), int(time.time() * 1000))
-    return {**facts, "track": record, "alerts": s.store.alerts(coin)}
 
 
 def _add_alert(s: Services, b: dict[str, Any]) -> dict[str, Any]:
@@ -740,7 +723,139 @@ def _deposit_paid(s: Services, b: dict[str, Any]) -> dict[str, Any]:
     return {"amount": key, "aud": aud}
 
 
+def _coins(raw: object, s: Services) -> list[str]:
+    asked = [_coin(c) for c in str(raw or "").split(",") if c.strip()][:20]
+    return asked or sorted(s.store.watched_coins())
+
+
+def _lots(s: Services, coin: str) -> list[dict[str, Any]]:
+    """The coin's tax lots for Ellis, read only when Plan fit runs; none when the ledger
+    can't be read, since only that step needs them."""
+    if not trading_agent.current(s.store)[1]["steps"]["planfit"]["on"]:
+        return []
+    try:
+        return [lot for lot in _tax(s)["lots"] if lot["coin"] == coin]
+    except (Refused, SignalError, BinanceError, MarketError, httpx.HTTPError, KeyError):
+        return []
+    except InvalidOperation:
+        return []
+
+
+def _sellable(s: Services, facts: dict[str, Any]) -> str:
+    """The coin on Binance, less what open sells already hold: the most a sell ticket asks."""
+    coin = facts["coin"]
+    on_binance = sum(
+        (
+            Decimal(str(h.get("amount") or "0"))
+            for h in (s.portfolio or live_portfolio)()["holdings"]
+            if h["asset"] == coin and h.get("source", "Binance") == "Binance"
+        ),
+        Decimal(0),
+    )
+    selling = sum(
+        (Decimal(o["amount"]) for o in facts.get("openOrders", []) if o["side"] == "sell"),
+        Decimal(0),
+    )
+    return plain(max(on_binance - selling, Decimal(0)))
+
+
+def _analyse(s: Services, b: dict[str, Any]) -> dict[str, Any]:
+    coin = _coin(b.get("coin"))
+    facts = _facts(s, coin)
+    facts["sellable"] = _sellable(s, facts)
+    return analyse.start(s.store, s.audit, facts, _lots(s, coin), _now_ms())
+
+
+def _calls(s: Services, q: dict[str, str]) -> dict[str, Any]:
+    def dated(coin: str) -> dict[str, Any] | None:
+        return _dated_signal(s, s.signals.last(coin))
+
+    return {"calls": analyse.calls(_coins(q.get("coins"), s), dated)}
+
+
+def _rank(s: Services, b: dict[str, Any]) -> dict[str, Any]:
+    coins = _coins(",".join(map(str, b.get("coins") or [])), s)
+    prices = {t["coin"]: t for t in _tickers(s.binance, ",".join(coins))["tickers"]}
+    portfolio = (s.portfolio or live_portfolio)()
+    total = Decimal(portfolio["total"]["value"] or "0")
+    rows: list[dict[str, Any]] = []
+    for coin in coins:
+        last = _dated_signal(s, s.signals.last(coin))
+        value = sum(
+            (Decimal(h.get("value") or "0") for h in portfolio["holdings"] if h["asset"] == coin),
+            Decimal(0),
+        )
+        rows.append(
+            {
+                "coin": coin,
+                "change24h": prices.get(coin, {}).get("change24h"),
+                "sharePct": plain((value / total * 100).quantize(Decimal("0.1")))
+                if total
+                else None,
+                "lastCall": {
+                    "action": last["action"],
+                    "hoursAgo": round((_now_ms() - last["ranAt"]) / 3_600_000),
+                    "outOfDate": last["outOfDate"],
+                }
+                if last
+                else None,
+            }
+        )
+    return analyse.rank(s.signals, s.store, rows)
+
+
+def _agent_version(s: Services, q: dict[str, str]) -> dict[str, Any]:
+    try:
+        n = int(q.get("n", ""))
+    except ValueError:
+        raise Refused("No such version.") from None
+    return trading_agent.version(s.store, n)
+
+
+def _restore_agent(s: Services, b: dict[str, Any]) -> dict[str, Any]:
+    try:
+        n = int(str(b.get("n")))
+    except ValueError:
+        raise Refused("No such version.") from None
+    return trading_agent.restore(s.store, s.audit, n, _now_ms())
+
+
+def _import_agent(s: Services, b: dict[str, Any]) -> dict[str, Any]:
+    doc = trading_agent.parse(str(b.get("markdown") or ""))
+    return trading_agent.save(s.store, s.audit, doc, now=_now_ms(), summary_text="Imported")
+
+
+def _agent_markdown(s: Services) -> str:
+    n, doc = trading_agent.current(s.store)
+    return trading_agent.export(doc, n, _now_ms())
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
 SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
+    ("GET", "/agent"): lambda s, _q, _b: trading_agent.view(s.store),
+    ("PUT", "/agent"): lambda s, _, b: trading_agent.save(
+        s.store, s.audit, b.get("agent"), now=_now_ms()
+    ),
+    ("GET", "/agent/version"): lambda s, q, _b: _agent_version(s, q),
+    ("POST", "/agent/restore"): lambda s, _, b: _restore_agent(s, b),
+    ("GET", "/agent/export"): lambda s, _q, _b: {"markdown": _agent_markdown(s)},
+    ("POST", "/agent/import"): lambda s, _, b: _import_agent(s, b),
+    ("POST", "/analyse"): lambda s, _, b: _analyse(s, b),
+    ("POST", "/analyse/next"): lambda s, _, b: analyse.advance(
+        s.store, s.audit, s.signals, b.get("id"), _now_ms()
+    ),
+    ("GET", "/analyse/last"): lambda s, q, _b: {"run": analyse.last(s.store, _coin(q.get("coin")))},
+    ("GET", "/analyse/calls"): lambda s, q, _b: _calls(s, q),
+    ("POST", "/analyse/ask"): lambda s, _, b: analyse.ask(
+        s.store, s.signals, b.get("id"), b.get("question")
+    ),
+    ("POST", "/analyse/choice"): lambda s, _, b: analyse.choose(
+        s.store, s.audit, b.get("id"), b.get("choice")
+    ),
+    ("POST", "/analyse/rank"): lambda s, _, b: _rank(s, b),
     ("GET", "/deposits"): lambda s, q, _: _deposits(s, q),
     ("PUT", "/deposits/paid"): lambda s, _, b: _deposit_paid(s, b),
     ("GET", "/tickers"): lambda s, q, _: _tickers(s.binance, q.get("coins", "BTC,ETH,TAO")),
@@ -755,8 +870,6 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
             s, s.signals.last(coin_symbol(q.get("coin", "")).removesuffix(QUOTE))
         )
     },
-    ("POST", "/signal"): lambda s, _, b: _run_signal(s, b),
-    ("GET", "/plan"): lambda s, q, _: _plan(s, q),
     ("GET", "/risk"): lambda s, _q, _b: rules_of(s.store).view(),
     ("GET", "/alerts"): lambda s, q, _: {
         "alerts": s.store.alerts(_coin(q["coin"]) if q.get("coin") else None)

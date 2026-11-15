@@ -11,7 +11,9 @@ and order ids never reach the prompt (threat model R7).
 import json
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -97,8 +99,39 @@ No hype, no exclamation marks, no disclaimers, no tax advice."""
 Ask = Callable[[str, str, dict[str, Any]], tuple[dict[str, Any], Decimal]]
 
 
+@dataclass(frozen=True)
+class Step:
+    """One call's own model and web searches, for a step of the trading agent's run
+    (decision 60); None means the Settings page's model and the usual searches."""
+
+    model: str | None = None
+    searches: int = MAX_SEARCHES
+
+
+STEP: ContextVar[Step] = ContextVar("step", default=Step())  # noqa: B039 - frozen, never changed
+
+
+@contextmanager
+def step_call(model: str | None, searches: int) -> Generator[None]:
+    """Every Ask inside runs on `model`, with at most `searches` web searches."""
+    token = STEP.set(Step(model, searches))
+    try:
+        yield
+    finally:
+        STEP.reset(token)
+
+
+def chosen_model(model: Callable[[], str]) -> str:
+    picked = STEP.get().model or model()
+    return picked if picked in MODELS else MODEL
+
+
 class SignalError(Exception):
     """A signal the desk can't give; the message says why, in plain words."""
+
+
+class CapReached(SignalError):
+    """This month's AI spend is at its cap."""
 
 
 def schema(facts: dict[str, Any]) -> dict[str, Any]:
@@ -361,7 +394,7 @@ class Signals:
         """A short piece of writing for the desk (the coach's messages), through the same
         provider, cap and audit log as the plans."""
         if self._capped() and self.spent() >= self._cap:
-            raise SignalError("This month's AI spend has reached its cap.")
+            raise CapReached("This month's AI spend has reached its cap.")
         try:
             reply, cost = self._ask(system, text, shape)
         except SignalError as error:
@@ -371,7 +404,7 @@ class Signals:
         reply.pop("_model", None)
         self._store.set_setting(self._month_key(), plain(self.spent() + cost))
         self._audit.record("signal", f"Claude: {label} via {via}", f"about ${cost:.3f}")
-        return reply
+        return reply | ({"_cost": plain(cost)} if STEP.get().model else {})
 
     def last(self, coin: str) -> dict[str, Any] | None:
         """The last signal for a coin, with when it ran; never calls Claude."""
@@ -384,19 +417,36 @@ class Signals:
         signal["stale"] = self._now() - ran > KEEP_MS
         return signal
 
-    def run(self, facts: dict[str, Any], force: bool) -> dict[str, Any]:
+    def step(  # noqa: PLR0913 - one call's parts, each needed
+        self,
+        system: str,
+        text: str,
+        shape: dict[str, Any],
+        label: str,
+        *,
+        model: str,
+        searches: int,
+    ) -> tuple[dict[str, Any], Decimal, str]:
+        """One step of the trading agent's run (decision 60), on its own model, through the same
+        provider, cap and audit log as the plans: the reply, its cost and the model's name."""
+        with step_call(model, searches):
+            reply = self.write(system, text, shape, label)
+        cost = Decimal(str(reply.pop("_cost", "0")))
+        return reply, cost, MODELS[model].name
+
+    def run(self, facts: dict[str, Any], force: bool, system: str = SYSTEM) -> dict[str, Any]:
         coin = facts["coin"]
         kept = self.last(coin)
         if kept is not None and not kept["stale"] and not force:
             return kept
         if self._capped() and self.spent() >= self._cap:
             self._audit.record("signal", f"Claude: signal {coin}", "Refused: monthly cap reached")
-            raise SignalError(
+            raise CapReached(
                 f"This month's AI spend has reached its ${self._cap:,.2f} cap. "
                 "Raise AI_MONTHLY_CAP_USD in .env to run more signals."
             )
         try:
-            reply, cost = self._ask(SYSTEM, prompt(facts), schema(facts))
+            reply, cost = self._ask(system, prompt(facts), schema(facts))
         except SignalError as error:
             self._audit.record("signal", f"Claude: signal {coin}", f"Failed: {error}")
             raise
@@ -428,7 +478,7 @@ def claude(client: Any, model: Callable[[], str] = lambda: MODEL) -> Ask:
 
     def ask(system: str, text: str, shape: dict[str, Any]) -> tuple[dict[str, Any], Decimal]:
         messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
-        chosen = model() if model() in MODELS else MODEL
+        chosen = chosen_model(model)
         cost = Decimal(0)
         response: Any = None
         for _ in range(3):  # a long search turn can pause; send it back to carry on
@@ -457,19 +507,19 @@ def _create(
     """One call, with the SDK's errors turned into words the owner can act on."""
     import anthropic  # noqa: PLC0415 - only needed with a key
 
+    searches = STEP.get().searches
+    tools = (
+        [{"type": MODELS[model].search, "name": "web_search", "max_uses": searches}]
+        if searches > 0
+        else []
+    )
     try:
         return client.beta.messages.create(
             model=model,
             max_tokens=16000,
             system=system,
             messages=messages,
-            tools=[
-                {
-                    "type": MODELS[model].search,
-                    "name": "web_search",
-                    "max_uses": MAX_SEARCHES,
-                }
-            ],
+            tools=tools,
             output_config={
                 "effort": "medium",
                 "format": {"type": "json_schema", "schema": shape},

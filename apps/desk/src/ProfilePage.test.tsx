@@ -145,6 +145,7 @@ const api = {
   getProfileVersion: vi.fn(),
   restoreProfile: vi.fn(),
   getScorecard: vi.fn(),
+  getTradingAgent: vi.fn(),
 };
 vi.mock("./api", () => ({
   getProfilePage: () => api.getProfilePage(),
@@ -159,6 +160,12 @@ vi.mock("./api", () => ({
   importProfile: vi.fn(),
   exportProfile: vi.fn(),
   reviewAllocation: vi.fn(),
+  getTradingAgent: () => api.getTradingAgent(),
+  saveTradingAgent: vi.fn(),
+  getTradingAgentVersion: vi.fn(),
+  restoreTradingAgent: vi.fn(),
+  exportTradingAgent: vi.fn(),
+  importTradingAgent: vi.fn(),
 }));
 
 const { default: Profile } = await import("./ProfilePage");
@@ -331,6 +338,18 @@ describe("Profile", () => {
     expect(await screen.findByRole("alert")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByRole("heading", { name: "Rules" })).toBeTruthy();
+  });
+
+  it("keeps the policy and the trading agent on two tabs", async () => {
+    api.getTradingAgent.mockRejectedValue(new Error("Your trading agent couldn't be read."));
+    render(<Profile />);
+    expect(screen.getByRole("tab", { name: "My policy" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    expect(await screen.findByRole("button", { name: "Version history, now v14" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "Trading agent" }));
+    expect(await screen.findByText("Your trading agent couldn't be read.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Version history, now v14" })).toBeNull();
   });
 });
 

@@ -40,9 +40,10 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 ## Components
 
 11. Button (secondary on `panel-2`, primary on `accent`, buy on `up`, sell on `down`), Input with a unit on the right, segmented Buy/Sell, Tabs with an accent underline, Table, Tag (Buy, Sell, Buy now, Wait, Avoid), Pill (connection and kill switch), Card, Dialog for the confirm step, Toast and Skeleton. Anything new is built from these and added here once settled.
-12. One primary button per view: the order button on Trade, Create on a bot page.
+12. One primary button per view: Analyse on Trade (then Use this order on the ticket), Create on a bot page.
 13. Coin mark: the coin's own logo, 24px (decision 25); its letters on `panel-2` when there's none.
 13a. Rule-break banner (red, Keep to my rules first, Place anyway (logged) set apart), an Out of date tag (`wait`), and agent cards with an initials avatar, the Coordinator leading (decisions 58, 59).
+13b. The trading agent: a run as a numbered timeline (done, working, skipped, failed, each with its model and cost), a ticket edged in `accent`, and Agent and Profile versions stamped on every call (decision 60).
 
 ## Not this
 
@@ -58,6 +59,6 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 
 18. Locale: Australian English. Money follows the header's currency toggle (AUD, USD, INR, BTC); dates as 13 Nov 2026, times in am and pm, Sydney time. Money shows 2 decimal places, except the Dashboard's balances table, rounded to stay sleek ([details](design-system/screens.md#balances)). A coin amount elsewhere shows up to 8 places, trailing zeros dropped.
 19. Shell: a 232px side panel that folds to a 64px icon strip, with Dashboard, Trade, the Bots section, and at its foot the connection pills and the kill switch, always in view (spec 10). A slim header carries BTC, BTC dominance, market cap, the total and the currency toggle. Details: [design-system/screens.md](design-system/screens.md#shell).
-20. Screens: Dashboard widgets that open details in place; DCA and grid bots as a table and a page per bot; Trade as watchlist, chart and order form. Destructive actions are red, set apart, and confirmed in a dialog whose default is to keep. Details: [design-system/screens.md](design-system/screens.md#screens).
-21. Charts: the Trade page shows TradingView's Advanced Chart in the dark theme on the desk's `bg` and `line` colours, with its details panel and no volume bars, 560px tall by default (the owner found a full-window chart too big) and resizable from 320 to 1200px by a grip along its bottom edge (drag, arrow keys, double-click to reset, remembered per browser). A Reset chart button, outlined with an icon, reloads the frame, since its right-click menu isn't reachable from the desk.
+20. Screens: Dashboard widgets that open details in place; DCA and grid bots as a table and a page per bot; Trade as the agent's workspace: coins with their last calls, the run's steps and ticket, and context beside it, the order form a sheet (decision 60). Destructive actions are red, set apart, and confirmed in a dialog whose default is to keep. Details: [design-system/screens.md](design-system/screens.md#screens).
+21. Charts: the Trade page shows a compact 4-hour line with the agent's add zone, no-chase and invalidation drawn on it; Full chart opens TradingView's Advanced Chart in a dialog, in the dark theme on the desk's `bg` and `line` colours, framed from TradingView's own site (decision 22).
 22. Status: Connected (dot, `up`), Stale, for data older than ten minutes (dot, `wait`), Disconnected (dot, `down`). Verdicts: Buy now (`up`), Wait (`wait`), Avoid (`down`). Smart trades keep their states from decision 12: Waiting for entry, Protected, Needs exits, Closed at take-profit, Closed at stop-loss and Cancelled. The kill switch: Trading on (`up`) or Trading off (`down`).

@@ -23,7 +23,6 @@ import type {
   OrderRequest,
   Portfolio,
   Settings,
-  Signal,
   SmartTrade,
   SmartTradeRequest,
   Terminal,
@@ -32,8 +31,6 @@ import type {
   FyDeposits,
   Sentiment,
   SentimentDetail,
-  PlanFacts,
-  PriceAlert,
   MarketGlobal,
   DcaBots,
   DcaPreview,
@@ -46,6 +43,14 @@ import type {
   GridPreview,
   GridRequest,
   LadderRequest,
+  AgentCall,
+  AgentDoc,
+  AgentPage,
+  AgentRun,
+  AgentVersion,
+  CoinRank,
+  PriceAlert,
+  TicketChoice,
 } from "./types";
 
 export class ApiError extends Error {
@@ -125,8 +130,6 @@ export const getMarket = (coin: string, interval: Interval) =>
     "GET",
     `/market?symbol=${encodeURIComponent(coin)}&interval=${encodeURIComponent(interval)}`,
   );
-export const runSignal = (coin: string, force: boolean) =>
-  call<{ signal: Signal }>("POST", "/signal", { coin, force });
 export const placeOrder = (request: OrderRequest) =>
   call<{ message: string }>("POST", "/orders", request);
 // The owner's average cost for a holding with no trades here; null clears it (decision 27).
@@ -184,18 +187,6 @@ export const editOrder = (request: {
   amount: string;
   clientId: string;
 }) => call<{ message: string; orderId: number }>("POST", "/orders/edit", request);
-
-// The AI panel's live facts, the owner's risk rules and price alerts (decision 46).
-export const getPlan = (coin: string) =>
-  call<PlanFacts>("GET", `/plan?coin=${encodeURIComponent(coin)}`);
-export const addAlert = (alert: {
-  coin: string;
-  direction: "above" | "below";
-  price: string;
-  note: string;
-}) => call<{ alerts: PriceAlert[] }>("POST", "/alerts", alert);
-export const deleteAlert = (id: number) =>
-  call<{ alerts: PriceAlert[] }>("DELETE", `/alerts/${id}`, {});
 
 // The coach and the agents (decisions 52 and 59).
 export const getCoach = () => call<Coach>("GET", "/coach");
@@ -257,3 +248,38 @@ export const getScorecard = () =>
   call<{ windows: Record<string, ScoreRow[]> }>("GET", "/profile/scorecard");
 export const getRecaps = () => call<{ recaps: Recap[] }>("GET", "/recaps");
 export const writeRecap = () => call<{ recap: Recap }>("POST", "/recaps", {});
+
+// The trading agent (TODO 6): its profile, versioned like the Profile, and Analyse runs.
+export const getTradingAgent = () => call<AgentPage>("GET", "/agent");
+export const saveTradingAgent = (agent: AgentDoc) => call<AgentPage>("PUT", "/agent", { agent });
+export const getTradingAgentVersion = (n: number) =>
+  call<AgentVersion>("GET", `/agent/version?n=${encodeURIComponent(n)}`);
+export const restoreTradingAgent = (n: number) => call<AgentPage>("POST", "/agent/restore", { n });
+export const exportTradingAgent = () => call<{ markdown: string }>("GET", "/agent/export");
+export const importTradingAgent = (markdown: string) =>
+  call<AgentPage>("POST", "/agent/import", { markdown });
+
+// Analyse: start a run, then ask for one step at a time until it isn't running.
+export const startAnalysis = (coin: string) => call<AgentRun>("POST", "/analyse", { coin });
+export const nextAnalysisStep = (id: number) => call<AgentRun>("POST", "/analyse/next", { id });
+export const getLastAnalysis = (coin: string) =>
+  call<{ run: AgentRun | null }>("GET", `/analyse/last?coin=${encodeURIComponent(coin)}`);
+export const getAnalysisCalls = () => call<{ calls: AgentCall[] }>("GET", "/analyse/calls");
+export const askAnalysis = (id: number, question: string) =>
+  call<AgentRun>("POST", "/analyse/ask", { id, question });
+export const chooseTicket = (id: number, choice: TicketChoice) =>
+  call<AgentRun>("POST", "/analyse/choice", { id, choice });
+export const rankCoins = (coins: string[]) =>
+  call<{ ranked: CoinRank[]; cost: string }>("POST", "/analyse/rank", { coins });
+
+// Price alerts (decision 46), set from the agent's Watch for lines.
+export const getAlerts = (coin: string) =>
+  call<{ alerts: PriceAlert[] }>("GET", `/alerts?coin=${encodeURIComponent(coin)}`);
+export const addAlert = (alert: {
+  coin: string;
+  direction: "above" | "below";
+  price: string;
+  note: string;
+}) => call<{ alerts: PriceAlert[] }>("POST", "/alerts", alert);
+export const deleteAlert = (id: number) =>
+  call<{ alerts: PriceAlert[] }>("DELETE", `/alerts/${id}`, {});

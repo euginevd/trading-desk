@@ -186,13 +186,116 @@ export interface Signal {
 
 export type PlanAction = "Buy" | "Add" | "Hold" | "Trim" | "Sell" | "Wait";
 
-// The Profile's three risk rules; null where the owner hasn't set one (decision 58).
-export interface RiskRules {
-  maxCoinPct: string | null;
-  tradeBudgetAud: string | null;
-  maxLossPct: string | null;
+// The trading agent (TODO 6): its versioned profile, and a run of Analyse on one coin.
+export type AgentStepKey = "macro" | "technical" | "planfit" | "debate" | "risk" | "decision";
+export type AgentStyle = "careful" | "balanced" | "opportunistic";
+export type AgentFocus = "dca" | "swing" | "both";
+export type AgentAutonomy = "advise" | "propose";
+
+export interface AgentDoc {
+  name: string;
+  title: string;
+  style: AgentStyle;
+  focus: AgentFocus;
+  brief: string;
+  always: string[];
+  never: string[];
+  confidenceFloor: number;
+  autonomy: AgentAutonomy;
+  steps: Record<AgentStepKey, { on: boolean; model: string }>;
 }
 
+export interface AgentPage {
+  version: number; // 0 until the first save: the defaults
+  time: number | null;
+  agent: AgentDoc;
+  history: { n: number; time: number; author: string; summary: string }[]; // newest first
+  told: string;
+  estimate: string; // US$ a run
+  models: { id: string; name: string }[];
+  steps: { key: AgentStepKey; title: string; who: string; fixed: boolean }[];
+}
+
+export interface AgentVersion {
+  n: number;
+  agent: AgentDoc;
+  changes: { label: string; from: string; to: string }[]; // from that version to the current
+}
+
+export interface RunStep {
+  key: "brief" | AgentStepKey;
+  title: string;
+  who: string;
+  model: string | null;
+  status: "pending" | "done" | "skipped" | "failed";
+  summary: string;
+  points: string[];
+  events: { when: string; what: string }[];
+  cost: string;
+  note: string | null;
+}
+
+export interface AgentTicket {
+  side: "buy" | "sell";
+  price: string;
+  qty: string;
+  totalUsd: string;
+  totalAud: string;
+  breaks: RuleBreak[]; // empty: within the Profile
+}
+
+export type TicketChoice = "used" | "edited" | "dismissed";
+
+export interface AgentRun {
+  id: number;
+  coin: string;
+  started: number;
+  finished: number | null;
+  status: "running" | "done" | "stopped";
+  agentVersion: number;
+  profileVersion: number;
+  cost: string;
+  agent: { name: string; title: string; autonomy: string };
+  price: string;
+  change24h: string;
+  position: {
+    held: boolean;
+    qty: string;
+    avgCost: Num;
+    value: string;
+    pnlPct: Num;
+    weightPct: Num;
+  };
+  cashUsd: string;
+  levels: { id: string; price: string; source: string; awayPct: Num }[];
+  guardrails: {
+    capAud: Num;
+    monthSpentAud: string;
+    maxPctPerCoin: Num;
+    sharePct: Num;
+    perTradeAud: Num;
+    minCashAud: Num;
+    audPerUsd: string;
+  };
+  steps: RunStep[];
+  signal: Signal | null;
+  ticket: AgentTicket | null;
+  noTicket: string | null;
+  choice: TicketChoice | null;
+  asks: { q: string; a: string }[];
+  outOfDate: boolean;
+  busy?: boolean; // another request holds the step: nothing was run
+}
+
+export interface AgentCall {
+  coin: string;
+  action: string;
+  confidence: number;
+  ranAt: number;
+  outOfDate: boolean;
+}
+
+// A price alert on a coin (decision 46): sent to Telegram when the price crosses it.
 export interface PriceAlert {
   id: number;
   coin: string;
@@ -203,40 +306,10 @@ export interface PriceAlert {
   triggered: number | null;
 }
 
-// The live half of the AI panel: everything worked out in code (decision 46).
-export interface PlanFacts {
+export interface CoinRank {
   coin: string;
-  pair: string;
-  quote: string;
-  price: string;
-  position: {
-    held: boolean;
-    qty: string;
-    avgCost: Num;
-    invested: Num;
-    value: Num;
-    pnl: Num;
-    pnlPct: Num;
-    weightPct: Num;
-  };
-  cash: Num;
-  total: Num;
-  audPerUsd: string;
-  rules: RiskRules;
-  whatIf: {
-    amount: Num;
-    price: string;
-    newAvg: Num;
-    breakEvenBefore: Num;
-    breakEvenAfter: Num;
-    weightBefore: Num;
-    weightAfter: Num;
-    cashLeft: Num;
-  };
-  checks: { canAdd: boolean; pastMaxLoss: boolean; notes: string[] };
-  levels: { id: string; price: string; source: string; awayPct: Num }[];
-  track: { scored: number; correct: number; hours: number };
-  alerts: PriceAlert[];
+  priority: "high" | "medium" | "low";
+  reason: string;
 }
 
 export interface WatchedCoin {

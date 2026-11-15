@@ -130,6 +130,13 @@ CREATE TABLE IF NOT EXISTS profile_versions (
     n INTEGER PRIMARY KEY, time INTEGER NOT NULL, author TEXT NOT NULL,
     summary TEXT NOT NULL, reason TEXT NOT NULL, doc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS agent_versions (
+    n INTEGER PRIMARY KEY, time INTEGER NOT NULL, author TEXT NOT NULL,
+    summary TEXT NOT NULL, doc TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS agent_runs (
+    id INTEGER PRIMARY KEY, coin TEXT NOT NULL, started INTEGER NOT NULL, doc TEXT NOT NULL
+);
 """
 FIELDS = (
     "status",
@@ -159,6 +166,10 @@ class Store:
         # The Markdown made from the Profile on each save, beside the database it came from.
         self.profile_md = path.parent / (
             "profile.md" if path.stem == "desk" else f"{path.stem}-profile.md"
+        )
+        # The same for the trading agent's profile (decision 60).
+        self.agent_md = path.parent / (
+            "agent.md" if path.stem == "desk" else f"{path.stem}-agent.md"
         )
 
     def close(self) -> None:
@@ -639,3 +650,65 @@ class Store:
     def latest_profile(self) -> dict[str, Any] | None:
         row = self._db.execute("SELECT * FROM profile_versions ORDER BY n DESC LIMIT 1").fetchone()
         return dict(row) if row else None
+
+    # The trading agent's versions and runs (decision 60).
+
+    def add_agent_version(self, now_ms: int, author: str, summary: str, doc: str) -> int:
+        with self._db:
+            cursor = self._db.execute(
+                "INSERT INTO agent_versions (time, author, summary, doc) VALUES (?, ?, ?, ?)",
+                (now_ms, author, summary, doc),
+            )
+        return int(cursor.lastrowid or 0)
+
+    def agent_versions(self) -> list[dict[str, Any]]:
+        """Every version, oldest first, each with its document."""
+        rows = self._db.execute("SELECT * FROM agent_versions ORDER BY n")
+        return [dict(r) for r in rows]
+
+    def agent_version(self, n: int) -> dict[str, Any] | None:
+        row = self._db.execute("SELECT * FROM agent_versions WHERE n = ?", (n,)).fetchone()
+        return dict(row) if row else None
+
+    def latest_agent(self) -> dict[str, Any] | None:
+        row = self._db.execute("SELECT * FROM agent_versions ORDER BY n DESC LIMIT 1").fetchone()
+        return dict(row) if row else None
+
+    def add_run(self, coin: str, now_ms: int, doc: str) -> int:
+        with self._db:
+            cursor = self._db.execute(
+                "INSERT INTO agent_runs (coin, started, doc) VALUES (?, ?, ?)", (coin, now_ms, doc)
+            )
+        return int(cursor.lastrowid or 0)
+
+    def save_run(self, run_id: int, doc: str) -> None:
+        with self._db:
+            self._db.execute("UPDATE agent_runs SET doc = ? WHERE id = ?", (doc, run_id))
+
+    def run(self, run_id: int) -> str | None:
+        row = self._db.execute("SELECT doc FROM agent_runs WHERE id = ?", (run_id,)).fetchone()
+        return str(row["doc"]) if row else None
+
+    def last_run(self, coin: str) -> int | None:
+        row = self._db.execute(
+            "SELECT id FROM agent_runs WHERE coin = ? ORDER BY id DESC LIMIT 1", (coin,)
+        ).fetchone()
+        return int(row["id"]) if row else None
+
+    def claim_run(self, run_id: int, now_ms: int, stale_ms: int) -> bool:
+        """Takes the run's next step for this request; False while another request has it. A
+        claim older than `stale_ms` is from a request that died, and is taken over."""
+        key = f"run_claim_{run_id}"
+        with self._db:
+            self._db.execute(
+                "DELETE FROM settings WHERE key = ? AND CAST(value AS INTEGER) < ?",
+                (key, now_ms - stale_ms),
+            )
+            cursor = self._db.execute(
+                "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, str(now_ms))
+            )
+        return cursor.rowcount == 1
+
+    def release_run(self, run_id: int) -> None:
+        with self._db:
+            self._db.execute("DELETE FROM settings WHERE key = ?", (f"run_claim_{run_id}",))

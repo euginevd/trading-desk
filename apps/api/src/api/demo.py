@@ -285,8 +285,11 @@ def history(store: "Store", today: str, value: str) -> None:
 
 def ask(system: str, prompt: str, shape: dict[str, Any]) -> tuple[dict[str, Any], Decimal]:
     """A made-up plan from the facts in the prompt, so demo mode needs no Anthropic key."""
-    del system, shape
+    del system
     import json  # noqa: PLC0415 - demo only
+
+    if "action" not in shape.get("properties", {}):
+        return filled(shape), Decimal(0)
 
     facts = json.loads(prompt.split("\n", 3)[3])
     trend = facts["frames"]["4h"]["trend"]
@@ -316,6 +319,26 @@ def ask(system: str, prompt: str, shape: dict[str, Any]) -> tuple[dict[str, Any]
         "summary": "Demo mode: a made-up plan from the computed facts.",
     }
     return reply, Decimal(0)
+
+
+def filled(shape: dict[str, Any]) -> Any:  # noqa: PLR0911 - one return per kind
+    """A made-up reply of any shape: the trading agent's steps in demo mode."""
+    kind = shape.get("type")
+    if "enum" in shape:
+        return shape["enum"][len(shape["enum"]) // 2]
+    if kind == "object":
+        return {k: filled(v) for k, v in shape.get("properties", {}).items()}
+    if kind == "array":
+        item = shape.get("items", {})
+        if item.get("type") == "object" and "enum" in item.get("properties", {}).get("coin", {}):
+            return [
+                {"coin": c, "priority": "medium", "reason": "Demo mode: made up."}
+                for c in item["properties"]["coin"]["enum"]
+            ]
+        return [filled(item)]
+    if kind == "integer":
+        return 60
+    return "Demo mode: a made-up note."
 
 
 def sentiment_detail() -> dict[str, Any]:

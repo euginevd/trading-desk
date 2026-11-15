@@ -24,6 +24,7 @@ Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 5
 | 62 | Pre-trade check (decision 58): a buy or smart trade breaking a set Profile rule shows a red banner and needs "Place anyway (logged)" | Done | |
 | 63 | Dashboard: a refresh button, the five-person agent team (decision 59), the weekly recap with past recaps, and Out of date marks | Done | |
 | 64 | Settings shows the provider and model in use, providers as cards with their own status; Portfolio's allocation legend as coin icons | Done | |
+| 65 | Trading agent (decision 60): a versioned agent profile on the Profile page (persona, style, brief, steps and models, floor, autonomy, compare, restore, agent.md); Analyse runs one coin step by step (brief, macro and events, technicals, plan fit and tax, bull against bear, risk, decision) and proposes an order to use, edit or dismiss; the Trade page rebuilt around it, with follow-up questions, Analyse all, a compact chart, guardrails and price alerts | Done | |
 
 ## `api`
 

@@ -14,6 +14,7 @@ import {
 import { audText, dayOf, dayText, SECTIONS } from "./profileFields";
 import { Card, CheckTag, Editor, SectionView, SuggestionDiff } from "./ProfileCards";
 import { AllocationReview, HistoryDrawer, Scorecard, WhatIf } from "./ProfileTools";
+import AgentProfile from "./AgentProfile";
 import type { CommandReply, ProfileDoc, ProfilePage as Page, ProfileSection } from "./types";
 import "./profile.css";
 
@@ -35,7 +36,43 @@ const CHIPS: { label: string; fill?: string; ask?: string; edit?: ProfileSection
   { label: "Monthly check-in", ask: "Monthly check-in: how did this month go against my Profile?" },
 ];
 
+type Tab = "policy" | "agent";
+const TABS: { tab: Tab; label: string }[] = [
+  { tab: "policy", label: "My policy" },
+  { tab: "agent", label: "Trading agent" },
+];
+
+// Two tabs: the owner's policy, and the trading agent who works inside it (#/profile?tab=agent).
 export default function ProfilePage() {
+  const [tab, setTab] = useState<Tab>(() =>
+    window.location.hash.includes("tab=agent") ? "agent" : "policy",
+  );
+  return (
+    <main className="wrap pf-page">
+      <h1 className="pf-h1">Profile</h1>
+      <div className="tabs pf-tabs" role="tablist" aria-label="Profile">
+        {TABS.map((t) => (
+          <button
+            key={t.tab}
+            id={`pf-tab-${t.tab}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.tab}
+            aria-controls="pf-tabpanel"
+            onClick={() => setTab(t.tab)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div id="pf-tabpanel" className="pf-page" role="tabpanel" aria-labelledby={`pf-tab-${tab}`}>
+        {tab === "policy" ? <Policy /> : <AgentProfile />}
+      </div>
+    </main>
+  );
+}
+
+function Policy() {
   const [page, setPage] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<{
@@ -62,29 +99,26 @@ export default function ProfilePage() {
 
   if (error && !page) {
     return (
-      <main className="wrap pf-page">
+      <>
         <p className="error-text" role="alert">
           {error}
         </p>
         <button type="button" onClick={load}>
           Try again
         </button>
-      </main>
+      </>
     );
   }
   if (!page) {
     return (
-      <main className="wrap pf-page" aria-busy="true">
-        <div className="pf-title">
-          <h1>Profile</h1>
-        </div>
+      <div className="pf-page" aria-busy="true">
         <div className="pf-strip">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="card pf-skeleton" />
           ))}
         </div>
         <p className="muted">Loading your Profile…</p>
-      </main>
+      </div>
     );
   }
 
@@ -134,9 +168,8 @@ export default function ProfilePage() {
     page.suggestions.filter((s) => s.changes.some((c) => c.section === section));
 
   return (
-    <main className="wrap pf-page">
+    <>
       <div className="pf-title">
-        <h1>Profile</h1>
         <button
           type="button"
           className="pf-version"
@@ -265,7 +298,7 @@ export default function ProfilePage() {
 
       <AllocationReview review={page.planner} onDone={load} />
       <WhatIf page={page} />
-    </main>
+    </>
   );
 }
 
