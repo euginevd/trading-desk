@@ -1,4 +1,15 @@
 import type {
+  Drift,
+  JournalData,
+  SellCheck,
+  TaxReport,
+  TelegramSettings,
+  AgentThread,
+  Coach,
+  PlanSection,
+  TradingPlan,
+  AiMode,
+  AiSettings,
   Interval,
   Market,
   OrderRequest,
@@ -15,7 +26,6 @@ import type {
   SentimentDetail,
   PlanFacts,
   PriceAlert,
-  RiskRules,
   MarketGlobal,
   DcaBots,
   DcaPreview,
@@ -63,6 +73,14 @@ export const getSentimentDetail = () => call<SentimentDetail>("GET", "/sentiment
 export const getTerminal = (symbol: string) =>
   call<Terminal>("GET", `/trade?symbol=${encodeURIComponent(symbol)}`);
 export const getSettings = () => call<Settings>("GET", "/settings");
+export const getAiSettings = () => call<AiSettings>("GET", "/settings/ai");
+export const setAiSettings = (mode: AiMode, fallback: boolean, model: string) =>
+  call<AiSettings>("PUT", "/settings/ai", { mode, fallback, model });
+// Credentials go to .env through the api and never come back (decision 51).
+export const saveAiKey = (key: string) => call<AiSettings>("PUT", "/settings/ai/key", { key });
+export const startSignIn = () => call<{ url: string }>("POST", "/settings/ai/signin", {});
+export const finishSignIn = (code: string) =>
+  call<AiSettings>("POST", "/settings/ai/signin/finish", { code });
 export const setTrading = (on: boolean) => call<Settings>("PUT", "/trading", { on });
 export const setLimits = (perOrder: string, perDay: string) =>
   call<Settings>("PUT", "/limits", { perOrder, perDay });
@@ -147,7 +165,6 @@ export const editOrder = (request: {
 // The AI panel's live facts, the owner's risk rules and price alerts (decision 46).
 export const getPlan = (coin: string) =>
   call<PlanFacts>("GET", `/plan?coin=${encodeURIComponent(coin)}`);
-export const setRisk = (rules: RiskRules) => call<RiskRules>("PUT", "/risk", rules);
 export const addAlert = (alert: {
   coin: string;
   direction: "above" | "below";
@@ -156,3 +173,38 @@ export const addAlert = (alert: {
 }) => call<{ alerts: PriceAlert[] }>("POST", "/alerts", alert);
 export const deleteAlert = (id: number) =>
   call<{ alerts: PriceAlert[] }>("DELETE", `/alerts/${id}`, {});
+
+// The coach, the Plan and the agents (decision 52).
+export const getCoach = () => call<Coach>("GET", "/coach");
+export const writeCoach = () => call<Coach>("POST", "/coach/message", {});
+export const getTradingPlan = () => call<TradingPlan>("GET", "/trading-plan");
+export const saveTradingPlan = (section: PlanSection, body: unknown) =>
+  call<TradingPlan>("PUT", `/trading-plan/${section}`, body);
+export const getAgents = () => call<{ agents: { id: string; name: string }[] }>("GET", "/agents");
+export const getAgent = (id: string) => call<AgentThread>("GET", `/agents/${id}`);
+export const sendAgent = (id: string, text: string) =>
+  call<AgentThread>("POST", `/agents/${id}`, { text });
+export const getProfile = () => call<{ name: string }>("GET", "/settings/profile");
+export const setProfile = (name: string) =>
+  call<{ name: string }>("PUT", "/settings/profile", { name });
+
+// Tax lots, drift, the Journal and Telegram (decisions 54 to 57).
+export const getTax = () => call<TaxReport>("GET", "/tax");
+export const sellCheck = (coin: string, qty: string) =>
+  call<SellCheck>(
+    "GET",
+    `/tax/sell-check?coin=${encodeURIComponent(coin)}&qty=${encodeURIComponent(qty)}`,
+  );
+export const getDrift = () => call<Drift>("GET", "/rebalance");
+export const getJournal = () => call<JournalData>("GET", "/journal");
+export const tagTrade = (key: string, setups: string[], mistakes: string[]) =>
+  call<{ setups: string[]; mistakes: string[] }>("PUT", "/journal/tags", { key, setups, mistakes });
+export const setJournalLists = (setups: string[], mistakes: string[]) =>
+  call<JournalData["lists"]>("PUT", "/journal/lists", { setups, mistakes });
+export const getTelegram = () => call<TelegramSettings>("GET", "/settings/telegram");
+export const setTelegramTime = (time: string) =>
+  call<TelegramSettings>("PUT", "/settings/telegram", { time });
+export const saveTelegramToken = (token: string) =>
+  call<TelegramSettings>("PUT", "/settings/telegram/token", { token });
+export const testTelegram = () => call<TelegramSettings>("POST", "/settings/telegram/test", {});
+export const linkTelegram = () => call<TelegramSettings>("POST", "/settings/telegram/link", {});

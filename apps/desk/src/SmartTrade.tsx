@@ -6,6 +6,7 @@ import {
   getBot,
   getSmart,
   placeOrder,
+  sellCheck,
   setLimits,
   suggestBot,
   switchBot,
@@ -13,13 +14,14 @@ import {
 import { BotChart, type Level } from "./BotKit";
 import CoinIcon from "./CoinIcon";
 import { DealCard, message, quoteAmount } from "./DcaBots";
-import { amount as coinAmount, dateTime, price } from "./format";
+import { aud, amount as coinAmount, dateTime, price, shortDate } from "./format";
 import type {
   DcaBot,
   DcaBots as Trades,
   DcaConfig,
   DcaDetail,
   Market,
+  SellCheck,
   Settings,
   Signal,
   Terminal,
@@ -98,7 +100,7 @@ export default function SmartTradePanel({
   onPlaced: (note: string) => void;
   onSettings: (s: Settings) => void;
   onDone: (problem?: string) => void;
-  prefill?: { side: "buy" | "sell"; price: string; n: number } | null;
+  prefill?: { side: "buy" | "sell"; price: string; n: number; qty?: string; why?: string } | null;
 }) {
   const [creating, setCreating] = useState<"buy" | "sell" | null>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -159,8 +161,10 @@ export default function SmartTradePanel({
       )}
       {creating === "sell" && (
         <SellForm
-          key={`sell-${opened}`}
+          key={`sell-${terminal.symbol}-${opened}`}
           start={prefill?.side === "sell" ? prefill.price : undefined}
+          startQty={prefill?.side === "sell" ? prefill.qty : undefined}
+          why={prefill?.side === "sell" ? prefill.why : undefined}
           terminal={terminal}
           settings={settings}
           market={market}
@@ -663,6 +667,8 @@ function NewTrade({
 
 function SellForm({
   start,
+  startQty,
+  why,
   terminal,
   settings,
   market,
@@ -677,6 +683,8 @@ function SellForm({
   onCancel: () => void;
   onPlaced: (note: string) => void;
   start?: string;
+  startQty?: string;
+  why?: string;
 }) {
   const resistance = Number(market?.indicators.resistance ?? signal?.resistance ?? 0);
   const [at, setAt] = useState(() =>
@@ -687,9 +695,36 @@ function SellForm({
           terminal.tick,
         ),
   );
-  const [qty, setQty] = useState("");
+  const [qty, setQty] = useState(() =>
+    startQty && Number(startQty) > 0
+      ? floor(Math.min(Number(startQty), Number(terminal.baseFree)), terminal.step)
+      : "",
+  );
+  // A prefill from a link is checked against the market: far from it, the form says so.
+  const far =
+    start && Number(terminal.price) > 0
+      ? Math.abs(Number(at) / Number(terminal.price) - 1) > 0.1
+      : false;
   const [error, setError] = useState("");
   const [id, setId] = useState(() => crypto.randomUUID());
+  // Before a sale: would it use a lot under 12 months (decision 54)? Checked as the amount
+  // settles; a warning only.
+  const [check, setCheck] = useState<SellCheck | null>(null);
+  useEffect(() => {
+    if (!(Number(qty) > 0)) return;
+    let live = true;
+    const timer = window.setTimeout(() => {
+      sellCheck(terminal.base, qty).then(
+        (c) => live && setCheck(c),
+        () => live && setCheck(null),
+      );
+    }, 400);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [qty, terminal.base]);
+  const shownCheck = Number(qty) > 0 ? check : null;
   const send = () => {
     placeOrder({
       clientId: id,
@@ -721,11 +756,13 @@ function SellForm({
             <span className="muted">{terminal.quote}</span>
           </div>
           <div className="dca-reason">
-            {start
-              ? "From the AI plan's trim zone"
-              : resistance > Number(terminal.price)
-                ? "Resistance from recent candles"
-                : "Today's price"}
+            {why === "rebalance"
+              ? "Back toward your target allocation"
+              : start
+                ? "From the AI plan's trim zone"
+                : resistance > Number(terminal.price)
+                  ? "Resistance from recent candles"
+                  : "Today's price"}
           </div>
         </div>
         <div className="field">
@@ -753,6 +790,20 @@ function SellForm({
           </div>
         </div>
       </div>
+      {far && (
+        <div className="tax-warn" role="note">
+          <b>Far from the market.</b> This limit is more than 10% from today&apos;s price (
+          {price(terminal.price)}). Check it before you place it.
+        </div>
+      )}
+      {shownCheck?.young && shownCheck.youngest && (
+        <div className="tax-warn" role="note">
+          <b>Under 12 months.</b> Selling {coinAmount(qty)} {terminal.base} uses the lot bought{" "}
+          {shortDate(shownCheck.youngest.bought ?? "")}, {shownCheck.youngest.heldDays} days old.
+          Held another {shownCheck.youngest.daysToDiscount} days, half its gain would be discounted.
+          {shownCheck.gainAud !== null && ` Estimated gain now: ${aud(shownCheck.gainAud)}.`}
+        </div>
+      )}
       <div className="kv">
         <span className="muted">Order value · held</span>
         <span className="num">

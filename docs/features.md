@@ -9,33 +9,28 @@ The agreed features, by app and audience; the agent adds a row when you approve 
 
 ## `desk`
 
-Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 36, built before the bots: [features/01-36.md](features/01-36.md).
+Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 52: [features/01-52.md](features/01-52.md).
 
 | # | Feature | Status | PR |
 |---|---|---|---|
-| 37 | Trade page: resizable watchlist; order form, limits and orders under the chart | Done | |
-| 38 | Enter your own average cost for a holding with no trades, such as the TAO wallet (decision 27) | Done | |
-| 39 | Key levels over the chart: month, week and day opens, previous week and day highs and lows, support and resistance (decision 28) | Done | |
-| 40 | USDC deposits into Binance for the financial year, a bar a month in AUD: paid where recorded, estimated at the day's rate otherwise (decision 31); Dashboard refresh is an icon, and the connect buttons are gone | Done | |
-| 41 | Eight compact Dashboard widgets: total, accounts, PnL, Fear & Greed, allocation, deposits, top movers, AI signals; Invested column and totals row in balances (decision 36) | Done | |
-| 42 | DCA bots (decision 37): a four-step wizard (pair; Bollinger Band entry on 15m, 1h or 4h; base order, DCA order, deviation %, max DCA orders, DCA size and deviation multipliers, presets; take profit % and what follows it) beside the ladder, a chart of the band and ladder, the limit checks and a backtest. Limit orders only; created off, switched on after a confirm; the kill switch stops them | Done | |
-| 43 | Grid bots (decision 38): a three-step wizard (pair; range from the last 14 days, grids, geometric or arithmetic; investment, buy first, stop below) beside profit per grid, the opening buys, the limit checks, a week's chart with the lines and a backtest against holding. Limit orders only; created off, switched on after a confirm; the kill switch cancels their buys | Done | |
-| 44 | Ladder buys on the order form (decision 39): 2 to 20 limit buys from a top to a bottom price, sized equally or more at lower prices, each a smart trade with the same exits, checked whole and confirmed once; Hide chart on the Trade page | Done | |
-| 45 | Bots like a consumer app (decision 40): Create bot from watchlist coins, 30-day presets with a reason per setting (DCA, grid, ladder), Lightweight Charts with the levels, simultaneous DCA deals, references (DCA-1, D-12, GRID-2, ST-7), bot tables with Active and Stopped, Copy, and a page per bot with Live and History | Done | |
-| 46 | A sleeker watchlist: the list name opens a menu (switch, edit, new, delete); add and remove only while editing; Analyse all runs a fresh AI signal for each coin in turn, inside the monthly AI cap | Done | |
-| 47 | Smart trade as a one-off DCA deal (decision 41): New trade in four steps (entry, DCA orders, take profit, stop loss) with reasons, the levels on a chart, reward to risk, Active and History with TR references, Close at market; a plain Sell; key levels cut to the nearest ceiling and floor and the week and day opens | Done | |
-| 48 | Header with Portfolio prices, the total in the chosen currency and BTC, and the currency toggle; every Dashboard widget opens a details panel, Fear & Greed with gauge, history, the year's range and the market (decision 42); coin logos in the allocation legend | Done | |
-| 49 | Open orders on their chart with how far they are from filling, and Edit in one step (decision 43); details open in place; page titles hidden; header prices show only whole coins | Done | |
-| 50 | Cancelling an open order asks first (Keep order is the default; the cancel is red and set apart); deposits details list the newest 20, scroll, and show more; the Dashboard's filter and Fetched share one row; Top movers shows the biggest gains or losses, biggest first, by a Gained / Lost toggle | Done | |
-| 51 | Header: BTC, BTC dominance and market cap with 24h change (decision 44); times in am and pm; Top movers panel by Gained or Lost | Done | |
-| 52 | AI panel as a plan for the owner's position (decision 46): position strip, action and horizons, zones with Prefill, what-if, why, context, watch-for alerts, track record, editable risk rules; swing support and resistance; level chips in words; draggable detail panels; smart trade spends in USDC or coins with Place now | Done | |
+| 54 | Settings page: the AI section switches between the API key and the Claude subscription, with the fallback; Sign in with Claude and a pasted key, saved to `.env` (decisions 50, 51) | Done | |
+| 55 | Coach Dashboard (decision 52): greeting and mood with a short message, deposit coach against the monthly cap, today's key points, seven agents with placeholder replies; today's widgets moved to a Portfolio page | Done | |
+| 56 | Profile page (decision 52; was Plan): goals, strategy, rules with history and a rebalance band, lessons and quotes; the rules edited only here; every agent reads it | Done | |
+| 57 | Tax tab on Portfolio (decision 54): lots by coin with the 12-month countdown, this year's realised gains and losses, holdings under water before 30 June; a warning on the sell form | Done | |
+| 58 | Drift card on Portfolio (decision 55): each target against now, and a link that prefills an order back toward target | Done | |
+| 59 | Journal (decision 56): every filled order, its source and result, rule checks, setup and mistake tags, a 30-day score | Done | |
+| 60 | Telegram morning summary from Settings (decision 57) | Done | |
 
 ## `api`
 
-Every feature so far is in [features/01-36.md](features/01-36.md).
+Features 7 to 25: [features/01-52.md](features/01-52.md).
+
+| # | Feature | Status | PR |
+|---|---|---|---|
+| 53 | AI provider switch (decision 48): `AI_AUTH_MODE` picks the API key or the owner's Claude subscription (Claude Agent SDK) at each run; the panel and audit log name the source; optional fall back to the key | Done | |
 
 ## Behind every app
 
-What no single app owns, such as an agent, a check every request goes through, or a deployment. Every feature so far is in [features/01-36.md](features/01-36.md).
+What no single app owns, such as an agent, a check every request goes through, or a deployment. Every feature so far is in [features/01-52.md](features/01-52.md).
 
 Status: Next, Building, Done or Dropped (with the reason).

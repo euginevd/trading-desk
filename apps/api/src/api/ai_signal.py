@@ -12,6 +12,7 @@ import json
 import re
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, cast
@@ -37,10 +38,29 @@ WATCH = 3
 DEFAULT_CAP = Decimal(20)
 MAX_SEARCHES = 3
 NONE = "none"
-# Claude Opus 5.5 list prices in US dollars (costs 3): per token in and out, and per search.
-PRICE_IN = Decimal(4) / 1_000_000
-PRICE_OUT = Decimal(20) / 1_000_000
-PRICE_SEARCH = Decimal("0.01")
+PRICE_SEARCH = Decimal("0.01")  # per web search, in US dollars (costs 3)
+
+
+@dataclass(frozen=True)
+class Model:
+    """A model the owner can pick on the Settings page (decision 53), with its list prices in
+    US dollars per million tokens in and out, and the web search tool it takes."""
+
+    name: str
+    price_in: Decimal
+    price_out: Decimal
+    search: str
+
+
+MODELS = {
+    "claude-opus-5-5": Model("Claude Opus 5.5", Decimal(4), Decimal(20), "web_search_20260209"),
+    "claude-sonnet-5-5": Model("Claude Sonnet 5.5", Decimal(2), Decimal(10), "web_search_20260209"),
+    "claude-haiku-5-5": Model(
+        "Claude Haiku 5.5", Decimal("0.1"), Decimal("0.5"), "web_search_20250305"
+    ),
+}
+PRICE_IN = MODELS[MODEL].price_in / 1_000_000
+PRICE_OUT = MODELS[MODEL].price_out / 1_000_000
 
 SYSTEM = """You are the analyst on one person's crypto trading desk. For one coin, give them a \
 plan for their own position, in plain Australian English.
@@ -307,19 +327,22 @@ def context(facts: dict[str, Any], action: str) -> list[str]:
 
 
 class Signals:
-    def __init__(
+    def __init__(  # noqa: PLR0913 - the clock and the cap check are keyword-only, for tests
         self,
         ask: Ask,
         store: Store,
         audit: Audit,
         cap: Decimal = DEFAULT_CAP,
+        *,
         clock: Callable[[], float] = time.time,
+        capped: Callable[[], bool] = lambda: True,
     ) -> None:
         self._ask = ask
         self._store = store
         self._audit = audit
         self._cap = cap
         self._clock = clock
+        self._capped = capped  # a subscription run that can't fall back isn't capped
 
     def _now(self) -> int:
         return int(self._clock() * 1000)
@@ -332,6 +355,22 @@ class Signals:
 
     def budget(self) -> dict[str, str]:
         return {"spent": plain(self.spent()), "cap": plain(self._cap)}
+
+    def write(self, system: str, text: str, shape: dict[str, Any], label: str) -> dict[str, Any]:
+        """A short piece of writing for the desk (the coach's messages), through the same
+        provider, cap and audit log as the plans."""
+        if self._capped() and self.spent() >= self._cap:
+            raise SignalError("This month's AI spend has reached its cap.")
+        try:
+            reply, cost = self._ask(system, text, shape)
+        except SignalError as error:
+            self._audit.record("signal", f"Claude: {label}", f"Failed: {error}")
+            raise
+        via = str(reply.pop("_via", "API key"))
+        reply.pop("_model", None)
+        self._store.set_setting(self._month_key(), plain(self.spent() + cost))
+        self._audit.record("signal", f"Claude: {label} via {via}", f"about ${cost:.3f}")
+        return reply
 
     def last(self, coin: str) -> dict[str, Any] | None:
         """The last signal for a coin, with when it ran; never calls Claude."""
@@ -349,7 +388,7 @@ class Signals:
         kept = self.last(coin)
         if kept is not None and not kept["stale"] and not force:
             return kept
-        if self.spent() >= self._cap:
+        if self._capped() and self.spent() >= self._cap:
             self._audit.record("signal", f"Claude: signal {coin}", "Refused: monthly cap reached")
             raise SignalError(
                 f"This month's AI spend has reached its ${self._cap:,.2f} cap. "
@@ -360,15 +399,17 @@ class Signals:
         except SignalError as error:
             self._audit.record("signal", f"Claude: signal {coin}", f"Failed: {error}")
             raise
+        via = str(reply.pop("_via", "API key"))
+        model = str(reply.pop("_model", MODEL))
         self._store.set_setting(self._month_key(), plain(self.spent() + cost))
         try:
-            signal = checked(reply, facts, kept)
+            signal = checked(reply, facts, kept) | {"via": via, "model": model}
         except SignalError as error:
-            self._audit.record("signal", f"Claude: signal {coin}", f"Refused: {error}")
+            self._audit.record("signal", f"Claude: signal {coin} via {via}", f"Refused: {error}")
             raise
         self._audit.record(
             "signal",
-            f"Claude: signal {coin}",
+            f"Claude: signal {coin} via {via}",
             f"{signal['action']}, {signal['confidence']}%, about ${cost:.3f}",
         )
         self._store.save_signal(coin, self._now(), json.dumps(signal))
@@ -376,16 +417,17 @@ class Signals:
         return self.last(coin) or signal
 
 
-def claude(client: Any) -> Ask:
-    """The real Ask: Claude Opus 5.5 with web search, through the Anthropic SDK."""
+def claude(client: Any, model: Callable[[], str] = lambda: MODEL) -> Ask:
+    """The real Ask: the chosen Claude model with web search, through the Anthropic SDK."""
 
     def ask(system: str, text: str, shape: dict[str, Any]) -> tuple[dict[str, Any], Decimal]:
         messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
+        chosen = model() if model() in MODELS else MODEL
         cost = Decimal(0)
         response: Any = None
         for _ in range(3):  # a long search turn can pause; send it back to carry on
-            response = _create(client, system, messages, shape)
-            cost += usage_cost(response.usage)
+            response = _create(client, system, messages, shape, chosen)
+            cost += usage_cost(response.usage, chosen)
             if response.stop_reason != "pause_turn":
                 break
             messages.append({"role": "assistant", "content": response.content})
@@ -398,24 +440,26 @@ def claude(client: Any) -> Ask:
             reply = None
         if not isinstance(reply, dict):
             raise SignalError("Claude's answer wasn't in the expected shape. Re-run it.")
-        return dict(reply), cost  # pyright: ignore[reportUnknownArgumentType]
+        return cast(dict[str, Any], reply) | {"_model": chosen}, cost
 
     return ask
 
 
-def _create(client: Any, system: str, messages: list[dict[str, Any]], shape: dict[str, Any]) -> Any:
+def _create(
+    client: Any, system: str, messages: list[dict[str, Any]], shape: dict[str, Any], model: str
+) -> Any:
     """One call, with the SDK's errors turned into words the owner can act on."""
     import anthropic  # noqa: PLC0415 - only needed with a key
 
     try:
         return client.beta.messages.create(
-            model=MODEL,
+            model=model,
             max_tokens=16000,
             system=system,
             messages=messages,
             tools=[
                 {
-                    "type": "web_search_20260209",
+                    "type": MODELS[model].search,
                     "name": "web_search",
                     "max_uses": MAX_SEARCHES,
                 }
@@ -436,8 +480,8 @@ def _create(client: Any, system: str, messages: list[dict[str, Any]], shape: dic
         raise SignalError("Anthropic didn't answer. Check the connection.") from error
 
 
-def usage_cost(usage: Any) -> Decimal:
-    """About what one call cost, from its token counts, at Claude Opus 5.5's list prices."""
+def usage_cost(usage: Any, model: str = MODEL) -> Decimal:
+    """About what one call cost, from its token counts, at the model's list prices."""
     tokens_in = sum(
         int(getattr(usage, name, 0) or 0)
         for name in ("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
@@ -445,4 +489,10 @@ def usage_cost(usage: Any) -> Decimal:
     tokens_out = int(getattr(usage, "output_tokens", 0) or 0)
     tools = getattr(usage, "server_tool_use", None)
     searches = int(getattr(tools, "web_search_requests", 0) or 0) if tools else 0
-    return tokens_in * PRICE_IN + tokens_out * PRICE_OUT + searches * PRICE_SEARCH
+    rates = MODELS.get(model, MODELS[MODEL])
+    million = 1_000_000
+    return (
+        tokens_in * rates.price_in / million
+        + tokens_out * rates.price_out / million
+        + searches * PRICE_SEARCH
+    )

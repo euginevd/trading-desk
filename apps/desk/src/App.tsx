@@ -1,25 +1,34 @@
 import { useCallback, useEffect, useState } from "react";
 import { getGlobal, getPortfolio, getSettings, getTickers, setTrading } from "./api";
 import { percent, price, trend, usdShort } from "./format";
+import Coach from "./Coach";
+import Journal from "./Journal";
 import DcaBots from "./DcaBots";
 import GridBots from "./GridBots";
+import SettingsPage from "./SettingsPage";
 import {
   CollapseIcon,
   DashboardIcon,
   DcaIcon,
   GridIcon,
+  JournalIcon,
   MenuIcon,
+  PlanIcon,
+  PortfolioIcon,
   PowerIcon,
+  SettingsIcon,
   TradeIcon,
   WalletIcon,
 } from "./icons";
+import PlanPage from "./PlanPage";
 import Portfolio from "./Portfolio";
 import { CURRENCIES, type Currency, money } from "./money";
 import Trade from "./Trade";
 import type { MarketGlobal, Settings, TaoWallet, Ticker } from "./types";
 import type { Status } from "./ui";
 
-type Page = "dashboard" | "trade" | "dca" | "grid";
+type Page =
+  "dashboard" | "profile" | "portfolio" | "journal" | "trade" | "dca" | "grid" | "settings";
 const TICK_MS = 30_000;
 const CURRENCY_KEY = "desk.currency";
 function readCurrency(): Currency {
@@ -35,16 +44,30 @@ const FOLDED_KEY = "desk.side.folded";
 
 const PAGES: { page: Page; hash: string; name: string; Icon: () => React.JSX.Element }[] = [
   { page: "dashboard", hash: "#/", name: "Dashboard", Icon: DashboardIcon },
+  { page: "portfolio", hash: "#/portfolio", name: "Portfolio", Icon: PortfolioIcon },
+  { page: "journal", hash: "#/journal", name: "Journal", Icon: JournalIcon },
   { page: "trade", hash: "#/trade", name: "Trade", Icon: TradeIcon },
 ];
 const BOT_PAGES: typeof PAGES = [
   { page: "dca", hash: "#/dca", name: "DCA Bot", Icon: DcaIcon },
   { page: "grid", hash: "#/grid", name: "Grid Bot", Icon: GridIcon },
 ];
+const PROFILE_PAGE: (typeof PAGES)[number] = {
+  page: "profile",
+  hash: "#/profile",
+  name: "Profile",
+  Icon: PlanIcon,
+};
+const SETTINGS_PAGE: (typeof PAGES)[number] = {
+  page: "settings",
+  hash: "#/settings",
+  name: "Settings",
+  Icon: SettingsIcon,
+};
 
 function pageFromHash(): Page {
   const hash = window.location.hash.split("?")[0]; // "#/dca?new" opens the DCA wizard
-  const found = [...PAGES, ...BOT_PAGES].find((p) => p.hash === hash);
+  const found = [...PAGES, ...BOT_PAGES, PROFILE_PAGE, SETTINGS_PAGE].find((p) => p.hash === hash);
   return found?.page ?? "dashboard";
 }
 
@@ -157,8 +180,16 @@ export default function App() {
     };
     const sum = () =>
       getPortfolio().then(
-        (p) => setTotal({ usd: p.total.value, rates: p.total.rates ?? {} }),
-        () => setTotal(null),
+        (p) => {
+          setTotal({ usd: p.total.value, rates: p.total.rates ?? {} });
+          // The side panel's pills, whichever page is open (the coach doesn't read balances).
+          setStatus(p.demo ? "demo" : "connected");
+          setTao(p.wallets.tao.status);
+        },
+        () => {
+          setTotal(null);
+          setStatus("disconnected");
+        },
       );
     tick();
     sum();
@@ -231,6 +262,9 @@ export default function App() {
           <div className="side-rule" />
           <div className="side-label side-word">Bots</div>
           {BOT_PAGES.map(link)}
+          <div className="side-rule" />
+          {link(PROFILE_PAGE)}
+          {link(SETTINGS_PAGE)}
         </nav>
         <div className="side-status">
           <span className="pill" title={folded ? binance.word : undefined}>
@@ -362,8 +396,16 @@ export default function App() {
           <DcaBots />
         ) : page === "grid" ? (
           <GridBots />
-        ) : (
+        ) : page === "settings" ? (
+          <SettingsPage />
+        ) : page === "profile" ? (
+          <PlanPage />
+        ) : page === "journal" ? (
+          <Journal />
+        ) : page === "portfolio" ? (
           <Portfolio onStatus={onStatus} onTao={onTao} currency={currency} />
+        ) : (
+          <Coach />
         )}
       </div>
     </div>

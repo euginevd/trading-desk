@@ -158,6 +158,8 @@ export interface Signal {
   summary: string;
   reasons: string[];
   model: string;
+  /** How it reached Claude: "API key" or "Claude subscription" (decision 48). */
+  via?: string;
   ranAt: number;
   stale: boolean;
   // The position-aware plan (decision 46); missing on a signal from before it.
@@ -612,4 +614,197 @@ export interface GridRequest {
   investment: string;
   buyFirst: boolean;
   stopBelow: string;
+}
+
+// The Settings page's AI section (decision 50): the choice and whether each credential is set.
+export type AiMode = "api_key" | "subscription";
+export interface AiSettings {
+  mode: AiMode;
+  fallback: boolean;
+  apiKeySet: boolean;
+  tokenSet: boolean;
+  model: string;
+  models: { id: string; name: string }[];
+  budget: { spent: string; cap: string };
+}
+
+// The coach Dashboard (decision 52): every figure worked out by the api; the words kept per day.
+export type Mood = "sharp_up" | "up" | "flat" | "down" | "sharp_down";
+export type KeyPoint =
+  | { kind: "concentration"; coin: string; pct: string; cap: string; rule: true }
+  | { kind: "loss"; coin: string; pct: string; cap: string; rule: true }
+  | { kind: "mover"; coin: string; pct: string; rule: false }
+  | { kind: "addZone"; coin: string; low: string; high: string; rule: false }
+  | { kind: "nearInvalidation"; coin: string; pct: string; price: string; rule: false };
+export interface Lesson {
+  id?: string;
+  date: string;
+  happened: string;
+  learned: string;
+}
+export interface Quote {
+  id?: string;
+  text: string;
+  author: string;
+}
+export interface Coach {
+  greeting: string;
+  mood: Mood;
+  moodLabel: string;
+  changePct: string;
+  changeAud: string;
+  streak: { weekPct: string; everyDay: string } | null;
+  takeProfit: string | null;
+  withinRules: boolean;
+  deposits: {
+    known: boolean;
+    fy: string | null;
+    fyAud: string;
+    monthAud: string;
+    capAud: string | null;
+    leftAud: string | null;
+    overAud: string | null;
+    usedPct: string | null;
+    lesson: Lesson | null;
+  };
+  keyPoints: KeyPoint[];
+  day: string;
+  message: {
+    lines: string[];
+    coach: string;
+    quote: { text: string; author: string } | null;
+    link: "trade" | null;
+    source: "plain" | "model";
+  };
+  pending: boolean;
+}
+
+// The Plan page (decision 52): the source every agent reads.
+export interface RuleChange {
+  time: number;
+  rule: string;
+  from: string;
+  to: string;
+}
+export interface TradingPlan {
+  goals: { text: string; targets: { coin: string; pct: string }[]; updated: number | null };
+  strategy: { text: string; updated: number | null };
+  rules: {
+    monthlyCapAud: string | null;
+    maxCoinPct: string;
+    tradeBudgetAud: string;
+    maxLossPct: string;
+    takeProfit: string;
+    behaviour: string[];
+    notes: string;
+    driftBand: string;
+    updated: number | null;
+    history: RuleChange[];
+  };
+  lessons: { items: Lesson[]; updated: number | null };
+  quotes: { items: Quote[]; updated: number | null };
+}
+export type PlanSection = keyof TradingPlan;
+
+export interface AgentMessage {
+  role: "owner" | "agent";
+  text: string;
+  time: number;
+}
+export interface AgentThread {
+  id: string;
+  name: string;
+  messages: AgentMessage[];
+}
+
+// Tax lots and the 12-month countdown (decision 54).
+export interface TaxLot {
+  coin: string;
+  bought: string | null;
+  qty: string;
+  costAud: string | null;
+  nowAud: string | null;
+  gainAud: string | null;
+  heldDays: number | null;
+  qualifiesOn: string | null;
+  daysToDiscount: number | null;
+}
+export interface TaxReport {
+  fy: string;
+  realisedGainsAud: string;
+  realisedLossesAud: string;
+  sales: number;
+  unknownSales: number;
+  discountedAud: string;
+  next: TaxLot | null;
+  lots: TaxLot[];
+  underWater: { coin: string; lossAud: string; afterAud: string }[];
+}
+export interface SellCheck {
+  coin: string;
+  qty: string;
+  lots: TaxLot[];
+  young: boolean;
+  youngest: TaxLot | null;
+  gainAud: string | null;
+  unknown: boolean;
+}
+
+// Drift from the Profile's target allocation (decision 55).
+export interface DriftRow {
+  coin: string;
+  targetPct: string;
+  nowPct: string;
+  outside: boolean;
+  side: "buy" | "sell" | null;
+  toTargetAud?: string;
+  orderAud?: string;
+  price?: string | null;
+  qty?: string | null;
+  capped?: boolean;
+}
+export interface Drift {
+  band: string;
+  rows: DriftRow[];
+  outside: number;
+  hasTargets: boolean;
+}
+
+// The Journal (decision 56).
+export interface JournalEntry {
+  key: string;
+  time: number;
+  coin: string;
+  side: "buy" | "sell";
+  qty: string;
+  price: string;
+  aud: string;
+  from: string;
+  resultAud: string | null;
+  broke: string[];
+  setups: string[];
+  mistakes: string[];
+}
+export interface JournalData {
+  entries: JournalEntry[];
+  score: {
+    days: number;
+    trades: number;
+    kept: number;
+    keptPct: string | null;
+    mostBroken: { what: string; times: number }[];
+    withMistakeAud: string;
+    withoutMistakeAud: string;
+  };
+  lists: { setups: string[]; mistakes: string[] };
+}
+
+// Telegram's morning summary (decision 57).
+export interface TelegramSettings {
+  tokenSet: boolean;
+  chatFound: boolean;
+  chatName: string | null;
+  linkCode: string | null;
+  time: string;
+  lastSent: string | null;
 }

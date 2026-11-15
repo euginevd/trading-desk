@@ -20,6 +20,34 @@ export const DashboardIcon = () => (
   </svg>
 );
 
+export const SettingsIcon = () => (
+  <svg {...base}>
+    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+    <circle cx="12" cy="12" r="3" />
+  </svg>
+);
+
+export const PlanIcon = () => (
+  <svg {...base}>
+    <rect x="5" y="3" width="14" height="18" rx="2" />
+    <path d="M9 8h6M9 12h6M9 16h4" />
+  </svg>
+);
+
+export const PortfolioIcon = () => (
+  <svg {...base}>
+    <path d="M21 12a9 9 0 1 1-9-9v9z" />
+    <path d="M14.5 2.8A9 9 0 0 1 21.2 9.5H14.5z" />
+  </svg>
+);
+
+export const JournalIcon = () => (
+  <svg {...base}>
+    <path d="M6 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6z" />
+    <path d="M6 3v18M10 8h5M10 12h5" />
+  </svg>
+);
+
 export const TradeIcon = () => (
   <svg {...base}>
     <path d="M7 3v4M7 17v4M17 6v3M17 17v3" />

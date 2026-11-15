@@ -360,6 +360,20 @@ def test_the_monthly_cap_stops_new_signals(
     assert any(e["result"] == "Refused: monthly cap reached" for e in audit_lines(tmp_path))
 
 
+def test_the_signal_and_the_audit_log_say_how_it_reached_claude(
+    tmp_path: Path, parts: tuple[Binance, Store, Audit]
+) -> None:
+    _, store, audit = parts
+
+    def ask(_s: str, _p: str, _shape: dict[str, Any]) -> tuple[dict[str, Any], Decimal]:
+        return reply() | {"_via": "Claude subscription"}, D(0)
+
+    signal = Signals(ask, store, audit, clock=lambda: NOW).run(facts(), force=True)
+    assert signal["via"] == "Claude subscription"
+    assert "_via" not in signal
+    assert audit_lines(tmp_path)[-1]["action"] == "Claude: signal SOL via Claude subscription"
+
+
 def test_usage_cost_counts_tokens_and_searches() -> None:
     class Tools:
         web_search_requests = 3

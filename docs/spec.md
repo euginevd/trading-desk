@@ -4,14 +4,14 @@
 
 ## Business
 
-Unnumbered, so the spec's numbers stay put; the same for every project of this business.
+Unnumbered; the same for every project of this business.
 
 - Business: ArcVault AI, an Australian AI and security consultancy. This is one of its portfolio projects, and its owner's own trading tool.
 - Size: one person, the owner, developer and only user. A few trades a day; plain Australian English, figures first.
 - Regulators and laws: none while it trades only its owner's money. Trading for anyone else would need an Australian financial services licence and AUSTRAC registration, so commercialising starts with legal advice (decision 6). An AI signal shown to others could count as financial advice too.
 - Data: no customer data. The owner's balances, trades, watchlist and keys stay on the owner's own machine. The AI plan sends Anthropic a coin's computed figures and the owner's position in it (amount, average cost, PnL, share, cash, open orders' prices), never keys, account ids or order ids (decision 46).
 - Risk appetite: none for losing funds through the software (no key can withdraw; no order the owner didn't confirm or switch on); low for showing balances to others.
-- Systems: Binance is the system of record for balances, orders and trades; Taostats for the TAO wallet; this keeps an audit log. The AI signal comes from Claude through the Anthropic API. The Australian dollar rate comes from the European Central Bank's daily rates (Frankfurter). No payments.
+- Systems: Binance is the system of record for balances, orders and trades; Taostats for the TAO wallet; this keeps an audit log. The AI plan comes from Claude, by API key or the owner's subscription (decision 48). The Australian dollar rate comes from the European Central Bank's daily rates (Frankfurter). No payments.
 - People: the owner sets the trading rules and limits, and approves any new exchange, key permission or data flow.
 
 ## Project
@@ -44,12 +44,12 @@ Template defaults: GitHub Actions, the pre-push scan and the PR security checks.
 
 9. `/health` returns nothing from the request. Both containers publish on `127.0.0.1` only, and nothing is reachable from another machine; sign-in comes with hosting (decision 10).
 10. The limits that hold whatever else changes:
-    - Keys: one per service and purpose, with only the permissions it needs; Binance's trades spot only (no withdrawal, margin or futures), from the owner's IP address. The TAO wallet is read by its public address. A key lives only in `.env`: never in code, a log, a PR, the browser or a prompt.
+    - Keys: one per service and purpose, with only the permissions it needs; Binance's trades spot only (no withdrawal, margin or futures), from the owner's IP address. The TAO wallet is read by its public address. A key lives only in `.env`, never in code, a log, a PR or a prompt; only Claude's pass the browser, inbound once (decision 51).
     - Money: spot limit orders only. An order goes only from the owner's order form, after a confirm step, or from a DCA or grid bot the owner switched on, after a confirm stating the orders it may place (decisions 37 and 38). Every order stays within limits the owner sets (per order and per day, zero until set; bot buys count towards the day), checked in code, and only while the kill switch is on; turning it off stops every bot, cancels their open buys and refuses every new order.
     - AI: the plan advises and never acts. Its output is checked against a schema built for each call and held to the owner's risk rules in code; it can't place, change or cancel an order (its buttons only fill the form), and sees the owner's position in the coin but never keys, account ids or order ids (decisions 16 and 46).
-    - Audit log: every exchange call, AI signal, order, bot action and settings change is recorded with its time, who or what asked, and the result. Entries are added, never edited or deleted.
-    - Monthly spend: $20 of Anthropic API, checked in code; no cloud spend. Security baseline: OWASP ASVS 5.0 Level 1, with the limits above on top.
+    - Audit log: every exchange call, AI plan, order, bot action and settings change, with its time, who asked and the result; added, never edited or deleted.
+    - Monthly spend: $20 of Anthropic API, checked in code. Security baseline: OWASP ASVS 5.0 Level 1, with the limits above on top.
 
 ## Not for now
 
-11. Hosting, sign-in and other users; Bybit and leverage, decentralised exchange (DEX) leverage and DeFi, waiting in [TODO.md](../TODO.md); an AI agent that builds, backtests or runs strategies (the brief's later direction); market buys; other wallets and exchanges; billing, tax reports, alerts sent off the desk, and a phone app.
+11. Hosting, sign-in and other users; Bybit and leverage, decentralised exchange (DEX) leverage and DeFi, waiting in [TODO.md](../TODO.md); an AI agent that builds, backtests or runs strategies (the brief's later direction); market buys; other wallets and exchanges; billing, tax reports, alerts off the desk beyond the morning summary (decision 57), and a phone app.
