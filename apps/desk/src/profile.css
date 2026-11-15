@@ -85,6 +85,14 @@
   color: var(--accent);
 }
 
+.pf-live-off {
+  margin: 0;
+  background: var(--wait-soft);
+  color: var(--wait);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
 /* The top strip. */
 .pf-strip {
   display: grid;
@@ -147,6 +155,8 @@
 }
 .pf-command-bar:focus-within {
   border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .pf-command-bar input {
   flex: 1;

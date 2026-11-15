@@ -10,7 +10,7 @@ import json
 import re
 from dataclasses import dataclass
 from datetime import date
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, cast
 
 from api.audit import Audit
@@ -47,6 +47,7 @@ LOCKS = ("goals", "min_cash", "deposit_cap")
 LOCK_LABELS = {"goals": "Goals", "min_cash": "Minimum cash", "deposit_cap": "Deposit cap"}
 COIN = re.compile(r"[A-Z0-9]{1,15}")
 DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
+PLAIN_NUMBER = re.compile(r"-?\d{1,15}(\.\d{1,15})?")
 SUMMARY_PARTS = 2
 MAX_MONEY = Decimal(1_000_000_000)
 
@@ -172,8 +173,12 @@ def _blank(value: object) -> bool:
     return value is None or (isinstance(value, str) and not value.strip())
 
 
-def number(value: object, label: str, low: Decimal, high: Decimal) -> Decimal:
-    """A number as the owner might type it: commas, A$ and a K or M suffix are fine."""
+def number(  # noqa: PLR0913 - the value, how it reads, and its bounds
+    value: object, label: str, low: Decimal, high: Decimal, places: int = 2
+) -> Decimal:
+    """A number as the owner might type it: commas, A$ and a K or M suffix are fine. Plain
+    digits only, at most `places` decimals: an exponent such as 1e-200000 would save a string
+    of 200,000 characters."""
     text = str(value).strip().upper().replace(",", "").replace("A$", "").replace("US$", "")
     text = text.removeprefix("$").removesuffix("%").strip()
     scale = Decimal(1)
@@ -181,12 +186,15 @@ def number(value: object, label: str, low: Decimal, high: Decimal) -> Decimal:
         text, scale = text[:-1], Decimal(1000)
     elif text.endswith("M"):
         text, scale = text[:-1], Decimal(1_000_000)
-    try:
-        found = Decimal(text) * scale
-    except InvalidOperation:
-        raise Refused(f"{label} must be a number.") from None
-    if not found.is_finite() or not low <= found <= high:
+    if not PLAIN_NUMBER.fullmatch(text):
+        raise Refused(f"{label} must be a number.")
+    found = Decimal(text) * scale
+    if not low <= found <= high:
         raise Refused(f"{label} must be from {plain(low)} to {plain(high)}.")
+    if found != found.quantize(Decimal(1).scaleb(-places)):
+        raise Refused(
+            f"{label} takes {'whole numbers' if places == 0 else f'up to {places} decimals'}."
+        )
     return found
 
 
@@ -204,7 +212,7 @@ def _field(f: Field, value: object) -> Any:  # noqa: PLR0911 - one return per ki
     if f.kind == "text":
         return str(value).strip()[: f.limit]
     if f.kind in ("money", "pct", "num", "year"):
-        return plain(number(value, f.label, f.low, f.high))
+        return plain(number(value, f.label, f.low, f.high, 0 if f.kind == "year" else 2))
     if f.kind == "date":
         return _day(f, value)
     choice = str(value).strip().lower() if f.key != "currency" else str(value).strip().upper()
@@ -351,8 +359,8 @@ def changes(old: dict[str, Any], new: dict[str, Any]) -> list[dict[str, str]]:
 def _list_changes(
     name: str, old: list[dict[str, Any]], new: list[dict[str, Any]]
 ) -> list[dict[str, str]]:
-    before = {_row_name(name, r): r for r in old}
-    after = {_row_name(name, r): r for r in new}
+    before = _named_rows(name, old)
+    after = _named_rows(name, new)
     found: list[dict[str, str]] = []
     for key, row in after.items():
         if key not in before:
@@ -362,6 +370,18 @@ def _list_changes(
     found += [_item(name, key, "", "removed") for key in before if key not in after]
     if not found:  # only the order changed
         found.append(_item(name, TITLES[name], "", "reordered"))
+    return found
+
+
+def _named_rows(name: str, rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
+    """Each row by its name, with a count for a second row of the same name."""
+    found: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        key = base = _row_name(name, row)
+        n = 2
+        while key in found:
+            key, n = f"{base} ({n})", n + 1
+        found[key] = row
     return found
 
 
@@ -489,6 +509,20 @@ def view(store: Store) -> dict[str, Any]:
         "profile": doc,
         "updated": section_times(store),
     }
+
+
+def age(doc: dict[str, Any], today: date | None = None) -> int | None:
+    born = doc["identity"]["date_of_birth"]
+    if not born:
+        return None
+    day = date.fromisoformat(born)
+    now = today or date.today()  # noqa: DTZ011 - a birthday is a calendar day, not a moment
+    return now.year - day.year - ((now.month, now.day) < (day.month, day.day))
+
+
+def for_model(doc: dict[str, Any]) -> dict[str, Any]:
+    """Identity as the model reads it: the name and an age, never the date of birth."""
+    return {"name": doc["identity"]["name"], "age": age(doc)}
 
 
 def rule(doc: dict[str, Any], key: str) -> Decimal | None:

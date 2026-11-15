@@ -721,17 +721,25 @@ class Bots:
     def store_and_audit(self) -> tuple[Store, Audit]:
         return self._store, self._audit
 
-    def allow_past_rules(self, bot_id: int) -> None:
-        """The owner confirmed this smart trade past a Profile rule: its buys aren't held."""
-        self._store.set_setting(f"bot_past_rules_{bot_id}", "1")
+    def _past_rules_key(self, bot_id: int) -> str:
+        # By id and creation time: SQLite reuses a deleted bot's id, and the next bot mustn't
+        # inherit this one's confirmation.
+        return f"bot_past_rules_{bot_id}_{self._store.bot(bot_id)['created']}"
+
+    def allow_past_rules(self, bot_id: int, *, allowed: bool) -> None:
+        """Set on each switch-on: the owner confirmed this smart trade past a broken Profile rule,
+        so its buys aren't held; cleared when switched on without that."""
+        self._store.set_setting(self._past_rules_key(bot_id), "1" if allowed else "")
 
     def rule_hold(self, spend: Decimal, bot_id: int) -> str | None:
         """A buy that breaks a set Profile rule waits: a bot can't confirm past it (decision 58)."""
-        if self._store.setting(f"bot_past_rules_{bot_id}", "") == "1":
+        if self._store.setting(self._past_rules_key(bot_id), "") == "1":
             return None
+        bot = self._store.bot(bot_id)
         _, doc = profile.current(self._store)
         now = datetime.fromtimestamp(self._clock(), profile_live.SYDNEY)
-        return profile_live.bot_problem(self._store, doc, spend, now)
+        coin = str(bot["symbol"]).removesuffix(QUOTE)
+        return profile_live.bot_problem(self._store, doc, spend, now, coin)
 
     def _hold(self, bot: dict[str, Any], note: str) -> None:
         if bot["note"] != note:

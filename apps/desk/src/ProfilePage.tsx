@@ -167,6 +167,15 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {!page.live.known && (
+        <p className="pf-live-off" role="alert">
+          Live figures couldn't be read, so totals and checks that need Binance or the wallet show
+          —.{" "}
+          <button type="button" className="pf-link" onClick={load}>
+            Try again
+          </button>
+        </p>
+      )}
       <Strip page={page} />
       <CommandBar
         onChange={(next) => setPage(next)}
@@ -262,13 +271,16 @@ export default function ProfilePage() {
 
 function Strip({ page }: { page: Page }) {
   const s = page.live.strip;
-  const goal = s.nextGoal;
+  const known = page.live.known;
+  const goal = known ? s.nextGoal : null;
   return (
     <section className="pf-strip" aria-label="Where you stand">
       <div className="card pf-tile">
         <span className="muted">Total now</span>
-        <span className="pf-big">{audText(s.totalAud)}</span>
-        <span className="muted">{audText(s.totalUsd, "USD")}</span>
+        <span className="pf-big">{known ? audText(s.totalAud) : "—"}</span>
+        <span className="muted">
+          {known ? audText(s.totalUsd, "USD") : "Live figures unavailable"}
+        </span>
       </div>
       <div className="card pf-tile">
         <span className="muted">
@@ -276,7 +288,7 @@ function Strip({ page }: { page: Page }) {
             ? `Next goal · ${audText(goal.amount, goal.currency)}${goal.date ? ` by ${dayText(goal.date)}` : ""}`
             : "Next goal"}
         </span>
-        <span className="pf-big">{goal ? `${goal.pct}%` : "Not set"}</span>
+        <span className="pf-big">{goal ? `${goal.pct}%` : known ? "Not set" : "—"}</span>
         {goal && <Meter pct={Number(goal.pct)} label="Progress to the next goal" tone="ok" />}
       </div>
       <div className="card pf-tile">

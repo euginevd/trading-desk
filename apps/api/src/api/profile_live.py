@@ -2,9 +2,10 @@
 check beside each rule, the Foundations' status, and the pre-trade check every buy passes.
 All worked out here; a rule the owner hasn't set is never checked."""
 
+import json
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from api.binance import plain
@@ -18,6 +19,7 @@ HUNDRED = Decimal(100)
 STABLES = ("USDT", "USDC", "FDUSD")
 SOURCES = {"binance": "Binance", "taostats": "TAO wallet"}
 RATE_KEY = "aud_per_usd"
+HELD_KEY = "last_coin_values"
 NEAR = Decimal(80)  # % of a cap used: attention from here
 NEAR_POINTS = Decimal(5)  # points under the max per coin: attention from here
 DUST = Decimal(1)
@@ -39,10 +41,23 @@ def month_spent_aud(store: Store, rate: Decimal, now: datetime) -> Decimal:
 
 
 def remember_rate(store: Store, portfolio: dict[str, Any]) -> Decimal:
-    """The AUD rate the portfolio was valued at, kept for the bots, which have no portfolio."""
+    """The AUD rate and each coin's value the portfolio was read at, kept for the bots, which
+    have no portfolio of their own."""
     rate = aud_rate(portfolio)
     store.set_setting(RATE_KEY, plain(rate))
+    values: dict[str, str] = {}
+    for h in portfolio["holdings"]:
+        values[h["asset"]] = plain(
+            Decimal(values.get(h["asset"], "0")) + Decimal(h.get("value") or "0")
+        )
+    held = {"total": str(portfolio["total"]["value"] or "0"), "values": values}
+    store.set_setting(HELD_KEY, json.dumps(held))
     return rate
+
+
+def _last_held(store: Store) -> dict[str, Any] | None:
+    raw = store.setting(HELD_KEY, "")
+    return cast(dict[str, Any], json.loads(raw)) if raw else None
 
 
 def coin_shares(portfolio: dict[str, Any]) -> dict[str, Decimal]:
@@ -279,16 +294,24 @@ def share_after(portfolio: dict[str, Any], coin: str, spend_usd: Decimal) -> Dec
     return (held + spend_usd) / total * HUNDRED
 
 
-def bot_problem(store: Store, doc: dict[str, Any], spend_usd: Decimal, now: datetime) -> str | None:
-    """A bot can't confirm a second time, so a buy that breaks the monthly cap or the per-trade
-    size waits (decision 58). The share per coin needs a live portfolio: the owner's orders
-    check it; a bot's don't."""
+def bot_problem(
+    store: Store, doc: dict[str, Any], spend_usd: Decimal, now: datetime, coin: str
+) -> str | None:
+    """A bot can't confirm a second time, so a buy that breaks a set rule waits (decision 58).
+    The share per coin comes from the last portfolio reading; with none, the buy waits too."""
     rate = Decimal(store.setting(RATE_KEY, "1.5"))
+    held = _last_held(store)
+    share = None
+    if held and Decimal(held["total"]) > ZERO:
+        value = Decimal(held["values"].get(coin, "0"))
+        share = (value + spend_usd) / Decimal(held["total"]) * HUNDRED
+    if share is None and rule(doc, "max_pct_per_coin") is not None:
+        return "Waiting: your portfolio hasn't been read yet, so max % per coin can't be checked."
     found = breaks(
         doc,
         spend_aud=spend_usd * rate,
         month_aud=month_spent_aud(store, rate, now),
-        share_after=None,
-        coin="",
+        share_after=share,
+        coin=coin,
     )
     return f"Waiting: breaks your {found[0]['label'].lower()}." if found else None

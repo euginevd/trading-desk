@@ -18,7 +18,7 @@ from api.ai_signal import Signals
 from api.audit import Audit
 from api.binance import Binance
 from api.handler import Services
-from api.profile_md import export, parse
+from api.profile_md import export, for_agents, parse
 from api.store import Store
 from api.trading import Refused, Trading
 
@@ -185,7 +185,9 @@ def test_a_change_request_is_a_proposal_with_its_diff_and_conflicts(
     page = profile_ai.accept(store, audit, suggestion["id"], "", NOW + 1)
     assert page["version"] == 2  # noqa: PLR2004
     assert profile.history(store)[0]["author"] == "Command bar"
-    assert profile.history(store)[0]["summary"] == "Per-trade A$5K, max per coin 40%"
+    assert profile.history(store)[0]["summary"] == (
+        "Max % per coin Not set → 40%; Per-trade size (A$) Not set → A$5,000"
+    )  # code's own words, never the model's
     assert profile_ai.suggestions(store) == []
 
 
@@ -350,8 +352,8 @@ def test_a_bot_holds_a_buy_that_breaks_a_rule(store: Store, audit: Audit) -> Non
     doc = profile.clean(sample())
     now = datetime(2026, 11, 15, 10, tzinfo=SYDNEY)
     store.set_setting(profile_live.RATE_KEY, "1.5")
-    assert profile_live.bot_problem(store, doc, D(100), now) is None  # A$150 under A$4,000
-    held_back = profile_live.bot_problem(store, doc, D(3000), now)
+    assert profile_live.bot_problem(store, doc, D(100), now, "BTC") is None  # A$150 under A$4,000
+    held_back = profile_live.bot_problem(store, doc, D(3000), now, "BTC")
     assert held_back == "Waiting: breaks your monthly deposit cap."
 
 
@@ -449,10 +451,108 @@ def test_switching_on_a_smart_trade_gets_the_same_check(store: Store, audit: Aud
     doc["rules"]["per_trade_aud"] = "250"
     profile.save(store, audit, doc, author=profile.OWNER, now=NOW)
     bots = FakeTradeBots(store, audit)
-    held_back = handler._trade_bot_check(bots, 1, {"on": True}, held)  # type: ignore[arg-type]  # noqa: SLF001
+    held_back, past = handler._trade_bot_check(bots, 1, {"on": True}, held)  # type: ignore[arg-type]  # noqa: SLF001
     assert held_back is not None
+    assert not past
     assert json.loads(str(held_back["body"]))["ruleBreaks"][0]["label"] == "Per-trade size"
-    assert handler._trade_bot_check(bots, 1, {"on": True, "override": True}, held) is None  # type: ignore[arg-type]  # noqa: SLF001
-    assert bots.allowed  # its buys won't be held later
+    confirmed = {"on": True, "override": True}
+    assert handler._trade_bot_check(bots, 1, confirmed, held) == (None, True)  # type: ignore[arg-type]  # noqa: SLF001
     recurring = FakeTradeBots(store, audit, trade=False)
-    assert handler._trade_bot_check(recurring, 2, {"on": True}, held) is None  # type: ignore[arg-type]  # noqa: SLF001
+    assert handler._trade_bot_check(recurring, 2, confirmed, held) == (None, False)  # type: ignore[arg-type]  # noqa: SLF001
+    doc["rules"]["per_trade_aud"] = None
+    profile.save(store, audit, doc, author=profile.OWNER, now=NOW + 1)
+    # Nothing broken: an override confirms nothing, so the trade's buys stay checked.
+    assert handler._trade_bot_check(bots, 1, confirmed, held) == (None, False)  # type: ignore[arg-type]  # noqa: SLF001
+
+
+# The review's findings (decision 58).
+
+
+def test_a_stale_suggestion_is_refused_rather_than_undo_a_newer_edit(
+    store: Store, audit: Audit
+) -> None:
+    saved(store, audit)
+    _, doc = profile.current(store)
+    write = stub(change({"rules": doc["rules"] | {"rebalance_band": "5"}}))
+    suggestion = profile_ai.command(store, audit, write, text="band 5", live={}, shares={})[
+        "suggestion"
+    ]
+    profile.save_section(
+        store, audit, "rules", doc["rules"] | {"max_pct_per_coin": "30"}, now=NOW + 1
+    )
+    with pytest.raises(Refused, match="changed since this was suggested"):
+        profile_ai.accept(store, audit, suggestion["id"], "", NOW + 2)
+    assert profile.current(store)[1]["rules"]["max_pct_per_coin"] == "30"  # kept
+
+
+def test_a_proposed_record_keeps_fields_the_model_left_out(store: Store, audit: Audit) -> None:
+    saved(store, audit)
+    write = stub(change({"identity": {"name": "Sam R"}}))
+    suggestion = profile_ai.command(store, audit, write, text="name", live={}, shares={})[
+        "suggestion"
+    ]
+    assert suggestion["sections"]["identity"]["date_of_birth"] == "1988-03-04"
+
+
+@pytest.mark.parametrize("typed", ["1e-200000", "1E5", "4000.123", "NaN", "Infinity"])
+def test_numbers_are_plain_digits_with_two_decimals_at_most(typed: str) -> None:
+    with pytest.raises(Refused):
+        profile.number(typed, "The cap", D(0), D(10**9))
+
+
+def test_years_are_whole() -> None:
+    doc = sample() | {"lessons": [{"year": "2000.5", "text": "x"}]}
+    with pytest.raises(Refused, match="whole numbers"):
+        profile.clean(doc)
+
+
+def test_the_markdown_keeps_bars_semicolons_and_the_words_not_set() -> None:
+    doc = sample()
+    doc["rules"]["behaviour_rules"] = ["Wait; then buy", "Not set", "a | b"]
+    doc["rules"]["take_profit_rule"] = "Not set"
+    doc["lessons"] = [{"year": "2024", "text": "Sold | bought back; lost"}]
+    kept = profile.clean(doc)
+    assert parse(export(kept, 1, NOW)) == kept
+
+
+def test_two_rows_of_the_same_name_are_told_apart() -> None:
+    doc = profile.clean(sample())
+    twin = doc["holdings"][1]
+    two = doc | {"holdings": [*doc["holdings"], twin]}
+    found = profile.changes(two, doc)
+    assert [(c["label"], c["to"]) for c in found] == [("Bank (2)", "removed")]
+
+
+def test_agents_read_an_age_never_the_date_of_birth(store: Store, audit: Audit) -> None:
+    saved(store, audit)
+    text = for_agents(store)
+    assert "1988-03-04" not in text
+    assert "- Age: " in text
+
+
+def test_a_bot_checks_max_per_coin_from_the_last_reading(store: Store, audit: Audit) -> None:
+    doc = profile.clean(sample())
+    doc["rules"]["max_pct_per_coin"] = "25"
+    now = datetime(2026, 11, 15, 10, tzinfo=SYDNEY)
+    first = profile_live.bot_problem(store, doc, D(10), now, "BTC")
+    assert first is not None
+    assert "hasn't been read" in first
+    profile_live.remember_rate(store, held())  # BTC is $2,000 of $10,000: 20%
+    assert profile_live.bot_problem(store, doc, D(100), now, "BTC") is None  # 21%
+    assert profile_live.bot_problem(store, doc, D(1000), now, "BTC") == (
+        "Waiting: breaks your max % per coin."
+    )  # 30%
+
+
+def test_a_new_bot_never_inherits_a_deleted_ones_confirmation(store: Store, audit: Audit) -> None:
+    from api.bots import Bots  # noqa: PLC0415 - only this test needs the bots
+
+    saved(store, audit)
+    bots = Bots(None, store, audit, clock=lambda: NOW / 1000)  # type: ignore[arg-type] - no exchange needed
+    first = store.add_bot("TR-1", "BTCUSDT", "{}", NOW)
+    bots.allow_past_rules(first, allowed=True)
+    assert bots.rule_hold(D(5000), first) is None  # confirmed past the cap
+    store.delete_bot(first)
+    second = store.add_bot("DCA-1", "BTCUSDT", "{}", NOW + 1)
+    assert second == first  # SQLite reuses the id
+    assert bots.rule_hold(D(5000), second) is not None  # but not the confirmation

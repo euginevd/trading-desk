@@ -313,6 +313,16 @@ describe("Profile", () => {
     expect(await screen.findByText("v13 restored as v15.")).toBeTruthy();
   });
 
+  it("says when live figures couldn't be read, with dashes for the totals", async () => {
+    const off = page();
+    off.live = { ...off.live, known: false };
+    api.getProfilePage.mockResolvedValue(off);
+    render(<Profile />);
+    expect(await screen.findByText(/Live figures couldn't be read/)).toBeTruthy();
+    expect(screen.getByText("Live figures unavailable")).toBeTruthy();
+    expect(screen.queryByText("A$212,400")).toBeNull();
+  });
+
   it("shows an error with a retry", async () => {
     api.getProfilePage
       .mockRejectedValueOnce(new Error("The api couldn't answer."))

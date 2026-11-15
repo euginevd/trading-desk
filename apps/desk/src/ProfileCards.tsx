@@ -115,7 +115,7 @@ function Field({
       : f.kind === "targets"
         ? "One a line, such as BTC 50"
         : f.kind === "money"
-          ? "A$, such as 7000 or 7K"
+          ? "A$, such as 2500 or 2.5K"
           : null;
   return (
     <div className="pf-field">

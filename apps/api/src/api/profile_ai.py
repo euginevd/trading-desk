@@ -16,7 +16,7 @@ from typing import Any, cast
 from api import profile
 from api.audit import Audit
 from api.binance import plain
-from api.profile_md import export
+from api.profile_live import SYDNEY
 from api.store import Store
 from api.trading import Refused
 
@@ -58,10 +58,9 @@ CHANGE_SHAPE: dict[str, Any] = {
                 "additionalProperties": False,
             },
         },
-        "summary": {"type": "string"},
         "reason": {"type": "string"},
     },
-    "required": ["kind", "answer", "sections", "summary", "reason"],
+    "required": ["kind", "answer", "sections", "reason"],
     "additionalProperties": False,
 }
 PLANNER_SHAPE: dict[str, Any] = {
@@ -70,10 +69,9 @@ PLANNER_SHAPE: dict[str, Any] = {
         "summary": {"type": "string"},
         "gaps": {"type": "array", "items": {"type": "string"}},
         "sections": CHANGE_SHAPE["properties"]["sections"],
-        "change_summary": {"type": "string"},
         "change_reason": {"type": "string"},
     },
-    "required": ["summary", "gaps", "sections", "change_summary", "change_reason"],
+    "required": ["summary", "gaps", "sections", "change_reason"],
     "additionalProperties": False,
 }
 RECAP_SHAPE: dict[str, Any] = {
@@ -201,13 +199,18 @@ def propose(  # noqa: PLR0913 - each is a separate fact about the proposal
     sections: dict[str, Any],
     *,
     author: str,
-    summary: str,
     reason: str,
     shares: dict[str, Decimal],
 ) -> dict[str, Any]:
-    """Checks a change and queues it for the owner: the diff, conflicts and any lock in the way."""
+    """Checks a change and queues it for the owner: the diff, conflicts and any lock in the way.
+    A one-record section is laid over today's, so a field the model left out keeps its value.
+    The summary is code's own, from the diff, never the model's words."""
     n, old = profile.current(store)
-    new = profile.clean(old | sections)
+    laid = {
+        name: old[name] | value if name in profile.RECORDS and isinstance(value, dict) else value
+        for name, value in sections.items()
+    }
+    new = profile.clean(old | laid)
     found = profile.changes(old, new)
     if not found:
         raise Refused("That's already how your profile reads.")
@@ -219,7 +222,7 @@ def propose(  # noqa: PLR0913 - each is a separate fact about the proposal
         "baseVersion": n,
         "sections": {k: new[k] for k in sections},
         "changes": found,
-        "summary": " ".join(summary.split())[:160] or profile.summary(found),
+        "summary": profile.summary(found),
         "reason": " ".join(reason.split())[:300],
         "conflicts": conflicts(old, new, shares),
         "blocked": f"{', '.join(locked)} locked: unlock on the card first." if locked else None,
@@ -245,10 +248,16 @@ def _take(store: Store, suggestion_id: str) -> dict[str, Any]:
 
 
 def accept(store: Store, audit: Audit, suggestion_id: str, reason: str, now: int) -> dict[str, Any]:
-    """Saves a suggestion as a new version, under its author's name, over today's profile."""
+    """Saves a suggestion as a new version, under its author's name. Refused once the Profile has
+    moved past the version it was made on: saving it would undo the newer edit unseen."""
     found = _take(store, suggestion_id)
-    _, doc = profile.current(store)
+    n, doc = profile.current(store)
     try:
+        if n != found["baseVersion"]:
+            raise Refused(
+                f"Your Profile changed since this was suggested (v{found['baseVersion']}, now "
+                f"v{n}). Reject it and ask again, or use Edit."
+            )
         return profile.save(
             store,
             audit,
@@ -274,8 +283,11 @@ def reject(store: Store, audit: Audit, suggestion_id: str) -> dict[str, Any]:
 
 
 def _context(store: Store, live: dict[str, Any]) -> str:
+    """One copy of the Profile for the model, with an age for the date of birth, and the live
+    figures."""
     n, doc = profile.current(store)
-    return f"Profile (version {n}):\n{export(doc, n, _now())}\nLive figures: {json.dumps(live)}"
+    shown = doc | {"identity": profile.for_model(doc)}
+    return f"Profile JSON (version {n}): {json.dumps(shown)}\nLive figures: {json.dumps(live)}"
 
 
 def command(  # noqa: PLR0913 - each is a separate input
@@ -296,12 +308,10 @@ def command(  # noqa: PLR0913 - each is a separate input
         SYSTEM,
         "The owner typed this into their Profile's command bar. If it asks to change the "
         "Profile, reply kind 'change' with each changed section as value_json: the whole "
-        "section's new JSON, in the same shape as the Profile JSON below, a one-line summary "
-        "such as 'Deposit cap A$10K → A$7K', and the reason they gave if any. Otherwise reply "
-        "kind 'answer' with a short answer from the Profile and the live figures, and no "
-        "sections.\n"
-        f"Request: {json.dumps(ask)}\n"
-        f"Profile JSON: {json.dumps(profile.current(store)[1])}\n{_context(store, live)}",
+        "section's new JSON, in the same shape as the Profile JSON below, and the reason they "
+        "gave if any. Otherwise reply kind 'answer' with a short answer from the Profile and the "
+        "live figures, and no sections.\n"
+        f"Request: {json.dumps(ask)}\n{_context(store, live)}",
         CHANGE_SHAPE,
     )
     audit.record(
@@ -315,7 +325,6 @@ def command(  # noqa: PLR0913 - each is a separate input
                 store,
                 sections,
                 author="Command bar",
-                summary=str(reply.get("summary", "")),
                 reason=str(reply.get("reason", "")),
                 shares=shares,
             ),
@@ -341,8 +350,8 @@ def planner(
         "summary, then up to five specific gaps, each saying what it is, what changing it would "
         "do over time using the projections given, and nothing generic. If one change to the "
         "Profile itself would help, give it as sections (each value_json the whole section's "
-        "new JSON) with a one-line change_summary and change_reason; otherwise no sections.\n"
-        f"Profile JSON: {json.dumps(profile.current(store)[1])}\n{_context(store, live)}",
+        "new JSON) with a one-line change_reason; otherwise no sections.\n"
+        f"{_context(store, live)}",
         PLANNER_SHAPE,
     )
     kept: dict[str, Any] = {
@@ -360,7 +369,6 @@ def planner(
                 store,
                 _sections(reply.get("sections")),
                 author="Riley, Risk Officer",
-                summary=str(reply.get("change_summary", "")),
                 reason=str(reply.get("change_reason", "")),
                 shares=shares,
             )
@@ -397,8 +405,9 @@ def recap_facts(
     then = next((Decimal(v) for d, v in history if d <= week_ago), None)
     now_usd = Decimal(history[-1][1]) if history else None
     change = (now_usd / then - 1) * HUNDRED if then and now_usd else None
-    since = int(datetime.combine(today - timedelta(days=7), datetime.min.time()).timestamp() * 1000)
-    overrides = [o for o in _load(store, "profile_overrides") if int(o["time"]) >= since]
+    week_start = datetime.combine(today - timedelta(days=7), datetime.min.time(), SYDNEY)
+    since = int(week_start.timestamp() * 1000)
+    broken_past = [o for o in overrides(store) if int(o["time"]) >= since]
     return {
         "week": today.isoformat(),
         "changePct": plain(change.quantize(Decimal("0.1"))) if change is not None else None,
@@ -406,7 +415,7 @@ def recap_facts(
         "nextGoal": strip["nextGoal"],
         "month": strip["month"],
         "rules": {k: v for k, v in checks.items()},
-        "overrides": len(overrides),
+        "overrides": len(broken_past),
     }
 
 

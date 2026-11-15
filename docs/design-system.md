@@ -42,6 +42,7 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 11. Button (secondary on `panel-2`, primary on `accent`, buy on `up`, sell on `down`), Input with a unit on the right, segmented Buy/Sell, Tabs with an accent underline, Table, Tag (Buy, Sell, Buy now, Wait, Avoid), Pill (connection and kill switch), Card, Dialog for the confirm step, Toast and Skeleton. Anything new is built from these and added here once settled.
 12. One primary button per view: the order button on Trade, Create on a bot page.
 13. Coin mark: the coin's own logo, 24px (decision 25); its letters on `panel-2` when there's none.
+13a. Rule-break banner (red, Keep to my rules first, Place anyway (logged) set apart), an Out of date tag (`wait`), and agent cards with an initials avatar, the Coordinator leading (decisions 58, 59).
 
 ## Not this
 

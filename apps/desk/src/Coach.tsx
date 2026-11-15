@@ -138,8 +138,8 @@ function Greeting({ coach }: { coach: CoachData }) {
               <OutOfDate />
             </div>
           )}
-          {message.lines.map((line) => (
-            <p key={line}>{line}</p>
+          {message.lines.map((line, i) => (
+            <p key={`${i}-${line}`}>{line}</p>
           ))}
           {message.link === "trade" && (
             <p>
@@ -347,8 +347,8 @@ function Recaps({ round }: { round: number }) {
           <p className="coach-recap-headline">{newest.headline}</p>
           {newest.lines.length > 0 && (
             <ul className="coach-points">
-              {newest.lines.map((line) => (
-                <li key={line}>{line}</li>
+              {newest.lines.map((line, i) => (
+                <li key={`${i}-${line}`}>{line}</li>
               ))}
             </ul>
           )}

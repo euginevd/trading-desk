@@ -680,7 +680,7 @@ function NewTrade({
           </div>
         )}
       </dialog>
-      <dialog ref={dialog} aria-labelledby="st-confirm" onClose={() => setHeldTrade(null)}>
+      <dialog ref={dialog} aria-labelledby="st-confirm" onClose={keepTrade}>
         <h2 id="st-confirm">
           Place {rows.length} limit {rows.length === 1 ? "buy" : "buys"} of {terminal.base}?
         </h2>
