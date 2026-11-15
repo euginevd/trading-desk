@@ -1,6 +1,7 @@
-"""Drift from the Plan's target allocation (decision 55): each target coin's share now against
-its target, outside a band set on the Plan (default ±5 points), and the limit order that would
-bring it back, within the per-trade size. Shown and prefilled only; the owner confirms each.
+"""Drift from the Profile's target allocation (decisions 55 and 58): each target coin's share
+now against its target, outside the rebalance band if one is set, and the limit order that would
+bring it back, within the per-trade size if one is set. Shown and prefilled only; the owner
+confirms each.
 """
 
 from decimal import Decimal
@@ -9,7 +10,6 @@ from typing import Any
 from api.binance import plain
 from api.tax import aud_rate
 
-DEFAULT_BAND = Decimal(5)
 STABLES = ("USDT", "USDC", "FDUSD")
 
 
@@ -18,8 +18,8 @@ def drift(portfolio: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
     total_usd = Decimal(portfolio["total"]["value"] or "0")
     rate = aud_rate(portfolio)
     rules = plan["rules"]
-    band = Decimal(rules.get("driftBand") or DEFAULT_BAND)
-    budget = Decimal(rules["tradeBudgetAud"])
+    band = Decimal(rules["rebalance_band"]) if rules["rebalance_band"] else None
+    budget = Decimal(rules["per_trade_aud"]) if rules["per_trade_aud"] else None
     values: dict[str, Decimal] = {}
     prices: dict[str, Decimal] = {}
     on_binance: dict[str, Decimal] = {}
@@ -31,13 +31,13 @@ def drift(portfolio: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
         if h.get("source") == "Binance":
             on_binance[coin] = on_binance.get(coin, Decimal(0)) + Decimal(h.get("amount") or "0")
     rows: list[dict[str, Any]] = []
-    for target in plan["goals"]["targets"]:
+    for target in plan["strategy"]["targets"]:
         coin, want = target["coin"], Decimal(target["pct"])
         if coin in STABLES:
             continue  # cash: what's left over, not something to trade toward
         now = values.get(coin, Decimal(0)) / total_usd * 100 if total_usd else Decimal(0)
         gap = want - now
-        outside = abs(gap) > band
+        outside = band is not None and abs(gap) > band
         row: dict[str, Any] = {
             "coin": coin,
             "targetPct": plain(want),
@@ -48,7 +48,7 @@ def drift(portfolio: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
         if outside and total_usd:
             aud = abs(gap) / 100 * total_usd * rate
             price = prices.get(coin)
-            order_aud = min(aud, budget)
+            order_aud = min(aud, budget) if budget is not None else aud
             qty = order_aud / rate / price if price else None
             if qty is not None and gap < 0:  # a sale can't be more than Binance holds
                 qty = min(qty, on_binance.get(coin, Decimal(0)))
@@ -63,7 +63,7 @@ def drift(portfolio: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
             }
         rows.append(row)
     return {
-        "band": plain(band),
+        "band": plain(band) if band is not None else None,
         "rows": rows,
         "outside": sum(1 for r in rows if r["outside"]),
         "hasTargets": bool(rows),

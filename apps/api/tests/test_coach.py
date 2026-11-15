@@ -11,11 +11,12 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from api import agents, coach, demo, handler, trading_plan
+from api import agents, coach, demo, handler, profile
 from api.ai_signal import SignalError, Signals
 from api.audit import Audit
 from api.binance import Binance
 from api.handler import Services
+from api.profile_md import for_agents
 from api.store import Store
 from api.trading import Refused, Trading
 
@@ -82,29 +83,19 @@ def portfolio(change_pct: str, **extra: Any) -> dict[str, Any]:
 
 
 def plan_with(store: Store, audit: Audit, **rules: Any) -> dict[str, Any]:
-    trading_plan.save(
-        store,
-        audit,
-        "rules",
-        {
-            "monthlyCapAud": "6000",
-            "maxCoinPct": "25",
-            "tradeBudgetAud": "500",
-            "maxLossPct": "20",
-            "takeProfit": "Up 7 days in a row or 15% in 7 days: trim back to target.",
-            "behaviour": ["No FOMO"],
-        }
-        | rules,
-        NOW_MS,
-    )
-    trading_plan.save(
-        store,
-        audit,
-        "quotes",
-        {"items": [{"text": "Opportunities always come back.", "author": "Me"}]},
-        NOW_MS,
-    )
-    return trading_plan.view(store)
+    doc = profile.empty()
+    doc["rules"] |= {
+        "monthly_deposit_cap_aud": "6000",
+        "max_pct_per_coin": "25",
+        "per_trade_aud": "500",
+        "max_loss_pct": "20",
+        "take_profit_rule": "Up 7 days in a row or 15% in 7 days: trim back to target.",
+        "behaviour_rules": ["No FOMO"],
+    } | rules
+    doc["quotes"] = [{"text": "Opportunities always come back.", "author": "Me"}]
+    if profile.clean(doc) != profile.current(store)[1]:
+        profile.save(store, audit, doc, author=profile.OWNER, now=NOW_MS)
+    return profile.current(store)[1]
 
 
 def week(values: list[str]) -> list[tuple[str, Decimal]]:
@@ -150,7 +141,7 @@ def test_each_mood_band_gets_its_message(
     facts = facts_for(store, audit, change)
     assert facts["mood"] == band
     assert facts["greeting"] == "Evening, Sam."
-    message = coach.written(facts, trading_plan.view(store))
+    message = coach.written(facts, profile.current(store)[1])
     assert message["lines"][0].startswith(says)
     if band in ("down", "sharp_down"):
         assert message["quote"] == {"text": "Opportunities always come back.", "author": "Me"}
@@ -176,7 +167,7 @@ def test_a_seven_day_streak_suggests_the_take_profit_rule(store: Store, audit: A
     every_day = ["100", "101", "102", "103", "104", "105", "106", "107"]
     facts = facts_for(store, audit, "3", every_day)
     assert facts["streak"] == {"weekPct": "7", "everyDay": "true"}
-    message = coach.written(facts, trading_plan.view(store))
+    message = coach.written(facts, profile.current(store)[1])
     assert (
         "You're up 7% this week. Your rule says consider taking some profit" in message["lines"][-1]
     )  # noqa: E501
@@ -219,17 +210,17 @@ def test_the_deposit_card_shows_the_year_the_month_and_the_cap(store: Store, aud
     assert (over["leftAud"], over["overAud"]) == ("0", "500")
     assert (
         "over your monthly cap by A$500"
-        in coach.written(facts | {"deposits": over}, trading_plan.view(store))["coach"]
+        in coach.written(facts | {"deposits": over}, profile.current(store)[1])["coach"]
     )
 
 
 def test_a_lesson_about_the_cap_shows_on_the_deposit_card() -> None:
     lessons = [
-        {"date": "2026-08-18", "happened": "Chased a breakout", "learned": "Wait for the retest"},
-        {"date": "2026-09-03", "happened": "Raised the monthly cap", "learned": "Keep it lower"},
+        {"year": "2025", "text": "Chased a breakout. Wait for the retest"},
+        {"year": "2026", "text": "Raised the monthly cap. Keep it lower"},
     ]
     card = coach.deposits(None, date(2026, 11, 15), None, lessons)
-    assert card["lesson"]["date"] == "2026-09-03"
+    assert card["lesson"]["year"] == "2026"
     assert card["known"] is False
 
 
@@ -248,11 +239,11 @@ def test_key_points_put_rule_breaches_first_and_keep_to_four(store: Store, audit
     ]
     assert points[0]["pct"] == "50"
     roomy = coach.key_points(
-        portfolio("-5"), plan["rules"] | {"maxCoinPct": "60", "maxLossPct": "30"}, zones.get
+        portfolio("-5"), plan["rules"] | {"max_pct_per_coin": "60", "max_loss_pct": "30"}, zones.get
     )  # noqa: E501
     assert [p["kind"] for p in roomy] == ["mover", "addZone"]
     near = {"BTC": {"zones": {"invalidation": {"price": "68000"}}}}
-    assert coach.key_points(portfolio("-5"), plan["rules"] | {"maxCoinPct": "60", "maxLossPct": "30"}, near.get)[1] == {  # noqa: E501
+    assert coach.key_points(portfolio("-5"), plan["rules"] | {"max_pct_per_coin": "60", "max_loss_pct": "30"}, near.get)[1] == {  # noqa: E501
         "kind": "nearInvalidation", "coin": "BTC", "rule": False, "pct": "2.9", "price": "68000",
     }  # fmt: skip
 
@@ -262,14 +253,14 @@ def test_key_points_put_rule_breaches_first_and_keep_to_four(store: Store, audit
 
 def test_the_model_words_the_message_once_per_day_and_mood(store: Store, audit: Audit) -> None:
     facts = facts_for(store, audit, "-14")
-    plan = trading_plan.view(store)
+    plan = profile.current(store)[1]
     asked: list[str] = []
 
     def write(_system: str, text: str, _shape: dict[str, Any]) -> dict[str, Any]:
         asked.append(text)
         return {"lines": ["Hard day.", "You're within your rules."], "coach": "Stay under A$6000."}
 
-    first = coach.message(facts, plan, trading_plan.for_agents(store), None, write)
+    first = coach.message(facts, plan, for_agents(store), None, write)
     assert (first["lines"], first["source"]) == (
         ["Hard day.", "You're within your rules."],
         "model",
@@ -278,10 +269,10 @@ def test_the_model_words_the_message_once_per_day_and_mood(store: Store, audit: 
     assert '"mood": "sharp_down"' in asked[0]
     assert "No FOMO" in asked[0]  # the Plan goes with it
     kept = {"key": coach.cache_key(facts), "message": first}
-    assert coach.message(facts, plan, {}, kept, write) == first
+    assert coach.message(facts, plan, "", kept, write) == first
     assert len(asked) == 1  # kept: not asked again
     calmer = facts_for(store, audit, "-5")
-    assert coach.message(calmer, plan, {}, kept, write)["lines"] == [
+    assert coach.message(calmer, plan, "", kept, write)["lines"] == [
         "Hard day.",
         "You're within your rules.",
     ]  # noqa: E501
@@ -290,101 +281,17 @@ def test_the_model_words_the_message_once_per_day_and_mood(store: Store, audit: 
 
 def test_without_the_model_or_a_quote_the_plain_words_stand(store: Store, audit: Audit) -> None:
     facts = facts_for(store, audit, "-5")
-    trading_plan.save(store, audit, "quotes", {"items": []}, NOW_MS)
-    plan = trading_plan.view(store)
+    profile.save_section(store, audit, "quotes", [], now=NOW_MS + 1)
+    plan = profile.current(store)[1]
 
     def broken(_s: str, _t: str, _shape: dict[str, Any]) -> dict[str, Any]:
         raise SignalError("No key")
 
-    message = coach.message(facts, plan, {}, None, broken)
+    message = coach.message(facts, plan, "", None, broken)
     assert message["source"] == "plain"
     assert message["quote"] is None  # never an invented one
-    empty = coach.message(facts, plan, {}, None, lambda _s, _t, _shape: {"lines": [], "coach": ""})
+    empty = coach.message(facts, plan, "", None, lambda _s, _t, _shape: {"lines": [], "coach": ""})
     assert empty["source"] == "plain"
-
-
-# The Plan page.
-
-
-def test_the_plan_saves_all_five_sections_and_keeps_rule_history(
-    store: Store, audit: Audit
-) -> None:
-    plan_with(store, audit)
-    trading_plan.save(
-        store,
-        audit,
-        "goals",
-        {"text": "Long-term BTC.", "targets": [{"coin": "btc", "pct": "40"}]},
-        NOW_MS,
-    )  # noqa: E501
-    trading_plan.save(store, audit, "strategy", {"text": "Buy in steps."}, NOW_MS)
-    trading_plan.save(
-        store,
-        audit,
-        "lessons",
-        {"items": [{"date": "2026-09-03", "happened": "Raised the cap", "learned": "Keep it"}]},
-        NOW_MS,
-    )  # noqa: E501
-    later = NOW_MS + 1000
-    trading_plan.save(
-        store,
-        audit,
-        "rules",
-        {
-            "monthlyCapAud": "4000",
-            "maxCoinPct": "30",
-            "tradeBudgetAud": "500",
-            "maxLossPct": "20",
-            "takeProfit": "Trim at +15%.",
-            "behaviour": ["No FOMO"],
-        },
-        later,
-    )  # noqa: E501
-    plan = trading_plan.view(store)
-    assert plan["goals"]["targets"] == [{"coin": "BTC", "pct": "40"}]
-    assert plan["strategy"] == {"text": "Buy in steps.", "updated": NOW_MS}
-    assert plan["lessons"]["items"][0]["happened"] == "Raised the cap"
-    assert plan["quotes"]["items"][0]["author"] == "Me"
-    assert plan["rules"]["updated"] == later
-    changes = {
-        (h["rule"], h["from"], h["to"]) for h in plan["rules"]["history"] if h["time"] == later
-    }  # noqa: E501
-    assert changes == {
-        ("Monthly deposit cap (A$)", "6000", "4000"),
-        ("Max % per coin", "25", "30"),
-        (
-            "Take-profit rule",
-            "Up 7 days in a row or 15% in 7 days: trim back to target.",
-            "Trim at +15%.",
-        ),  # noqa: E501
-    }
-    assert plan["rules"]["maxCoinPct"] == "30"  # the same rule the AI plan reads
-
-
-@pytest.mark.parametrize(
-    ("section", "body"),
-    [
-        ("rules", {"maxCoinPct": "250", "tradeBudgetAud": "500", "maxLossPct": "20"}),
-        (
-            "rules",
-            {
-                "monthlyCapAud": "lots",
-                "maxCoinPct": "25",
-                "tradeBudgetAud": "500",
-                "maxLossPct": "20",
-            },
-        ),  # noqa: E501
-        ("goals", {"targets": [{"coin": "bad coin!", "pct": "10"}]}),
-        ("lessons", {"items": [{"date": "yesterday", "happened": "x"}]}),
-        ("quotes", {"items": [{"text": ""}]}),
-        ("diary", {}),
-    ],
-)
-def test_the_plan_refuses_what_doesnt_fit(
-    store: Store, audit: Audit, section: str, body: dict[str, Any]
-) -> None:
-    with pytest.raises(Refused):
-        trading_plan.save(store, audit, section, body, NOW_MS)
 
 
 # The agents.
@@ -394,7 +301,15 @@ def test_every_agent_reads_the_plan_and_answers_with_a_placeholder(
     store: Store, audit: Audit
 ) -> None:
     plan_with(store, audit)
-    assert len(agents.listing()["agents"]) == 7  # six personas and Ask the desk  # noqa: PLR2004
+    team = agents.listing()["agents"]
+    assert [a["title"] for a in team] == [
+        "Desk Coordinator",
+        "Risk Officer",
+        "Market Researcher",
+        "Technical Analyst",
+        "Tax Specialist (AU)",
+    ]
+    assert {a["reportsTo"] for a in team[1:]} == {"desk"}  # the specialists report to Morgan
     for persona in agents.PERSONAS:
         told = agents.instructions(store, persona)
         assert "No FOMO" in told
@@ -402,10 +317,10 @@ def test_every_agent_reads_the_plan_and_answers_with_a_placeholder(
     thread = agents.send(store, audit, "risk", {"text": "  Should I add TAO? "})
     assert [m["text"] for m in thread["messages"]] == [
         "Should I add TAO?",
-        "Risk Officer will answer here soon.",
+        "Riley will answer here soon.",
     ]
     assert agents.send(store, audit, "desk", {"text": "Hi"})["messages"][-1]["text"] == (
-        "The desk will answer here soon."
+        "Morgan will answer here soon."
     )
     assert agents.thread(store, "risk")["messages"][0]["role"] == "owner"
     with pytest.raises(Refused):
@@ -461,9 +376,9 @@ def call(tmp_path: Path, store: Store, audit: Audit, monkeypatch: pytest.MonkeyP
 
 def test_the_routes_serve_the_coach_plan_agents_and_name(call: Any) -> None:
     assert call("PUT", "/settings/profile", {"name": "  Sam  "}) == (200, {"name": "Sam"})
-    status, plan = call("PUT", "/trading-plan/strategy", {"text": "Buy in steps."})
-    assert (status, plan["strategy"]["text"]) == (200, "Buy in steps.")
-    assert call("PUT", "/trading-plan/diary", {})[0] == 400  # noqa: PLR2004
+    status, page = call("PUT", "/profile/strategy", {"value": {"text": "Buy in steps."}})
+    assert (status, page["profile"]["strategy"]["text"]) == (200, "Buy in steps.")
+    assert call("PUT", "/profile/diary", {"value": {}})[0] == 400  # noqa: PLR2004
     status, dashboard = call("GET", "/coach")
     assert status == 200  # noqa: PLR2004
     assert dashboard["greeting"].endswith(", Sam.")
@@ -477,11 +392,11 @@ def test_the_routes_serve_the_coach_plan_agents_and_name(call: Any) -> None:
     status, dashboard = call("GET", "/coach")
     assert dashboard["pending"] is False
     assert call.written == ["asked"]
-    assert call("POST", "/agents/macro", {"text": "Rates?"})[1]["messages"][-1]["text"] == (
-        "Macro & News will answer here soon."
+    assert call("POST", "/agents/research", {"text": "Rates?"})[1]["messages"][-1]["text"] == (
+        "Quinn will answer here soon."
     )
-    assert call("GET", "/agents")[1]["agents"][0]["name"] == "Ask the desk"
-    assert call("PUT", "/risk", {"maxCoinPct": "30"})[0] == 404  # noqa: PLR2004 - rules live on the Plan
+    assert call("GET", "/agents")[1]["agents"][0]["name"] == "Morgan"
+    assert call("PUT", "/risk", {"maxCoinPct": "30"})[0] == 404  # noqa: PLR2004 - rules live on the Profile
 
 
 def test_a_failed_wording_is_not_kept_so_it_is_tried_again(

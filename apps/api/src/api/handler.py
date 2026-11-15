@@ -24,10 +24,13 @@ from api import (
     env_file,
     journal,
     ledger,
+    profile,
+    profile_ai,
+    profile_live,
+    profile_routes,
     rebalance,
     tax,
     telegram,
-    trading_plan,
 )
 from api.advisor import futures, gather, history_candles, rules_of
 from api.ai_client import capped, subscription, switched
@@ -42,6 +45,7 @@ from api.grid import Grids
 from api.icons import Icons
 from api.market import QUOTE, MarketError, coin_symbol, market
 from api.plan import track
+from api.profile_md import for_agents
 from api.sentiment import SentimentError, fear_and_greed, fear_and_greed_detail, market_global
 from api.service import CostRules, TradeCache, Wallet, fetch
 from api.store import Store
@@ -219,6 +223,7 @@ def live_portfolio() -> dict[str, Any]:
             portfolio = fetch(binance, fx, _wallet(tao), TRADE_CACHE, rules)
         today = datetime.now(SYDNEY).date().isoformat()
         store.record_value(today, portfolio["total"]["value"])
+        profile_live.remember_rate(store, portfolio)  # the bots' pre-trade check reads it
         if _demo():
             demo.history(store, today, portfolio["total"]["value"])
         portfolio["history"] = [
@@ -479,12 +484,83 @@ def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
     return {"source": source, "asset": asset, "averageCost": average}
 
 
-def _trading_route(
+BUYS = ("/trades", "/orders", "/orders/ladder")
+PRETRADE_RULES = ("monthly_deposit_cap_aud", "per_trade_aud", "max_pct_per_coin")
+
+
+def _spend_of(path: str, body: dict[str, Any]) -> Decimal | None:
+    """What a buy request would spend, in the quote; None when it isn't a buy or can't be read
+    (the order itself then refuses it)."""
+    try:
+        if path == "/orders":
+            if body.get("side") != "buy":
+                return None
+            return Decimal(str(body.get("price"))) * Decimal(str(body.get("amount")))
+        return Decimal(str(body.get("spend")))
+    except (InvalidOperation, ValueError):
+        return None
+
+
+def _pretrade(
+    desk: Trading, path: str, body: dict[str, Any], portfolio: Portfolio
+) -> dict[str, object] | None:
+    """The pre-trade check (decision 58): a buy that breaks a set Profile rule goes only once the
+    owner confirms past it, and that override is logged. A 409 names each rule broken."""
+    if path not in BUYS:
+        return None
+    spend = _spend_of(path, body)
+    if spend is None or not spend.is_finite() or spend <= 0:
+        return None
+    _, store, audit, _ = desk.parts()
+    _, doc = profile.current(store)
+    if all(profile.rule(doc, key) is None for key in PRETRADE_RULES):
+        return None
+    coin = coin_symbol(body.get("symbol", "")).removesuffix(QUOTE)
+    try:
+        held: dict[str, Any] | None = portfolio()
+    except profile_routes.LIVE_ERRORS:
+        held = None
+    rate = (
+        profile_live.remember_rate(store, held)
+        if held
+        else Decimal(store.setting(profile_live.RATE_KEY, "1.5"))
+    )
+    found = profile_live.breaks(
+        doc,
+        spend_aud=spend * rate,
+        month_aud=profile_live.month_spent_aud(store, rate, datetime.now(SYDNEY)),
+        share_after=profile_live.share_after(held, coin, spend) if held else None,
+        coin=coin,
+    )
+    if held is None and profile.rule(doc, "max_pct_per_coin") is not None:
+        found.append(  # fail closed: a set rule that can't be checked counts as broken
+            {
+                "rule": "max_pct_per_coin",
+                "label": "Max % per coin",
+                "message": "Your portfolio couldn't be read, so this coin's share wasn't checked.",
+            }
+        )
+    if not found:
+        return None
+    if body.get("override") is True:
+        profile_ai.record_override(store, audit, found, coin, spend * rate)
+        return None
+    audit.record(
+        "profile", f"Pre-trade check on {coin}", "Held: " + "; ".join(b["label"] for b in found)
+    )
+    return _reply(
+        409,
+        {"error": f"This buy breaks your rule: {found[0]['label']}.", "ruleBreaks": found},
+    )
+
+
+def _trading_route(  # noqa: PLR0913, PLR0917 - each factory is a seam the tests replace
     method: str,
     path: str,
     params: dict[str, str],
     event: dict[str, object],
     trading: TradingFactory,
+    portfolio: Portfolio,
 ) -> dict[str, object] | None:
     action = re.fullmatch(r"/trades/(\d+)/(cancel|close)", path)
     route = ROUTES.get((method, path))
@@ -492,6 +568,9 @@ def _trading_route(
         return None
     with trading() as desk:
         if route is not None:
+            held = _pretrade(desk, path, _body(event), portfolio)
+            if held is not None:
+                return held
             data = route(desk, params, _body(event))
             if path == "/trade" and _demo():
                 data["demo"] = True
@@ -553,8 +632,20 @@ def _coin(raw: object) -> str:
 
 
 def _run_signal(s: Services, body: dict[str, Any]) -> dict[str, Any]:
-    facts = _facts(s, _coin(body.get("coin"))) | {"plan": trading_plan.for_agents(s.store)}
-    return {"signal": s.signals.run(facts, body.get("force") is True)}
+    n, _ = profile.current(s.store)
+    facts = _facts(s, _coin(body.get("coin"))) | {
+        "plan": for_agents(s.store),
+        "profileVersion": n,
+    }
+    return {"signal": _dated_signal(s, s.signals.run(facts, body.get("force") is True))}
+
+
+def _dated_signal(s: Services, signal: dict[str, Any] | None) -> dict[str, Any] | None:
+    """A signal, marked out of date once the Profile has moved past the version it read."""
+    if signal is None:
+        return None
+    n, _ = profile.current(s.store)
+    return signal | {"outOfDate": signal.get("profileVersion") not in (None, n)}
 
 
 def _plan(s: Services, q: dict[str, str]) -> dict[str, Any]:
@@ -631,7 +722,9 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("POST", "/watchlist"): lambda s, _, b: s.watchlist().add(b.get("coin"), b.get("list")),
     ("POST", "/watchlists"): lambda s, _, b: s.watchlist().create(b.get("name")),
     ("GET", "/signal"): lambda s, q, _: {
-        "signal": s.signals.last(coin_symbol(q.get("coin", "")).removesuffix(QUOTE))
+        "signal": _dated_signal(
+            s, s.signals.last(coin_symbol(q.get("coin", "")).removesuffix(QUOTE))
+        )
     },
     ("POST", "/signal"): lambda s, _, b: _run_signal(s, b),
     ("GET", "/plan"): lambda s, q, _: _plan(s, q),
@@ -645,14 +738,13 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("PUT", "/settings/ai/key"): lambda s, _, b: _save_key(s, b),
     ("GET", "/settings/profile"): lambda s, _q, _b: _profile(s),
     ("PUT", "/settings/profile"): lambda s, _, b: _set_profile(s, b),
-    ("GET", "/trading-plan"): lambda s, _q, _b: trading_plan.view(s.store),
     ("GET", "/coach"): lambda s, _q, _b: _coach(s, write=False),
     ("POST", "/coach/message"): lambda s, _q, _b: _coach(s, write=True),
     ("GET", "/agents"): lambda _s, _q, _b: agents.listing(),
     ("GET", "/tax"): lambda s, _q, _b: _tax(s),
     ("GET", "/tax/sell-check"): lambda s, q, _b: _sell_check(s, q),
     ("GET", "/rebalance"): lambda s, _q, _b: rebalance.drift(
-        (s.portfolio or live_portfolio)(), trading_plan.view(s.store)
+        (s.portfolio or live_portfolio)(), profile.current(s.store)[1]
     ),
     ("GET", "/journal"): lambda s, _q, _b: _journal(s),
     ("PUT", "/journal/tags"): lambda s, _, b: journal.tag(s.store, b),
@@ -697,14 +789,23 @@ def _service_route(
         return _reply(200, s.watchlist().remove(removing.group(1), params.get("list")))
 
 
+def _profile_route(
+    method: str, path: str, event: dict[str, object], services: ServicesFactory
+) -> dict[str, object] | None:
+    """The Profile's routes (decision 58)."""
+    if not path.startswith(("/profile", "/recaps")):
+        return None
+    with services() as s:
+        found = profile_routes.route(
+            method, path, _body(event), s, s.portfolio or live_portfolio, lambda: _journal(s)
+        )
+        return _reply(200, found) if found is not None else None
+
+
 def _named_route(
     method: str, path: str
 ) -> Callable[[Services, dict[str, Any]], dict[str, Any]] | None:
-    """Routes with a name in the path: a section of the Plan, an agent's thread."""
-    section = re.fullmatch(r"/trading-plan/([a-z]{1,12})", path)
-    if section and method == "PUT":
-        name = section.group(1)
-        return lambda s, b: trading_plan.save(s.store, s.audit, name, b, int(time.time() * 1000))
+    """Routes with a name in the path: an agent's thread."""
     agent = re.fullmatch(r"/agents/([a-z]{1,12})", path)
     if agent and method == "GET":
         return lambda s, _b: agents.thread(s.store, agent.group(1))
@@ -728,7 +829,7 @@ def _set_profile(s: Services, body: dict[str, Any]) -> dict[str, str]:
 def _coach(s: Services, *, write: bool) -> dict[str, Any]:
     """The Dashboard: facts from code, and the message kept for today and this mood. GET is
     quick, with the plain wording until the model's is kept; POST has the model write it."""
-    plan = trading_plan.view(s.store)
+    n, plan = profile.current(s.store)
     try:
         report: dict[str, Any] | None = _deposits(s, {})
     except (BinanceError, httpx.HTTPError, LookupError, ValueError):
@@ -739,7 +840,7 @@ def _coach(s: Services, *, write: bool) -> dict[str, Any]:
         report=report,
         plan=plan,
         now=datetime.now(SYDNEY),
-        name=s.store.setting(coach.NAME_KEY, ""),
+        name=plan["identity"]["name"] or s.store.setting(coach.NAME_KEY, ""),
         last_plan=s.signals.last,
     )
     raw = s.store.setting(coach.CACHE_KEY, "")
@@ -749,18 +850,23 @@ def _coach(s: Services, *, write: bool) -> dict[str, Any]:
         kept = None
     fresh = bool(kept and kept.get("key") == coach.cache_key(facts))
     if not write:
-        message = coach.message(facts, plan, {}, kept, None)
-        return facts | {"message": message, "pending": not fresh}
+        message = coach.message(facts, plan, "", kept, None)
+        return facts | {"message": _dated_message(message, kept, n), "pending": not fresh}
 
     def ask(system: str, text: str, shape: dict[str, Any]) -> dict[str, Any]:
         return s.signals.write(system, text, shape, "coach message")
 
-    message = coach.message(facts, plan, trading_plan.for_agents(s.store), kept, ask)
-    if message["source"] == "model":
-        s.store.set_setting(
-            coach.CACHE_KEY, json.dumps({"key": coach.cache_key(facts), "message": message})
-        )
-    return facts | {"message": message, "pending": False}
+    message = coach.message(facts, plan, for_agents(s.store), kept, ask)
+    if message["source"] == "model" and not (fresh and kept):
+        kept = {"key": coach.cache_key(facts), "message": message, "profileVersion": n}
+        s.store.set_setting(coach.CACHE_KEY, json.dumps(kept))
+    return facts | {"message": _dated_message(message, kept, n), "pending": False}
+
+
+def _dated_message(message: dict[str, Any], kept: dict[str, Any] | None, n: int) -> dict[str, Any]:
+    """The model's words are out of date once the Profile moves past the version they read."""
+    read = kept.get("profileVersion") if kept and message.get("source") == "model" else None
+    return message | {"outOfDate": read is not None and read != n}
 
 
 def _ledger(s: Services) -> tuple[list[ledger.Fill], dict[str, Any], date]:
@@ -794,12 +900,15 @@ def _sell_check(s: Services, q: dict[str, str]) -> dict[str, Any]:
 def _journal(s: Services) -> dict[str, Any]:
     fills, portfolio, today = _ledger(s)
     _, sales = tax.build(fills, tax.held_of(portfolio))
-    plan = trading_plan.view(s.store)
+    _, plan = profile.current(s.store)
     total = Decimal(portfolio["total"]["value"] or "0")
-    cap = Decimal(plan["rules"]["maxCoinPct"])
+    cap = profile.rule(plan, "max_pct_per_coin")
     over = {
-        r["coin"] for r in coach.coins_held(portfolio) if total and r["value"] / total * 100 > cap
+        r["coin"]
+        for r in coach.coins_held(portfolio)
+        if cap is not None and total and r["value"] / total * 100 > cap
     }
+
     try:
         report = _deposits(s, {})
         months = {m["month"]: Decimal(m["aud"]) for m in report["months"]}
@@ -852,6 +961,19 @@ def morning_summary(s: Services, now: datetime | None = None) -> bool:
         s.audit.record("telegram", "Morning summary", f"Failed: {said}")
         return False
     s.audit.record("telegram", "Morning summary", "Sent")
+    return True
+
+
+def weekly_recap(s: Services, now: datetime | None = None) -> bool:
+    """Writes the Sunday recap once it's due (decision 58); a failure is in the audit log."""
+    now = now or datetime.now(SYDNEY)
+    if profile_ai.recap_due(s.store, now) is None:
+        return False
+    try:
+        profile_routes.recap_now(s, s.portfolio or live_portfolio)
+    except Exception as error:  # noqa: BLE001 - the watcher must keep running
+        s.audit.record("profile", "Weekly recap", f"Failed: {type(error).__name__}")
+        return False
     return True
 
 
@@ -914,7 +1036,8 @@ def handler(  # noqa: PLR0913, PLR0917 - each factory is a seam the tests replac
         routed = (
             _bot_route(method, path, event, bots)
             or _grid_route(method, path, event, grids)
-            or _trading_route(method, path, params, event, trading)
+            or _trading_route(method, path, params, event, trading, portfolio)
+            or _profile_route(method, path, event, services)
             or _service_route(method, path, params, event, services)
         )
     except (

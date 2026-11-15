@@ -84,7 +84,7 @@ def test_what_if_matches_a_hand_calculation() -> None:
 
 
 def test_the_rules_stop_adding_over_the_cap_and_flag_a_big_loss() -> None:
-    rules = Rules()
+    rules = Rules(max_coin_pct=D(25), trade_budget_aud=D(500), max_loss_pct=D(20))
     heavy = Position(D(1), D(100), D(100), D(80), D(-20), D(-20), D(80))
     found = checks(heavy, rules, after_weight=D(85))
     assert not found["canAdd"]
@@ -95,7 +95,14 @@ def test_the_rules_stop_adding_over_the_cap_and_flag_a_big_loss() -> None:
     assert not checks(light, rules, after_weight=D(30))["canAdd"]
 
 
+def test_a_rule_the_owner_hasnt_set_checks_nothing() -> None:
+    heavy = Position(D(1), D(100), D(100), D(80), D(-90), D(-90), D(99))
+    found = checks(heavy, Rules(), after_weight=D(100))
+    assert found == {"canAdd": True, "pastMaxLoss": False, "notes": []}
+
+
 def test_levels_come_from_swing_lows_and_highs_nearest_first() -> None:
+
     weekly = [
         bar(0, "100", "110"),
         bar(1, "98", "108"),

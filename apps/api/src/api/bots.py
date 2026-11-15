@@ -7,9 +7,11 @@ import json
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from api import profile, profile_live
 from api.audit import Audit
 from api.binance import Binance, BinanceError, Filters, plain
 from api.indicators import Candle, bollinger
@@ -676,6 +678,10 @@ class Bots:
         filters = self._binance.filters(symbol)
         price = Decimal(self._binance.tickers([symbol])[symbol]["lastPrice"])
         rows = ladder(config, price, filters)
+        held = self.rule_hold(rows[-1]["total"]) if rows else None
+        if held:  # the same signal is tried again next step: last_signal isn't saved
+            self._hold(self._store.bot(int(bot["id"])), held)
+            return
         problem = self._cannot_start(config, rows, filters)
         if problem:
             bot["note"] = f"Skipped a signal: {problem}"
@@ -692,13 +698,29 @@ class Bots:
         assert config.entry_price is not None  # noqa: S101 - a trade has one
         filters = self._binance.filters(str(bot["symbol"]))
         rows = ladder(config, config.entry_price, filters)
+        held = self.rule_hold(rows[-1]["total"]) if rows else None
+        if held:
+            self._hold(bot, held)
+            return
         problem = self._cannot_start(config, rows, filters)
         if problem:
             self._finish(bot, f"Not placed: {problem}")
             return
         self._open_deal(bot, rows)
 
+    def rule_hold(self, spend: Decimal) -> str | None:
+        """A buy that breaks a set Profile rule waits: a bot can't confirm past it (decision 58)."""
+        _, doc = profile.current(self._store)
+        now = datetime.fromtimestamp(self._clock(), profile_live.SYDNEY)
+        return profile_live.bot_problem(self._store, doc, spend, now)
+
+    def _hold(self, bot: dict[str, Any], note: str) -> None:
+        if bot["note"] != note:
+            self._store.save_bot(bot | {"note": note, "updated": self._now()})
+            self._say(bot, "held a buy", note)
+
     def _finish(self, bot: dict[str, Any], note: str) -> None:
+
         bot = self._store.bot(int(bot["id"]))
         bot |= {"enabled": 0, "note": note, "updated": self._now()}
         self._store.save_bot(bot)

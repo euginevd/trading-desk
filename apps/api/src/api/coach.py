@@ -34,7 +34,7 @@ LABELS = {
 
 SYSTEM = (
     "You write the short messages on the owner's personal crypto dashboard. Plain, warm and "
-    "short; never hype, never panic. Use only the facts given and the owner's own plan: never "
+    "short; never hype, never panic. Use only the facts given and the owner's own Profile: never "
     "invent a number, a quote, a price or a rule. Advice only; never tell them to place an order. "
     "Australian English. Reply in the JSON shape asked for."
 )
@@ -89,7 +89,7 @@ def part_of_day(now: datetime) -> str:
 
 
 def deposits(
-    report: dict[str, Any] | None, today: date, cap: Decimal | None, lessons: list[dict[str, str]]
+    report: dict[str, Any] | None, today: date, cap: Decimal | None, lessons: list[dict[str, Any]]
 ) -> dict[str, Any]:
     """This financial year's and this month's deposits in AUD, against the monthly cap."""
     month_key = f"{today:%Y-%m}"
@@ -99,10 +99,8 @@ def deposits(
     note = next(
         (
             item
-            for item in sorted(lessons, key=lambda item: item["date"], reverse=True)
-            if any(
-                w in (item["happened"] + " " + item["learned"]).lower() for w in ("cap", "deposit")
-            )
+            for item in sorted(lessons, key=lambda item: item["year"] or "", reverse=True)
+            if any(w in str(item["text"]).lower() for w in ("cap", "deposit"))
         ),
         None,
     )
@@ -134,32 +132,35 @@ def coins_held(portfolio: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _breaches(
-    rows: list[dict[str, Any]], total: Decimal, rules: dict[str, str]
+    rows: list[dict[str, Any]], total: Decimal, rules: dict[str, Any]
 ) -> list[dict[str, Any]]:
+    """The Profile's max per coin and max loss, where set (decision 58)."""
     points: list[dict[str, Any]] = []
-    cap, max_loss = Decimal(rules["maxCoinPct"]), Decimal(rules["maxLossPct"])
+    raw_cap, raw_loss = rules.get("max_pct_per_coin"), rules.get("max_loss_pct")
+    cap = Decimal(raw_cap) if raw_cap is not None else None
+    max_loss = Decimal(raw_loss) if raw_loss is not None else None
     for row in rows:
         share = row["value"] / total * 100 if total else Decimal(0)
-        if share > cap:
+        if cap is not None and share > cap:
             points.append(
                 {
                     "kind": "concentration",
                     "coin": row["coin"],
                     "rule": True,
                     "pct": plain(share.quantize(Decimal(1))),
-                    "cap": rules["maxCoinPct"],
+                    "cap": raw_cap,
                 }
             )
     for row in rows:
         lost = row.get("profitPercent")
-        if lost is not None and Decimal(lost) <= -max_loss:
+        if max_loss is not None and lost is not None and Decimal(lost) <= -max_loss:
             points.append(
                 {
                     "kind": "loss",
                     "coin": row["coin"],
                     "rule": True,
                     "pct": plain(Decimal(lost).quantize(Decimal("0.1"))),
-                    "cap": rules["maxLossPct"],
+                    "cap": raw_loss,
                 }
             )
     return points
@@ -197,7 +198,7 @@ def _zone(row: dict[str, Any], plan: dict[str, Any] | None) -> dict[str, Any] | 
 
 def key_points(
     portfolio: dict[str, Any],
-    rules: dict[str, str],
+    rules: dict[str, Any],
     last_plan: Callable[[str], dict[str, Any] | None],
 ) -> list[dict[str, Any]]:
     """Up to four points from real data: rule breaches first, then the day's biggest mover,
@@ -231,7 +232,7 @@ def facts(  # noqa: PLR0913 - every input is a separate source, passed in for te
     aud = Decimal(rates.get("AUD") or total.get("audRate") or "1")
     change_aud = Decimal(total.get("change24h") or "0") * aud
     rules = plan["rules"]
-    cap = Decimal(rules["monthlyCapAud"]) if rules.get("monthlyCapAud") else None
+    cap = Decimal(rules["monthly_deposit_cap_aud"]) if rules["monthly_deposit_cap_aud"] else None
     points = key_points(portfolio, rules, last_plan)
     up = streak(history, inflows(report))
     band = mood(pct)
@@ -242,9 +243,9 @@ def facts(  # noqa: PLR0913 - every input is a separate source, passed in for te
         "changePct": plain(pct.quantize(Decimal("0.1"))),
         "changeAud": plain(change_aud.quantize(Decimal(1))),
         "streak": up if band not in ("down", "sharp_down") else None,
-        "takeProfit": rules.get("takeProfit") or None,
+        "takeProfit": rules["take_profit_rule"] or None,
         "withinRules": not any(p["rule"] for p in points),
-        "deposits": deposits(report, now.date(), cap, plan["lessons"]["items"]),
+        "deposits": deposits(report, now.date(), cap, plan["lessons"]),
         "keyPoints": points,
         "day": now.date().isoformat(),
     }
@@ -252,7 +253,7 @@ def facts(  # noqa: PLR0913 - every input is a separate source, passed in for te
 
 def quote(plan: dict[str, Any], day: str) -> dict[str, str] | None:
     """One of the owner's own quotes, the same all day; none if the list is empty."""
-    quotes = plan["quotes"]["items"]
+    quotes = plan["quotes"]
     if not quotes:
         return None
     index = int(hashlib.sha256(day.encode()).hexdigest(), 16) % len(quotes)
@@ -285,7 +286,7 @@ def written(facts_: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
     elif band in ("up", "sharp_up") and facts_["takeProfit"]:
         lines.append(f"Your take-profit rule: {facts_['takeProfit']}")
     if dep["capAud"] is None:
-        coach = "Set a monthly deposit cap on your Plan to track it here."
+        coach = "Set a monthly deposit cap on your Profile to track it here."
     elif dep["overAud"]:
         coach = f"You're over your monthly cap by A${dep['overAud']}. The next deposit can wait."
     else:
@@ -327,7 +328,7 @@ SHAPE: dict[str, Any] = {
 }
 
 
-def prompt(facts_: dict[str, Any], plan: dict[str, Any], plain_: dict[str, Any]) -> str:
+def prompt(facts_: dict[str, Any], plan: str, plain_: dict[str, Any]) -> str:
     asks = {
         "down": "lines: 1 calm, consoling line, then 1 practical line tied to the owner's rules.",
         "sharp_down": "lines: 1 calm, consoling line, then 1 practical line tied to their rules.",
@@ -337,10 +338,10 @@ def prompt(facts_: dict[str, Any], plan: dict[str, Any], plain_: dict[str, Any])
     }
     return (
         f"{asks[facts_['mood']]} coach: 1 line on this month's deposits against the cap, "
-        "grounded in the plan (its rules and lessons). Use the figures exactly as given.\n"
+        "grounded in the Profile (its rules and lessons). Use the figures exactly as given.\n"
         f"Facts: {json.dumps({k: v for k, v in facts_.items() if k != 'keyPoints'})}\n"
         f"Key points: {json.dumps(facts_['keyPoints'])}\n"
-        f"Plan: {json.dumps(plan)}\n"
+        f"Profile:\n{plan}\n"
         f"A plain version to improve on: {json.dumps(plain_)}"
     )
 
@@ -348,7 +349,7 @@ def prompt(facts_: dict[str, Any], plan: dict[str, Any], plain_: dict[str, Any])
 def message(
     facts_: dict[str, Any],
     plan: dict[str, Any],
-    agents_plan: dict[str, Any],
+    agents_plan: str,
     kept: dict[str, Any] | None,
     write: Callable[[str, str, dict[str, Any]], dict[str, Any]] | None,
 ) -> dict[str, Any]:

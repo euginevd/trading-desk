@@ -315,7 +315,8 @@ def context(facts: dict[str, Any], action: str) -> list[str]:
     pos = facts["position"]
     rules = facts["rules"]
     notes: list[str] = []
-    if pos["held"] and Decimal(pos["weightPct"] or "0") >= Decimal(rules["maxCoinPct"]):
+    most = rules.get("maxCoinPct")
+    if pos["held"] and most is not None and Decimal(pos["weightPct"] or "0") >= Decimal(most):
         notes.append(f"{facts['coin']} is {Decimal(pos['weightPct']):.0f}% of your portfolio.")
     pnl = Decimal(pos["pnl"]) if pos.get("pnl") is not None else None
     if pos["held"] and pnl is not None and pnl < 0 and action in ("Trim", "Sell"):
@@ -403,7 +404,12 @@ class Signals:
         model = str(reply.pop("_model", MODEL))
         self._store.set_setting(self._month_key(), plain(self.spent() + cost))
         try:
-            signal = checked(reply, facts, kept) | {"via": via, "model": model}
+            signal: dict[str, Any] = checked(reply, facts, kept) | {
+                "via": via,
+                "model": model,
+                "profileVersion": facts.get("profileVersion"),
+            }
+
         except SignalError as error:
             self._audit.record("signal", f"Claude: signal {coin} via {via}", f"Refused: {error}")
             raise
