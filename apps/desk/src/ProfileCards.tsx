@@ -81,7 +81,7 @@ function fromDraft(f: FieldSpec, value: string | boolean): unknown {
       .filter((parts) => parts[0])
       .map(([coin, pct]) => ({
         coin: (coin ?? "").toUpperCase(),
-        pct: (pct ?? "").replace("%", ""),
+        pct: (pct ?? "").replaceAll("%", ""),
       }));
   return text.trim() === "" ? null : text.trim();
 }
