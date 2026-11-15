@@ -6,7 +6,7 @@ import ConfirmCancel from "./ConfirmCancel";
 import OrderDetail from "./OrderDetail";
 import Deposits from "./Deposits";
 import { FearGreed, Movers, Signals } from "./Widgets";
-import { ResetIcon } from "./icons";
+import { ResetIcon, WalletIcon } from "./icons";
 import { type Currency, type Money, money } from "./money";
 import { Clickable, DetailPanel, type DetailKind } from "./WidgetDetails";
 import {
@@ -138,12 +138,14 @@ function Allocation({ holdings }: { holdings: Holding[] }) {
           key: `${h.asset}-${h.source}`,
           label: h.source === "TAO wallet" ? "TAO (wallet)" : h.asset,
           coin: h.asset as string | null,
+          wallet: h.source === "TAO wallet",
           value: Number(h.value),
         }))
       : WALLETS.map((source) => ({
           key: source,
           label: SOURCE_WORD[source],
           coin: null as string | null,
+          wallet: source === "TAO wallet",
           value: valued.filter((h) => h.source === source).reduce((s, h) => s + Number(h.value), 0),
         }))
           .filter((g) => g.value > 0)
@@ -161,19 +163,32 @@ function Allocation({ holdings }: { holdings: Holding[] }) {
           <div key={p.key} style={{ flex: p.share, background: p.colour }} />
         ))}
       </div>
-      <div className="legend">
-        {parts.map((p) => (
-          <span key={p.key}>
-            {p.coin ? (
-              <span className="legend-icon" style={{ boxShadow: `0 0 0 1.5px ${p.colour}` }}>
-                <CoinIcon coin={p.coin} />
+      <div className={`legend${by === "coin" ? " legend-coins" : ""}`}>
+        {parts.map((p) => {
+          const pct = `${p.share > 0 && p.share < 1 ? "<1" : p.share.toFixed(0)}%`;
+          // By coin: the logo and share only; the name stays for screen readers and on hover.
+          return p.coin ? (
+            <span key={p.key} title={`${p.label} ${pct}`}>
+              <span className="legend-mark">
+                <span className="legend-icon" style={{ boxShadow: `0 0 0 1.5px ${p.colour}` }}>
+                  <CoinIcon coin={p.coin} />
+                </span>
+                {p.wallet && (
+                  <span className="legend-badge" aria-hidden="true">
+                    <WalletIcon />
+                  </span>
+                )}
               </span>
-            ) : (
+              <span className="visually-hidden">{p.label}</span>
+              <span className="num">{pct}</span>
+            </span>
+          ) : (
+            <span key={p.key}>
               <s style={{ background: p.colour }} />
-            )}
-            {p.label} {p.share > 0 && p.share < 1 ? "<1" : p.share.toFixed(0)}%
-          </span>
-        ))}
+              {p.label} {pct}
+            </span>
+          );
+        })}
       </div>
     </>
   );
