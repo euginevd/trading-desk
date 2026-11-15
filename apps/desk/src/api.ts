@@ -1,4 +1,8 @@
 import type {
+  AgentThread,
+  Coach,
+  PlanSection,
+  TradingPlan,
   AiMode,
   AiSettings,
   Interval,
@@ -17,7 +21,6 @@ import type {
   SentimentDetail,
   PlanFacts,
   PriceAlert,
-  RiskRules,
   MarketGlobal,
   DcaBots,
   DcaPreview,
@@ -157,7 +160,6 @@ export const editOrder = (request: {
 // The AI panel's live facts, the owner's risk rules and price alerts (decision 46).
 export const getPlan = (coin: string) =>
   call<PlanFacts>("GET", `/plan?coin=${encodeURIComponent(coin)}`);
-export const setRisk = (rules: RiskRules) => call<RiskRules>("PUT", "/risk", rules);
 export const addAlert = (alert: {
   coin: string;
   direction: "above" | "below";
@@ -166,3 +168,17 @@ export const addAlert = (alert: {
 }) => call<{ alerts: PriceAlert[] }>("POST", "/alerts", alert);
 export const deleteAlert = (id: number) =>
   call<{ alerts: PriceAlert[] }>("DELETE", `/alerts/${id}`, {});
+
+// The coach, the Plan and the agents (decision 52).
+export const getCoach = () => call<Coach>("GET", "/coach");
+export const writeCoach = () => call<Coach>("POST", "/coach/message", {});
+export const getTradingPlan = () => call<TradingPlan>("GET", "/trading-plan");
+export const saveTradingPlan = (section: PlanSection, body: unknown) =>
+  call<TradingPlan>("PUT", `/trading-plan/${section}`, body);
+export const getAgents = () => call<{ agents: { id: string; name: string }[] }>("GET", "/agents");
+export const getAgent = (id: string) => call<AgentThread>("GET", `/agents/${id}`);
+export const sendAgent = (id: string, text: string) =>
+  call<AgentThread>("POST", `/agents/${id}`, { text });
+export const getProfile = () => call<{ name: string }>("GET", "/settings/profile");
+export const setProfile = (name: string) =>
+  call<{ name: string }>("PUT", "/settings/profile", { name });

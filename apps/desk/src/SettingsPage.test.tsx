@@ -24,6 +24,8 @@ const saveAiKey = vi.fn((key: string) => key && Promise.resolve({ ...saved, apiK
 const startSignIn = vi.fn(() => Promise.resolve({ url: LINK }));
 const finishSignIn = vi.fn((code: string) => code && Promise.resolve({ ...saved, tokenSet: true }));
 vi.mock("./api", () => ({
+  getProfile: () => Promise.resolve({ name: "" }),
+  setProfile: (name: string) => Promise.resolve({ name }),
   getAiSettings: () => Promise.resolve(saved),
   setAiSettings: (mode: AiSettings["mode"], fallback: boolean, model: string) =>
     setAiSettings(mode, fallback, model),

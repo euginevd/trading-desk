@@ -627,3 +627,91 @@ export interface AiSettings {
   models: { id: string; name: string }[];
   budget: { spent: string; cap: string };
 }
+
+// The coach Dashboard (decision 52): every figure worked out by the api; the words kept per day.
+export type Mood = "sharp_up" | "up" | "flat" | "down" | "sharp_down";
+export type KeyPoint =
+  | { kind: "concentration"; coin: string; pct: string; cap: string; rule: true }
+  | { kind: "loss"; coin: string; pct: string; cap: string; rule: true }
+  | { kind: "mover"; coin: string; pct: string; rule: false }
+  | { kind: "addZone"; coin: string; low: string; high: string; rule: false }
+  | { kind: "nearInvalidation"; coin: string; pct: string; price: string; rule: false };
+export interface Lesson {
+  id?: string;
+  date: string;
+  happened: string;
+  learned: string;
+}
+export interface Quote {
+  id?: string;
+  text: string;
+  author: string;
+}
+export interface Coach {
+  greeting: string;
+  mood: Mood;
+  moodLabel: string;
+  changePct: string;
+  changeAud: string;
+  streak: { weekPct: string; everyDay: string } | null;
+  takeProfit: string | null;
+  withinRules: boolean;
+  deposits: {
+    known: boolean;
+    fy: string | null;
+    fyAud: string;
+    monthAud: string;
+    capAud: string | null;
+    leftAud: string | null;
+    overAud: string | null;
+    usedPct: string | null;
+    lesson: Lesson | null;
+  };
+  keyPoints: KeyPoint[];
+  day: string;
+  message: {
+    lines: string[];
+    coach: string;
+    quote: { text: string; author: string } | null;
+    link: "trade" | null;
+    source: "plain" | "model";
+  };
+  pending: boolean;
+}
+
+// The Plan page (decision 52): the source every agent reads.
+export interface RuleChange {
+  time: number;
+  rule: string;
+  from: string;
+  to: string;
+}
+export interface TradingPlan {
+  goals: { text: string; targets: { coin: string; pct: string }[]; updated: number | null };
+  strategy: { text: string; updated: number | null };
+  rules: {
+    monthlyCapAud: string | null;
+    maxCoinPct: string;
+    tradeBudgetAud: string;
+    maxLossPct: string;
+    takeProfit: string;
+    behaviour: string[];
+    notes: string;
+    updated: number | null;
+    history: RuleChange[];
+  };
+  lessons: { items: Lesson[]; updated: number | null };
+  quotes: { items: Quote[]; updated: number | null };
+}
+export type PlanSection = keyof TradingPlan;
+
+export interface AgentMessage {
+  role: "owner" | "agent";
+  text: string;
+  time: number;
+}
+export interface AgentThread {
+  id: string;
+  name: string;
+  messages: AgentMessage[];
+}

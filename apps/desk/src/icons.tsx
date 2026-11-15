@@ -27,6 +27,20 @@ export const SettingsIcon = () => (
   </svg>
 );
 
+export const PlanIcon = () => (
+  <svg {...base}>
+    <rect x="5" y="3" width="14" height="18" rx="2" />
+    <path d="M9 8h6M9 12h6M9 16h4" />
+  </svg>
+);
+
+export const PortfolioIcon = () => (
+  <svg {...base}>
+    <path d="M21 12a9 9 0 1 1-9-9v9z" />
+    <path d="M14.5 2.8A9 9 0 0 1 21.2 9.5H14.5z" />
+  </svg>
+);
+
 export const TradeIcon = () => (
   <svg {...base}>
     <path d="M7 3v4M7 17v4M17 6v3M17 17v3" />

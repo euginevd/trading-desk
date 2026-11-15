@@ -55,4 +55,5 @@ To add one: its line here, and its record, in the same form, at the end of the n
 49. A prototype's PR waits for the batch, never one request. [Record](decisions/from-48.md)
 50. A Settings page holds the desk's choices, starting with the AI provider. [Record](decisions/from-48.md)
 51. Settings signs in to Claude and takes the API key, saving both to `.env`. [Record](decisions/from-48.md)
-53. The owner picks the model on Settings: Opus, Sonnet or Haiku 5.5. [Record](decisions/from-48.md)
+52. A coach Dashboard, and a Plan page every agent reads. [Record](decisions/from-48.md)
+53. The owner picks the model on Settings. [Record](decisions/from-48.md)

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, addAlert, deleteAlert, getPlan, setRisk } from "./api";
+import { ApiError, addAlert, deleteAlert, getPlan } from "./api";
 import { amount as coinAmount, dateTime, percent, price } from "./format";
 import { whatIf } from "./plan";
 import type { PlanAction, PlanFacts, RiskRules, Signal } from "./types";
@@ -133,7 +133,7 @@ export default function AiPanel({
           </span>
         )}
       </div>
-      {facts && <RulesLine rules={facts.rules} onSaved={load} />}
+      {facts && <RulesLine rules={facts.rules} />}
       <p className="ai-note muted">
         Uses your position (amount, avg cost, PnL, allocation). Never your keys. Advice only; you
         decide.
@@ -428,75 +428,12 @@ function WatchFor({
   );
 }
 
-function RulesLine({ rules, onSaved }: { rules: RiskRules; onSaved: () => void }) {
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState(rules);
-  const [error, setError] = useState("");
-  if (!editing) {
-    return (
-      <div className="ai-rules muted">
-        Your rules: max {rules.maxCoinPct}% a coin · A$
-        {Number(rules.tradeBudgetAud).toLocaleString("en-AU")} a trade · max loss {rules.maxLossPct}
-        % a position{" "}
-        <button
-          className="link"
-          type="button"
-          onClick={() => {
-            setForm(rules);
-            setEditing(true);
-          }}
-        >
-          Edit
-        </button>
-      </div>
-    );
-  }
-  const field = (key: keyof RiskRules, label: string, unit: string) => (
-    <div className="field">
-      <label htmlFor={`risk-${key}`}>{label}</label>
-      <div className="in">
-        <input
-          id={`risk-${key}`}
-          className="num"
-          inputMode="decimal"
-          value={form[key]}
-          onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-        />
-        <span className="muted">{unit}</span>
-      </div>
-    </div>
-  );
+function RulesLine({ rules }: { rules: RiskRules }) {
   return (
-    <div className="ai-rules-edit">
-      <div className="dca-two" style={{ gridTemplateColumns: "repeat(3, minmax(0, 1fr))" }}>
-        {field("maxCoinPct", "Max a coin", "%")}
-        {field("tradeBudgetAud", "A trade", "A$")}
-        {field("maxLossPct", "Max loss", "%")}
-      </div>
-      {error && <p className="error-text">{error}</p>}
-      <div
-        className="row-actions"
-        style={{ justifyContent: "flex-start", width: "auto", marginTop: 8 }}
-      >
-        <button
-          className="btn btn-small"
-          type="button"
-          onClick={() =>
-            setRisk(form).then(
-              () => {
-                setEditing(false);
-                onSaved();
-              },
-              (e: unknown) => setError(message(e)),
-            )
-          }
-        >
-          Save rules
-        </button>
-        <button className="btn btn-small" type="button" onClick={() => setEditing(false)}>
-          Cancel
-        </button>
-      </div>
+    <div className="ai-rules muted">
+      Your rules: max {rules.maxCoinPct}% a coin · A$
+      {Number(rules.tradeBudgetAud).toLocaleString("en-AU")} a trade · max loss {rules.maxLossPct}%
+      a position · <a href="#/plan">Edit in Plan</a>
     </div>
   );
 }

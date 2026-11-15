@@ -2947,3 +2947,372 @@ dialog.in-place .detail-head {
     grid-template-columns: 1fr;
   }
 }
+
+/* The coach Dashboard (decision 52) */
+.coach {
+  display: grid;
+  gap: 12px;
+}
+.coach-greet {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 24px;
+  padding: 18px;
+}
+.coach-greet h2 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+.coach-headline {
+  font-size: 16px;
+  margin: 4px 0 10px;
+}
+.coach-message p {
+  margin: 4px 0;
+  color: var(--body);
+  max-width: 760px;
+}
+.coach-message a,
+.coach-links a,
+.coach-set {
+  color: var(--accent);
+  text-decoration: none;
+}
+.coach-quote {
+  margin: 10px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--line-2);
+  color: var(--muted);
+  font-style: italic;
+}
+.coach-side {
+  display: grid;
+  justify-items: end;
+  align-content: start;
+  gap: 12px;
+}
+.coach-mood {
+  display: inline-flex;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--panel-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.coach-mood.up,
+.coach-mood.sharp_up {
+  background: var(--up-soft);
+  color: var(--up);
+}
+.coach-mood.down,
+.coach-mood.sharp_down {
+  background: var(--down-soft);
+  color: var(--down);
+}
+.coach-links {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+}
+.coach-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.coach-card {
+  padding: 16px;
+}
+.coach-card h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.coach-sub {
+  font-weight: 400;
+  font-size: 12px;
+}
+.coach-split {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+}
+.coach-split strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.coach-month {
+  margin-top: 12px;
+}
+.coach-big {
+  font-size: 22px;
+  font-weight: 500;
+}
+.coach-big .muted {
+  font-size: 13px;
+}
+.coach-bar {
+  height: 8px;
+  background: var(--panel-2);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 8px 0 6px;
+}
+.coach-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.coach-bar.over i {
+  background: var(--wait);
+}
+.coach-over {
+  margin: 6px 0 0;
+  color: var(--wait);
+  font-weight: 600;
+}
+.coach-line {
+  margin: 10px 0 0;
+  color: var(--body);
+}
+.coach-note {
+  margin: 10px 0 0;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.coach-note strong {
+  color: var(--text);
+  font-weight: 500;
+}
+.coach-set {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.coach-points {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 8px;
+  color: var(--body);
+}
+.coach-rule {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--wait-soft);
+  color: var(--wait);
+}
+.coach-agents {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 12px;
+}
+.coach-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.coach-chips button {
+  padding: 7px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.coach-chips button.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.coach-chat {
+  display: flex;
+  flex-direction: column;
+  min-height: 220px;
+}
+.coach-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 260px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+.coach-bubble {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  max-width: 90%;
+}
+.coach-bubble.owner {
+  align-self: flex-end;
+  background: var(--accent-soft);
+}
+.coach-ask {
+  display: flex;
+  gap: 6px;
+  margin-top: auto;
+}
+.coach-ask input,
+.plan-page input,
+.plan-page textarea {
+  min-width: 0;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  font: inherit;
+}
+.coach-ask input {
+  flex: 1;
+  height: 32px;
+  padding: 0 10px;
+}
+.coach-ask button,
+.plan-save button {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid var(--line-2);
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* The Plan page (decision 52) */
+.plan-intro {
+  margin: 0 0 12px;
+}
+.plan-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.plan-card {
+  padding: 16px;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+.plan-card.wide {
+  grid-column: 1 / -1;
+}
+.plan-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.plan-head h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.plan-updated {
+  font-size: 11px;
+}
+.plan-page textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+.plan-page textarea.tall {
+  min-height: 150px;
+}
+.plan-page textarea.short {
+  min-height: 48px;
+}
+.plan-page input {
+  height: 32px;
+  padding: 0 10px;
+}
+.plan-label {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.plan-line,
+.plan-lesson {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.plan-line input {
+  width: 110px;
+}
+.plan-line input.grow,
+.plan-lesson input:not([type="date"]) {
+  flex: 1 1 200px;
+}
+.plan-fields {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.plan-field {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.plan-add {
+  justify-self: start;
+}
+.plan-save {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-top: 4px;
+}
+.plan-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.plan-table th,
+.plan-table td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.plan-table th {
+  color: var(--muted);
+  font-weight: 500;
+}
+.settings-you {
+  margin-left: 0;
+}
+.settings-card + .settings-card {
+  margin-top: 12px;
+}
+@media (max-width: 900px) {
+  .coach-row,
+  .coach-agents,
+  .plan-grid {
+    grid-template-columns: 1fr;
+  }
+  .coach-greet {
+    grid-template-columns: 1fr;
+  }
+  .coach-side {
+    justify-items: start;
+  }
+  .plan-fields {
+    grid-template-columns: 1fr 1fr;
+  }
+}

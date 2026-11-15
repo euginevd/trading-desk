@@ -16,8 +16,8 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from api import ai_client, demo, env_file
-from api.advisor import futures, gather, history_candles, rules_of, set_rules
+from api import agents, ai_client, coach, demo, env_file, trading_plan
+from api.advisor import futures, gather, history_candles, rules_of
 from api.ai_client import capped, subscription, switched
 from api.ai_signal import Ask, SignalError, Signals, claude
 from api.ai_signin import SignIn
@@ -541,7 +541,7 @@ def _coin(raw: object) -> str:
 
 
 def _run_signal(s: Services, body: dict[str, Any]) -> dict[str, Any]:
-    facts = _facts(s, _coin(body.get("coin")))
+    facts = _facts(s, _coin(body.get("coin"))) | {"plan": trading_plan.for_agents(s.store)}
     return {"signal": s.signals.run(facts, body.get("force") is True)}
 
 
@@ -624,7 +624,6 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("POST", "/signal"): lambda s, _, b: _run_signal(s, b),
     ("GET", "/plan"): lambda s, q, _: _plan(s, q),
     ("GET", "/risk"): lambda s, _q, _b: rules_of(s.store).view(),
-    ("PUT", "/risk"): lambda s, _, b: set_rules(s.store, b),
     ("GET", "/alerts"): lambda s, q, _: {
         "alerts": s.store.alerts(_coin(q["coin"]) if q.get("coin") else None)
     },
@@ -632,6 +631,12 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("GET", "/settings/ai"): lambda s, _q, _b: ai_client.view(s.store, s.signals),
     ("PUT", "/settings/ai"): lambda s, _, b: ai_client.choose(s.store, s.audit, s.signals, b),
     ("PUT", "/settings/ai/key"): lambda s, _, b: _save_key(s, b),
+    ("GET", "/settings/profile"): lambda s, _q, _b: _profile(s),
+    ("PUT", "/settings/profile"): lambda s, _, b: _set_profile(s, b),
+    ("GET", "/trading-plan"): lambda s, _q, _b: trading_plan.view(s.store),
+    ("GET", "/coach"): lambda s, _q, _b: _coach(s, write=False),
+    ("POST", "/coach/message"): lambda s, _q, _b: _coach(s, write=True),
+    ("GET", "/agents"): lambda _s, _q, _b: agents.listing(),
     ("POST", "/settings/ai/signin"): lambda s, _q, _b: _signin_start(s),
     ("POST", "/settings/ai/signin/finish"): lambda s, _, b: _signin_finish(s, b),
 }
@@ -649,6 +654,10 @@ def _service_route(
         with services() as s:
             s.store.delete_alert(int(alert.group(1)))
             return _reply(200, {"alerts": s.store.alerts()})
+    named = _named_route(method, path)
+    if named is not None:
+        with services() as s:
+            return _reply(200, named(s, _body(event)))
     removing = re.fullmatch(r"/watchlist/([A-Za-z0-9]{1,16})", path)
     dropping = re.fullmatch(r"/watchlists/(\d{1,9})", path)
     route = SERVICE_ROUTES.get((method, path))
@@ -661,6 +670,72 @@ def _service_route(
             return _reply(200, s.watchlist().delete(dropping.group(1)))
         assert removing is not None  # noqa: S101 - checked above
         return _reply(200, s.watchlist().remove(removing.group(1), params.get("list")))
+
+
+def _named_route(
+    method: str, path: str
+) -> Callable[[Services, dict[str, Any]], dict[str, Any]] | None:
+    """Routes with a name in the path: a section of the Plan, an agent's thread."""
+    section = re.fullmatch(r"/trading-plan/([a-z]{1,12})", path)
+    if section and method == "PUT":
+        name = section.group(1)
+        return lambda s, b: trading_plan.save(s.store, s.audit, name, b, int(time.time() * 1000))
+    agent = re.fullmatch(r"/agents/([a-z]{1,12})", path)
+    if agent and method == "GET":
+        return lambda s, _b: agents.thread(s.store, agent.group(1))
+    if agent and method == "POST":
+        return lambda s, b: agents.send(s.store, s.audit, agent.group(1), b)
+    return None
+
+
+def _profile(s: Services) -> dict[str, str]:
+    return {"name": s.store.setting(coach.NAME_KEY, "")}
+
+
+def _set_profile(s: Services, body: dict[str, Any]) -> dict[str, str]:
+    """The owner's name for the greeting, kept only in the local database (decision 52)."""
+    name = " ".join(str(body.get("name", "")).split())[:40]
+    s.store.set_setting(coach.NAME_KEY, name)
+    s.audit.record("settings", "Your name", "Saved" if name else "Cleared")
+    return _profile(s)
+
+
+def _coach(s: Services, *, write: bool) -> dict[str, Any]:
+    """The Dashboard: facts from code, and the message kept for today and this mood. GET is
+    quick, with the plain wording until the model's is kept; POST has the model write it."""
+    plan = trading_plan.view(s.store)
+    try:
+        report: dict[str, Any] | None = _deposits(s, {})
+    except (BinanceError, httpx.HTTPError, LookupError, ValueError):
+        report = None  # the coach still shows; the card says deposits couldn't be read
+    facts = coach.facts(
+        portfolio=(s.portfolio or live_portfolio)(),
+        history=[Decimal(value) for _, value in s.store.history(coach.STREAK_DAYS + 1)],
+        report=report,
+        plan=plan,
+        now=datetime.now(SYDNEY),
+        name=s.store.setting(coach.NAME_KEY, ""),
+        last_plan=s.signals.last,
+    )
+    raw = s.store.setting(coach.CACHE_KEY, "")
+    kept: dict[str, Any] | None = json.loads(raw) if raw else None
+    # Only the model's words are kept: the plain ones are tried again next time.
+    if kept and kept.get("message", {}).get("source") != "model":
+        kept = None
+    fresh = bool(kept and kept.get("key") == coach.cache_key(facts))
+    if not write:
+        message = coach.message(facts, plan, {}, kept, None)
+        return facts | {"message": message, "pending": not fresh}
+
+    def ask(system: str, text: str, shape: dict[str, Any]) -> dict[str, Any]:
+        return s.signals.write(system, text, shape, "coach message")
+
+    message = coach.message(facts, plan, trading_plan.for_agents(s.store), kept, ask)
+    if message["source"] == "model":
+        s.store.set_setting(
+            coach.CACHE_KEY, json.dumps({"key": coach.cache_key(facts), "message": message})
+        )
+    return facts | {"message": message, "pending": False}
 
 
 def _failure(error: Exception) -> tuple[int, dict[str, str]]:

@@ -51,7 +51,7 @@ In full, with other read-only sources: [threat-model/boundaries.md](threat-model
 - **TB1** Browser to `api`: `127.0.0.1` only, no sign-in (decision 10); the `api` allows only the desk's origin and checks `Content-Type` on every write.
 - **TB2** `api` to Binance and Frankfurter: TLS, Binance calls signed; replies untrusted, parsed to a fixed shape.
 - **TB3** `api` to Taostats: TLS, the public address only.
-- **TB4** `api` to Anthropic, by API key or the owner's subscription via Claude Code, which only searches and gets no other secret (decision 48): a coin's figures and the owner's position (decision 46), never keys or ids; replies schema-checked.
+- **TB4** `api` to Anthropic, by API key or the owner's subscription via Claude Code, which only searches and gets no other secret (decision 48): a coin's figures and the owner's position, and the coach's totals and Plan (decision 52), never keys or ids; replies schema-checked.
 - **TB5** `api` to CoinGecko: tickers for logos and rates, never amounts; logos checked for host, type and size.
 
 ## Top risks

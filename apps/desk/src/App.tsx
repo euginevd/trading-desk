@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getGlobal, getPortfolio, getSettings, getTickers, setTrading } from "./api";
 import { percent, price, trend, usdShort } from "./format";
+import Coach from "./Coach";
 import DcaBots from "./DcaBots";
 import GridBots from "./GridBots";
 import SettingsPage from "./SettingsPage";
@@ -10,18 +11,21 @@ import {
   DcaIcon,
   GridIcon,
   MenuIcon,
+  PlanIcon,
+  PortfolioIcon,
   PowerIcon,
   SettingsIcon,
   TradeIcon,
   WalletIcon,
 } from "./icons";
+import PlanPage from "./PlanPage";
 import Portfolio from "./Portfolio";
 import { CURRENCIES, type Currency, money } from "./money";
 import Trade from "./Trade";
 import type { MarketGlobal, Settings, TaoWallet, Ticker } from "./types";
 import type { Status } from "./ui";
 
-type Page = "dashboard" | "trade" | "dca" | "grid" | "settings";
+type Page = "dashboard" | "plan" | "portfolio" | "trade" | "dca" | "grid" | "settings";
 const TICK_MS = 30_000;
 const CURRENCY_KEY = "desk.currency";
 function readCurrency(): Currency {
@@ -37,6 +41,8 @@ const FOLDED_KEY = "desk.side.folded";
 
 const PAGES: { page: Page; hash: string; name: string; Icon: () => React.JSX.Element }[] = [
   { page: "dashboard", hash: "#/", name: "Dashboard", Icon: DashboardIcon },
+  { page: "plan", hash: "#/plan", name: "Plan", Icon: PlanIcon },
+  { page: "portfolio", hash: "#/portfolio", name: "Portfolio", Icon: PortfolioIcon },
   { page: "trade", hash: "#/trade", name: "Trade", Icon: TradeIcon },
 ];
 const BOT_PAGES: typeof PAGES = [
@@ -165,8 +171,16 @@ export default function App() {
     };
     const sum = () =>
       getPortfolio().then(
-        (p) => setTotal({ usd: p.total.value, rates: p.total.rates ?? {} }),
-        () => setTotal(null),
+        (p) => {
+          setTotal({ usd: p.total.value, rates: p.total.rates ?? {} });
+          // The side panel's pills, whichever page is open (the coach doesn't read balances).
+          setStatus(p.demo ? "demo" : "connected");
+          setTao(p.wallets.tao.status);
+        },
+        () => {
+          setTotal(null);
+          setStatus("disconnected");
+        },
       );
     tick();
     sum();
@@ -374,8 +388,12 @@ export default function App() {
           <GridBots />
         ) : page === "settings" ? (
           <SettingsPage />
-        ) : (
+        ) : page === "plan" ? (
+          <PlanPage />
+        ) : page === "portfolio" ? (
           <Portfolio onStatus={onStatus} onTao={onTao} currency={currency} />
+        ) : (
+          <Coach />
         )}
       </div>
     </div>

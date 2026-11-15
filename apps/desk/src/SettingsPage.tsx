@@ -2,7 +2,15 @@
 // reaches Claude. Sign in or paste a key here, as in Claude Code; the api saves it to .env and
 // this page only ever shows whether each is set.
 import { useEffect, useState } from "react";
-import { finishSignIn, getAiSettings, saveAiKey, setAiSettings, startSignIn } from "./api";
+import {
+  finishSignIn,
+  getAiSettings,
+  getProfile,
+  saveAiKey,
+  setAiSettings,
+  setProfile,
+  startSignIn,
+} from "./api";
 import type { AiMode, AiSettings } from "./types";
 
 const MODES: { mode: AiMode; name: string }[] = [
@@ -41,6 +49,7 @@ export default function SettingsPage() {
 
   return (
     <main className="wrap settings">
+      <You />
       <section className="card settings-card" aria-labelledby="settings-ai">
         <h2 id="settings-ai">AI</h2>
         {!ai && !error && <p className="muted">Loading…</p>}
@@ -259,5 +268,57 @@ function Subscription({
         Needs a Pro or Max plan. Signs in the way Claude Code does; the token lasts a year.
       </p>
     </li>
+  );
+}
+
+function You() {
+  const [name, setName] = useState("");
+  const [saved, setSaved] = useState<string | null>(null);
+  const [note, setNote] = useState("");
+  useEffect(() => {
+    getProfile().then(
+      (p) => {
+        setName(p.name);
+        setSaved(p.name);
+      },
+      () => setSaved(""),
+    );
+  }, []);
+  const save = () =>
+    setProfile(name).then(
+      (p) => {
+        setSaved(p.name);
+        setName(p.name);
+        setNote("Saved");
+      },
+      (e: unknown) => setNote(e instanceof Error ? e.message : "Not saved."),
+    );
+  return (
+    <section className="card settings-card" aria-labelledby="settings-you">
+      <h2 id="settings-you">You</h2>
+      <div className="settings-input settings-you">
+        <input
+          aria-label="Your name"
+          placeholder="Your name"
+          maxLength={40}
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            setNote("");
+          }}
+        />
+        <button
+          type="button"
+          disabled={saved === null || name === saved}
+          onClick={() => void save()}
+        >
+          Save name
+        </button>
+        {note && <span className="muted">{note}</span>}
+      </div>
+      <p className="settings-hint muted">
+        For the Dashboard&apos;s greeting. Kept on this machine only, never in the code.
+      </p>
+    </section>
   );
 }
