@@ -42,6 +42,49 @@
   margin: 0;
 }
 
+/* Buttons, as the desk's .btn (styles.css), unless they're a pencil or a link. */
+:where(.pf-page button:not(.pf-pencil):not(.pf-link)) {
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  background: var(--panel-2);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+:where(.pf-page button:not(.pf-pencil):not(.pf-link)):hover {
+  border-color: var(--hover-line);
+}
+:where(.pf-page button):disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.pf-page button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.pf-page .pf-version {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+}
+.pf-page .pf-chip-btn,
+.pf-page .pf-lock,
+.pf-page .pf-seg {
+  border-radius: 999px;
+  font-size: 12px;
+}
+.pf-page .pf-seg.on,
+.pf-page .pf-lock.on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* The top strip. */
 .pf-strip {
   display: grid;
@@ -202,15 +245,13 @@
 }
 .pf-dl {
   margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.6fr) auto;
+  gap: 6px 12px;
+  align-items: baseline;
 }
 .pf-dl-row {
-  display: grid;
-  grid-template-columns: minmax(140px, 0.9fr) minmax(0, 1.4fr) auto;
-  gap: 12px;
-  align-items: baseline;
+  display: contents;
 }
 .pf-dl dt {
   color: var(--muted);
@@ -506,10 +547,10 @@
   .pf-sim {
     grid-template-columns: 1fr;
   }
-  .pf-dl-row {
-    grid-template-columns: 1fr auto;
+  .pf-dl {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
-  .pf-dl-row dt {
+  .pf-dl dt {
     grid-column: 1 / -1;
   }
   .pf-versions li {

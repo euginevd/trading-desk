@@ -207,7 +207,9 @@ export function WhatIf({ page }: { page: ProfilePage }) {
     () => project(Number(strip.totalAud) || 0, Number(monthly) || 0, Number(ret) || 0, months),
     [strip.totalAud, monthly, ret, months],
   );
-  const goals = doc.goals.map((g) => ({
+  const due = doc.goals.filter((g) => !g.date || g.date <= (until || firstDate));
+  const shownGoals = due.length ? due : doc.goals.slice(0, 1);
+  const goals = shownGoals.map((g) => ({
     label: `${audText(g.amount, g.currency)}${g.date ? ` by ${dayText(g.date)}` : ""}`,
     aud: Number(g.amount) * (g.currency === "USD" ? usdRate : 1),
   }));

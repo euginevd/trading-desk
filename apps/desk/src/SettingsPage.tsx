@@ -77,7 +77,7 @@ function InUse({ ai }: { ai: AiSettings }) {
   let detail: string;
   if (ai.mode === "api_key") {
     detail = ai.apiKeySet
-      ? `$${ai.budget.spent} of $${ai.budget.cap} spent this month`
+      ? `$${Number(ai.budget.spent).toFixed(2)} of $${ai.budget.cap} spent this month`
       : "Paste a key below to start.";
   } else if (!ai.tokenSet) {
     detail =
@@ -313,7 +313,7 @@ function ApiKey({
       status={
         ai.apiKeySet ? (
           <Status tone="up">
-            Key set · ${ai.budget.spent} of ${ai.budget.cap} this month
+            Key set · ${Number(ai.budget.spent).toFixed(2)} of ${ai.budget.cap} this month
           </Status>
         ) : (
           <Status tone="idle">No key yet</Status>

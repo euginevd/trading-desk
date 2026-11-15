@@ -391,7 +391,7 @@ export function Card({
         )}
         {lock}
         <span className="pf-updated">
-          {updated ? `Updated ${dateTime(updated)}` : "Not saved yet"}
+          {updated ? `Updated ${dateTime(updated)}` : "Never changed"}
         </span>
         {onEdit && (
           <button

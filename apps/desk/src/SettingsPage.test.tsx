@@ -106,9 +106,9 @@ describe("Settings", () => {
     fireEvent.change(input, { target: { value: "sk-ant-api03-made-up" } });
     fireEvent.click(screen.getByRole("button", { name: "Save key" }));
     expect(saveAiKey).toHaveBeenCalledWith("sk-ant-api03-made-up");
-    expect(await screen.findByText(/Key set · \$4\.1 of \$20 this month/)).toBeTruthy();
+    expect(await screen.findByText(/Key set · \$4\.10 of \$20 this month/)).toBeTruthy();
     expect(screen.getByText("Ready")).toBeTruthy();
-    expect(screen.getByText("$4.1 of $20 spent this month")).toBeTruthy();
+    expect(screen.getByText("$4.10 of $20 spent this month")).toBeTruthy();
     expect(screen.queryByLabelText("Anthropic API key")).toBeNull();
     expect(screen.queryByDisplayValue("sk-ant-api03-made-up")).toBeNull();
   });
