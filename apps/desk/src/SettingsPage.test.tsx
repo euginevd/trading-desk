@@ -65,10 +65,11 @@ afterEach(cleanup);
 describe("Settings", () => {
   it("switches to the subscription and offers the fall back", async () => {
     render(<SettingsPage />);
-    const key = await screen.findByRole("button", { name: "API key (pay per use)" });
-    expect(key.getAttribute("aria-pressed")).toBe("true");
+    const key = await screen.findByRole("radio", { name: "API key (pay per use)" });
+    expect((key as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByText("Not set up")).toBeTruthy();
     expect(screen.queryByRole("checkbox")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Claude subscription (personal use)" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Claude subscription (personal use)" }));
     expect(setAiSettings).toHaveBeenCalledWith("subscription", false, "claude-opus-5-5");
     fireEvent.click(
       await screen.findByRole("checkbox", { name: "Use the API key if the subscription fails" }),
@@ -78,16 +79,23 @@ describe("Settings", () => {
 
   it("switches the model", async () => {
     render(<SettingsPage />);
-    expect(
-      (await screen.findByRole("button", { name: "Opus 5.5" })).getAttribute("aria-pressed"),
-    ).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "Haiku 5.5" }));
+    const opus = (await screen.findByRole("radio", { name: "Opus 5.5" })) as HTMLInputElement;
+    expect(opus.checked).toBe(true);
+    expect(screen.getByText("The cheapest and fastest")).toBeTruthy();
+    fireEvent.click(screen.getByRole("radio", { name: "Haiku 5.5" }));
     expect(setAiSettings).toHaveBeenLastCalledWith("api_key", false, "claude-haiku-5-5");
     await waitFor(() =>
-      expect(screen.getByRole("button", { name: "Haiku 5.5" }).getAttribute("aria-pressed")).toBe(
-        "true",
+      expect((screen.getByRole("radio", { name: "Haiku 5.5" }) as HTMLInputElement).checked).toBe(
+        true,
       ),
     );
+    // The in-use line follows the choice.
+    expect(
+      screen.getByText(
+        (_, el) =>
+          el?.className === "settings-inuse-main" && el.textContent === "API key · Haiku 5.5",
+      ),
+    ).toBeTruthy();
   });
 
   it("saves a pasted API key, then shows only that it's set", async () => {
@@ -98,7 +106,9 @@ describe("Settings", () => {
     fireEvent.change(input, { target: { value: "sk-ant-api03-made-up" } });
     fireEvent.click(screen.getByRole("button", { name: "Save key" }));
     expect(saveAiKey).toHaveBeenCalledWith("sk-ant-api03-made-up");
-    expect(await screen.findByText(/Key set · \$4\.1 of \$20 this month/)).toBeTruthy();
+    expect(await screen.findByText(/Key set · \$4\.10 of \$20 this month/)).toBeTruthy();
+    expect(screen.getByText("Ready")).toBeTruthy();
+    expect(screen.getByText("$4.10 of $20 spent this month")).toBeTruthy();
     expect(screen.queryByLabelText("Anthropic API key")).toBeNull();
     expect(screen.queryByDisplayValue("sk-ant-api03-made-up")).toBeNull();
   });

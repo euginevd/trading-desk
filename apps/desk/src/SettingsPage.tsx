@@ -1,7 +1,7 @@
 // Settings (decisions 50 and 51): the desk's choices in one place, starting with how the AI
 // reaches Claude. Sign in or paste a key here, as in Claude Code; the api saves it to .env and
 // this page only ever shows whether each is set.
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import {
   finishSignIn,
   getAiSettings,
@@ -18,21 +18,101 @@ import {
 } from "./api";
 import type { AiMode, AiSettings, TelegramSettings } from "./types";
 
-const MODES: { mode: AiMode; name: string }[] = [
-  { mode: "api_key", name: "API key (pay per use)" },
-  { mode: "subscription", name: "Claude subscription (personal use)" },
+const MODES: Record<AiMode, { name: string; title: string; sub: string }> = {
+  api_key: { name: "API key (pay per use)", title: "API key", sub: "Pay per use" },
+  subscription: {
+    name: "Claude subscription (personal use)",
+    title: "Claude subscription",
+    sub: "Pro or Max plan, personal use",
+  },
+};
+
+// One line per model, matched on its family so a new version keeps its note.
+const MODEL_NOTES: [string, string][] = [
+  ["Opus", "The deepest reasoning"],
+  ["Sonnet", "About half Opus's price"],
+  ["Haiku", "The cheapest and fastest"],
 ];
+const modelNote = (name: string) => MODEL_NOTES.find(([family]) => name.includes(family))?.[1];
+const shortName = (name: string) => name.replace("Claude ", "");
 
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
+
+type Tone = "up" | "wait" | "down" | "idle";
+
+// A status is a word with a dot (design-system 22, code-standards 26), never the colour alone.
+function Status({ tone, children }: { tone: Tone; children: ReactNode }) {
+  return (
+    <span className={`settings-status is-${tone}`}>
+      <span className="settings-dot" aria-hidden="true" />
+      {children}
+    </span>
+  );
+}
+
+// Every card's header: its title, and its status at the right.
+function CardHead({ id, title, children }: { id: string; title: string; children?: ReactNode }) {
+  return (
+    <header className="settings-head">
+      <h2 id={id}>{title}</h2>
+      {children}
+    </header>
+  );
+}
+
+// Whether the AI can answer right now, on what it's set to.
+function aiStatus(ai: AiSettings): { tone: Tone; word: string } {
+  if (ai.mode === "api_key") {
+    return ai.apiKeySet ? { tone: "up", word: "Ready" } : { tone: "down", word: "Not set up" };
+  }
+  if (ai.tokenSet) return { tone: "up", word: "Ready" };
+  if (ai.fallback && ai.apiKeySet) return { tone: "wait", word: "On the API key" };
+  return { tone: "down", word: "Not set up" };
+}
+
+// The answer to "what am I using?": the provider and model, then spend or the fall back.
+function InUse({ ai }: { ai: AiSettings }) {
+  const provider = MODES[ai.mode].title;
+  const model = ai.models.find((m) => m.id === ai.model);
+  let detail: string;
+  if (ai.mode === "api_key") {
+    detail = ai.apiKeySet
+      ? `$${Number(ai.budget.spent).toFixed(2)} of $${ai.budget.cap} spent this month`
+      : "Paste a key below to start.";
+  } else if (!ai.tokenSet) {
+    detail =
+      ai.fallback && ai.apiKeySet
+        ? "Not signed in, so the API key answers."
+        : "Sign in below to start.";
+  } else if (!ai.fallback) {
+    detail = "Fall back to the API key is off";
+  } else {
+    detail = ai.apiKeySet
+      ? "Falls back to the API key if the subscription fails"
+      : "Fall back is on, but there's no API key yet";
+  }
+  return (
+    <div className="settings-inuse">
+      <span className="settings-label">In use</span>
+      <p className="settings-inuse-main">
+        {provider}
+        <span className="muted"> · </span>
+        {model ? shortName(model.name) : ai.model}
+      </p>
+      <p className="settings-inuse-sub muted">{detail}</p>
+    </div>
+  );
+}
 
 export default function SettingsPage() {
   const [ai, setAi] = useState<AiSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     getAiSettings().then(setAi, (e: unknown) => setError(message(e, "Settings couldn't be read.")));
-  }, []);
+  }, [attempt]);
 
   // Every change goes through here: one at a time, with the reply as the new state.
   const run = (action: () => Promise<AiSettings>, failed: string) => {
@@ -51,79 +131,94 @@ export default function SettingsPage() {
       },
     );
   };
+  const pick = (mode: AiMode) => {
+    if (ai && ai.mode !== mode) {
+      void run(() => setAiSettings(mode, ai.fallback, ai.model), "Not saved.");
+    }
+  };
+  const status = ai && aiStatus(ai);
 
   return (
     <main className="wrap settings">
       <You />
       <section className="card settings-card" aria-labelledby="settings-ai">
-        <h2 id="settings-ai">AI</h2>
-        {!ai && !error && <p className="muted">Loading…</p>}
+        <CardHead id="settings-ai" title="AI">
+          {status && <Status tone={status.tone}>{status.word}</Status>}
+        </CardHead>
+        {!ai && !error && (
+          <div className="settings-inuse settings-loading" aria-busy="true">
+            <span className="settings-label">In use</span>
+            <p className="muted">Loading…</p>
+          </div>
+        )}
         {error && (
-          <p className="settings-error" role="alert">
-            {error}
-          </p>
+          <div className="settings-error-row">
+            <p className="settings-error" role="alert">
+              {error}
+            </p>
+            {!ai && (
+              <button
+                type="button"
+                className="settings-btn"
+                onClick={() => {
+                  setError(null);
+                  setAttempt((n) => n + 1);
+                }}
+              >
+                Try again
+              </button>
+            )}
+          </div>
         )}
         {ai && (
           <>
-            <div className="settings-row">
-              <span className="settings-label">Answer with</span>
-              <div className="seg dca-seg settings-seg" role="group" aria-label="Answer with">
-                {MODES.map(({ mode, name }) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    className={ai.mode === mode ? "on" : ""}
-                    aria-pressed={ai.mode === mode}
-                    disabled={saving}
-                    onClick={() =>
-                      void run(() => setAiSettings(mode, ai.fallback, ai.model), "Not saved.")
-                    }
-                  >
-                    {name}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="settings-row settings-model">
-              <span className="settings-label">Model</span>
-              <div className="seg dca-seg settings-seg" role="group" aria-label="Model">
-                {ai.models.map((m) => (
-                  <button
-                    key={m.id}
-                    type="button"
-                    className={ai.model === m.id ? "on" : ""}
-                    aria-pressed={ai.model === m.id}
-                    disabled={saving}
-                    onClick={() =>
-                      void run(() => setAiSettings(ai.mode, ai.fallback, m.id), "Not saved.")
-                    }
-                  >
-                    {m.name.replace("Claude ", "")}
-                  </button>
-                ))}
-              </div>
-              <p className="settings-hint muted">
-                Opus: the deepest reasoning. Sonnet: about half Opus&apos;s price. Haiku: the
-                cheapest and fastest.
-              </p>
-            </div>
-            {ai.mode === "subscription" && (
-              <label className="settings-check">
-                <input
-                  type="checkbox"
-                  checked={ai.fallback}
-                  disabled={saving}
-                  onChange={(e) =>
-                    void run(() => setAiSettings(ai.mode, e.target.checked, ai.model), "Not saved.")
-                  }
+            <InUse ai={ai} />
+            <fieldset className="settings-group">
+              <legend className="settings-label">Answer with</legend>
+              <div className="settings-providers">
+                <ApiKey ai={ai} saving={saving} run={run} onPick={() => pick("api_key")} />
+                <Subscription
+                  ai={ai}
+                  saving={saving}
+                  run={run}
+                  onError={setError}
+                  onPick={() => pick("subscription")}
                 />
-                Use the API key if the subscription fails
-              </label>
-            )}
-            <ul className="settings-creds">
-              <ApiKey ai={ai} saving={saving} run={run} />
-              <Subscription ai={ai} saving={saving} run={run} onError={setError} />
-            </ul>
+              </div>
+            </fieldset>
+            <fieldset className="settings-group">
+              <legend className="settings-label">Model</legend>
+              <div className="settings-models">
+                {ai.models.map((m) => {
+                  const on = ai.model === m.id;
+                  const note = modelNote(m.name);
+                  return (
+                    <label key={m.id} className={`settings-option${on ? " on" : ""}`}>
+                      <input
+                        type="radio"
+                        name="ai-model"
+                        value={m.id}
+                        checked={on}
+                        disabled={saving}
+                        aria-label={shortName(m.name)}
+                        aria-describedby={note ? `model-${m.id}` : undefined}
+                        onChange={() =>
+                          void run(() => setAiSettings(ai.mode, ai.fallback, m.id), "Not saved.")
+                        }
+                      />
+                      <span className="settings-option-text">
+                        <strong>{shortName(m.name)}</strong>
+                        {note && (
+                          <span className="muted" id={`model-${m.id}`}>
+                            {note}
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
             <p className="settings-note muted">
               Applies to every AI feature: plans, Analyse all and the Dashboard&apos;s signals. What
               you enter is saved to .env and never shown again.
@@ -138,7 +233,67 @@ export default function SettingsPage() {
 
 type Run = (action: () => Promise<AiSettings>, failed: string) => Promise<boolean>;
 
-function ApiKey({ ai, saving, run }: { ai: AiSettings; saving: boolean; run: Run }) {
+// A provider as a selectable card: a native radio (arrow keys move between the two), its own
+// status and its own action. The one in use is ringed in the accent and tagged In use.
+function ProviderCard({
+  mode,
+  ai,
+  saving,
+  onPick,
+  status,
+  action,
+  children,
+}: {
+  mode: AiMode;
+  ai: AiSettings;
+  saving: boolean;
+  onPick: () => void;
+  status: ReactNode;
+  action?: ReactNode;
+  children?: ReactNode;
+}) {
+  const option = MODES[mode];
+  const on = ai.mode === mode;
+  return (
+    <div className={`settings-provider${on ? " on" : ""}`}>
+      <div className="settings-provider-head">
+        <label className="settings-option-pick">
+          <input
+            type="radio"
+            name="ai-mode"
+            value={mode}
+            checked={on}
+            disabled={saving}
+            aria-label={option.name}
+            onChange={onPick}
+          />
+          <span className="settings-option-text">
+            <strong>{option.title}</strong>
+            <span className="muted">{option.sub}</span>
+          </span>
+        </label>
+        {on && <span className="settings-tag">In use</span>}
+      </div>
+      <div className="settings-provider-state">
+        {status}
+        {action}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ApiKey({
+  ai,
+  saving,
+  run,
+  onPick,
+}: {
+  ai: AiSettings;
+  saving: boolean;
+  run: Run;
+  onPick: () => void;
+}) {
   const [key, setKey] = useState("");
   const [open, setOpen] = useState(false);
   const editing = !ai.apiKeySet || open;
@@ -150,21 +305,28 @@ function ApiKey({ ai, saving, run }: { ai: AiSettings; saving: boolean; run: Run
       }
     });
   return (
-    <li>
-      <div className="settings-cred-head">
-        <span className={`settings-dot${ai.apiKeySet ? "" : " off"}`} aria-hidden="true" />
-        <strong>API credits</strong>
-        <span className="muted">
-          {ai.apiKeySet
-            ? ` · Key set · $${ai.budget.spent} of $${ai.budget.cap} this month`
-            : " · No key yet"}
-        </span>
-        {ai.apiKeySet && !open && (
+    <ProviderCard
+      mode="api_key"
+      ai={ai}
+      saving={saving}
+      onPick={onPick}
+      status={
+        ai.apiKeySet ? (
+          <Status tone="up">
+            Key set · ${Number(ai.budget.spent).toFixed(2)} of ${ai.budget.cap} this month
+          </Status>
+        ) : (
+          <Status tone="idle">No key yet</Status>
+        )
+      }
+      action={
+        ai.apiKeySet && !open ? (
           <button className="link" type="button" onClick={() => setOpen(true)}>
             Replace
           </button>
-        )}
-      </div>
+        ) : undefined
+      }
+    >
       {editing && (
         <div className="settings-input">
           <input
@@ -176,15 +338,32 @@ function ApiKey({ ai, saving, run }: { ai: AiSettings; saving: boolean; run: Run
             value={key}
             onChange={(e) => setKey(e.target.value)}
           />
-          <button type="button" disabled={saving || !key.trim()} onClick={save}>
+          <button
+            type="button"
+            className="settings-btn"
+            disabled={saving || !key.trim()}
+            onClick={save}
+          >
             Save key
           </button>
+          {open && (
+            <button
+              className="link"
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setKey("");
+              }}
+            >
+              Cancel
+            </button>
+          )}
         </div>
       )}
       <p className="settings-hint muted">
         Create a key at console.anthropic.com under API keys, then paste it here.
       </p>
-    </li>
+    </ProviderCard>
   );
 }
 
@@ -193,11 +372,13 @@ function Subscription({
   saving,
   run,
   onError,
+  onPick,
 }: {
   ai: AiSettings;
   saving: boolean;
   run: Run;
   onError: (error: string | null) => void;
+  onPick: () => void;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [code, setCode] = useState("");
@@ -227,22 +408,31 @@ function Subscription({
     });
 
   return (
-    <li>
-      <div className="settings-cred-head">
-        <span className={`settings-dot${ai.tokenSet ? "" : " off"}`} aria-hidden="true" />
-        <strong>Claude subscription</strong>
-        <span className="muted">{ai.tokenSet ? " · Signed in" : " · Not signed in"}</span>
-        {!url && (
+    <ProviderCard
+      mode="subscription"
+      ai={ai}
+      saving={saving}
+      onPick={onPick}
+      status={
+        ai.tokenSet ? (
+          <Status tone="up">Signed in</Status>
+        ) : (
+          <Status tone="idle">Not signed in</Status>
+        )
+      }
+      action={
+        url ? undefined : (
           <button
-            className={ai.tokenSet ? "link" : "settings-primary"}
+            className={ai.tokenSet ? "link" : "settings-btn primary"}
             type="button"
             disabled={starting || saving}
             onClick={start}
           >
             {starting ? "Starting…" : ai.tokenSet ? "Sign in again" : "Sign in with Claude"}
           </button>
-        )}
-      </div>
+        )
+      }
+    >
       {url && (
         <div className="settings-signin">
           <p>
@@ -261,7 +451,12 @@ function Subscription({
               value={code}
               onChange={(e) => setCode(e.target.value)}
             />
-            <button type="button" disabled={saving || !code.trim()} onClick={finish}>
+            <button
+              type="button"
+              className="settings-btn"
+              disabled={saving || !code.trim()}
+              onClick={finish}
+            >
               {saving ? "Signing in…" : "Finish sign-in"}
             </button>
             <button className="link" type="button" onClick={() => setUrl(null)}>
@@ -270,17 +465,30 @@ function Subscription({
           </div>
         </div>
       )}
+      {ai.mode === "subscription" && (
+        <label className="settings-check">
+          <input
+            type="checkbox"
+            checked={ai.fallback}
+            disabled={saving}
+            onChange={(e) =>
+              void run(() => setAiSettings(ai.mode, e.target.checked, ai.model), "Not saved.")
+            }
+          />
+          Use the API key if the subscription fails
+        </label>
+      )}
       <p className="settings-hint muted">
-        Needs a Pro or Max plan. Signs in the way Claude Code does; the token lasts a year.
+        Signs in the way Claude Code does; the token lasts a year.
       </p>
-    </li>
+    </ProviderCard>
   );
 }
 
 function You() {
   const [name, setName] = useState("");
   const [saved, setSaved] = useState<string | null>(null);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   useEffect(() => {
     getProfile().then(
       (p) => {
@@ -295,36 +503,60 @@ function You() {
       (p) => {
         setSaved(p.name);
         setName(p.name);
-        setNote("Saved");
+        setNote({ ok: true, text: "Saved" });
       },
-      (e: unknown) => setNote(e instanceof Error ? e.message : "Not saved."),
+      (e: unknown) => setNote({ ok: false, text: message(e, "Not saved.") }),
     );
   return (
     <section className="card settings-card" aria-labelledby="settings-you">
-      <h2 id="settings-you">You</h2>
-      <div className="settings-input settings-you">
-        <input
-          aria-label="Your name"
-          placeholder="Your name"
-          maxLength={40}
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-            setNote("");
-          }}
-        />
-        <button
-          type="button"
-          disabled={saved === null || name === saved}
-          onClick={() => void save()}
-        >
-          Save name
-        </button>
-        {note && <span className="muted">{note}</span>}
+      <CardHead id="settings-you" title="You">
+        {saved === null ? (
+          <span className="settings-status muted">Loading…</span>
+        ) : saved ? (
+          <span className="settings-status muted">Greets you as {saved}</span>
+        ) : (
+          <span className="settings-status muted">No name yet</span>
+        )}
+      </CardHead>
+      <div className="settings-field">
+        <label className="settings-label" htmlFor="settings-name">
+          Name
+        </label>
+        <div>
+          <div className="settings-input">
+            <input
+              id="settings-name"
+              aria-label="Your name"
+              placeholder="Your name"
+              maxLength={40}
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setNote(null);
+              }}
+            />
+            <button
+              type="button"
+              className="settings-btn"
+              disabled={saved === null || name === saved}
+              onClick={() => void save()}
+            >
+              Save name
+            </button>
+            {note && (
+              <span
+                className={note.ok ? "muted" : "settings-error"}
+                role={note.ok ? "status" : "alert"}
+              >
+                {note.text}
+              </span>
+            )}
+          </div>
+          <p className="settings-hint muted">
+            For the Dashboard&apos;s greeting. Kept on this machine only, never in the code.
+          </p>
+        </div>
       </div>
-      <p className="settings-hint muted">
-        For the Dashboard&apos;s greeting. Kept on this machine only, never in the code.
-      </p>
     </section>
   );
 }
@@ -332,6 +564,8 @@ function You() {
 // Telegram's morning summary (decision 57): your own bot; its token goes to .env.
 function Telegram() {
   const [tg, setTg] = useState<TelegramSettings | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [token, setToken] = useState("");
   const [time, setTime] = useState("07:30");
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -342,9 +576,9 @@ function Telegram() {
         setTg(t);
         setTime(t.time);
       },
-      () => setTg(null),
+      () => setFailed(true),
     );
-  }, []);
+  }, [attempt]);
   const act = (action: () => Promise<TelegramSettings>, done: string) => {
     setBusy(true);
     setNote(null);
@@ -356,100 +590,142 @@ function Telegram() {
       },
       (e: unknown) => {
         setBusy(false);
-        setNote({ ok: false, text: e instanceof Error ? e.message : "That didn't work." });
+        setNote({ ok: false, text: message(e, "That didn't work.") });
       },
     );
   };
-  if (!tg) return null;
-  const status = !tg.tokenSet
-    ? "Not connected"
-    : tg.chatFound
-      ? `Connected${tg.chatName ? ` to ${tg.chatName}` : ""}`
-      : "Bot saved: link your chat";
+  const status: { tone: Tone; word: string } | null = !tg
+    ? null
+    : !tg.tokenSet
+      ? { tone: "down", word: "Not connected" }
+      : tg.chatFound
+        ? { tone: "up", word: `Connected${tg.chatName ? ` to ${tg.chatName}` : ""}` }
+        : { tone: "wait", word: "Bot saved: link your chat" };
   return (
     <section className="card settings-card" aria-labelledby="settings-telegram">
-      <h2 id="settings-telegram">Telegram</h2>
-      <p className="settings-cred-head">
-        <span
-          className={`settings-dot${tg.tokenSet && tg.chatFound ? "" : " off"}`}
-          aria-hidden="true"
-        />
-        <strong>{status}</strong>
-        {tg.lastSent && <span className="muted"> · last summary {tg.lastSent}</span>}
+      <CardHead id="settings-telegram" title="Telegram">
+        {status && <Status tone={status.tone}>{status.word}</Status>}
+      </CardHead>
+      <p className="settings-intro muted">
+        A morning summary from your own bot, once a day, Sydney time: the coach&apos;s mood line,
+        key points and deposits left.
       </p>
-      <div className="settings-input settings-you">
-        <input
-          type="password"
-          autoComplete="off"
-          spellCheck={false}
-          aria-label="Telegram bot token"
-          placeholder={tg.tokenSet ? "Replace the bot token" : "Bot token from @BotFather"}
-          value={token}
-          onChange={(e) => setToken(e.target.value)}
-        />
-        <button
-          type="button"
-          disabled={busy || !token.trim()}
-          onClick={() =>
-            act(() => saveTelegramToken(token).finally(() => setToken("")), "Bot token saved")
-          }
-        >
-          Save
-        </button>
-      </div>
-      {tg.linkCode && (
-        <div className="settings-link">
-          <p>
-            Send <code>{tg.linkCode}</code> to your bot in Telegram, then press Link. Only the chat
-            that sends this code gets your summary.
+      {!tg && !failed && (
+        <p className="muted settings-loading" aria-busy="true">
+          Loading…
+        </p>
+      )}
+      {!tg && failed && (
+        <div className="settings-error-row">
+          <p className="settings-error" role="alert">
+            Telegram settings couldn&apos;t be read.
           </p>
           <button
             type="button"
-            disabled={busy}
-            onClick={() => act(() => linkTelegram(), "Checked")}
+            className="settings-btn"
+            onClick={() => {
+              setFailed(false);
+              setAttempt((n) => n + 1);
+            }}
           >
-            Link
+            Try again
           </button>
         </div>
       )}
-      <p className="settings-hint muted settings-flush">
-        Create a bot with @BotFather in Telegram and paste its token here. Saved to .env, never
-        shown again.
-      </p>
-      <div className="settings-input settings-you">
-        <label className="settings-label" htmlFor="tg-time">
-          Morning summary at
-        </label>
-        <input
-          id="tg-time"
-          type="time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-          style={{ flex: "0 0 120px" }}
-        />
-        <button
-          type="button"
-          disabled={busy || time === tg.time}
-          onClick={() => act(() => setTelegramTime(time), "Time saved")}
-        >
-          Save time
-        </button>
-        <button
-          type="button"
-          disabled={busy || !tg.tokenSet}
-          onClick={() => act(() => testTelegram(), "Test summary sent")}
-        >
-          Send a test
-        </button>
-      </div>
-      {note && (
-        <p className={note.ok ? "muted" : "settings-error"} role={note.ok ? "status" : "alert"}>
-          {note.text}
-        </p>
+      {tg && (
+        <>
+          <div className="settings-field">
+            <span className="settings-label">Bot token</span>
+            <div>
+              <div className="settings-input">
+                <input
+                  type="password"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label="Telegram bot token"
+                  placeholder={tg.tokenSet ? "Replace the bot token" : "Bot token from @BotFather"}
+                  value={token}
+                  onChange={(e) => setToken(e.target.value)}
+                />
+                <button
+                  type="button"
+                  className="settings-btn"
+                  disabled={busy || !token.trim()}
+                  onClick={() =>
+                    act(
+                      () => saveTelegramToken(token).finally(() => setToken("")),
+                      "Bot token saved",
+                    )
+                  }
+                >
+                  Save
+                </button>
+              </div>
+              <p className="settings-hint muted">
+                Create a bot with @BotFather in Telegram and paste its token here. Saved to .env,
+                never shown again.
+              </p>
+              {tg.linkCode && (
+                <div className="settings-link">
+                  <p>
+                    Send <code>{tg.linkCode}</code> to your bot in Telegram, then press Link. Only
+                    the chat that sends this code gets your summary.
+                  </p>
+                  <button
+                    type="button"
+                    className="settings-btn"
+                    disabled={busy}
+                    onClick={() => act(() => linkTelegram(), "Checked")}
+                  >
+                    Link
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="settings-field">
+            <label className="settings-label" htmlFor="tg-time">
+              Morning summary at
+            </label>
+            <div className="settings-input">
+              <input
+                id="tg-time"
+                className="settings-time"
+                type="time"
+                value={time}
+                onChange={(e) => setTime(e.target.value)}
+              />
+              <button
+                type="button"
+                className="settings-btn"
+                disabled={busy || time === tg.time}
+                onClick={() => act(() => setTelegramTime(time), "Time saved")}
+              >
+                Save time
+              </button>
+            </div>
+          </div>
+          <div className="settings-field">
+            <span className="settings-label">Last summary</span>
+            <div className="settings-input">
+              <span className="settings-value">{tg.lastSent ?? "None sent yet"}</span>
+              <button
+                type="button"
+                className="settings-btn"
+                disabled={busy || !tg.tokenSet}
+                onClick={() => act(() => testTelegram(), "Test summary sent")}
+              >
+                Send a test
+              </button>
+            </div>
+          </div>
+          {note && (
+            <p className={note.ok ? "muted" : "settings-error"} role={note.ok ? "status" : "alert"}>
+              {note.text}
+            </p>
+          )}
+        </>
       )}
-      <p className="settings-hint muted settings-flush">
-        One message a day, Sydney time: the coach&apos;s mood line, key points and deposits left.
-      </p>
     </section>
   );
 }

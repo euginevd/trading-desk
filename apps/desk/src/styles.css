@@ -2565,6 +2565,52 @@ dialog.detail-panel {
   display: block;
   font-style: normal;
 }
+/* By coin: logos only (design-system 13), names kept for screen readers and on hover; the
+   wallet's holding wears a small wallet badge. */
+.legend.legend-coins {
+  gap: 8px 14px;
+}
+.legend .legend-mark {
+  position: relative;
+  display: inline-grid;
+  flex: none;
+}
+.legend.legend-coins .legend-icon,
+.legend.legend-coins .legend-icon i,
+.legend.legend-coins .legend-icon img {
+  width: 22px;
+  height: 22px;
+}
+.legend.legend-coins .legend-icon {
+  margin: 2px;
+  background: var(--panel-2);
+  font-size: 8px;
+  place-items: center;
+}
+.legend.legend-coins .legend-icon i {
+  display: grid;
+  place-items: center;
+}
+.legend .legend-badge {
+  position: absolute;
+  right: -3px;
+  bottom: -3px;
+  width: 13px;
+  height: 13px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+}
+.legend .legend-badge svg {
+  width: 9px;
+  height: 9px;
+}
+.legend.legend-coins .num {
+  color: var(--text);
+}
 
 /* An open order's panel: the pair as a link, the edit form. */
 .order-open {
@@ -2821,95 +2867,250 @@ dialog.in-place .detail-head {
   touch-action: none;
 }
 
-/* Settings (decision 50) */
+/* Settings (decision 50): cards with a header row and their status at the right; the AI card
+   says what's in use first, then the providers as selectable cards and the models. */
 .settings {
   max-width: 760px;
 }
 .settings-card {
   padding: 16px;
 }
-.settings-card h2 {
-  margin: 0 0 14px;
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+}
+.settings-head h2 {
+  margin: 0;
   font-size: 15px;
   font-weight: 600;
 }
-.settings-row {
-  display: grid;
+.settings-head .settings-status {
+  margin-left: auto;
+}
+.settings-status {
+  display: inline-flex;
+  align-items: center;
   gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+.settings-dot {
+  display: inline-block;
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dim);
+}
+.settings-status.is-up .settings-dot {
+  background: var(--up);
+}
+.settings-status.is-wait .settings-dot {
+  background: var(--wait);
+}
+.settings-status.is-down .settings-dot {
+  background: var(--down);
+}
+.settings-status.is-idle {
+  color: var(--muted);
+}
+.settings-status.is-idle .settings-dot {
+  background: none;
+  border: 1px solid var(--muted);
 }
 .settings-label {
   font-size: 12px;
   color: var(--muted);
 }
-.settings-seg button.on {
-  background: var(--accent);
-  color: var(--accent-ink);
+.settings-intro {
+  margin: -4px 0 4px;
+  font-size: 12px;
 }
-.settings-model {
-  margin-top: 14px;
+
+/* What's in use: the one line that answers "what am I using?" */
+.settings-inuse {
+  display: grid;
+  gap: 2px;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
-.settings-model .settings-hint {
-  margin-left: 0;
+.settings-inuse p {
+  margin: 0;
+}
+.settings-inuse-main {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.settings-inuse-sub {
+  font-size: 12px;
+}
+
+.settings-group {
+  margin: 16px 0 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+.settings-group > legend {
+  padding: 0;
+  margin-bottom: 8px;
+}
+.settings-providers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+.settings-provider {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  transition: border-color 120ms var(--ease);
+}
+.settings-provider:hover {
+  border-color: var(--hover-line);
+}
+.settings-provider.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.settings-provider:has(input[type="radio"]:focus-visible),
+.settings-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.settings-provider-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.settings-option-pick {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+  min-width: 0;
+}
+.settings-option-pick input,
+.settings-option input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+.settings-option-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.settings-option-text strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+.settings-option-text .muted {
+  font-size: 12px;
+}
+.settings-tag {
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.settings-provider-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  min-height: 30px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+.settings-provider-state > :last-child:not(.settings-status) {
+  margin-left: auto;
+}
+.settings-provider .settings-input,
+.settings-provider .settings-hint,
+.settings-provider .settings-signin p {
+  margin: 0;
+}
+.settings-models {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.settings-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 120ms var(--ease);
+}
+.settings-option:hover {
+  border-color: var(--hover-line);
+}
+.settings-option.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .settings-check {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 12px;
   font-size: 13px;
 }
-.settings-creds {
-  list-style: none;
-  margin: 16px 0 0;
-  padding: 0;
+.settings-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+/* Field rows: the label on the left, the control and its hint on the right. */
+.settings-field {
   display: grid;
-  gap: 12px;
-}
-.settings-creds li {
-  padding-top: 12px;
+  grid-template-columns: 150px minmax(0, 1fr);
+  gap: 6px 16px;
+  align-items: start;
+  padding: 12px 0 0;
+  margin-top: 12px;
   border-top: 1px solid var(--line);
-  font-size: 13px;
 }
-.settings-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--up);
-  margin-right: 8px;
-  vertical-align: middle;
+.settings-head + .settings-field {
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
 }
-.settings-dot.off {
-  background: var(--down);
+.settings-field > .settings-label {
+  padding-top: 8px;
 }
-.settings-cred-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-}
-.settings-cred-head .link,
-.settings-cred-head .settings-primary {
-  margin-left: auto;
-}
-.settings-primary {
-  height: 30px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
-  cursor: pointer;
+.settings-field .settings-hint {
+  margin: 6px 0 0;
 }
 .settings-input {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  margin: 8px 0 0 15px;
 }
 .settings-input input {
-  flex: 1 1 220px;
+  flex: 1 1 200px;
   min-width: 0;
   height: 32px;
   padding: 0 10px;
@@ -2918,7 +3119,14 @@ dialog.in-place .detail-head {
   border: 1px solid var(--line-2);
   border-radius: 6px;
 }
-.settings-input button:not(.link) {
+.settings-input input.settings-time {
+  flex: 0 0 120px;
+}
+.settings-value {
+  flex: 1 1 auto;
+  color: var(--text);
+}
+.settings-btn {
   height: 32px;
   padding: 0 12px;
   background: var(--panel-2);
@@ -2926,25 +3134,55 @@ dialog.in-place .detail-head {
   border: 1px solid var(--line-2);
   border-radius: 6px;
   cursor: pointer;
+  white-space: nowrap;
 }
-.settings-signin p {
-  margin: 8px 0 0 15px;
+.settings-btn:disabled {
+  color: var(--dim);
+  cursor: default;
+}
+.settings-btn.primary {
+  height: 30px;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.settings-btn.primary:disabled {
+  opacity: 0.6;
+}
+.settings-signin {
+  display: grid;
+  gap: 8px;
 }
 .settings-hint {
-  margin: 4px 0 0 15px;
+  margin: 4px 0 0;
   font-size: 12px;
 }
 .settings-note {
-  margin: 16px 0 0;
+  margin: 14px 0 0;
   font-size: 12px;
+}
+.settings-error-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
 }
 .settings-error {
   color: var(--down);
   font-size: 13px;
 }
+.settings-loading {
+  min-height: 64px;
+}
 @media (max-width: 640px) {
-  .settings-seg {
+  .settings-providers,
+  .settings-models,
+  .settings-field {
     grid-template-columns: 1fr;
+  }
+  .settings-field > .settings-label {
+    padding-top: 0;
   }
 }
 
@@ -3165,9 +3403,7 @@ dialog.in-place .detail-head {
   gap: 6px;
   margin-top: auto;
 }
-.coach-ask input,
-.plan-page input,
-.plan-page textarea {
+.coach-ask input {
   min-width: 0;
   background: var(--bg);
   color: var(--text);
@@ -3191,87 +3427,12 @@ dialog.in-place .detail-head {
   cursor: pointer;
 }
 
-/* The Plan page (decision 52) */
-.plan-intro {
-  margin: 0 0 12px;
-}
-.plan-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.plan-card {
-  padding: 16px;
-  display: grid;
-  gap: 8px;
-  align-content: start;
-}
-.plan-card.wide {
-  grid-column: 1 / -1;
-}
-.plan-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.plan-head h2 {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-.plan-updated {
-  font-size: 11px;
-}
-.plan-page textarea {
-  width: 100%;
-  min-height: 72px;
-  padding: 8px 10px;
-  resize: vertical;
-}
-.plan-page textarea.tall {
-  min-height: 150px;
-}
-.plan-page textarea.short {
-  min-height: 48px;
-}
-.plan-page input {
-  height: 32px;
-  padding: 0 10px;
-}
-.plan-label {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-.plan-line,
-.plan-lesson {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.plan-line input {
-  width: 110px;
-}
-.plan-line input.grow,
-.plan-lesson input:not([type="date"]) {
-  flex: 1 1 200px;
-}
-.plan-fields {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
+/* Form rows the Journal uses (from the old Plan page) */
 .plan-field {
   display: grid;
   gap: 4px;
   font-size: 12px;
   color: var(--muted);
-}
-.plan-add {
-  justify-self: start;
 }
 .plan-save {
   display: flex;
@@ -3279,31 +3440,12 @@ dialog.in-place .detail-head {
   align-items: center;
   margin-top: 4px;
 }
-.plan-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-.plan-table th,
-.plan-table td {
-  text-align: left;
-  padding: 6px 8px;
-  border-bottom: 1px solid var(--line);
-}
-.plan-table th {
-  color: var(--muted);
-  font-weight: 500;
-}
-.settings-you {
-  margin-left: 0;
-}
 .settings-card + .settings-card {
   margin-top: 12px;
 }
 @media (max-width: 900px) {
   .coach-row,
-  .coach-agents,
-  .plan-grid {
+  .coach-agents {
     grid-template-columns: 1fr;
   }
   .coach-greet {
@@ -3311,9 +3453,6 @@ dialog.in-place .detail-head {
   }
   .coach-side {
     justify-items: start;
-  }
-  .plan-fields {
-    grid-template-columns: 1fr 1fr;
   }
 }
 
@@ -3547,12 +3686,6 @@ button.jtag {
   margin-top: 6px;
   max-width: 320px;
 }
-.settings-flush {
-  margin-left: 0;
-}
-.plan-fields {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-}
 @media (max-width: 900px) {
   .tax-tiles,
   .journal-top {
@@ -3577,7 +3710,10 @@ button.jtag {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
-  margin: 8px 0;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
 }
 .settings-link p {
   margin: 0;
@@ -3585,4 +3721,226 @@ button.jtag {
 .settings-link code {
   color: var(--accent);
   font-weight: 600;
+}
+
+/* The refresh spin is decoration: its label already says Refreshing (code-standards 26). */
+@media (prefers-reduced-motion: reduce) {
+  .refresh-btn.spinning svg {
+    animation: none;
+  }
+}
+
+/* Marks from the Profile (decision 58): out-of-date advice and the pre-trade check. */
+.out-of-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.rule-break {
+  flex-direction: column;
+  align-items: stretch;
+  margin: 12px 0 0;
+}
+.rule-break-text strong {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--down);
+}
+.rule-break-text p {
+  margin: 4px 0 0;
+  color: var(--text);
+}
+.rule-break-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.rule-break-btns .btn-danger {
+  margin-left: auto;
+}
+
+/* The Dashboard's head, recap and agent team (decisions 58 and 59). */
+.coach-head {
+  margin-bottom: 0;
+}
+.coach-dated {
+  margin-bottom: 6px;
+}
+.coach-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.coach-card-head h3 {
+  margin: 0;
+}
+.coach-recap-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+.coach-recap-headline {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+.coach-past {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.coach-past summary {
+  color: var(--accent);
+  cursor: pointer;
+  width: fit-content;
+}
+.coach-past ul {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 6px;
+  color: var(--body);
+}
+.coach-team {
+  display: grid;
+  justify-items: stretch;
+}
+.coach-agent {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 24px;
+  padding: 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 120ms;
+}
+.coach-agent:hover {
+  border-color: var(--hover-line);
+}
+.coach-agent.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.coach-agent.lead {
+  padding: 14px 16px;
+}
+.coach-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  color: var(--text);
+  font-weight: 600;
+}
+.coach-agent.lead .coach-avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 16px;
+}
+.coach-agent.on .coach-avatar {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.coach-avatar.small {
+  width: 28px;
+  height: 28px;
+  font-size: 12px;
+}
+.coach-agent-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.coach-agent-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+.coach-agent-open {
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+}
+.coach-agent-title {
+  color: var(--muted);
+  font-size: 12px;
+}
+.coach-agent-remit {
+  color: var(--body);
+  font-size: 12px;
+}
+/* A thin stem from the coordinator down to the row of specialists. */
+.coach-reports {
+  position: relative;
+  margin: 0;
+  padding: 18px 0 8px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+}
+.coach-reports::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  height: 14px;
+  border-left: 1px solid var(--line-2);
+}
+.coach-specialists {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.coach-specialists.under {
+  padding-top: 10px;
+  border-top: 1px solid var(--line-2);
+}
+.coach-advice {
+  margin: 12px 0 0;
+}
+.coach-chat-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.coach-chat-head h3 {
+  margin: 0;
+}
+@media (max-width: 1100px) {
+  .coach-specialists {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 520px) {
+  .coach-specialists {
+    grid-template-columns: 1fr;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .coach-agent {
+    transition: none;
+  }
 }

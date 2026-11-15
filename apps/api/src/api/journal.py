@@ -125,7 +125,8 @@ def _breaches(  # noqa: PLR0913 - each is a separate fact the checks need
     if e.side != "buy":
         return []
     broke: list[str] = []
-    if e.aud > Decimal(rules["tradeBudgetAud"]):
+    size = rules["per_trade_aud"]
+    if size is not None and e.aud > Decimal(size):
         broke.append("Over per-trade size")
     if e.coin in over_cap_now:
         broke.append(f"{e.coin} over its cap")
@@ -145,7 +146,8 @@ def view(  # noqa: PLR0913, PLR0917 - every input is a separate source
 ) -> dict[str, Any]:
     """The Journal page: the entries, newest first, and the 30-day score."""
     rules = plan["rules"]
-    cap = Decimal(rules["monthlyCapAud"]) if rules.get("monthlyCapAud") else None
+    cap = Decimal(rules["monthly_deposit_cap_aud"]) if rules["monthly_deposit_cap_aud"] else None
+
     deposits_over = {m for m, aud in deposit_months.items() if cap is not None and aud > cap}
     sources = store.order_sources()
     tags = _tags(store)

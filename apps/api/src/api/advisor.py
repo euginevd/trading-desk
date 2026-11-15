@@ -8,6 +8,7 @@ from typing import Any
 
 import httpx
 
+from api import profile
 from api.binance import Binance, BinanceError, plain
 from api.indicators import Candle
 from api.market import QUOTE, candles
@@ -18,47 +19,16 @@ ZERO = Decimal(0)
 STABLES = ("USDC", "USDT", "FDUSD")
 FUTURES_URL = "https://fapi.binance.com"
 OK = 200
-RULE_KEYS = {
-    "max_coin_pct": "risk_max_coin_pct",
-    "trade_budget_aud": "risk_trade_budget_aud",
-    "max_loss_pct": "risk_max_loss_pct",
-}
-RULE_RANGES = {
-    "max_coin_pct": (Decimal(1), Decimal(100)),
-    "trade_budget_aud": (Decimal(10), Decimal(1_000_000)),
-    "max_loss_pct": (Decimal(1), Decimal(100)),
-}
 
 
 def rules_of(store: Store) -> Rules:
-    base = Rules()
+    """The three risk rules, read from the Profile; each None until the owner sets it."""
+    _, doc = profile.current(store)
     return Rules(
-        **{
-            field: Decimal(store.setting(key, str(getattr(base, field))))
-            for field, key in RULE_KEYS.items()
-        }
+        max_coin_pct=profile.rule(doc, "max_pct_per_coin"),
+        trade_budget_aud=profile.rule(doc, "per_trade_aud"),
+        max_loss_pct=profile.rule(doc, "max_loss_pct"),
     )
-
-
-def set_rules(store: Store, body: dict[str, Any]) -> dict[str, str]:
-    """The owner's risk rules, each within a sensible range."""
-    from api.trading import Refused  # noqa: PLC0415 - avoids a cycle through trading
-
-    names = {
-        "max_coin_pct": "maxCoinPct",
-        "trade_budget_aud": "tradeBudgetAud",
-        "max_loss_pct": "maxLossPct",
-    }
-    for field, key in names.items():
-        try:
-            value = Decimal(str(body.get(key, "")).strip())
-        except ArithmeticError as error:
-            raise Refused("Each rule must be a number.") from error
-        low, high = RULE_RANGES[field]
-        if not value.is_finite() or not low <= value <= high:
-            raise Refused(f"{key} must be from {low} to {high}.")
-        store.set_setting(RULE_KEYS[field], format(value.normalize(), "f"))
-    return rules_of(store).view()
 
 
 def futures(client: httpx.Client, coin: str) -> dict[str, str] | None:
@@ -143,7 +113,8 @@ def gather(
     aud = Decimal(rates.get("AUD", "1.5"))
     rules = rules_of(store)
     pos = position(holdings, coin, total)
-    budget = rules.trade_budget_aud / aud
+    # The what-if adds one trade: the per-trade size if set, else a tenth of the cash.
+    budget = rules.trade_budget_aud / aud if rules.trade_budget_aud is not None else cash / 10
     trade = min(budget, cash) if cash > ZERO else budget
     found = what_if(pos, price, trade, total, cash)
     ruled = checks(pos, rules, found["weightAfter"])

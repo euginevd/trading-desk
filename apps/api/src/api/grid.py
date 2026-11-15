@@ -9,9 +9,11 @@ import secrets
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from api import profile, profile_live
 from api.audit import Audit
 from api.binance import Binance, BinanceError, Filters, plain
 from api.bots import FEE, checked, checked_whole
@@ -601,13 +603,12 @@ class Grids:
             if row["status"] != "wanted":
                 continue
             qty, price = Decimal(row["qty"]), Decimal(row["price"])
-            if row["side"] == "buy":
-                left = Decimal(self.trading.settings()["leftToday"])
-                if price * qty > left:
-                    note = "Waiting: today's limit is used up; buys resume tomorrow."
-                    if grid["note"] != note:
-                        grid = self._store.save_grid(grid | {"note": note})
-                    continue
+            waiting = self._buy_wait(price * qty, symbol) if row["side"] == "buy" else None
+            if waiting:
+                if grid["note"] != waiting:
+                    grid = self._store.save_grid(grid | {"note": waiting})
+                    self._audit.record("grid", f"Grid {grid['id']} held a buy", waiting)
+                continue
             self._store.save_grid_order(row | {"status": "placing", "updated": self._now()})
             try:
                 if row["side"] == "buy":
@@ -623,6 +624,15 @@ class Grids:
             self._store.save_grid_order(
                 row | {"order_id": int(order["orderId"]), "status": "open", "updated": self._now()}
             )
+
+    def _buy_wait(self, spend: Decimal, symbol: str) -> str | None:
+        """Why a buy waits: today's limit is used up, or it breaks a set Profile rule, which a
+        bot can't confirm past (decision 58)."""
+        if spend > Decimal(self.trading.settings()["leftToday"]):
+            return "Waiting: today's limit is used up; buys resume tomorrow."
+        _, doc = profile.current(self._store)
+        now = datetime.fromtimestamp(self._clock(), profile_live.SYDNEY)
+        return profile_live.bot_problem(self._store, doc, spend, now, symbol.removesuffix(QUOTE))
 
     def _resolve(self, grid: dict[str, Any], row: dict[str, Any]) -> dict[str, Any]:
         """A row sent without an answer, looked up by its client id: open if Binance has it,

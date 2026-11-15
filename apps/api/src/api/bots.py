@@ -7,9 +7,11 @@ import json
 import time
 from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
+from api import profile, profile_live
 from api.audit import Audit
 from api.binance import Binance, BinanceError, Filters, plain
 from api.indicators import Candle, bollinger
@@ -676,6 +678,10 @@ class Bots:
         filters = self._binance.filters(symbol)
         price = Decimal(self._binance.tickers([symbol])[symbol]["lastPrice"])
         rows = ladder(config, price, filters)
+        held = self.rule_hold(rows[-1]["total"], int(bot["id"])) if rows else None
+        if held:  # the same signal is tried again next step: last_signal isn't saved
+            self._hold(self._store.bot(int(bot["id"])), held)
+            return
         problem = self._cannot_start(config, rows, filters)
         if problem:
             bot["note"] = f"Skipped a signal: {problem}"
@@ -692,13 +698,56 @@ class Bots:
         assert config.entry_price is not None  # noqa: S101 - a trade has one
         filters = self._binance.filters(str(bot["symbol"]))
         rows = ladder(config, config.entry_price, filters)
+        held = self.rule_hold(rows[-1]["total"], int(bot["id"])) if rows else None
+        if held:
+            self._hold(bot, held)
+
+            return
         problem = self._cannot_start(config, rows, filters)
         if problem:
             self._finish(bot, f"Not placed: {problem}")
             return
         self._open_deal(bot, rows)
 
+    def trade_budget(self, bot_id: int) -> tuple[str, Decimal] | None:
+        """A smart trade's coin and whole ladder, in the quote; None for a recurring bot."""
+        bot = self._store.bot(bot_id)
+        config = config_of(bot)
+        if config.entry_price is None:
+            return None
+        rows = ladder(config, config.entry_price, self._binance.filters(str(bot["symbol"])))
+        return str(bot["symbol"]).removesuffix(QUOTE), rows[-1]["total"] if rows else ZERO
+
+    def store_and_audit(self) -> tuple[Store, Audit]:
+        return self._store, self._audit
+
+    def _past_rules_key(self, bot_id: int) -> str:
+        # By id and creation time: SQLite reuses a deleted bot's id, and the next bot mustn't
+        # inherit this one's confirmation.
+        return f"bot_past_rules_{bot_id}_{self._store.bot(bot_id)['created']}"
+
+    def allow_past_rules(self, bot_id: int, *, allowed: bool) -> None:
+        """Set on each switch-on: the owner confirmed this smart trade past a broken Profile rule,
+        so its buys aren't held; cleared when switched on without that."""
+        self._store.set_setting(self._past_rules_key(bot_id), "1" if allowed else "")
+
+    def rule_hold(self, spend: Decimal, bot_id: int) -> str | None:
+        """A buy that breaks a set Profile rule waits: a bot can't confirm past it (decision 58)."""
+        if self._store.setting(self._past_rules_key(bot_id), "") == "1":
+            return None
+        bot = self._store.bot(bot_id)
+        _, doc = profile.current(self._store)
+        now = datetime.fromtimestamp(self._clock(), profile_live.SYDNEY)
+        coin = str(bot["symbol"]).removesuffix(QUOTE)
+        return profile_live.bot_problem(self._store, doc, spend, now, coin)
+
+    def _hold(self, bot: dict[str, Any], note: str) -> None:
+        if bot["note"] != note:
+            self._store.save_bot(bot | {"note": note, "updated": self._now()})
+            self._say(bot, "held a buy", note)
+
     def _finish(self, bot: dict[str, Any], note: str) -> None:
+
         bot = self._store.bot(int(bot["id"]))
         bot |= {"enabled": 0, "note": note, "updated": self._now()}
         self._store.save_bot(bot)

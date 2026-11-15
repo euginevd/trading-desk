@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
-from api import env_file, handler, journal, ledger, rebalance, tax, telegram, trading_plan
+from api import env_file, handler, journal, ledger, rebalance, tax, telegram
 from api.ai_signal import Signals
 from api.audit import Audit
 from api.binance import Binance
@@ -112,14 +112,14 @@ def test_a_sale_warns_when_it_uses_a_lot_under_twelve_months() -> None:
 
 def test_drift_flags_coins_outside_the_band_and_sizes_the_order() -> None:
     plan = {
-        "goals": {
+        "strategy": {
             "targets": [
                 {"coin": "TAO", "pct": "20"},
                 {"coin": "BTC", "pct": "40"},
                 {"coin": "ETH", "pct": "25"},
             ]
-        },  # noqa: E501
-        "rules": {"driftBand": "5", "tradeBudgetAud": "500"},
+        },
+        "rules": {"rebalance_band": "5", "per_trade_aud": "500"},
     }
     held = portfolio(
         TAO=("10", "410"), BTC=("0.03", "70000"), ETH=("0.6", "3000"), USDC=("1900", "1")
@@ -136,11 +136,13 @@ def test_drift_flags_coins_outside_the_band_and_sizes_the_order() -> None:
     assert rows["TAO"]["qty"] == "0.81300813"  # A$500 at 1.5 = $333.33, at $410
     assert rows["BTC"]["side"] == "buy"
     assert (
-        rebalance.drift(held, plan | {"rules": {"driftBand": "8", "tradeBudgetAud": "500"}})[
+        rebalance.drift(held, plan | {"rules": {"rebalance_band": "8", "per_trade_aud": "500"}})[
             "outside"
         ]
         == 2
-    )  # noqa: E501, PLR2004
+    )  # noqa: PLR2004
+    unset = rebalance.drift(held, plan | {"rules": {"rebalance_band": None, "per_trade_aud": None}})
+    assert (unset["outside"], unset["band"]) == (0, None)  # no band set: nothing is flagged
 
 
 # The journal.
@@ -161,7 +163,7 @@ def test_the_journal_groups_fills_checks_rules_and_scores(store: Store) -> None:
         fill("2026-11-14", "ETH", False, "0.1", "3200", 12),
     ]
     _, sales = tax.build(fills, {"SOL": D("4")})
-    plan = {"rules": {"tradeBudgetAud": "500", "maxCoinPct": "25", "monthlyCapAud": "6000"}}
+    plan = {"rules": {"per_trade_aud": "500", "monthly_deposit_cap_aud": "6000"}}
     view = journal.view(store, fills, sales, plan, {"SOL"}, {"2026-11": D("6500")}, TODAY)
     rows = {r["key"]: r for r in view["entries"]}
     sol = rows["SOLUSDC:10"]
@@ -294,20 +296,6 @@ def test_the_bot_token_has_its_own_shape(tmp_path: Path, monkeypatch: pytest.Mon
     assert f"TELEGRAM_BOT_TOKEN={TOKEN}" in file.read_text(encoding="utf-8")
     with pytest.raises(Refused, match="Telegram bot token"):
         env_file.save("TELEGRAM_BOT_TOKEN", "sk-ant-api03-" + "k" * 30)
-
-
-def test_the_plan_keeps_a_drift_band_with_history(store: Store, tmp_path: Path) -> None:
-    audit = Audit(tmp_path / "audit.jsonl")
-    base = {"maxCoinPct": "25", "tradeBudgetAud": "500", "maxLossPct": "20"}
-    trading_plan.save(store, audit, "rules", base, 1)
-    assert trading_plan.view(store)["rules"]["driftBand"] == "5"
-    trading_plan.save(store, audit, "rules", base | {"driftBand": "8"}, 2)
-    history = trading_plan.view(store)["rules"]["history"]
-    assert ("Rebalance band (± points)", "5", "8") in {
-        (h["rule"], h["from"], h["to"]) for h in history
-    }  # noqa: E501
-    with pytest.raises(Refused):
-        trading_plan.save(store, audit, "rules", base | {"driftBand": "90"}, 3)
 
 
 # The routes and the watcher.
@@ -445,8 +433,8 @@ def test_a_non_json_answer_from_telegram_is_words(
 
 def test_a_sale_never_exceeds_what_binance_holds() -> None:
     plan = {
-        "goals": {"targets": [{"coin": "TAO", "pct": "10"}, {"coin": "USDC", "pct": "50"}]},
-        "rules": {"driftBand": "5", "tradeBudgetAud": "100000"},
+        "strategy": {"targets": [{"coin": "TAO", "pct": "10"}, {"coin": "USDC", "pct": "50"}]},
+        "rules": {"rebalance_band": "5", "per_trade_aud": "100000"},
     }  # noqa: E501
     held = portfolio(TAO=("1", "400"), USDC=("100", "1"))
     held["holdings"].append(

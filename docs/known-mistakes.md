@@ -10,7 +10,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 4. Run the web apps' tests from an upper-case `C:\` path (`Set-Location C:\<repo>\apps\<app>`): from `c:` Vitest loads twice and every jest-dom matcher fails as "Invalid Chai property".
 5. Never rewrite a source file with Windows PowerShell `Get-Content`/`Set-Content`: it reads UTF-8 as ANSI and writes a BOM (`·` became `Â·`). Use the Edit tool, or Python with `encoding="utf-8"`.
 6. A script pasted into CloudShell runs interactively, where `!word` is history expansion (`!starts_with` dropped a check): write ``== `false` `` instead.
-7. The repo is public: never copy the owner's real balances, costs, deposits, wallet addresses or emails into tests, demo data or docs (real BTC, TAO and SOL amounts and a TAO cost reached test fixtures; later an available balance read off the owner's screenshot reached a mockup and a test). Use made-up numbers, including in mockups built from the owner's screenshots; the owner's data lives only in `local/` (SQLite, audit log) and `.env`, both git-ignored.
+7. The repo is public: never copy the owner's real balances, costs, deposits, wallet addresses or emails into tests, demo data or docs. Use made-up numbers, including in mockups built from the owner's screenshots; the owner's data lives only in `local/` (SQLite, audit log) and `.env`, both git-ignored.
 
 ## CI
 
@@ -57,6 +57,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 29b. Binance order ids are unique per pair only: key them `PAIR:id`.
 29c. Bot names are public: link a Telegram chat only by a one-time code.
+29d. The pre-trade check first missed smart trades, which go as a bot switched on: list every route that sends a buy before adding a check.
 
 ## SQLite
 

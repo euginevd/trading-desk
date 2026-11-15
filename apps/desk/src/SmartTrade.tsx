@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ApiError,
   cancelOrder,
   closeBot,
   createBot,
+  deleteBot,
   getBot,
   getSmart,
   placeOrder,
@@ -15,12 +17,15 @@ import { BotChart, type Level } from "./BotKit";
 import CoinIcon from "./CoinIcon";
 import { DealCard, message, quoteAmount } from "./DcaBots";
 import { aud, amount as coinAmount, dateTime, price, shortDate } from "./format";
+import { RuleBreakBanner } from "./RuleMarks";
 import type {
   DcaBot,
   DcaBots as Trades,
   DcaConfig,
   DcaDetail,
   Market,
+  OrderRequest,
+  RuleBreak,
   SellCheck,
   Settings,
   Signal,
@@ -245,27 +250,37 @@ function NewTrade({
   const quick = useRef<HTMLDialogElement>(null);
   const [quickId] = useState(() => crypto.randomUUID());
   const quickQty = floor(Number(form.base) / Number(form.entry), terminal.step);
-  const placeNow = () => {
+  // A buy the pre-trade check held (decision 58): the request as sent, and the rules it breaks.
+  const [held, setHeld] = useState<{ request: OrderRequest; breaks: RuleBreak[] } | null>(null);
+  const sendNow = (request: OrderRequest) => {
     setSending(true);
-    placeOrder({
-      clientId: quickId,
-      symbol: terminal.symbol,
-      side: "buy",
-      price: form.entry,
-      amount: quickQty,
-    }).then(
+    placeOrder(request).then(
       (d) => {
+        setHeld(null);
         quick.current?.close?.();
         setSending(false);
         onPlaced(d.message);
       },
       (e: unknown) => {
-        quick.current?.close?.();
         setSending(false);
+        if (e instanceof ApiError && e.ruleBreaks.length > 0 && !request.override) {
+          setHeld({ request, breaks: e.ruleBreaks });
+          return;
+        }
+        setHeld(null);
+        quick.current?.close?.();
         setError(message(e));
       },
     );
   };
+  const placeNow = () =>
+    sendNow({
+      clientId: quickId,
+      symbol: terminal.symbol,
+      side: "buy",
+      price: form.entry,
+      amount: quickQty,
+    });
   const [presetting, setPresetting] = useState(true);
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
@@ -319,6 +334,7 @@ function NewTrade({
   }, [terminal.symbol, terminal.tick, terminal.step]);
 
   const set = (key: keyof Form, value: string | boolean) => {
+    setHeld(null); // a changed form is a new order: the old check no longer applies
     setForm((f) => ({ ...f, [key]: value }));
     setWhy((w) => ({ ...w, [key]: "" }));
   };
@@ -365,20 +381,40 @@ function NewTrade({
     };
   };
 
-  const place = async () => {
+  // A smart trade breaking a Profile rule is held at switch-on (decision 58): the owner keeps
+  // to the rule, which removes the unsent trade, or places it past the rule, logged.
+  const [heldTrade, setHeldTrade] = useState<{
+    id: number;
+    ref: string;
+    breaks: RuleBreak[];
+  } | null>(null);
+  const place = async (override?: { id: number; ref: string }) => {
     setSending(true);
+    let mine = override;
     try {
-      const made = await createBot(request());
-      const mine = made.bots[made.bots.length - 1];
-      if (!mine) throw new Error();
-      await switchBot(mine.id, true);
+      if (!mine) {
+        const made = await createBot(request());
+        mine = made.bots[made.bots.length - 1];
+        if (!mine) throw new Error();
+      }
+      await switchBot(mine.id, true, override !== undefined);
+      setHeldTrade(null);
       dialog.current?.close?.();
       onPlaced(`${mine.ref} placed: ${rows.length} limit buys on ${terminal.pair}.`);
     } catch (e: unknown) {
-      dialog.current?.close?.();
-      setError(message(e));
+      if (e instanceof ApiError && e.ruleBreaks.length > 0 && mine && !override) {
+        setHeldTrade({ id: mine.id, ref: mine.ref, breaks: e.ruleBreaks });
+      } else {
+        dialog.current?.close?.();
+        setError(message(e));
+      }
     }
     setSending(false);
+  };
+  const keepTrade = () => {
+    if (heldTrade) void deleteBot(heldTrade.id).catch(() => undefined);
+    setHeldTrade(null);
+    dialog.current?.close?.();
   };
 
   const field = (key: keyof Form, label: string, unit: string) => (
@@ -615,7 +651,7 @@ function NewTrade({
         )}
       </section>
 
-      <dialog ref={quick} aria-labelledby="st-quick">
+      <dialog ref={quick} aria-labelledby="st-quick" onClose={() => setHeld(null)}>
         <h2 id="st-quick">
           Limit buy {quickQty} {terminal.base} at {price(form.entry)}?
         </h2>
@@ -623,16 +659,28 @@ function NewTrade({
           {two.format(Number(form.base) || 0)} {q}, one order with no DCA orders and no exits. It
           sits in Open orders until it fills or you cancel it.
         </p>
-        <div className="dlg-btns">
-          <button className="btn" type="button" onClick={() => quick.current?.close?.()}>
-            Back
-          </button>
-          <button className="btn btn-accent" type="button" disabled={sending} onClick={placeNow}>
-            {sending ? "Sending" : "Place limit buy"}
-          </button>
-        </div>
+        {held ? (
+          <RuleBreakBanner
+            breaks={held.breaks}
+            sending={sending}
+            onKeep={() => {
+              setHeld(null);
+              quick.current?.close?.();
+            }}
+            onOverride={() => sendNow({ ...held.request, override: true })}
+          />
+        ) : (
+          <div className="dlg-btns">
+            <button className="btn" type="button" onClick={() => quick.current?.close?.()}>
+              Back
+            </button>
+            <button className="btn btn-accent" type="button" disabled={sending} onClick={placeNow}>
+              {sending ? "Sending" : "Place limit buy"}
+            </button>
+          </div>
+        )}
       </dialog>
-      <dialog ref={dialog} aria-labelledby="st-confirm">
+      <dialog ref={dialog} aria-labelledby="st-confirm" onClose={keepTrade}>
         <h2 id="st-confirm">
           Place {rows.length} limit {rows.length === 1 ? "buy" : "buys"} of {terminal.base}?
         </h2>
@@ -647,19 +695,28 @@ function NewTrade({
         <p className="label">
           The orders go to Binance now. Once its one deal ends, the trade is finished.
         </p>
-        <div className="dlg-btns">
-          <button className="btn" type="button" onClick={() => dialog.current?.close?.()}>
-            Back
-          </button>
-          <button
-            className="btn btn-accent"
-            type="button"
-            disabled={sending}
-            onClick={() => void place()}
-          >
-            {sending ? "Sending" : "Place trade"}
-          </button>
-        </div>
+        {heldTrade ? (
+          <RuleBreakBanner
+            breaks={heldTrade.breaks}
+            sending={sending}
+            onKeep={keepTrade}
+            onOverride={() => void place({ id: heldTrade.id, ref: heldTrade.ref })}
+          />
+        ) : (
+          <div className="dlg-btns">
+            <button className="btn" type="button" onClick={() => dialog.current?.close?.()}>
+              Back
+            </button>
+            <button
+              className="btn btn-accent"
+              type="button"
+              disabled={sending}
+              onClick={() => void place()}
+            >
+              {sending ? "Sending" : "Place trade"}
+            </button>
+          </div>
+        )}
       </dialog>
     </div>
   );

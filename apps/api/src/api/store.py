@@ -126,6 +126,10 @@ CREATE TABLE IF NOT EXISTS costs (
     source TEXT NOT NULL, asset TEXT NOT NULL, average TEXT NOT NULL,
     PRIMARY KEY (source, asset)
 );
+CREATE TABLE IF NOT EXISTS profile_versions (
+    n INTEGER PRIMARY KEY, time INTEGER NOT NULL, author TEXT NOT NULL,
+    summary TEXT NOT NULL, reason TEXT NOT NULL, doc TEXT NOT NULL
+);
 """
 FIELDS = (
     "status",
@@ -152,6 +156,10 @@ class Store:
         self._db = sqlite3.connect(path, timeout=5)
         self._db.row_factory = sqlite3.Row
         self._db.executescript(SCHEMA)
+        # The Markdown made from the Profile on each save, beside the database it came from.
+        self.profile_md = path.parent / (
+            "profile.md" if path.stem == "desk" else f"{path.stem}-profile.md"
+        )
 
     def close(self) -> None:
         self._db.close()
@@ -605,3 +613,29 @@ class Store:
     def delete_alert(self, alert_id: int) -> None:
         with self._db:
             self._db.execute("DELETE FROM alerts WHERE id = ?", (alert_id,))
+
+    # The Profile's versions (decision 58): each save is a whole document, never edited.
+
+    def add_profile_version(
+        self, now_ms: int, author: str, summary: str, reason: str, doc: str
+    ) -> int:
+        with self._db:
+            cursor = self._db.execute(
+                "INSERT INTO profile_versions (time, author, summary, reason, doc) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (now_ms, author, summary, reason, doc),
+            )
+        return int(cursor.lastrowid or 0)
+
+    def profile_versions(self) -> list[dict[str, Any]]:
+        """Every version, oldest first, each with its document."""
+        rows = self._db.execute("SELECT * FROM profile_versions ORDER BY n")
+        return [dict(r) for r in rows]
+
+    def profile_version(self, n: int) -> dict[str, Any] | None:
+        row = self._db.execute("SELECT * FROM profile_versions WHERE n = ?", (n,)).fetchone()
+        return dict(row) if row else None
+
+    def latest_profile(self) -> dict[str, Any] | None:
+        row = self._db.execute("SELECT * FROM profile_versions ORDER BY n DESC LIMIT 1").fetchone()
+        return dict(row) if row else None

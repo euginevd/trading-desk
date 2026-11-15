@@ -23,6 +23,7 @@ from api.handler import (
     live_trading,
     morning_summary,
     store_path,
+    weekly_recap,
 )
 
 HOST = os.environ.get("API_HOST", "127.0.0.1")
@@ -122,6 +123,8 @@ def watch(stop: threading.Event) -> None:
                     services.binance, services.store, services.audit, int(time.time() * 1000)
                 )
                 morning_summary(services)  # Telegram, once a day (decision 57)
+                weekly_recap(services)  # Sunday evening (decision 58)
+
         except (LookupError, BinanceError) as error:
             print(f"watcher: {type(error).__name__}")
 

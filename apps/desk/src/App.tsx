@@ -20,7 +20,7 @@ import {
   TradeIcon,
   WalletIcon,
 } from "./icons";
-import PlanPage from "./PlanPage";
+import ProfilePage from "./ProfilePage";
 import Portfolio from "./Portfolio";
 import { CURRENCIES, type Currency, money } from "./money";
 import Trade from "./Trade";
@@ -399,7 +399,7 @@ export default function App() {
         ) : page === "settings" ? (
           <SettingsPage />
         ) : page === "profile" ? (
-          <PlanPage />
+          <ProfilePage />
         ) : page === "journal" ? (
           <Journal />
         ) : page === "portfolio" ? (

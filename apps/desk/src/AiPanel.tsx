@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ApiError, addAlert, deleteAlert, getPlan } from "./api";
 import { amount as coinAmount, dateTime, percent, price } from "./format";
 import { whatIf } from "./plan";
+import { OutOfDate } from "./RuleMarks";
 import type { PlanAction, PlanFacts, RiskRules, Signal } from "./types";
 
 // The AI panel (decision 46): a plan for the owner's own position. Every number on it is
@@ -124,6 +125,7 @@ export default function AiPanel({
           {signal?.stale && " · older than 4 hours"}
           {plan?.changedSince && ` · ${plan.changedSince}`}
         </span>
+        {signal?.outOfDate && <OutOfDate />}
         <button className="link" type="button" disabled={running} onClick={onRun}>
           {running ? "Analysing…" : signal ? "Re-run analysis" : "Run analysis"}
         </button>
@@ -297,6 +299,9 @@ function WhatIf({ facts, signal }: { facts: PlanFacts; signal: Signal }) {
     Number(facts.cash ?? 0),
   );
   const be = (v: number | null) => (v === null ? "–" : `${v.toFixed(1)}%`);
+  // An unset rule is no cap: nothing to compare against (decision 58).
+  const cap = facts.rules.maxCoinPct;
+  const over = cap !== null && found.weightAfter > Number(cap);
   return (
     <div className="ai-whatif">
       <h3 className="detail-h">What if</h3>
@@ -326,7 +331,7 @@ function WhatIf({ facts, signal }: { facts: PlanFacts; signal: Signal }) {
       </div>
       <div className="kv">
         <span className="muted">Share of portfolio</span>
-        <span className={`num ${found.weightAfter > Number(facts.rules.maxCoinPct) ? "down" : ""}`}>
+        <span className={`num ${over ? "down" : ""}`}>
           {found.weightBefore.toFixed(1)}% → {found.weightAfter.toFixed(1)}%
         </span>
       </div>
@@ -334,9 +339,7 @@ function WhatIf({ facts, signal }: { facts: PlanFacts; signal: Signal }) {
         <span className="muted">Cash left</span>
         <span className={`num ${found.cashLeft < 0 ? "down" : ""}`}>{money(found.cashLeft)}</span>
       </div>
-      {found.weightAfter > Number(facts.rules.maxCoinPct) && (
-        <p className="ai-rule wait">Over your {facts.rules.maxCoinPct}% cap a coin.</p>
-      )}
+      {over && <p className="ai-rule wait">Over your {cap}% cap a coin.</p>}
     </div>
   );
 }
@@ -429,11 +432,13 @@ function WatchFor({
 }
 
 function RulesLine({ rules }: { rules: RiskRules }) {
+  const set = (v: string | null, shown: (v: string) => string) =>
+    v === null ? "Not set" : shown(v);
   return (
     <div className="ai-rules muted">
-      Your rules: max {rules.maxCoinPct}% a coin · A$
-      {Number(rules.tradeBudgetAud).toLocaleString("en-AU")} a trade · max loss {rules.maxLossPct}%
-      a position · <a href="#/profile">Edit in Profile</a>
+      Your rules: max per coin {set(rules.maxCoinPct, (v) => `${v}%`)} · per trade{" "}
+      {set(rules.tradeBudgetAud, (v) => `A$${Number(v).toLocaleString("en-AU")}`)} · max loss{" "}
+      {set(rules.maxLossPct, (v) => `${v}%`)} a position · <a href="#/profile">Edit in Profile</a>
     </div>
   );
 }

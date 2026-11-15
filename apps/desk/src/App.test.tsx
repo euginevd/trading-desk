@@ -211,7 +211,9 @@ describe("portfolio page", () => {
     render(<App />);
     expect((await screen.findAllByText("NEAR")).length).toBeGreaterThan(0); // $7.86: shown, not dust
     expect(screen.queryByText("PEPE")).toBeNull();
-    expect(screen.getByText("NEAR <1%")).toBeTruthy(); // allocation lists every coin held
+    // Allocation lists every coin held, by logo and share; the name is on hover and for readers.
+    expect(screen.getByTitle("NEAR <1%")).toBeTruthy();
+    expect(within(screen.getByTitle(/^TAO \(wallet\) /)).getByText("TAO (wallet)")).toBeTruthy();
     expect(screen.queryByText(/^Other/)).toBeNull();
     const by = screen.getByRole("group", { name: "Allocation by" });
     fireEvent.click(within(by).getByRole("button", { name: "By wallet" }));

@@ -23,17 +23,21 @@ TRACK_LAST = 20
 
 @dataclass(frozen=True)
 class Rules:
-    """The owner's risk rules, with the defaults asked for."""
+    """The owner's risk rules from their Profile; None where they haven't set one, and then
+    nothing checks it (decision 58)."""
 
-    max_coin_pct: Decimal = Decimal(25)
-    trade_budget_aud: Decimal = Decimal(500)
-    max_loss_pct: Decimal = Decimal(20)
+    max_coin_pct: Decimal | None = None
+    trade_budget_aud: Decimal | None = None
+    max_loss_pct: Decimal | None = None
 
-    def view(self) -> dict[str, str]:
+    def view(self) -> dict[str, str | None]:
+        def shown(value: Decimal | None) -> str | None:
+            return str(value) if value is not None else None
+
         return {
-            "maxCoinPct": str(self.max_coin_pct),
-            "tradeBudgetAud": str(self.trade_budget_aud),
-            "maxLossPct": str(self.max_loss_pct),
+            "maxCoinPct": shown(self.max_coin_pct),
+            "tradeBudgetAud": shown(self.trade_budget_aud),
+            "maxLossPct": shown(self.max_loss_pct),
         }
 
 
@@ -104,25 +108,24 @@ def what_if(
 
 
 def checks(pos: Position, rules: Rules, after_weight: Decimal) -> dict[str, Any]:
-    """What the risk rules allow, in plain words for the model and the page."""
-    over_cap = pos.weight_pct >= rules.max_coin_pct
-    would_exceed = after_weight > rules.max_coin_pct
-    past_loss = pos.pnl_pct is not None and -pos.pnl_pct >= rules.max_loss_pct
+    """What the risk rules the owner has set allow, in plain words for the model and the page."""
+    most, loss = rules.max_coin_pct, rules.max_loss_pct
+    over_cap = most is not None and pos.weight_pct >= most
+    would_exceed = most is not None and after_weight > most
+    past_loss = loss is not None and pos.pnl_pct is not None and -pos.pnl_pct >= loss
     notes: list[str] = []
     if over_cap:
         notes.append(
-            f"At {pos.weight_pct:.0f}% of the portfolio, over the {rules.max_coin_pct:.0f}% "
-            "cap a coin: no adding."
+            f"At {pos.weight_pct:.0f}% of the portfolio, over the {most:.0f}% cap a coin: "
+            "no adding."
         )
     elif would_exceed:
         notes.append(
             f"Adding a full trade would take it to {after_weight:.0f}%, over the "
-            f"{rules.max_coin_pct:.0f}% cap a coin: no adding."
+            f"{most:.0f}% cap a coin: no adding."
         )
     if past_loss and pos.pnl_pct is not None:
-        notes.append(
-            f"Down {-pos.pnl_pct:.0f}%, past the {rules.max_loss_pct:.0f}% max loss a position."
-        )
+        notes.append(f"Down {-pos.pnl_pct:.0f}%, past the {loss:.0f}% max loss a position.")
     return {"canAdd": not (over_cap or would_exceed), "pastMaxLoss": past_loss, "notes": notes}
 
 
