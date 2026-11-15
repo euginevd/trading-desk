@@ -661,6 +661,7 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("PUT", "/settings/telegram"): lambda s, _, b: telegram.set_time(s.store, b),
     ("PUT", "/settings/telegram/token"): lambda s, _, b: _telegram_token(s, b),
     ("POST", "/settings/telegram/test"): lambda s, _q, _b: _telegram_test(s),
+    ("POST", "/settings/telegram/link"): lambda s, _q, _b: _telegram_link(s),
     ("POST", "/settings/ai/signin"): lambda s, _q, _b: _signin_start(s),
     ("POST", "/settings/ai/signin/finish"): lambda s, _, b: _signin_finish(s, b),
 }
@@ -734,7 +735,7 @@ def _coach(s: Services, *, write: bool) -> dict[str, Any]:
         report = None  # the coach still shows; the card says deposits couldn't be read
     facts = coach.facts(
         portfolio=(s.portfolio or live_portfolio)(),
-        history=[Decimal(value) for _, value in s.store.history(coach.STREAK_DAYS + 1)],
+        history=[(day, Decimal(value)) for day, value in s.store.history(coach.STREAK_DAYS + 1)],
         report=report,
         plan=plan,
         now=datetime.now(SYDNEY),
@@ -809,12 +810,17 @@ def _journal(s: Services) -> dict[str, Any]:
 
 def _telegram_token(s: Services, body: dict[str, Any]) -> dict[str, Any]:
     env_file.save("TELEGRAM_BOT_TOKEN", str(body.get("token", "")))
+    telegram.new_link(s.store)  # a new bot links afresh, by the code shown in Settings
     s.audit.record("settings", "Telegram bot token", "Saved to .env")
-    try:
-        with telegram.client() as client:
-            telegram.find_chat(s.store, client)
-    except telegram.TelegramError:
-        pass  # found later: the test or the first summary looks again
+    return telegram.view(s.store)
+
+
+def _telegram_link(s: Services) -> dict[str, Any]:
+    """Looks for the code the owner sent the bot, and links that chat."""
+    with telegram.client() as client:
+        found = telegram.find_chat(s.store, client)
+    if found:
+        s.audit.record("settings", "Telegram chat", "Linked")
     return telegram.view(s.store)
 
 

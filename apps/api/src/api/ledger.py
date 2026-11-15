@@ -45,6 +45,11 @@ class Fill:
     aud_rate: Decimal  # US dollars to AUD on the day
 
     @property
+    def order(self) -> str:
+        """PAIR:order id, the order's key: Binance's ids are unique within a pair only."""
+        return f"{self.symbol}:{self.order_id}"
+
+    @property
     def aud(self) -> Decimal:
         return self.quote * self.aud_rate
 

@@ -278,29 +278,32 @@ class Store:
                     coins.add(symbol.removesuffix(quote))
         return coins
 
-    def order_sources(self) -> dict[int, str]:
-        """Binance order id to its reference: ST-n, DCA-n · D-n, TR-n, or GRID-n."""
-        sources: dict[int, str] = {}
-        for row in self._db.execute("SELECT id, buy_id, exit_id FROM trades"):
+    def order_sources(self) -> dict[str, str]:
+        """PAIR:order id to its reference: ST-n, DCA-n · D-n, TR-n, or GRID-n."""
+        sources: dict[str, str] = {}
+        for row in self._db.execute("SELECT id, symbol, buy_id, exit_id FROM trades"):
             for order_id in (row["buy_id"], row["exit_id"]):
                 if order_id:
-                    sources[int(order_id)] = f"Smart trade ST-{row['id']}"
+                    sources[f"{row['symbol']}:{order_id}"] = f"Smart trade ST-{row['id']}"
         bots = self._db.execute(
-            "SELECT bot_orders.order_id, bot_deals.id AS deal, bots.id AS bot, bots.config "
+            "SELECT bot_orders.order_id, bot_deals.id AS deal, bots.id AS bot, bots.config, "
+            "bots.symbol "
             "FROM bot_orders JOIN bot_deals ON bot_deals.id = bot_orders.deal_id "
             "JOIN bots ON bots.id = bot_deals.bot_id WHERE bot_orders.order_id IS NOT NULL"
         )
         for row in bots:
             config: dict[str, Any] = json.loads(str(row["config"]))
+            key = f"{row['symbol']}:{row['order_id']}"
             if config.get("entry_price") is not None:
-                sources[int(row["order_id"])] = f"Trade TR-{row['bot']}"
+                sources[key] = f"Trade TR-{row['bot']}"
             else:
-                sources[int(row["order_id"])] = f"DCA-{row['bot']} · D-{row['deal']}"
+                sources[key] = f"DCA-{row['bot']} · D-{row['deal']}"
         grids = self._db.execute(
-            "SELECT order_id, grid_id FROM grid_orders WHERE order_id IS NOT NULL"
+            "SELECT grid_orders.order_id, grid_orders.grid_id, grids.symbol FROM grid_orders "
+            "JOIN grids ON grids.id = grid_orders.grid_id WHERE grid_orders.order_id IS NOT NULL"
         )
         for row in grids:
-            sources[int(row["order_id"])] = f"GRID-{row['grid_id']}"
+            sources[f"{row['symbol']}:{row['order_id']}"] = f"GRID-{row['grid_id']}"
         return sources
 
     # DCA bots (decision 37): each bot, its deals and every order a deal placed.

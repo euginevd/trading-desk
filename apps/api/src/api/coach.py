@@ -53,18 +53,34 @@ def mood(change_pct: Decimal) -> str:
     return "sharp_down"
 
 
-def streak(values: list[Decimal]) -> dict[str, str] | None:
-    """Up 7 days in a row, or 15% or more over 7 days, from the daily account values."""
-    if len(values) < STREAK_DAYS + 1:
+def streak(
+    history: list[tuple[str, Decimal]], inflows: dict[str, Decimal] | None = None
+) -> dict[str, str] | None:
+    """Up 7 days in a row, or 15% or more over 7 days, from the daily account values, with
+    each day's deposits (in the same currency) taken out: money paid in isn't a gain."""
+    if len(history) < STREAK_DAYS + 1:
         return None
-    week = values[-(STREAK_DAYS + 1) :]
-    if week[0] <= 0:
+    week = history[-(STREAK_DAYS + 1) :]
+    paid = inflows or {}
+    start = week[0][1]
+    if start <= 0:
         return None
-    gain = (week[-1] / week[0] - 1) * 100
-    every_day = all(b > a for a, b in zip(week, week[1:], strict=False))
+    moves = [
+        b - a - paid.get(day, Decimal(0)) for (_, a), (day, b) in zip(week, week[1:], strict=False)
+    ]
+    gain = sum(moves, Decimal(0)) / start * 100
+    every_day = all(move > 0 for move in moves)
     if not every_day and gain < STREAK_GAIN:
         return None
     return {"weekPct": plain(gain.quantize(Decimal("0.1"))), "everyDay": str(every_day).lower()}
+
+
+def inflows(report: dict[str, Any] | None) -> dict[str, Decimal]:
+    """Each day's deposits in US dollars (USDC), from the deposits report."""
+    paid: dict[str, Decimal] = {}
+    for d in (report or {}).get("deposits", []):
+        paid[d["day"]] = paid.get(d["day"], Decimal(0)) + Decimal(d["amount"])
+    return paid
 
 
 def part_of_day(now: datetime) -> str:
@@ -201,7 +217,7 @@ def key_points(
 def facts(  # noqa: PLR0913 - every input is a separate source, passed in for tests
     *,
     portfolio: dict[str, Any],
-    history: list[Decimal],
+    history: list[tuple[str, Decimal]],
     report: dict[str, Any] | None,
     plan: dict[str, Any],
     now: datetime,
@@ -217,7 +233,7 @@ def facts(  # noqa: PLR0913 - every input is a separate source, passed in for te
     rules = plan["rules"]
     cap = Decimal(rules["monthlyCapAud"]) if rules.get("monthlyCapAud") else None
     points = key_points(portfolio, rules, last_plan)
-    up = streak(history)
+    up = streak(history, inflows(report))
     band = mood(pct)
     return {
         "greeting": f"{part_of_day(now)}, {name}." if name else f"{part_of_day(now)}.",

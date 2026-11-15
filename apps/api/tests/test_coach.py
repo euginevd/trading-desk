@@ -107,6 +107,11 @@ def plan_with(store: Store, audit: Audit, **rules: Any) -> dict[str, Any]:
     return trading_plan.view(store)
 
 
+def week(values: list[str]) -> list[tuple[str, Decimal]]:
+    """Daily account values, one a day to 15 Nov 2026."""
+    return [(f"2026-11-{15 - len(values) + 1 + i:02d}", D(v)) for i, v in enumerate(values)]
+
+
 def facts_for(
     store: Store, audit: Audit, change: str, history: list[str] | None = None
 ) -> dict[str, Any]:  # noqa: E501
@@ -117,7 +122,7 @@ def facts_for(
     }  # noqa: E501
     return coach.facts(
         portfolio=portfolio(change),
-        history=[D(v) for v in history or []],
+        history=week(history or []),
         report=report,
         plan=plan_with(store, audit),
         now=EVENING,
@@ -177,12 +182,14 @@ def test_a_seven_day_streak_suggests_the_take_profit_rule(store: Store, audit: A
     )  # noqa: E501
     assert message["link"] == "trade"
     jump = ["100", "99", "101", "100", "104", "110", "112", "116"]  # not every day, but +16%
-    assert coach.streak([D(v) for v in jump]) == {"weekPct": "16", "everyDay": "false"}
-    assert (
-        coach.streak([D(v) for v in ["100", "99", "101", "100", "104", "105", "106", "107"]])
-        is None
-    )  # noqa: E501
-    assert coach.streak([D("1")] * 3) is None  # not a week of history yet
+    assert coach.streak(week(jump)) == {"weekPct": "16", "everyDay": "false"}
+    assert coach.streak(week(["100", "99", "101", "100", "104", "105", "106", "107"])) is None  # noqa: E501
+    assert coach.streak(week(["1", "1", "1"])) is None  # not a week of history yet
+    # A deposit isn't a gain: +16% that was all paid in is no streak.
+    assert coach.streak(week(jump), {"2026-11-15": D("16")}) is None
+    assert coach.inflows({"deposits": [{"day": "2026-11-15", "amount": "16"}]}) == {
+        "2026-11-15": D("16")
+    }
     # A down day ends the suggestion, whatever the week did.
     assert facts_for(store, audit, "-5", every_day)["streak"] is None
 

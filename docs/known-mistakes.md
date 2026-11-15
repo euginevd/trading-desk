@@ -55,6 +55,9 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 29a. A timed-out order call (status 0) was treated as "not placed", so a live order could be lost or sent again: keep the row "placing" and look it up by its client id, and record a market sale before sending it (decision 47).
 
+29b. Binance order ids are unique per pair only: key them `PAIR:id`.
+29c. Bot names are public: link a Telegram chat only by a one-time code.
+
 ## SQLite
 
 30. Semgrep blocks SQL built with an f-string, even from fixed names: write each query whole, as in `apps/api/src/api/store.py`.

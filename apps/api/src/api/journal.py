@@ -6,9 +6,10 @@ tags; and a 30-day score of how well the rules were kept.
 import json
 import re
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from api.binance import plain
 from api.ledger import Fill
@@ -16,6 +17,7 @@ from api.store import Store
 from api.tax import Sale
 from api.trading import Refused
 
+SYDNEY = ZoneInfo("Australia/Sydney")
 LISTS_KEY = "journal_tag_lists"
 TAGS_KEY = "journal_tags"
 DEFAULT_LISTS = {
@@ -147,18 +149,18 @@ def view(  # noqa: PLR0913, PLR0917 - every input is a separate source
     deposits_over = {m for m, aud in deposit_months.items() if cap is not None and aud > cap}
     sources = store.order_sources()
     tags = _tags(store)
-    gains: dict[int, Decimal] = {}
-    unknown: set[int] = set()
+    gains: dict[str, Decimal] = {}
+    unknown: set[str] = set()
     for sale in sales:
         if sale.gain is None:
-            unknown.add(sale.order_id)
+            unknown.add(sale.order)
         else:
-            gains[sale.order_id] = gains.get(sale.order_id, Decimal(0)) + sale.gain
+            gains[sale.order] = gains.get(sale.order, Decimal(0)) + sale.gain
     rows: list[dict[str, Any]] = []
     for e in entries(fills):
         broke = _breaches(e, rules, over_cap_now, deposits_over)
         mine = tags.get(e.key, {"setups": [], "mistakes": []})
-        result = None if e.side == "buy" or e.order_id in unknown else gains.get(e.order_id)
+        result = None if e.side == "buy" or e.key in unknown else gains.get(e.key)
         rows.append(
             {
                 "key": e.key,
@@ -168,7 +170,7 @@ def view(  # noqa: PLR0913, PLR0917 - every input is a separate source
                 "qty": plain(e.qty),
                 "price": plain(e.price),
                 "aud": plain(e.aud.quantize(Decimal("0.01"))),
-                "from": sources.get(e.order_id, "Order form or Binance app"),
+                "from": sources.get(e.key, "Order form or Binance app"),
                 "resultAud": plain(result.quantize(Decimal("0.01")))
                 if result is not None
                 else None,
@@ -180,11 +182,15 @@ def view(  # noqa: PLR0913, PLR0917 - every input is a separate source
     return {"entries": rows, "score": score(rows, today), "lists": lists(store)}
 
 
+def _day(ms: int) -> date:
+    return datetime.fromtimestamp(ms / 1000, UTC).astimezone(SYDNEY).date()
+
+
 def score(rows: list[dict[str, Any]], today: date) -> dict[str, Any]:
     """The last 30 days: trades, how many kept every rule (no breach, no mistake tag), what
     was broken most, and the realised result with and without a mistake tag."""
     since = today - timedelta(days=WINDOW_DAYS)
-    recent = [r for r in rows if date.fromtimestamp(r["time"] / 1000) >= since]
+    recent = [r for r in rows if _day(r["time"]) >= since]
     kept = [r for r in recent if not r["broke"] and not r["mistakes"]]
     counts: dict[str, int] = {}
     for r in recent:

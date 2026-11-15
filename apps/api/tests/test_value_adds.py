@@ -208,7 +208,7 @@ def test_the_journal_names_the_desk_order_that_traded(store: Store) -> None:
             "updated": 1,
         }  # noqa: E501
     )
-    assert store.order_sources()[77].startswith("DCA-")
+    assert store.order_sources()["SOLUSDC:77"].startswith("DCA-")
     assert "SOL" in store.desk_coins()
 
 
@@ -265,11 +265,20 @@ def bot(replies: dict[str, Any], seen: list[dict[str, Any]]) -> httpx.Client:
 def test_it_finds_the_owners_chat_and_sends(store: Store, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN)
     seen: list[dict[str, Any]] = []
-    updates = {"ok": True, "result": [{"message": {"chat": {"id": 4242, "type": "private"}}}]}
+    code = telegram.new_link(store)
+    stranger = {"message": {"text": "hi", "chat": {"id": 666, "type": "private"}}}
+    owner = {"message": {"text": code, "chat": {"id": 4242, "type": "private", "username": "sam"}}}
+    late = {"message": {"text": "hello", "chat": {"id": 777, "type": "private"}}}
+    updates = {"ok": True, "result": [stranger, owner, late]}
+    assert telegram.view(store)["linkCode"] == code
     client = bot({"getUpdates": updates, "sendMessage": {"ok": True, "result": {}}}, seen)
     telegram.send(store, client, "Hello")
     assert [s["method"] for s in seen] == ["getUpdates", "sendMessage"]
-    assert seen[1]["body"]["chat_id"] == "4242"
+    assert seen[1]["body"]["chat_id"] == "4242"  # only the chat that sent the code
+    assert telegram.view(store)["chatName"] == "@sam"
+    assert telegram.view(store)["linkCode"] is None
+    telegram.send(store, client, "Again")
+    assert [s["method"] for s in seen][-1] == "sendMessage"  # linked: not searched again
     refused = bot({"sendMessage": {"ok": False, "description": f"Unauthorized {TOKEN}"}}, [])
     with pytest.raises(telegram.TelegramError) as caught:
         telegram.send(store, refused, "Hello")
@@ -408,3 +417,51 @@ def test_one_orders_fills_make_one_lot() -> None:
         (D("2"), D("3150")),
         (D("1"), D("3150")),
     ]
+
+
+def test_a_stranger_who_messages_the_bot_is_never_linked(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN)
+    code = telegram.new_link(store)
+    stranger = {"message": {"text": "hi", "chat": {"id": 666, "type": "private"}}}
+    client = bot({"getUpdates": {"ok": True, "result": [stranger]}}, [])
+    with pytest.raises(telegram.TelegramError, match=code):
+        telegram.send(store, client, "Hello")
+    assert telegram.view(store)["chatFound"] is False
+
+
+def test_a_non_json_answer_from_telegram_is_words(
+    store: Store, monkeypatch: pytest.MonkeyPatch
+) -> None:  # noqa: E501
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN", TOKEN)
+    store.set_setting(telegram.CHAT_KEY, "4242")
+    html = httpx.Client(
+        transport=httpx.MockTransport(lambda _r: httpx.Response(502, text="<html>"))
+    )
+    with pytest.raises(telegram.TelegramError, match="502"):
+        telegram.send(store, html, "Hello")
+
+
+def test_a_sale_never_exceeds_what_binance_holds() -> None:
+    plan = {
+        "goals": {"targets": [{"coin": "TAO", "pct": "10"}, {"coin": "USDC", "pct": "50"}]},
+        "rules": {"driftBand": "5", "tradeBudgetAud": "100000"},
+    }  # noqa: E501
+    held = portfolio(TAO=("1", "400"), USDC=("100", "1"))
+    held["holdings"].append(
+        {"asset": "TAO", "source": "TAO wallet", "amount": "20", "price": "400", "value": "8000"}
+    )  # noqa: E501
+    held["total"]["value"] = "8500"
+    rows = rebalance.drift(held, plan)["rows"]
+    assert [r["coin"] for r in rows] == ["TAO"]  # no stablecoin target
+    assert rows[0]["qty"] == "1"  # all Binance holds; the wallet's TAO can't be sold there
+
+
+def test_the_sign_in_log_blanks_tokens_codes_and_links() -> None:
+    from api.ai_signin import _redacted  # noqa: PLC0415  # pyright: ignore[reportPrivateUsage]
+
+    screen = "Paste code: abcDEF123456789012345678901234 https://claude.com/x?y sk-ant-oat01-secret"
+    shown = _redacted(screen)
+    for secret in ("abcDEF123456789012345678901234", "https://claude.com", "sk-ant-oat01"):
+        assert secret not in shown

@@ -27,7 +27,23 @@ vi.mock("./api", () => ({
   getTelegram: () =>
     Promise.resolve({ tokenSet: false, chatFound: false, time: "07:30", lastSent: null }),
   saveTelegramToken: () =>
-    Promise.resolve({ tokenSet: true, chatFound: false, time: "07:30", lastSent: null }),
+    Promise.resolve({
+      tokenSet: true,
+      chatFound: false,
+      chatName: null,
+      linkCode: "desk-482913",
+      time: "07:30",
+      lastSent: null,
+    }),
+  linkTelegram: () =>
+    Promise.resolve({
+      tokenSet: true,
+      chatFound: true,
+      chatName: "@sam",
+      linkCode: null,
+      time: "07:30",
+      lastSent: null,
+    }),
   setTelegramTime: (time: string) =>
     Promise.resolve({ tokenSet: true, chatFound: true, time, lastSent: null }),
   testTelegram: () =>
@@ -109,7 +125,10 @@ describe("Settings", () => {
     expect(input.getAttribute("type")).toBe("password");
     fireEvent.change(input, { target: { value: "123456789:made-up" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(await screen.findByText("Bot saved: send it a message in Telegram")).toBeTruthy();
+    expect(await screen.findByText("Bot saved: link your chat")).toBeTruthy();
+    expect(screen.getByText("desk-482913")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Link" }));
+    expect(await screen.findByText("Connected to @sam")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Send a test" }));
     expect(await screen.findByText("Test summary sent")).toBeTruthy();
   });

@@ -118,3 +118,19 @@ def test_a_code_needs_a_started_and_fresh_sign_in() -> None:
     clock[0] = 601
     with pytest.raises(Refused, match="expired"):
         signin.finish("abc123#state")
+
+
+def test_two_saves_at_once_both_land(dotenv: Path) -> None:
+    import threading  # noqa: PLC0415
+
+    jobs = [
+        threading.Thread(target=env_file.save, args=("ANTHROPIC_API_KEY", KEY)),
+        threading.Thread(target=env_file.save, args=("CLAUDE_CODE_OAUTH_TOKEN", TOKEN)),
+    ]
+    for job in jobs:
+        job.start()
+    for job in jobs:
+        job.join()
+    text = dotenv.read_text(encoding="utf-8")
+    assert f"ANTHROPIC_API_KEY={KEY}" in text
+    assert f"CLAUDE_CODE_OAUTH_TOKEN={TOKEN}" in text

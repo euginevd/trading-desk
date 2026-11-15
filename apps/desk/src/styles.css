@@ -3572,3 +3572,17 @@ button.jtag {
   font-size: 12px;
   background: var(--panel-2);
 }
+.settings-link {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 8px 0;
+}
+.settings-link p {
+  margin: 0;
+}
+.settings-link code {
+  color: var(--accent);
+  font-weight: 600;
+}

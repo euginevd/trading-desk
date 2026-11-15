@@ -30,13 +30,13 @@ class Lot:
     bought: date | None  # None: before the start date, or moved in; age unknown
     qty: Decimal
     unit_aud: Decimal | None  # cost per coin in AUD; None when unknown
-    order_id: int = 0  # the buy order it came from; 0 for the opening lot
+    order: str = ""  # PAIR:order id it was bought in; "" for the opening lot
 
 
 @dataclass(frozen=True)
 class Sale:
     coin: str
-    order_id: int
+    order: str  # PAIR:order id: Binance's ids are unique within a pair only
     day: date
     qty: Decimal
     proceeds_aud: Decimal
@@ -97,20 +97,18 @@ def build(fills: list[Fill], held: dict[str, Decimal]) -> tuple[dict[str, list[L
         for fill in mine:
             if fill.buy:
                 last = queue[-1] if queue else None
-                if last and last.order_id == fill.order_id:  # one order's fills, one lot
+                if last and last.order == fill.order:  # one order's fills, one lot
                     qty = last.qty + fill.qty
                     unit = (last.qty * (last.unit_aud or ZERO) + fill.aud) / qty
                     queue[-1] = replace(last, qty=qty, unit_aud=unit)
                 else:
-                    queue.append(Lot(coin, fill.day, fill.qty, fill.aud / fill.qty, fill.order_id))
+                    queue.append(Lot(coin, fill.day, fill.qty, fill.aud / fill.qty, fill.order))
                 continue
             taken, queue = _take(queue, fill.qty)
             unit = fill.aud / fill.qty
             for lot, part in taken:
                 cost = lot.unit_aud * part if lot.unit_aud is not None else None
-                sales.append(
-                    Sale(coin, fill.order_id, fill.day, part, unit * part, cost, lot.bought)
-                )
+                sales.append(Sale(coin, fill.order, fill.day, part, unit * part, cost, lot.bought))
         lots[coin] = queue
     return lots, sales
 
@@ -184,7 +182,7 @@ def report(fills: list[Fill], portfolio: dict[str, Any], today: date) -> dict[st
         "sales": len(this_year),
         "unknownSales": sum(1 for s in this_year if s.gain is None),
         "discountedAud": plain(
-            sum((r_gain(r) for r in rows if r["daysToDiscount"] == 0), ZERO).quantize(
+            sum((max(r_gain(r), ZERO) for r in rows if r["daysToDiscount"] == 0), ZERO).quantize(
                 Decimal("0.01")
             )
         ),

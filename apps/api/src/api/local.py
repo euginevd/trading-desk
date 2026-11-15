@@ -40,7 +40,9 @@ HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"} | {o.split("://", 1)[1] for o
 
 
 def load_env(path: Path) -> None:
-    """Sets KEY=VALUE lines from .env that aren't already set. Values are never printed."""
+    """Sets KEY=VALUE lines from .env that aren't already set, or are set but empty (compose
+    fixes the environment when the container is made; a key saved later from Settings is in the
+    mounted .env only). Values are never printed."""
     if not path.is_file():
         return
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -48,7 +50,9 @@ def load_env(path: Path) -> None:
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, value = line.split("=", 1)
-        os.environ.setdefault(key.strip(), value.strip().strip("\"'"))
+        name, value = key.strip(), value.strip().strip("\"'")
+        if value and not os.environ.get(name, "").strip():
+            os.environ[name] = value
 
 
 def allowed(method: str, headers: dict[str, str]) -> str | None:

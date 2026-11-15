@@ -7,6 +7,7 @@ import {
   getAiSettings,
   getProfile,
   getTelegram,
+  linkTelegram,
   saveTelegramToken,
   setTelegramTime,
   testTelegram,
@@ -363,8 +364,8 @@ function Telegram() {
   const status = !tg.tokenSet
     ? "Not connected"
     : tg.chatFound
-      ? "Connected"
-      : "Bot saved: send it a message in Telegram";
+      ? `Connected${tg.chatName ? ` to ${tg.chatName}` : ""}`
+      : "Bot saved: link your chat";
   return (
     <section className="card settings-card" aria-labelledby="settings-telegram">
       <h2 id="settings-telegram">Telegram</h2>
@@ -396,9 +397,24 @@ function Telegram() {
           Save
         </button>
       </div>
+      {tg.linkCode && (
+        <div className="settings-link">
+          <p>
+            Send <code>{tg.linkCode}</code> to your bot in Telegram, then press Link. Only the chat
+            that sends this code gets your summary.
+          </p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => act(() => linkTelegram(), "Checked")}
+          >
+            Link
+          </button>
+        </div>
+      )}
       <p className="settings-hint muted settings-flush">
-        Create a bot with @BotFather in Telegram, paste its token here, then send your bot any
-        message so the desk can find your chat. Saved to .env, never shown again.
+        Create a bot with @BotFather in Telegram and paste its token here. Saved to .env, never
+        shown again.
       </p>
       <div className="settings-input settings-you">
         <label className="settings-label" htmlFor="tg-time">

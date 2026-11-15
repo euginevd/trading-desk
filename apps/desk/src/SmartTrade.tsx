@@ -696,8 +696,15 @@ function SellForm({
         ),
   );
   const [qty, setQty] = useState(() =>
-    startQty && Number(startQty) > 0 ? floor(Number(startQty), terminal.step) : "",
+    startQty && Number(startQty) > 0
+      ? floor(Math.min(Number(startQty), Number(terminal.baseFree)), terminal.step)
+      : "",
   );
+  // A prefill from a link is checked against the market: far from it, the form says so.
+  const far =
+    start && Number(terminal.price) > 0
+      ? Math.abs(Number(at) / Number(terminal.price) - 1) > 0.1
+      : false;
   const [error, setError] = useState("");
   const [id, setId] = useState(() => crypto.randomUUID());
   // Before a sale: would it use a lot under 12 months (decision 54)? Checked as the amount
@@ -783,6 +790,12 @@ function SellForm({
           </div>
         </div>
       </div>
+      {far && (
+        <div className="tax-warn" role="note">
+          <b>Far from the market.</b> This limit is more than 10% from today&apos;s price (
+          {price(terminal.price)}). Check it before you place it.
+        </div>
+      )}
       {shownCheck?.young && shownCheck.youngest && (
         <div className="tax-warn" role="note">
           <b>Under 12 months.</b> Selling {coinAmount(qty)} {terminal.base} uses the lot bought{" "}

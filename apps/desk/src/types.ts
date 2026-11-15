@@ -803,6 +803,8 @@ export interface JournalData {
 export interface TelegramSettings {
   tokenSet: boolean;
   chatFound: boolean;
+  chatName: string | null;
+  linkCode: string | null;
   time: string;
   lastSent: string | null;
 }

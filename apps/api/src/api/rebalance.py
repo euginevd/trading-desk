@@ -22,14 +22,19 @@ def drift(portfolio: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
     budget = Decimal(rules["tradeBudgetAud"])
     values: dict[str, Decimal] = {}
     prices: dict[str, Decimal] = {}
+    on_binance: dict[str, Decimal] = {}
     for h in portfolio["holdings"]:
         coin = h["asset"]
         values[coin] = values.get(coin, Decimal(0)) + Decimal(h.get("value") or "0")
         if h.get("price"):
             prices[coin] = Decimal(h["price"])
+        if h.get("source") == "Binance":
+            on_binance[coin] = on_binance.get(coin, Decimal(0)) + Decimal(h.get("amount") or "0")
     rows: list[dict[str, Any]] = []
     for target in plan["goals"]["targets"]:
         coin, want = target["coin"], Decimal(target["pct"])
+        if coin in STABLES:
+            continue  # cash: what's left over, not something to trade toward
         now = values.get(coin, Decimal(0)) / total_usd * 100 if total_usd else Decimal(0)
         gap = want - now
         outside = abs(gap) > band
@@ -43,15 +48,18 @@ def drift(portfolio: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
         if outside and total_usd:
             aud = abs(gap) / 100 * total_usd * rate
             price = prices.get(coin)
+            order_aud = min(aud, budget)
+            qty = order_aud / rate / price if price else None
+            if qty is not None and gap < 0:  # a sale can't be more than Binance holds
+                qty = min(qty, on_binance.get(coin, Decimal(0)))
+                order_aud = qty * price * rate if price else order_aud
             row |= {
                 "side": "buy" if gap > 0 else "sell",
                 "toTargetAud": plain(aud.quantize(Decimal(1))),
-                "orderAud": plain(min(aud, budget).quantize(Decimal(1))),
+                "orderAud": plain(order_aud.quantize(Decimal(1))),
                 "price": plain(price) if price else None,
-                "qty": plain((min(aud, budget) / rate / price).quantize(Decimal("0.00000001")))
-                if price
-                else None,
-                "capped": aud > budget,
+                "qty": plain(qty.quantize(Decimal("0.00000001"))) if qty is not None else None,
+                "capped": aud > order_aud,
             }
         rows.append(row)
     return {

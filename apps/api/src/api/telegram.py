@@ -7,6 +7,7 @@ in Settings, Sydney time: the coach's mood line, key points and deposits left.
 """
 
 import os
+import secrets
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, cast
@@ -20,6 +21,8 @@ API = "https://api.telegram.org"
 CHAT_KEY = "telegram_chat_id"
 TIME_KEY = "telegram_summary_time"
 SENT_KEY = "telegram_last_sent"
+CODE_KEY = "telegram_link_code"
+NAME_KEY = "telegram_chat_name"
 DEFAULT_TIME = "07:30"
 TIMEOUT_SECONDS = 15
 OK = 200
@@ -34,9 +37,12 @@ def token() -> str:
 
 
 def view(store: Store) -> dict[str, Any]:
+    found = bool(store.setting(CHAT_KEY, ""))
     return {
         "tokenSet": bool(token()),
-        "chatFound": bool(store.setting(CHAT_KEY, "")),
+        "chatFound": found,
+        "chatName": store.setting(NAME_KEY, "") or None,
+        "linkCode": None if found or not token() else store.setting(CODE_KEY, "") or None,
         "time": store.setting(TIME_KEY, DEFAULT_TIME),
         "lastSent": store.setting(SENT_KEY, "") or None,
     }
@@ -60,21 +66,45 @@ def _call(client: httpx.Client, method: str, payload: dict[str, Any] | None = No
         response = client.post(f"{API}/bot{secret}/{method}", json=payload or {})
     except httpx.HTTPError:
         raise TelegramError("Telegram didn't answer. Check the connection.") from None
-    body: Any = response.json() if response.content else {}
+    try:
+        body: Any = response.json() if response.content else {}
+    except ValueError:
+        raise TelegramError(f"Telegram answered {response.status_code}. Try again.") from None
     if response.status_code != OK or not body.get("ok"):
         said = str(body.get("description", "no reason given"))[:120].replace(secret, "[token]")
         raise TelegramError(f"Telegram said: {said}")
     return body.get("result")
 
 
+def new_link(store: Store) -> str:
+    """A new bot: forget the old chat and make the code the owner sends to link theirs."""
+    code = f"desk-{secrets.randbelow(900_000) + 100_000}"
+    store.set_setting(CHAT_KEY, "")
+    store.set_setting(NAME_KEY, "")
+    store.set_setting(CODE_KEY, code)
+    return code
+
+
 def find_chat(store: Store, client: httpx.Client) -> bool:
-    """The owner's private chat with the bot, from the messages it has had; True once found."""
+    """The owner's private chat: the one that sent the code shown in Settings. Bot names are
+    public, so a chat that merely messaged the bot is never taken. Once linked, kept."""
+    if store.setting(CHAT_KEY, ""):
+        return True
+    code = store.setting(CODE_KEY, "")
+    if not code:
+        return False
     updates: list[dict[str, Any]] = _call(client, "getUpdates") or []
     for update in reversed(updates):
         message = cast(dict[str, Any], update.get("message") or {})
         chat = cast(dict[str, Any], message.get("chat") or {})
-        if chat.get("type") == "private" and chat.get("id"):
+        if (
+            chat.get("type") == "private"
+            and chat.get("id")
+            and message.get("text", "").strip() == code
+        ):
             store.set_setting(CHAT_KEY, str(chat["id"]))
+            name = chat.get("username") or chat.get("first_name") or ""
+            store.set_setting(NAME_KEY, f"@{name}" if chat.get("username") else str(name))
             return True
     return False
 
@@ -82,9 +112,8 @@ def find_chat(store: Store, client: httpx.Client) -> bool:
 def send(store: Store, client: httpx.Client, text: str) -> None:
     chat = store.setting(CHAT_KEY, "")
     if not chat and not find_chat(store, client):
-        raise TelegramError(
-            "Send your bot any message in Telegram first, so the desk can find you."
-        )
+        code = store.setting(CODE_KEY, "")
+        raise TelegramError(f"Send {code} to your bot in Telegram first, so the desk finds you.")
     _call(
         client,
         "sendMessage",

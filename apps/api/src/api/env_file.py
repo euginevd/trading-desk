@@ -1,10 +1,13 @@
-"""Saving the AI's credentials from the Settings page into `.env` (decision 51), so the owner
-never edits the file by hand. Only these two names may be written, each checked for its shape;
-the value takes effect at once and is never logged, returned or shown again.
+"""Saving credentials from the Settings page into `.env` (decisions 51 and 57), so the owner
+never edits the file by hand. Only the names in SHAPES may be written (the Claude API key, the
+Claude sign-in token and the Telegram bot token), each checked in full against its shape, so no
+other line can be added. One save at a time; the value takes effect at once and is never
+logged, returned or shown again.
 """
 
 import os
 import re
+import threading
 from pathlib import Path
 
 from api.trading import Refused
@@ -19,6 +22,9 @@ WORDS = {
     "CLAUDE_CODE_OAUTH_TOKEN": "Claude sign-in token",
     "TELEGRAM_BOT_TOKEN": "Telegram bot token",
 }
+
+
+_LOCK = threading.Lock()
 
 
 def path() -> Path:
@@ -36,16 +42,22 @@ def save(name: str, value: str) -> None:
     value = value.strip()
     if shape is None or not shape.fullmatch(value):
         raise Refused(f"That doesn't look like a {_word(name)}. Copy it again, in full.")
-    target = path()
+    with _LOCK:
+        _write(name, value, path())
+    os.environ[name] = value
+
+
+def _write(name: str, value: str, target: Path) -> None:
     lines = target.read_text(encoding="utf-8").splitlines()
     line = f"{name}={value}"
     kept = [line if raw.split("=", 1)[0].strip() == name else raw for raw in lines]
     if line not in kept:
         kept.append(line)
-    # In place, not a rename: .env is a single file mounted into the container.
+    # In place, not a rename: .env is a single file mounted into the container. Built first and
+    # written in one call, so the file is never left half-written by a slow save.
+    text = "\n".join(kept) + "\n"
     with target.open("w", encoding="utf-8", newline="\n") as file:
-        file.write("\n".join(kept) + "\n")
-    os.environ[name] = value
+        file.write(text)
 
 
 def _word(name: str) -> str:

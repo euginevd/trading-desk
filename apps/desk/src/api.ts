@@ -207,3 +207,4 @@ export const setTelegramTime = (time: string) =>
 export const saveTelegramToken = (token: string) =>
   call<TelegramSettings>("PUT", "/settings/telegram/token", { token });
 export const testTelegram = () => call<TelegramSettings>("POST", "/settings/telegram/test", {});
+export const linkTelegram = () => call<TelegramSettings>("POST", "/settings/telegram/link", {});
