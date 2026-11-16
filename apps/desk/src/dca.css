@@ -1473,3 +1473,97 @@ dialog:has(.dcr) {
   gap: 10px;
   white-space: nowrap;
 }
+
+/* The position panel's price strip: average cost and now as labelled pins, the gap between
+   them in green or red, filled buys as dots and open orders as amber ticks. */
+.dcb-ps {
+  margin: 4px 0 22px;
+}
+.dcb-ps-line {
+  position: relative;
+  height: 64px;
+  margin: 0 28px;
+  border-bottom: 1px solid var(--line-2);
+}
+.dcb-ps-gap {
+  position: absolute;
+  bottom: -2px;
+  height: 3px;
+  border-radius: 2px;
+}
+.dcb-ps-gap.is-up {
+  background: var(--up);
+}
+.dcb-ps-gap.is-down {
+  background: var(--down);
+}
+.dcb-ps-buy,
+.dcb-ps-open {
+  position: absolute;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+}
+.dcb-ps-buy {
+  background: var(--body);
+  border: 2px solid var(--panel);
+}
+.dcb-ps-open {
+  bottom: -7px;
+  width: 3px;
+  height: 14px;
+  margin-left: -1.5px;
+  border-radius: 1px;
+  background: var(--wait);
+}
+.dcb-ps-mark {
+  position: absolute;
+  bottom: 0;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding-bottom: 12px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dcb-ps-mark::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  height: 10px;
+  border-left: 1px dashed var(--muted);
+}
+.dcb-ps-mark small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.dcb-ps-mark.is-now b {
+  color: var(--accent);
+}
+.dcb-ps-mark.is-now::after {
+  border-left: 2px solid var(--accent);
+}
+.dcb-ps figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-top: 14px;
+  color: var(--body);
+  font-size: 13.5px;
+}
+.dcb-ps-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-ps-key i {
+  position: static;
+  margin: 0 0 0 6px;
+}

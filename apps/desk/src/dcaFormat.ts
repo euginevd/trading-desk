@@ -84,13 +84,24 @@ export function when(ms: number): string {
 }
 
 export const SOURCE: Record<DcaOrder["source"], string> = {
-  weekly: "Weekly",
-  named: "Named amount",
-  "close-out": "Close-out",
+  weekly: "Weekly plan",
+  named: "Extra funds",
+  "close-out": "Monday buy",
   trim: "Trim",
   "buy-back": "Buy-back",
-  desk: "From the desk",
+  desk: "By hand",
   imported: "From Binance",
+};
+
+// What each source means, for its tooltip.
+export const SOURCE_WHY: Record<DcaOrder["source"], string> = {
+  weekly: "This week's 600 USDC, as a limit order from the weekly plan",
+  named: "Extra money you added with Add funds, placed by dca-agent's plan",
+  "close-out": "Monday's market buy of what the week's limits didn't fill",
+  trim: "Part of the position sold when it ran hot, to buy back lower",
+  "buy-back": "Buying back what a trim sold, at a lower price",
+  desk: "An order you placed yourself on the desk",
+  imported: "Found on Binance and added to the book",
 };
 
 export const STATUS: Record<DcaOrder["status"], string> = {

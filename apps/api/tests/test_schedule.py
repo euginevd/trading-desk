@@ -1,5 +1,5 @@
 import json
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
@@ -191,3 +191,30 @@ def test_the_close_out_button_stops_working_when_the_week_turns(services: Servic
     week = "26W46"
     said = jobs.act(services, {"kind": "dca-close-out", "arg": week}, monday + timedelta(hours=2))
     assert said.startswith("Too late")
+
+
+def test_the_switch_routes_reach_the_scheduler(services: Services) -> None:
+    """The persona routes (/agents/<name>) must not swallow the scheduler's."""
+    from contextlib import contextmanager  # noqa: PLC0415
+
+    from api.handler import handler  # noqa: PLC0415
+
+    @contextmanager
+    def factory() -> Generator[Services]:
+        yield services
+
+    def call(method: str, body: object = None) -> dict[str, Any]:
+        event: dict[str, object] = {
+            "rawPath": "/my-agents/schedule",
+            "requestContext": {"http": {"method": method}},
+            "body": json.dumps(body) if body is not None else None,
+        }
+        reply = handler(event, None, services=factory)
+        return {"status": reply["statusCode"], **json.loads(str(reply["body"]))}
+
+    assert call("GET")["on"] is True
+    off = call("PUT", {"on": False})
+    assert off["status"] == 200
+    assert off["on"] is False
+    assert [j["key"] for j in off["jobs"]] == ["pot-scan", "dca-deposit", "dca-close-out"]
+    assert call("PUT", {"on": "yes"})["status"] == 400

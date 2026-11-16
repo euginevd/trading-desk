@@ -248,7 +248,7 @@ export const getTradingAgent = () => call<AgentPage>("GET", "/agent");
 export const getProfileFile = () => call<MarkdownFile>("GET", "/profile/file");
 // My agents (TODO 10): one file each in local/agents/, read only.
 export const getMyAgents = () => call<MyAgentsPage>("GET", "/my-agents");
-export const setAgentsOn = (on: boolean) => call<unknown>("PUT", "/agents/schedule", { on });
+export const setAgentsOn = (on: boolean) => call<unknown>("PUT", "/my-agents/schedule", { on });
 export const getMyAgentFile = (slug: string) =>
   call<{ markdown: string; error: string | null }>(
     "GET",

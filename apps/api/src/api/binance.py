@@ -34,6 +34,9 @@ class BinanceError(Exception):
         self.message = message
 
 
+CREDITED = (1, 6)  # Binance deposit states: success, and credited but locked
+
+
 @dataclass(frozen=True)
 class Filters:
     """A pair's trading rules: amount step, price step and the smallest order in quote."""
@@ -142,15 +145,17 @@ class Binance:
             start_ms = int(page[-1][0]) + 1
 
     def deposits(self, coin: str, start_ms: int, end_ms: int) -> list[dict[str, Any]]:
-        """Completed deposits of one coin in a window of at most 90 days (decision 31)."""
+        """Deposits of one coin that reached the account, in a window of at most 90 days
+        (decision 31): status 1 (success) and 6 (credited, not yet withdrawable). A fresh
+        deposit sits at 6 for a while, so asking for 1 alone hid it."""
         params = {
             "coin": coin,
-            "status": "1",
             "startTime": str(start_ms),
             "endTime": str(end_ms),
             "limit": "1000",
         }
-        return list(self._signed("/sapi/v1/capital/deposit/hisrec", params, f"{coin} deposits"))
+        rows = self._signed("/sapi/v1/capital/deposit/hisrec", params, f"{coin} deposits")
+        return [r for r in rows if int(r.get("status", -1)) in CREDITED]
 
     def open_orders(self) -> list[dict[str, Any]]:
         return list(self._signed("/api/v3/openOrders", {}, "open orders"))

@@ -3,7 +3,18 @@
 // Dashboard open the same panel; it closes on Esc, a click outside it, or Done.
 import { useEffect, useRef, type ReactNode } from "react";
 import CoinIcon from "./CoinIcon";
-import { dollars, day, limit, qty, signed, two, SOURCE, STATUS, amountOf } from "./dcaFormat";
+import {
+  dollars,
+  day,
+  limit,
+  qty,
+  signed,
+  two,
+  SOURCE,
+  SOURCE_WHY,
+  STATUS,
+  amountOf,
+} from "./dcaFormat";
 import { Live } from "./Figures";
 import type { DcaBook, DcaOrder, DcaPosition } from "./types";
 
@@ -29,7 +40,9 @@ function Orders({ orders, quote, label }: { orders: DcaOrder[]; quote: string; l
               <td className="dcb-id">{o.ref}</td>
               <td className="num">{day(o.created)}</td>
               <td>
-                <span className={`dcb-src is-${o.source}`}>{SOURCE[o.source]}</span>
+                <span className={`dcb-src is-${o.source}`} title={SOURCE_WHY[o.source]}>
+                  {SOURCE[o.source]}
+                </span>
               </td>
               <td className="r num">
                 {o.avgPrice ? limit(o.avgPrice) : o.kind === "market" ? "Market" : limit(o.price)}
@@ -47,6 +60,67 @@ function Orders({ orders, quote, label }: { orders: DcaOrder[]; quote: string; l
         </tbody>
       </table>
     </div>
+  );
+}
+
+// Where the price stands: the average cost, the price now, every buy that filled and every
+// order still open, on one line, with a sentence saying what it means.
+function PriceStrip({ pos, orders }: { pos: DcaPosition; orders: DcaOrder[] }) {
+  const held = Number(pos.qty);
+  const avg = Number(pos.avgCost);
+  if (!(held > 0) || !(avg > 0) || pos.value === null) return null;
+  const now = Number(pos.value) / held;
+  const filled = orders
+    .filter((o) => o.side === "buy" && o.status === "filled" && o.avgPrice)
+    .map((o) => Number(o.avgPrice));
+  const open = orders
+    .filter((o) => o.side === "buy" && (o.status === "open" || o.status === "placing") && o.price)
+    .map((o) => Number(o.price));
+  const all = [avg, now, ...filled, ...open];
+  const lo = Math.min(...all);
+  const hi = Math.max(...all);
+  const pad = (hi - lo) * 0.12 || hi * 0.02;
+  const at = (v: number) => `${((v - (lo - pad)) / (hi - lo + 2 * pad)) * 100}%`;
+  const gap = (now / avg - 1) * 100;
+  const deepest = open.length ? Math.min(...open) : null;
+  const words = [
+    `Now ${limit(String(now))}, ${Math.abs(gap).toFixed(1)}% ${gap >= 0 ? "above" : "below"} your average cost.`,
+    open.length
+      ? `${open.length} open ${open.length === 1 ? "order waits" : "orders wait"} down to ${limit(String(deepest))}, ${(((deepest ?? now) / now - 1) * -100).toFixed(1)}% under now.`
+      : "No open orders.",
+  ].join(" ");
+  return (
+    <figure className="dcb-ps" aria-label={words}>
+      <div className="dcb-ps-line" aria-hidden="true">
+        <span
+          className={`dcb-ps-gap ${gap >= 0 ? "is-up" : "is-down"}`}
+          style={{
+            left: at(Math.min(avg, now)),
+            width: `calc(${at(Math.max(avg, now))} - ${at(Math.min(avg, now))})`,
+          }}
+        />
+        {filled.map((p, i) => (
+          <span key={`f${i}`} className="dcb-ps-buy" style={{ left: at(p) }} />
+        ))}
+        {open.map((p, i) => (
+          <span key={`o${i}`} className="dcb-ps-open" style={{ left: at(p) }} />
+        ))}
+        <span className="dcb-ps-mark is-avg" style={{ left: at(avg) }}>
+          <small>Average</small>
+          <b className="num">{limit(String(avg))}</b>
+        </span>
+        <span className="dcb-ps-mark is-now" style={{ left: at(now) }}>
+          <small>Now</small>
+          <b className="num">{limit(String(now))}</b>
+        </span>
+      </div>
+      <figcaption>
+        {words}
+        <span className="dcb-ps-key" aria-hidden="true">
+          <i className="dcb-ps-buy" /> filled buy <i className="dcb-ps-open" /> open order
+        </span>
+      </figcaption>
+    </figure>
   );
 }
 
@@ -121,6 +195,7 @@ export default function PositionDrawer({
               </b>
             </div>
           </div>
+          <PriceStrip pos={pos} orders={mine} />
           <dl className="dcb-drawer-facts">
             <div>
               <dt>Quantity</dt>

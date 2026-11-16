@@ -10,7 +10,6 @@ import { dayOf } from "./profileFields";
 import type { MyAgent, MyAgentSlot, MyAgentsPage } from "./types";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const LONG = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 const WEEK = 7 * 1440;
 
 // 1020 is "5pm", 1110 is "6:30pm".
@@ -38,10 +37,34 @@ function weekMinute(at: Date): number {
 const whenOf = (s: { day: number; minute: number }) =>
   `${s.day < 0 ? "Daily" : DAYS[s.day]} ${clockOf(s.minute)}`;
 
-function nextWords(agent: MyAgent): string | null {
-  if (!agent.next) return null;
-  const at = new Date(agent.next.at);
-  return `${agent.next.label}, ${LONG[(at.getDay() + 6) % 7]} ${clockOf(at.getHours() * 60 + at.getMinutes())}`;
+// "today 11:15am", "tomorrow 7pm", "Fri 7pm", and "in 2h 10m" when it's within a day.
+export function soonWords(at: number, from: number): { when: string; in: string | null } {
+  const d = new Date(at);
+  const start = new Date(from);
+  start.setHours(0, 0, 0, 0);
+  const days = Math.floor((at - start.getTime()) / 86_400_000);
+  const clock = clockOf(d.getHours() * 60 + d.getMinutes());
+  const day = days === 0 ? "today" : days === 1 ? "tomorrow" : DAYS[(d.getDay() + 6) % 7];
+  const left = at - from;
+  const h = Math.floor(left / 3_600_000);
+  const m = Math.round((left % 3_600_000) / 60_000);
+  return {
+    when: `${day} ${clock}`,
+    in: left > 0 && left < 86_400_000 ? (h ? `in ${h}h ${m}m` : `in ${m}m`) : null,
+  };
+}
+
+// The row's next run: a job the scheduler runs, else the file's next item (by hand).
+function nextOf(agent: MyAgent): { at: number; label: string; auto: boolean } | null {
+  const job = [...(agent.jobs ?? [])].sort((a, b) => a.next - b.next)[0];
+  if (job) return { at: job.next, label: job.label, auto: true };
+  return agent.next ? { at: agent.next.at, label: agent.next.label, auto: false } : null;
+}
+
+function lastOf(agent: MyAgent) {
+  return (agent.jobs ?? [])
+    .flatMap((j) => (j.last ? [{ ...j.last, label: j.label }] : []))
+    .sort((a, b) => b.at - a.at)[0];
 }
 
 function Track({ agent, now }: { agent: MyAgent; now: number }) {
@@ -73,7 +96,7 @@ function Track({ agent, now }: { agent: MyAgent; now: number }) {
   );
 }
 
-function Detail({ agent, onRead }: { agent: MyAgent; onRead: () => void }) {
+function Detail({ agent, now, onRead }: { agent: MyAgent; now: number; onRead: () => void }) {
   const model = agent.model.effort
     ? `${agent.model.name}, ${agent.model.effort} effort`
     : agent.model.name;
@@ -142,6 +165,14 @@ function Detail({ agent, onRead }: { agent: MyAgent; onRead: () => void }) {
       </div>
       <div className="ma-week">
         <h3>Its week</h3>
+        <div className="ma-mini">
+          <div className="ma-axis" aria-hidden="true">
+            {DAYS.map((d) => (
+              <span key={d}>{d}</span>
+            ))}
+          </div>
+          <Track agent={agent} now={now} />
+        </div>
         <ol>
           {agent.schedule.map((s) => (
             <li key={s.label} className={agent.next?.label === s.label ? "is-next" : ""}>
@@ -168,6 +199,7 @@ export default function MyAgents() {
     error: string;
   } | null>(null);
   const [now] = useState(() => weekMinute(new Date()));
+  const [clock] = useState(() => Date.now());
   const [switching, setSwitching] = useState(false);
   const load = useCallback(() => {
     getMyAgents().then(
@@ -218,8 +250,11 @@ export default function MyAgents() {
 
   const agents = page.agents;
   const first = agents
-    .filter((a) => a.next)
-    .sort((a, b) => (a.next?.at ?? 0) - (b.next?.at ?? 0))[0];
+    .flatMap((a) => {
+      const n = nextOf(a);
+      return n?.auto && a.running ? [{ slug: a.slug, ...n }] : [];
+    })
+    .sort((a, b) => a.at - b.at)[0];
   const running = agents.filter((a) => a.running).length;
   const scheduled = agents.some((a) => (a.jobs ?? []).length > 0);
   const flip = () => {
@@ -242,12 +277,17 @@ export default function MyAgents() {
           "No agents yet."
         ) : (
           <>
-            {agents.length} {agents.length === 1 ? "agent" : "agents"} on your desk,{" "}
-            {running === 0 ? "none switched on yet" : `${running} switched on`}.
+            {agents.length} {agents.length === 1 ? "agent" : "agents"},{" "}
+            {running === 0
+              ? page.scheduleOn === false
+                ? "all paused"
+                : "none running on its own yet"
+              : `${running} running on ${running === 1 ? "its" : "their"} own`}
+            .
             {first && (
               <span className="muted">
                 {" "}
-                Next up: {first.slug}, {nextWords(first)}.
+                Next: {first.slug}, {first.label}, {soonWords(first.at, clock).when}.
               </span>
             )}
           </>
@@ -272,17 +312,18 @@ export default function MyAgents() {
       {agents.length > 0 && (
         <div className="ma-rota">
           <div className="ma-head" aria-hidden="true">
-            <span />
-            <div className="ma-axis">
-              {DAYS.map((d) => (
-                <span key={d}>{d}</span>
-              ))}
-            </div>
-            <span />
+            <span>Agent</span>
+            <span>Next</span>
+            <span>Last run</span>
+            <span>Status</span>
           </div>
           <ul className="ma-list">
             {agents.map((a) => {
               const isOpen = open === a.slug;
+              const next = nextOf(a);
+              const soon = next ? soonWords(next.at, clock) : null;
+              const last = lastOf(a);
+              const state = a.running ? "on" : (a.jobs ?? []).length ? "paused" : "hand";
               return (
                 <li key={a.slug} className={`ma-row${isOpen ? " is-open" : ""}`}>
                   <button
@@ -297,15 +338,46 @@ export default function MyAgents() {
                       <b>{a.slug}</b>
                       <small className="muted">{a.persona.title || sentence(a.purpose)}</small>
                     </span>
-                    <Track agent={a} now={now} />
+                    <span className="ma-next">
+                      {next && soon ? (
+                        <>
+                          <b>
+                            {sentence(soon.when)}
+                            {soon.in && <small className="ma-in"> {soon.in}</small>}
+                          </b>
+                          <small className="muted">
+                            {sentence(next.label)}
+                            {next.auto ? "" : ", by hand for now"}
+                          </small>
+                        </>
+                      ) : (
+                        <small className="muted">Nothing timed</small>
+                      )}
+                    </span>
+                    <span className="ma-last">
+                      {last ? (
+                        <>
+                          <small className="muted">
+                            {sentence(last.label)}, {dayOf(last.at)}
+                          </small>
+                          <span className={last.status === "failed" ? "error-text" : ""}>
+                            {last.line}
+                          </span>
+                        </>
+                      ) : (
+                        <small className="muted">
+                          {(a.jobs ?? []).length ? "Hasn't run yet" : "Runs when you ask"}
+                        </small>
+                      )}
+                    </span>
                     <span className="ma-meta">
-                      <span>{a.model.name.replace(/^Claude /, "")}</span>
-                      <small className="muted">
-                        {a.running ? "On" : (a.jobs ?? []).length ? "Paused" : "Not running yet"}
-                      </small>
+                      <span className={`ma-state is-${state}`}>
+                        {state === "on" ? "On" : state === "paused" ? "Paused" : "By hand"}
+                      </span>
+                      <small className="muted">{a.model.name.replace(/^Claude /, "")}</small>
                     </span>
                   </button>
-                  {isOpen && <Detail agent={a} onRead={() => read(a.slug)} />}
+                  {isOpen && <Detail agent={a} now={now} onRead={() => read(a.slug)} />}
                 </li>
               );
             })}

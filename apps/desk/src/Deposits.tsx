@@ -7,7 +7,10 @@ import type { FyDeposits } from "./types";
 // USDC deposits into Binance for the financial year, a bar a month, in AUD (decision 31): what
 // was paid where it's recorded, otherwise the amount at the AUD rate on the day it landed. The
 // Portfolio's "Money in": pick a month to read it, and open its deposits in place.
-const usdc = (value: string) => Number(value).toLocaleString("en-AU", { maximumFractionDigits: 2 });
+// Whole numbers: 677 USDC, A$1,000.
+const usdc = (value: string) => Math.round(Number(value)).toLocaleString("en-AU");
+const audWhole = (value: string) => `A$${Math.round(Number(value)).toLocaleString("en-AU")}`;
+const RECENT = 5;
 
 type State =
   { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; data: FyDeposits };
@@ -16,6 +19,7 @@ export default function Deposits() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [picked, setPicked] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
+  const [all, setAll] = useState(false);
 
   useEffect(() => {
     getDeposits().then(
@@ -75,6 +79,7 @@ export default function Deposits() {
             onClick={() => {
               setPicked(m.month);
               setOpen(false);
+              setAll(false);
             }}
           >
             {m.month === month && m.count > 0 && (
@@ -106,16 +111,28 @@ export default function Deposits() {
       )}
       {open && (
         <ul className="port-money-list" aria-label={`Deposits in ${chosen?.label ?? ""}`}>
-          {inMonth.map((d) => (
+          {(all ? inMonth : inMonth.slice(0, RECENT)).map((d) => (
             <li key={d.time} className="num">
               <span className="muted">{shortDate(d.day)}</span>
               <span>{usdc(d.amount)} USDC</span>
               <span>
-                {d.aud === null ? "–" : km(d.aud)}
+                {d.aud === null ? "–" : audWhole(d.aud)}
                 {d.basis !== "paid" && <small className="muted"> est.</small>}
               </span>
             </li>
           ))}
+          {inMonth.length > RECENT && (
+            <li className="port-money-more">
+              <button
+                type="button"
+                className="dash-link"
+                aria-expanded={all}
+                onClick={() => setAll(!all)}
+              >
+                {all ? "Show the latest 5" : `Show ${inMonth.length - RECENT} more`}
+              </button>
+            </li>
+          )}
         </ul>
       )}
     </section>

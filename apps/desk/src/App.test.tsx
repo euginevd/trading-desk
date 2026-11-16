@@ -468,6 +468,9 @@ describe("portfolio page", () => {
     const list = within(card).getByRole("list", { name: "Deposits in Aug" });
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(within(list).getByText("690 USDC")).toBeTruthy(); // newest first
+    expect(within(list).getByText("701 USDC")).toBeTruthy(); // whole numbers: 700.5 rounds up
+    expect(within(list).getByText("A$1,049")).toBeTruthy();
+    expect(within(list).queryByRole("button", { name: /more/ })).toBeNull(); // 5 or fewer
   });
 
   it("sorts the balances by coin, value, PnL percent or 24h", async () => {

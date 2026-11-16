@@ -461,9 +461,12 @@ describe("My agents tab", () => {
   it("lists each agent on a week, collapsed, and opens its file", async () => {
     render(<Profile />);
     fireEvent.click(screen.getByRole("tab", { name: "My agents" }));
-    expect(await screen.findByText(/1 agent on your desk, none switched on yet\./)).toBeTruthy();
-    expect(screen.getByText(/Next up: weekly-buyer, deposit day, Friday 5pm\./)).toBeTruthy();
+    expect(await screen.findByText(/1 agent, none running on its own yet\./)).toBeTruthy();
     const row = screen.getByRole("button", { name: /^weekly-buyer/ });
+    // At a glance: its next run from the file (by hand, no job yet), no last run, its state.
+    expect(row.textContent).toContain("Deposit day, by hand for now");
+    expect(row.textContent).toContain("Runs when you ask");
+    expect(row.textContent).toContain("By hand");
     expect(row.getAttribute("aria-expanded")).toBe("false"); // collapsed until opened
     expect(screen.queryByRole("heading", { name: "Its week" })).toBeNull();
     fireEvent.click(row);
