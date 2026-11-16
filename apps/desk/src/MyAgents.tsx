@@ -3,6 +3,7 @@
 // glance; opening a row gives its few facts, its week in words, and the file itself.
 import { useCallback, useEffect, useState } from "react";
 import { getMyAgentFile, getMyAgents } from "./api";
+import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
 import { Reader } from "./Markdown";
 import { dayOf } from "./profileFields";
@@ -84,6 +85,15 @@ function Detail({ agent, onRead }: { agent: MyAgent; onRead: () => void }) {
   return (
     <div className="ma-detail" id={`ma-${agent.slug}`}>
       <div className="ma-detail-main">
+        {agent.persona.title && (
+          <div className="ma-persona">
+            <AgentAvatar icon={agent.icon} slug={agent.slug} on={agent.running} size="lg" />
+            <div>
+              <b>{agent.persona.title}</b>
+              {agent.persona.traits && <p className="muted">{sentence(agent.persona.traits)}</p>}
+            </div>
+          </div>
+        )}
         <p className="ma-about">{agent.about || agent.purpose}</p>
         <dl className="ma-facts">
           {facts.map(([k, v]) => (
@@ -233,12 +243,9 @@ export default function MyAgents() {
                     onClick={() => setOpen(isOpen ? null : a.slug)}
                   >
                     <span className="ma-who">
-                      <span
-                        className={`ma-state-dot${a.running ? " on" : ""}`}
-                        aria-hidden="true"
-                      />
+                      <AgentAvatar icon={a.icon} slug={a.slug} on={a.running} />
                       <b>{a.slug}</b>
-                      <small className="muted">{sentence(a.purpose)}</small>
+                      <small className="muted">{a.persona.title || sentence(a.purpose)}</small>
                     </span>
                     <Track agent={a} now={now} />
                     <span className="ma-meta">

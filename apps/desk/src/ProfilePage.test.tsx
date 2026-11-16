@@ -219,6 +219,8 @@ const agents: MyAgentsPage = {
       model: { id: "claude-opus-5-5", name: "Claude Opus 5.5", effort: "high" },
       autonomy: "propose",
       cost: "about $0.20 a week",
+      icon: "dca",
+      persona: { title: "The patient buyer", traits: "steady, never chases" },
       sends: "Telegram messages",
       coins: ["BTC", "ETH"],
       schedule: [

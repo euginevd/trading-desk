@@ -12,6 +12,8 @@ Buys a little every week.
 - Model: claude-opus-5-5, effort high
 - Autonomy: propose
 - Cost: about $0.20 a week
+- Icon: DCA
+- Persona: The patient buyer: steady, never chases
 - Coins: BTC, ETH
 
 ## Schedule (Sydney time)
@@ -71,6 +73,8 @@ def test_listing_versions_each_change(tmp_path: Path) -> None:
     assert agent["model"] == {"id": "claude-opus-5-5", "name": "Claude Opus 5.5", "effort": "high"}
     assert agent["coins"] == ["BTC", "ETH"]
     assert agent["cost"] == "about $0.20 a week"
+    assert agent["icon"] == "dca"
+    assert agent["persona"] == {"title": "The patient buyer", "traits": "steady, never chases"}
     assert agent["version"] == 1
     assert my_agents.listing(store)["agents"][0]["version"] == 1
     (where / "weekly-buyer.md").write_text(SAMPLE + "\n- Buy.\n", encoding="utf-8")

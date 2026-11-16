@@ -83,6 +83,26 @@ def _model(value: str) -> dict[str, str]:
     return {"id": model_id, "name": known.name if known else model_id, "effort": effort}
 
 
+ICONS = (
+    "dca",
+    "grid",
+    "rebalance",
+    "research",
+    "news",
+    "risk",
+    "tax",
+    "journal",
+    "alert",
+    "coach",
+)
+
+
+def _persona(value: str) -> dict[str, str]:
+    """ "The patient buyer: steady, never chases" to its title and its traits."""
+    title, _, traits = value.partition(":")
+    return {"title": title.strip(), "traits": traits.strip()}
+
+
 def next_run(schedule: list[dict[str, Any]], now: datetime) -> dict[str, Any] | None:
     """The soonest timed item after `now`, in Sydney time."""
     local = now.astimezone(SYDNEY)
@@ -139,6 +159,8 @@ def listing(store: Store, now: datetime | None = None) -> dict[str, Any]:
                 "model": _model(facts.get("model", "")),
                 "autonomy": facts.get("autonomy", ""),
                 "cost": facts.get("cost", ""),
+                "icon": icon if (icon := facts.get("icon", "").lower()) in ICONS else "",
+                "persona": _persona(facts.get("persona", "")),
                 "sends": facts.get("sends", ""),
                 "coins": coins,
                 "schedule": found["schedule"],

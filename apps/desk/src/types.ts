@@ -229,6 +229,8 @@ export interface MyAgent {
   model: { id: string; name: string; effort: string };
   autonomy: string;
   cost: string;
+  icon: string;
+  persona: { title: string; traits: string };
   sends: string;
   coins: string[];
   schedule: MyAgentSlot[];
