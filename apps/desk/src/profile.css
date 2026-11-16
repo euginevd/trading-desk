@@ -454,19 +454,6 @@
   font-weight: 600;
   color: var(--accent);
 }
-@media (prefers-reduced-motion: no-preference) {
-  .pf-you-dot i {
-    animation: pf-settle 600ms var(--ease) 200ms both;
-  }
-}
-@keyframes pf-settle {
-  from {
-    transform: scale(0);
-  }
-  to {
-    transform: scale(1);
-  }
-}
 .pf-years {
   position: relative;
   height: 20px;
@@ -715,4 +702,183 @@
 }
 .pf-diff li.del .pf-diff-mark {
   color: var(--down);
+}
+
+/* Wide screens: the plan stops stretching at a readable width. */
+#pf-tabpanel {
+  max-width: 1180px;
+}
+
+/* Phones (~390px): the command bar stacks, labels sit above their values, and the chart keeps
+   only the labels that matter: you, the next milestone and the goal. */
+@media (max-width: 520px) {
+  .pf-title .pf-lead {
+    flex-basis: 100%;
+  }
+  .pf-title .pf-spacer {
+    display: none;
+  }
+  .pf-command-bar {
+    flex-direction: column;
+  }
+  .pf-row,
+  .ag-facts .pf-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+  .pf-headline {
+    font-size: 21px;
+  }
+  .pf-stop:not(.next):not(.goal) b,
+  .pf-years span:not(.today):not(:last-child) {
+    display: none;
+  }
+  .pf-chart-plot {
+    height: 150px;
+  }
+  .ag-steps li > span {
+    display: block;
+    min-width: 0;
+  }
+}
+
+/* Motion (decision 62): one entrance that tells the story, then motion only when something
+   changes or answers you. None of it runs when the system asks for reduced motion. */
+.pf-live {
+  display: inline-block;
+}
+.pf-bar i {
+  transition: width 700ms var(--ease);
+}
+@media (prefers-reduced-motion: no-preference) {
+  /* The road draws from today to the goal; each milestone arrives as the line reaches it; you
+     land last. */
+  .pf-chart svg {
+    animation: pf-draw 950ms var(--ease) 150ms both;
+  }
+  .pf-stop {
+    animation: pf-appear 320ms var(--ease) both;
+  }
+  .pf-you-dot i {
+    animation: pf-land 520ms cubic-bezier(0.34, 1.56, 0.64, 1) 1150ms both;
+  }
+  .pf-you-dot b {
+    animation: pf-appear 300ms var(--ease) 1450ms both;
+  }
+  /* Progress fills to where it stands. */
+  .pf-bar i {
+    animation: pf-fill 800ms var(--ease) 300ms both;
+  }
+  /* A live figure that moved rolls in from its direction, tinted for a moment. */
+  .pf-live.up {
+    animation:
+      pf-roll-up 420ms var(--ease) both,
+      pf-tint-up 1600ms ease-out both;
+  }
+  .pf-live.down {
+    animation:
+      pf-roll-down 420ms var(--ease) both,
+      pf-tint-down 1600ms ease-out both;
+  }
+  /* What you open slides from where you opened it. */
+  .pf-drawer,
+  .pf-answer,
+  .pf-change,
+  .pf-versions .pf-diff {
+    animation: pf-open 240ms var(--ease) both;
+  }
+  .pf-change.closing {
+    animation: pf-close 260ms var(--ease) both;
+  }
+  .pf-panel {
+    animation: pf-fade 180ms ease-out both;
+  }
+}
+@keyframes pf-draw {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes pf-appear {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes pf-land {
+  from {
+    transform: translateY(-28px) scale(0.4);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes pf-fill {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+@keyframes pf-roll-up {
+  from {
+    transform: translateY(0.5em);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes pf-roll-down {
+  from {
+    transform: translateY(-0.5em);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes pf-tint-up {
+  from {
+    color: var(--up);
+  }
+}
+@keyframes pf-tint-down {
+  from {
+    color: var(--down);
+  }
+}
+@keyframes pf-open {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pf-close {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@keyframes pf-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }

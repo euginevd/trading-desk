@@ -36,6 +36,7 @@ export default function CommandBar({
   const [error, setError] = useState("");
   const [answer, setAnswer] = useState<{ question: string; answer: string } | null>(null);
   const [change, setChange] = useState<ProfileSuggestion | null>(null);
+  const [closing, setClosing] = useState(false); // the diff folds away once accepted
   const shown = change ?? (pending?.markdown ? pending : null);
 
   const submit = (e: FormEvent) => {
@@ -65,8 +66,12 @@ export default function CommandBar({
     acceptSuggestion(s.id).then(
       (page) => {
         setBusy(false);
-        setChange(null);
-        onSaved(page);
+        setClosing(true);
+        onSaved(page); // the widgets roll to their new values while the diff folds away
+        window.setTimeout(() => {
+          setChange(null);
+          setClosing(false);
+        }, 260);
       },
       (err: unknown) => {
         setBusy(false);
@@ -124,7 +129,7 @@ export default function CommandBar({
         </div>
       )}
       {shown && (
-        <div className="card pf-change" aria-label="Proposed change">
+        <div className={`card pf-change${closing ? " closing" : ""}`} aria-label="Proposed change">
           <div className="pf-head">
             <h2>Proposed change</h2>
             <span className="muted">{shown.summary}</span>

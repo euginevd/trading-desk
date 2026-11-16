@@ -19,6 +19,7 @@ import { dayOf } from "./profileFields";
 import type { ProfilePage as Page, ProfileVersion, ProfileVersionDetail } from "./types";
 import "./profile.css";
 
+const REFRESH_MS = 60_000; // as the Portfolio page: the TAO reading is reused for a minute
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 type Tab = "policy" | "agent";
@@ -52,7 +53,13 @@ export default function ProfilePage() {
           ))}
         </div>
       </div>
-      <div id="pf-tabpanel" className="pf-page" role="tabpanel" aria-labelledby={`pf-tab-${tab}`}>
+      <div
+        key={tab}
+        id="pf-tabpanel"
+        className="pf-page pf-panel"
+        role="tabpanel"
+        aria-labelledby={`pf-tab-${tab}`}
+      >
         {tab === "policy" ? <Policy /> : <AgentProfile />}
       </div>
     </main>
@@ -70,7 +77,20 @@ function Policy() {
       setError(message(e, "Your Profile couldn't be read.")),
     );
   }, []);
-  useEffect(() => fetchPage(), [fetchPage]);
+  // The live figures (TAO, Binance, BTC) read again every minute while the page is in view, and at
+  // once when the tab comes back; a figure that moved rolls to its new value.
+  useEffect(() => {
+    fetchPage();
+    const quiet = () => {
+      if (document.visibilityState === "visible") fetchPage();
+    };
+    const timer = window.setInterval(quiet, REFRESH_MS);
+    document.addEventListener("visibilitychange", quiet);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", quiet);
+    };
+  }, [fetchPage]);
   const load = () => {
     setError(null);
     fetchPage();

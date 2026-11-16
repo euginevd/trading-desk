@@ -2,25 +2,45 @@
 // you on it, then the plan's terms beside the two things being built (the BTC stack and the cash
 // floor). The api works out every figure from profile.md and the live portfolio; this file only
 // lays them out. Mint is you and done, amber is next or short, red is risk; each also has words.
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import type { BoardCash, BoardRoad, BoardStack, BoardSummary, Num, ProfileBoard } from "./types";
+
+// A live figure: when the refresh brings a new value, it rolls in from the direction it moved,
+// tinted mint (up) or red (down) for a moment. The first value just appears.
+function Live({ value, children }: { value: Num | undefined; children: ReactNode }) {
+  const now = value === null || value === undefined ? null : Number(value);
+  const [seen, setSeen] = useState({ value: now, dir: "", turn: 0 });
+  if (seen.value !== now) {
+    // Worked out while rendering, so the new value rolls in on the very frame it appears.
+    const moved = seen.value !== null && now !== null;
+    setSeen({
+      value: now,
+      dir: moved ? (now > (seen.value ?? 0) ? "up" : "down") : "",
+      turn: moved ? seen.turn + 1 : seen.turn,
+    });
+  }
+  return (
+    <span key={seen.turn} className={`pf-live${seen.dir ? ` ${seen.dir}` : ""}`}>
+      {children}
+    </span>
+  );
+}
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const n = (v: Num | number | undefined) => (v === null || v === undefined ? null : Number(v));
 
-// Whole numbers with K or M: A$12K, US$1M, A$2.5K.
+// Rounded with K or M: US$98K, A$145K, US$1M; one decimal below 10K (A$6.2K), so a small figure
+// still moves when it changes.
 export function km(value: Num | number | undefined, currency: "A$" | "US$" | "" = "A$"): string {
   const v = n(value);
   if (v === null || Number.isNaN(v)) return "—";
   const sign = v < 0 ? "−" : "";
   const a = Math.abs(v);
   const trim = (x: number, places: number) => String(Number(x.toFixed(places)));
-  if (a >= 1_000_000) return `${sign}${currency}${trim(a / 1_000_000, 2)}M`;
-  if (a >= 1_000) return `${sign}${currency}${trim(a / 1_000, a >= 100_000 ? 0 : 1)}K`;
+  if (a >= 999_500) return `${sign}${currency}${trim(a / 1_000_000, 2)}M`;
+  if (a >= 1_000) return `${sign}${currency}${trim(a / 1_000, a >= 9_950 ? 0 : 1)}K`;
   return `${sign}${currency}${Math.round(a)}`;
 }
-const whole = (v: Num | undefined, currency: "A$" | "US$") =>
-  n(v) === null ? "—" : `${currency}${Math.round(Number(v)).toLocaleString("en-AU")}`;
 const pct = (v: Num | undefined) => (n(v) === null ? "—" : `${Number(Number(v).toFixed(1))}%`);
 const btc = (v: Num | undefined) => (n(v) === null ? "—" : String(Number(Number(v).toFixed(4))));
 const month = (iso: string | null | undefined) => {
@@ -70,7 +90,11 @@ function RoadChart({ r }: { r: BoardRoad }) {
             <span
               key={p.date}
               className={`pf-stop${goal ? " goal" : ""}${isNext ? " next" : ""}`}
-              style={{ left: `${x(p.date)}%`, top: `${y(p.usd)}%` }}
+              style={{
+                left: `${x(p.date)}%`,
+                top: `${y(p.usd)}%`,
+                animationDelay: `${250 + (i + 1) * (700 / (r.path.length - 1))}ms`,
+              }}
             >
               <i aria-hidden="true" />
               <b>
@@ -113,13 +137,15 @@ function Road({ r }: { r: BoardRoad }) {
       {r.known ? (
         <>
           <h2 className="pf-headline">
-            {whole(r.totalUsd, "US$")} of {km(r.goalUsd, "US$")}. {pct(r.pct)} of the way
-            {where ? `, ${where}` : ""}.
+            <Live value={r.totalUsd}>{km(r.totalUsd, "US$")}</Live> of {km(r.goalUsd, "US$")}.{" "}
+            <Live value={r.pct}>{pct(r.pct)}</Live> of the way{where ? `, ${where}` : ""}.
           </h2>
           {r.parts && (
             <p className="pf-sub">
-              {km(r.totalAud)}: TAO {km(r.parts.taoAud)}, Binance {km(r.parts.binanceAud)},
-              emergency fund {km(r.parts.emergencyAud)}.
+              <Live value={r.totalAud}>{km(r.totalAud)}</Live>: TAO{" "}
+              <Live value={r.parts.taoAud}>{km(r.parts.taoAud)}</Live>, Binance{" "}
+              <Live value={r.parts.binanceAud}>{km(r.parts.binanceAud)}</Live>, emergency fund{" "}
+              {km(r.parts.emergencyAud)}.
             </p>
           )}
         </>
@@ -242,10 +268,12 @@ function Stack({ b }: { b: BoardStack }) {
       {b.known ? (
         <>
           <p className="pf-goal-line">
-            <strong>{btc(b.held)} BTC</strong>
+            <strong>
+              <Live value={b.held}>{btc(b.held)} BTC</Live>
+            </strong>
             <span className="muted">
               {" "}
-              of {btc(b.target)}, worth {km(b.valueAud)}.{" "}
+              of {btc(b.target)}, worth <Live value={b.valueAud}>{km(b.valueAud)}</Live>.{" "}
             </span>
             {b.bought === null ? (
               <span className="muted">This week&apos;s buy couldn&apos;t be checked.</span>
@@ -287,7 +315,9 @@ function Cash({ c }: { c: BoardCash }) {
     <div className="pf-goal" aria-label="Cash floor" role="group">
       <h3>Cash floor</h3>
       <p className="pf-goal-line">
-        <strong>{km(c.totalAud)}</strong>
+        <strong>
+          <Live value={c.totalAud}>{km(c.totalAud)}</Live>
+        </strong>
         <span className="muted"> of {km(c.floorAud)}. </span>
         {c.full ? (
           <span className="pf-done">✓ Full</span>

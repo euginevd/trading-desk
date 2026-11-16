@@ -275,7 +275,7 @@ describe("Profile", () => {
 
     const road = screen.getByRole("region", { name: "Road to US$1M" });
     expect(within(road).getByRole("heading").textContent).toBe(
-      "US$38,000 of US$1M. 3.8% of the way, on or above the line.",
+      "US$38K of US$1M. 3.8% of the way, on or above the line.",
     );
     expect(road.textContent).toContain("A$57K: TAO A$21K, Binance A$24K, emergency fund A$12K.");
     expect(road.textContent).toContain("Next: US$150K by Dec 2027, US$112K to go in 13 months.");
@@ -305,6 +305,19 @@ describe("Profile", () => {
     expect(within(building).getByText("Take profit at milestones")).toBeTruthy();
     expect(screen.getByText(/^Sam, 36\./)).toBeTruthy();
     expect(screen.getByText("Aggressive risk")).toBeTruthy();
+  });
+
+  it("reads the live figures again and rolls a figure that moved", async () => {
+    render(<Profile />);
+    const road = await screen.findByRole("region", { name: "Road to US$1M" });
+    expect(within(road).getByText("US$38K").className).toBe("pf-live"); // first value: no roll
+    const higher = page();
+    higher.board = board();
+    higher.board.road = { ...part(board().road), totalUsd: "41200", pct: "4.1" };
+    api.getProfilePage.mockResolvedValue(higher);
+    document.dispatchEvent(new Event("visibilitychange")); // as the minute's refresh does
+    const moved = await within(road).findByText("US$41K");
+    expect(moved.className).toBe("pf-live up");
   });
 
   it("opens profile.md in the reader, with the rate the desk uses", async () => {
