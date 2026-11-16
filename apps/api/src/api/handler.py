@@ -27,6 +27,7 @@ from api import (
     journal,
     ledger,
     md_files,
+    my_agents,
     profile,
     profile_ai,
     profile_live,
@@ -886,6 +887,8 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("GET", "/coach"): lambda s, _q, _b: _coach(s, write=False),
     ("POST", "/coach/message"): lambda s, _q, _b: _coach(s, write=True),
     ("GET", "/agents"): lambda _s, _q, _b: agents.listing(),
+    ("GET", "/my-agents"): lambda s, _q, _b: my_agents.listing(s.store),
+    ("GET", "/my-agents/file"): lambda s, q, _b: my_agents.file(s.store, str(q.get("slug", ""))),
     ("GET", "/tax"): lambda s, _q, _b: _tax(s),
     ("GET", "/tax/sell-check"): lambda s, q, _b: _sell_check(s, q),
     ("GET", "/rebalance"): lambda s, _q, _b: rebalance.drift(

@@ -1,9 +1,8 @@
-// The Profile (decisions 58, 61 and 62): the owner's plan, profile.md, and the trading agent who
-// works inside it. The policy tab is a short motivation page: four widgets worked out from
+// The Profile (decisions 58, 61 and 62): the owner's plan, profile.md, and the agents who work
+// inside it (TODO 10). The policy tab is a short motivation page: four widgets worked out from
 // profile.md and the live portfolio, the file one click away, and a command bar that changes it
 // only through a diff and Accept.
 import { useCallback, useEffect, useState } from "react";
-import AgentProfile from "./AgentProfile";
 import {
   getProfileFile,
   getProfilePage,
@@ -14,10 +13,12 @@ import {
 import { dateTime } from "./format";
 import { FileNote, Reader, useMarkdownFile } from "./Markdown";
 import Board from "./ProfileBoard";
+import MyAgents from "./MyAgents";
 import CommandBar, { DiffView } from "./ProfileCommand";
 import { dayOf } from "./profileFields";
 import type { ProfilePage as Page, ProfileVersion, ProfileVersionDetail } from "./types";
 import "./profile.css";
+import "./myagents.css";
 
 const REFRESH_MS = 60_000; // as the Portfolio page: the TAO reading is reused for a minute
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
@@ -25,10 +26,10 @@ const message = (e: unknown, fallback: string) => (e instanceof Error ? e.messag
 type Tab = "policy" | "agent";
 const TABS: { tab: Tab; label: string }[] = [
   { tab: "policy", label: "My plan" },
-  { tab: "agent", label: "Trading agent" },
+  { tab: "agent", label: "My agents" },
 ];
 
-// Two tabs: the owner's plan, and the trading agent who works inside it (#/profile?tab=agent).
+// Two tabs: the owner's plan, and the agents who work inside it (#/profile?tab=agent).
 export default function ProfilePage() {
   const [tab, setTab] = useState<Tab>(() =>
     window.location.hash.includes("tab=agent") ? "agent" : "policy",
@@ -60,7 +61,7 @@ export default function ProfilePage() {
         role="tabpanel"
         aria-labelledby={`pf-tab-${tab}`}
       >
-        {tab === "policy" ? <Policy /> : <AgentProfile />}
+        {tab === "policy" ? <Policy /> : <MyAgents />}
       </div>
     </main>
   );

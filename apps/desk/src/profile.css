@@ -198,117 +198,6 @@
   box-shadow: inset 0 0 0 1px var(--accent);
 }
 
-/* The trading agent tab (TODO 6). Prefixed ag-. */
-.ag-skeleton {
-  height: 140px;
-  margin-bottom: 12px;
-}
-.ag-state {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-.ag-persona {
-  display: flex;
-  gap: 14px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.ag-ava {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: var(--accent-soft);
-  color: var(--accent);
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 13px;
-  flex: none;
-}
-.ag-ava-lg {
-  width: 52px;
-  height: 52px;
-  font-size: 18px;
-}
-
-@media (max-width: 640px) {
-  .ag-persona {
-    align-items: flex-start;
-  }
-}
-
-/* The files behind both tabs (decision 61): read only. */
-.pf-file-error {
-  margin: 0;
-}
-.pf-file-note {
-  margin: 0;
-  font-size: 12px;
-}
-.pf-file-note code {
-  padding: 1px 5px;
-  border-radius: 5px;
-  background: var(--panel-2);
-  color: var(--text);
-}
-.ag-sheet {
-  max-width: 760px;
-}
-.ag-facts {
-  margin-top: 14px;
-  border-top: 1px solid var(--line);
-}
-.ag-facts .pf-row {
-  grid-template-columns: 170px minmax(0, 1fr);
-}
-.ag-steps-h {
-  margin: 18px 0 6px;
-  font-size: 15px;
-  font-weight: 600;
-}
-.ag-steps {
-  margin: 0;
-  padding: 0 0 0 22px;
-  font-variant-numeric: tabular-nums;
-}
-.ag-steps li {
-  padding: 8px 0 8px 4px;
-  border-bottom: 1px solid var(--line);
-}
-.ag-steps li::marker {
-  color: var(--muted);
-}
-.ag-steps li > span {
-  display: inline-block;
-}
-.ag-step-title {
-  min-width: 190px;
-}
-.ag-steps li .muted {
-  min-width: 170px;
-}
-.ag-step-model {
-  color: var(--accent);
-}
-.ag-steps li.off .ag-step-title,
-.ag-steps li.off .ag-step-model {
-  color: var(--dim);
-}
-.ag-who {
-  flex: 1;
-  min-width: 0;
-}
-.ag-who h2 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-.ag-who p {
-  margin: 2px 0 0;
-}
-
 /* The plan (decision 62): a road over time, then a ledger. No cards: hairlines carry structure,
    and the chart is the one bold thing. Wide: two ledger columns; narrow (~650px): one. */
 .pf-top {
@@ -770,8 +659,7 @@
   .pf-command-bar {
     flex-direction: column;
   }
-  .pf-row,
-  .ag-facts .pf-row {
+  .pf-row {
     grid-template-columns: minmax(0, 1fr);
     gap: 2px;
   }
@@ -784,10 +672,6 @@
   }
   .pf-chart-plot {
     height: 150px;
-  }
-  .ag-steps li > span {
-    display: block;
-    min-width: 0;
   }
 }
 

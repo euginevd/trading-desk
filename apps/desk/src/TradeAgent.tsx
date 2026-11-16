@@ -2,7 +2,6 @@
 // steps, and its call. Every number on the ticket comes from code; the agent chose the action and
 // wrote the words. Its buttons only fill the order sheet; nothing is placed from here.
 import { useState } from "react";
-import { initials } from "./AgentProfile";
 import { amount, aud, big, clock, price } from "./format";
 import { OutOfDate } from "./RuleMarks";
 import type { AgentPage, AgentRun, PriceAlert, RunStep } from "./types";
@@ -14,6 +13,14 @@ const CHIPS = [
 ];
 
 // Green and red mean buy and sell, amber waiting (design-system 2).
+// The agent's initials for their avatar: "Jordan" is J, "Sam Lee" is SL.
+export function initials(name: string): string {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+  const first = words[0]?.[0] ?? "?";
+  const second = words.length > 1 ? (words[1]?.[0] ?? "") : "";
+  return (first + second).toUpperCase();
+}
+
 export function actionTone(action: string): "buy" | "sell" | "wait" {
   if (/^(buy|add)/i.test(action)) return "buy";
   if (/^(sell|trim|avoid)/i.test(action)) return "sell";
@@ -70,9 +77,6 @@ export function AgentHero({
           </button>
         ))}
       </div>
-      <a className="tr-fine" href="#/profile?tab=agent">
-        Change how {name} works
-      </a>
     </div>
   );
 }

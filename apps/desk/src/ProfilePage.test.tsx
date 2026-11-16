@@ -2,7 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
-  AgentPage,
+  MyAgentsPage,
   MarkdownFile,
   ProfileBoard,
   ProfileDoc,
@@ -150,12 +150,13 @@ const PROFILE_MD = `# Profile
 1. Emergency fund (6 months): **~A$12K of A$20K**
 `;
 
-const TRADE_MD = `# Trading agent
+const AGENT_MD = `# weekly-buyer
 
-## Identity
+Buys the weekly amount.
 
-- Name: Jordan
-- Style: Balanced
+## Never
+
+- Sell.
 `;
 
 function file(markdown: string, error: string | null = null): MarkdownFile {
@@ -189,8 +190,8 @@ const api = {
   askProfile: vi.fn(),
   acceptSuggestion: vi.fn(),
   rejectSuggestion: vi.fn(),
-  getTradingAgent: vi.fn(),
-  getAgentFile: vi.fn(),
+  getMyAgents: vi.fn(),
+  getMyAgentFile: vi.fn(),
 };
 vi.mock("./api", () => ({
   getProfilePage: () => api.getProfilePage(),
@@ -201,45 +202,35 @@ vi.mock("./api", () => ({
   askProfile: (text: string) => api.askProfile(text),
   acceptSuggestion: (id: string) => api.acceptSuggestion(id),
   rejectSuggestion: (id: string) => api.rejectSuggestion(id),
-  getTradingAgent: () => api.getTradingAgent(),
-  getAgentFile: () => api.getAgentFile(),
+  getMyAgents: () => api.getMyAgents(),
+  getMyAgentFile: (slug: string) => api.getMyAgentFile(slug),
 }));
 
 const { default: Profile } = await import("./ProfilePage");
 
-const agentPage: AgentPage = {
-  version: 3,
-  time: Date.UTC(2026, 10, 14, 2),
-  agent: {
-    name: "Jordan",
-    title: "Trader",
-    style: "balanced",
-    focus: "both",
-    brief: "",
-    always: [],
-    never: [],
-    confidenceFloor: 50,
-    autonomy: "propose",
-    steps: {
-      macro: { on: true, model: "haiku" },
-      technical: { on: true, model: "haiku" },
-      planfit: { on: true, model: "haiku" },
-      debate: { on: false, model: "sonnet" },
-      risk: { on: true, model: "haiku" },
-      decision: { on: true, model: "opus" },
+const agents: MyAgentsPage = {
+  folder: "local/agents",
+  agents: [
+    {
+      slug: "weekly-buyer",
+      file: "agents/weekly-buyer.md",
+      purpose: "buys the weekly amount",
+      about: "Buys a little every week.",
+      model: { id: "claude-opus-5-5", name: "Claude Opus 5.5", effort: "high" },
+      autonomy: "propose",
+      cost: "about $0.20 a week",
+      sends: "Telegram messages",
+      coins: ["BTC", "ETH"],
+      schedule: [
+        { day: 4, minute: 1020, label: "deposit day" },
+        { day: null, minute: null, label: "When the money lands" },
+        { day: 0, minute: 1110, label: "close-out" },
+      ],
+      next: { at: new Date(2026, 10, 20, 17, 0).getTime(), label: "deposit day" },
+      version: 2,
+      time: Date.UTC(2026, 10, 16, 2),
+      running: false,
     },
-  },
-  history: [],
-  told: "",
-  estimate: "0.08",
-  models: [
-    { id: "haiku", name: "Haiku 5.5" },
-    { id: "opus", name: "Opus 5.5" },
-  ],
-  steps: [
-    { key: "macro", title: "Macro", who: "Quinn", fixed: false },
-    { key: "debate", title: "Bull against bear", who: "Specialists", fixed: false },
-    { key: "decision", title: "Decision", who: "Jordan", fixed: true },
   ],
 };
 
@@ -259,8 +250,8 @@ beforeEach(() => {
       },
     ],
   });
-  api.getTradingAgent.mockResolvedValue(agentPage);
-  api.getAgentFile.mockResolvedValue(file(TRADE_MD));
+  api.getMyAgents.mockResolvedValue(agents);
+  api.getMyAgentFile.mockResolvedValue({ markdown: AGENT_MD, error: null });
 });
 afterEach(cleanup);
 
@@ -464,38 +455,41 @@ describe("Profile", () => {
   });
 });
 
-describe("Trading agent tab", () => {
-  it("shows the agent read only and opens trade.md", async () => {
+describe("My agents tab", () => {
+  it("lists each agent on a week and opens its file", async () => {
     render(<Profile />);
-    fireEvent.click(screen.getByRole("tab", { name: "Trading agent" }));
-    const card = await screen.findByRole("region", { name: "Jordan" });
-    expect(within(card).getByText("Trader. Balanced style, DCA and swing.")).toBeTruthy();
-    const steps = within(card).getByRole("list");
+    fireEvent.click(screen.getByRole("tab", { name: "My agents" }));
+    expect(await screen.findByText(/1 agent on your desk, none switched on yet\./)).toBeTruthy();
+    expect(screen.getByText(/Next up: weekly-buyer, deposit day, Friday 5pm\./)).toBeTruthy();
+    const row = screen.getByRole("button", { name: /^weekly-buyer/ });
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(row.textContent).toContain("Opus 5.5");
+    expect(screen.getByText("Claude Opus 5.5, high effort")).toBeTruthy();
+    expect(screen.getByText("Proposes; you approve each order")).toBeTruthy();
+    expect(screen.getByText("v2, 16 Nov 2026")).toBeTruthy();
+    const week = screen.getByRole("heading", { name: "Its week" }).parentElement as HTMLElement;
     expect(
-      within(steps)
+      within(week)
         .getAllByRole("listitem")
         .map((li) => li.textContent),
-    ).toEqual(["MacroQuinnHaiku 5.5", "Bull against bearSpecialistsOff", "DecisionJordanOpus 5.5"]);
-    expect(within(card).getByText("Propose")).toBeTruthy();
-    expect(within(card).getByText("about $0.08")).toBeTruthy();
-    expect(screen.getByText(/To change it, ask Claude Code to edit/).textContent).toContain(
-      "local/trade.md",
-    );
-    fireEvent.click(within(card).getByRole("button", { name: "Show Jordan's profile" }));
-    const reader = await screen.findByRole("dialog", { name: "Jordan's profile" });
-    expect(api.getAgentFile).toHaveBeenCalled();
-    expect(within(reader).getByRole("heading", { level: 1, name: "Trading agent" })).toBeTruthy();
-    expect(within(reader).getByText("Style").closest("li")?.className).toBe("md-field");
+    ).toEqual(["Fri 5pmDeposit day", "WhenThe money lands", "Mon 6:30pmClose-out"]);
+    fireEvent.click(screen.getByRole("button", { name: "Read weekly-buyer.md" }));
+    const reader = await screen.findByRole("dialog", { name: "weekly-buyer.md" });
+    expect(api.getMyAgentFile).toHaveBeenCalledWith("weekly-buyer");
+    expect(
+      await within(reader).findByRole("heading", { level: 1, name: "weekly-buyer" }),
+    ).toBeTruthy();
+    fireEvent.click(row);
+    expect(screen.queryByRole("heading", { name: "Its week" })).toBeNull();
   });
 
-  it("says when trade.md has a problem", async () => {
-    api.getAgentFile.mockResolvedValue(file(TRADE_MD, "Unknown style “bold”."));
+  it("says how to add the first agent", async () => {
+    api.getMyAgents.mockResolvedValue({ folder: "local/agents", agents: [] });
     render(<Profile />);
-    fireEvent.click(screen.getByRole("tab", { name: "Trading agent" }));
-    expect(
-      await screen.findByText(
-        "trade.md has a problem: Unknown style “bold”. The desk is still using v3.",
-      ),
-    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("tab", { name: "My agents" }));
+    expect(await screen.findByText("No agents yet.")).toBeTruthy();
+    expect(screen.getByText(/ask Claude Code to write it in/).textContent).toContain(
+      "local/agents/",
+    );
   });
 });

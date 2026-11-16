@@ -213,6 +213,36 @@ export interface MarkdownFile {
   error: string | null;
 }
 
+// My agents (TODO 10): a file's header and schedule. `day` 0 is Monday; `minute` is from
+// midnight, Sydney time. An item with no day is a trigger ("When the USDC lands").
+export interface MyAgentSlot {
+  day: number | null;
+  minute: number | null;
+  label: string;
+}
+
+export interface MyAgent {
+  slug: string;
+  file: string;
+  purpose: string;
+  about: string;
+  model: { id: string; name: string; effort: string };
+  autonomy: string;
+  cost: string;
+  sends: string;
+  coins: string[];
+  schedule: MyAgentSlot[];
+  next: { at: number; label: string } | null;
+  version: number;
+  time: number;
+  running: boolean;
+}
+
+export interface MyAgentsPage {
+  agents: MyAgent[];
+  folder: string;
+}
+
 export interface RunStep {
   key: "brief" | AgentStepKey;
   title: string;

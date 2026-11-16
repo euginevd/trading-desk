@@ -40,6 +40,7 @@ import type {
   GridRequest,
   AgentCall,
   AgentPage,
+  MyAgentsPage,
   AgentRun,
   CoinRank,
   MarkdownFile,
@@ -226,7 +227,13 @@ export const writeRecap = () => call<{ recap: Recap }>("POST", "/recaps", {});
 export const getTradingAgent = () => call<AgentPage>("GET", "/agent");
 // The owner's files, read only (decision 61): they change them by asking Claude Code.
 export const getProfileFile = () => call<MarkdownFile>("GET", "/profile/file");
-export const getAgentFile = () => call<MarkdownFile>("GET", "/agent/file");
+// My agents (TODO 10): one file each in local/agents/, read only.
+export const getMyAgents = () => call<MyAgentsPage>("GET", "/my-agents");
+export const getMyAgentFile = (slug: string) =>
+  call<{ markdown: string; error: string | null }>(
+    "GET",
+    `/my-agents/file?slug=${encodeURIComponent(slug)}`,
+  );
 
 // Analyse: start a run, then ask for one step at a time until it isn't running.
 export const startAnalysis = (coin: string) => call<AgentRun>("POST", "/analyse", { coin });
