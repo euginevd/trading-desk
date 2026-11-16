@@ -34,18 +34,24 @@ function weekMinute(at: Date): number {
   return ((at.getDay() + 6) % 7) * 1440 + at.getHours() * 60 + at.getMinutes();
 }
 
+// "Fri 5pm", or "Daily 11:15am" for an item that runs every day (day -1).
+const whenOf = (s: { day: number; minute: number }) =>
+  `${s.day < 0 ? "Daily" : DAYS[s.day]} ${clockOf(s.minute)}`;
+
 function nextWords(agent: MyAgent): string | null {
   if (!agent.next) return null;
   const at = new Date(agent.next.at);
-  const slot = agent.schedule.find(
-    (s) => timed(s) && s.label === agent.next?.label && s.day === (at.getDay() + 6) % 7,
-  );
-  const when = slot && timed(slot) ? `${LONG[slot.day]} ${clockOf(slot.minute)}` : "";
-  return `${agent.next.label}${when ? `, ${when}` : ""}`;
+  return `${agent.next.label}, ${LONG[(at.getDay() + 6) % 7]} ${clockOf(at.getHours() * 60 + at.getMinutes())}`;
 }
 
 function Track({ agent, now }: { agent: MyAgent; now: number }) {
-  const slots = agent.schedule.filter(timed);
+  // A daily item puts a dot on every day; only the next one is ringed.
+  const nextDay = agent.next ? (new Date(agent.next.at).getDay() + 6) % 7 : -2;
+  const slots = agent.schedule
+    .filter(timed)
+    .flatMap((s) =>
+      s.day < 0 ? DAYS.map((_, d) => ({ ...s, day: d, daily: true })) : [{ ...s, daily: false }],
+    );
   return (
     <div className="ma-track" aria-hidden="true">
       {DAYS.map((d) => (
@@ -53,13 +59,13 @@ function Track({ agent, now }: { agent: MyAgent; now: number }) {
       ))}
       <span className="ma-now" style={{ left: `${(now / WEEK) * 100}%` }} />
       {slots.map((s) => {
-        const next = agent.next?.label === s.label;
+        const next = agent.next?.label === s.label && (!s.daily || s.day === nextDay);
         return (
           <span
             key={`${s.day}-${s.minute}`}
             className={`ma-dot${next ? " is-next" : ""}`}
             style={{ left: `${((s.day * 1440 + s.minute) / WEEK) * 100}%` }}
-            title={`${DAYS[s.day]} ${clockOf(s.minute)}: ${s.label}`}
+            title={`${s.daily ? "Daily" : DAYS[s.day]} ${clockOf(s.minute)}: ${s.label}`}
           />
         );
       })}
@@ -122,9 +128,7 @@ function Detail({ agent, onRead }: { agent: MyAgent; onRead: () => void }) {
         <ol>
           {agent.schedule.map((s) => (
             <li key={s.label} className={agent.next?.label === s.label ? "is-next" : ""}>
-              <span className="ma-when num">
-                {timed(s) ? `${DAYS[s.day]} ${clockOf(s.minute)}` : "When"}
-              </span>
+              <span className="ma-when num">{timed(s) ? whenOf(s) : "When"}</span>
               <span>{timed(s) ? sentence(s.label) : sentence(s.label.replace(/^when /i, ""))}</span>
             </li>
           ))}
@@ -198,7 +202,9 @@ export default function MyAgents() {
   }
 
   const agents = page.agents;
-  const first = agents.find((a) => a.next);
+  const first = agents
+    .filter((a) => a.next)
+    .sort((a, b) => (a.next?.at ?? 0) - (b.next?.at ?? 0))[0];
   const running = agents.filter((a) => a.running).length;
   return (
     <section className="ma" aria-label="My agents">

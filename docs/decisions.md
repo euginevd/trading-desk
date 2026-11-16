@@ -44,3 +44,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 68. DCA and Grid bots share one Bots page: a sentence, a filter by type, a section a type; the old links open it filtered; rebalancing is next on TODO. [Record](decisions/from-58.md)
 69. Trade keeps only what you can act on: the verdict and how sure, one line on what to do, the order and its buttons, the rule check and alert chips; the reasons and the steps fold away. [Record](decisions/from-58.md)
 70. My agents: agents named by purpose, one versioned Markdown file each in `local/agents/`; the Profile's second tab lists them on a week rota and opens each file. The first is `dca-agent`. [Record](decisions/from-58.md)
+71. The monthly money splits into DCA and a small trading pot, each with its own agent: one trading agent for the pot, with swing, position and grid bots as playbooks in its file, not an agent per style. [Record](decisions/from-58.md)

@@ -20,7 +20,7 @@ DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sun
 # "1. **Friday 5pm, deposit day:** ..." or "2. **When the USDC lands on Binance:** ..."
 ITEM = re.compile(r"^\d+\.\s+\*\*(?P<head>[^*]+?):?\*\*:?\s*(?P<text>.*)$")
 WHEN = re.compile(
-    r"^(?P<day>monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+"
+    r"^(?P<day>daily|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\s+"
     r"(?P<hour>\d{1,2})(?::(?P<min>\d{2}))?\s*(?P<ampm>am|pm)(?:,\s*(?P<label>.+))?$",
     re.IGNORECASE,
 )
@@ -64,7 +64,8 @@ def parse(text: str) -> dict[str, Any]:
                 hour = int(when["hour"]) % 12 + (12 if when["ampm"].lower() == "pm" else 0)
                 schedule.append(
                     {
-                        "day": DAYS.index(when["day"].lower()),
+                        # -1 is every day.
+                        "day": DAYS.index(day) if (day := when["day"].lower()) in DAYS else -1,
                         "minute": hour * 60 + int(when["min"] or 0),
                         "label": (when["label"] or _first_sentence(rest)).strip(),
                     }
@@ -110,12 +111,13 @@ def next_run(schedule: list[dict[str, Any]], now: datetime) -> dict[str, Any] | 
     for item in schedule:
         if item["day"] is None:
             continue
-        ahead = (item["day"] - local.weekday()) % 7
+        daily = item["day"] == -1
+        ahead = 0 if daily else (item["day"] - local.weekday()) % 7
         at = (local + timedelta(days=ahead)).replace(
             hour=item["minute"] // 60, minute=item["minute"] % 60, second=0, microsecond=0
         )
         if at <= local:
-            at += timedelta(days=7)
+            at += timedelta(days=1 if daily else 7)
         if best is None or at < best[0]:
             best = (at, item["label"])
     return None if best is None else {"at": int(best[0].timestamp() * 1000), "label": best[1]}

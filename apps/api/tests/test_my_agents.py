@@ -59,6 +59,19 @@ def test_next_run_is_the_soonest_timed_item() -> None:
     assert later["label"] == "The close-out for anything unfilled"
 
 
+def test_a_daily_item_runs_every_day() -> None:
+    schedule = my_agents.parse("# a\n\n## Schedule\n\n1. **Daily 11:15am, scan:** read.\n")[
+        "schedule"
+    ]
+    assert schedule == [{"day": -1, "minute": 11 * 60 + 15, "label": "scan"}]
+    noon = datetime(2026, 11, 18, 12, 0, tzinfo=my_agents.SYDNEY)
+    found = my_agents.next_run(schedule, noon)
+    assert found is not None
+    assert datetime.fromtimestamp(found["at"] / 1000, my_agents.SYDNEY) == datetime(
+        2026, 11, 19, 11, 15, tzinfo=my_agents.SYDNEY
+    )
+
+
 def test_listing_versions_each_change(tmp_path: Path) -> None:
     store = _store(tmp_path)
     assert my_agents.listing(store)["agents"] == []
