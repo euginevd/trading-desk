@@ -1000,3 +1000,130 @@ dialog.tr-sheet p.tr-from {
 .tr-alerts-skeleton {
   height: 40px;
 }
+
+/* The call, cut to what to do (decision 69): the verdict and how sure on one line, one line on
+   what to do, the order and its three buttons, the rule check, prices worth an alert as chips;
+   the reasons and the steps fold away. */
+.tr-decision {
+  padding: 18px 0 14px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.tr-decision-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 14px;
+}
+.tr-decision .tr-verdict {
+  font-size: 34px;
+  line-height: 1;
+}
+.tr-decision .tr-conf {
+  font-size: 14px;
+  color: var(--text);
+}
+.tr-do {
+  margin: 10px 0 0;
+  font-size: 15px;
+  color: var(--text);
+  max-width: 70ch;
+}
+.tr-order-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--panel);
+}
+.tr-order-what {
+  display: grid;
+  gap: 2px;
+  font-size: 15px;
+}
+.tr-order-what small {
+  font-size: 12px;
+}
+.tr-order-btns {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+.tr-noorder {
+  margin: 12px 0 0;
+}
+.tr-decision .tr-check {
+  margin: 10px 0 0;
+}
+.tr-decision .tr-watch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 12px 0 0;
+}
+.tr-watch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  font-size: 13px;
+}
+.tr-watch-chip .link {
+  min-height: 0;
+  font-size: 12px;
+}
+.tr-why-box {
+  margin-top: 10px;
+}
+.tr-fold {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.tr-fold::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 160ms var(--ease);
+}
+.tr-fold[aria-expanded="true"]::after {
+  transform: translateY(1px) rotate(-135deg);
+}
+.tr-fold:hover {
+  color: var(--text);
+}
+.tr-decision .tr-why {
+  margin: 8px 0 0;
+}
+.tr-how-fold {
+  display: block;
+  text-align: left;
+  margin: 14px 0 8px;
+  color: var(--text);
+  font-weight: 600;
+}
+.tr-hero-line {
+  margin: 10px 0 12px;
+  color: var(--body);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tr-decision .tr-why,
+  .tr-how .tr-steps {
+    animation: dash-rise 220ms var(--ease) both;
+  }
+}

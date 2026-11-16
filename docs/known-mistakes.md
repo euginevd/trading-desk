@@ -14,6 +14,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 8. Run `bash .lefthook/pre-push-scan.sh </dev/null` by hand: without a terminal it waits on stdin for git's pushed refs and hangs for hours.
 9. Don't write Python or TypeScript edits through a bash heredoc: backslash escapes (`\n`, `\b`, `\1`) arrive as line breaks or control characters. Use the Edit or Write tool.
 10. Before deleting CSS rules whose class no source file names, grep for classes built in template strings (`` `on-${side}` ``): a word-search prune dropped the order sheet's Buy and Sell colours and Settings' status dots (`is-${tone}`). Read the whole list: a `head -20` hid the second.
+11. Before naming a new CSS class, grep the app's stylesheets for it: a new `tr-call` for Trade's decision took the coin list's existing `tr-call` styles, right-aligning the call and stretching every coin row.
 
 ## CI
 

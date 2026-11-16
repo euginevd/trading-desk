@@ -33,6 +33,7 @@ Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 5
 | 72 | Journal redesign (decision 66): rules kept in a sentence, the last 30 days as a strip of trades (hover, focus or pick a dot), the ledger filtered to all, broke a rule or kept; responsive to phone width | Done | |
 | 73 | Trade fixes (decision 67): the call first, the steps folded under it, the levels as a ladder around today's price, whole prices from 1,000 | Done | |
 | 74 | Bots page (decision 68): DCA and grid bots on one page: a sentence, Running, Stopped and Coins, chips by type with counts, each bot a block of its figures and actions; Rebalancing shown as coming soon; the old links open it filtered | Done | |
+| 75 | Trade, actionable only (decision 69): the verdict, one line on what to do, the order and its buttons, alert chips; reasons under Why and the steps folded | Done | |
 | 68 | Portfolio refresh: the Portfolio page reads balances again every minute while in view, and when its tab comes back | Done | |
 
 ## `api`

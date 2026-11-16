@@ -448,6 +448,9 @@ describe("trade page", () => {
     expect(posts(fetch, "/analyse")).toEqual([{ coin: "SOL" }]);
     expect(posts(fetch, "/analyse/next")).toEqual([{ id: 41 }, { id: 41 }]);
 
+    // The steps fold into one line once the run is done.
+    expect(screen.queryByRole("list", { name: "Steps" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^How Jordan got there · \d+ steps/ }));
     const steps = screen.getByRole("list", { name: "Steps" });
     expect(within(steps).getByText("Daily RSI 28, oversold.")).toBeTruthy();
     expect(within(steps).getByText("Off in your agent profile")).toBeTruthy();
@@ -455,18 +458,22 @@ describe("trade page", () => {
     expect(screen.getByText(/Analysed SOL at 8:12 pm · 38s · \$0.05/)).toBeTruthy();
 
     expect(within(ticket).getByText("Add")).toBeTruthy();
-    expect(within(ticket).getByText("62%")).toBeTruthy();
+    expect(within(ticket).getByText(/^62% sure/)).toBeTruthy();
     expect(within(ticket).getByText(/was 55%/)).toBeTruthy();
-    expect(within(ticket).getByText("Limit buy")).toBeTruthy();
-    expect(within(ticket).getByText("A$300.00 · 1.136 SOL")).toBeTruthy();
-    expect(within(ticket).getByText("Daily close under 165.00")).toBeTruthy();
+    // The order in one line, with when it's wrong.
+    const order = ticket.querySelector(".tr-order-what") as HTMLElement;
+    expect(order.textContent).toMatch(/^Limit buy 1\.136 SOL at 176\.00 A\$300\.00/);
+    expect(within(ticket).getByText("Out on a daily close under 165.00")).toBeTruthy();
+    // The reasons fold under Why.
+    expect(within(ticket).queryByText("Held the weekly low at 176")).toBeNull();
+    fireEvent.click(within(ticket).getByRole("button", { name: "Why" }));
     expect(within(ticket).getByText("Held the weekly low at 176")).toBeTruthy();
     expect(
       within(ticket).getByText(
         /Within your Profile: per trade A\$500.00, cap left A\$640.00, max per coin 20%/,
       ),
     ).toBeTruthy();
-    expect(within(ticket).getByText("Agent v3 · Profile v7")).toBeTruthy();
+    expect(ticket.getAttribute("title")).toMatch(/Agent v3 · Profile v7$/);
 
     const levels = screen.getByRole("region", { name: "Levels" });
     expect(within(levels).getByText("170.00 – 176.00")).toBeTruthy();

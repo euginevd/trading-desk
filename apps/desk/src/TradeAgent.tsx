@@ -38,9 +38,6 @@ export function AgentHero({
   onChip: (question: string) => void;
 }) {
   const name = agent?.agent.name || "Your agent";
-  const on = agent
-    ? agent.steps.filter((s) => !s.fixed && agent.agent.steps[s.key].on).map((s) => s.title)
-    : [];
   const style = agent ? `${agent.agent.style[0]?.toUpperCase()}${agent.agent.style.slice(1)}` : "";
   return (
     <div className="tr-hero">
@@ -62,10 +59,8 @@ export function AgentHero({
           {working ? "Starting…" : `Analyse ${coin}`}
         </button>
       </div>
-      <p>
-        {name} reads your Profile (goals, rules and holdings) and your {coin} position, then works
-        through {on.length ? on.join(", ").toLowerCase() : "the steps you've switched on"}, and
-        checks the result against your rules before proposing an order.
+      <p className="tr-hero-line">
+        {name} reads your plan, your {coin} position and the market, then proposes one order.
         {agent && ` About $${agent.estimate} a run.`}
       </p>
       <div className="tr-chips">
@@ -75,10 +70,9 @@ export function AgentHero({
           </button>
         ))}
       </div>
-      <p className="tr-fine dim">
-        Pick a question to ask once the run is done. {name} advises; you place every order.{" "}
-        <a href="#/profile?tab=agent">Change how {name} works</a>
-      </p>
+      <a className="tr-fine" href="#/profile?tab=agent">
+        Change how {name} works
+      </a>
     </div>
   );
 }
@@ -168,10 +162,38 @@ function meta(step: RunStep, state: StepState): string {
 export function Timeline({ run, working }: { run: AgentRun; working: boolean }) {
   const now =
     run.status === "running" && working ? run.steps.findIndex((s) => s.status === "pending") : -1;
-  const done = run.status !== "running";
+  const done = run.status === "done"; // a stopped run stays open: its failure is what to read
+  const [open, setOpen] = useState(false);
+  const cost = run.steps.reduce((t, x) => t + Number(x.cost ?? 0), 0);
+  if (done && !open)
+    return (
+      <button
+        type="button"
+        className="tr-fold tr-how-fold"
+        aria-expanded={false}
+        onClick={() => setOpen(true)}
+      >
+        How {run.agent.name} got there{" "}
+        <span className="muted">
+          · {run.steps.length} steps{cost > 0 ? ` · $${cost.toFixed(3)}` : ""}
+        </span>
+      </button>
+    );
   return (
     <div className="tr-how">
-      {done && <h2 className="tr-how-head">How {run.agent.name} got there</h2>}
+      {done && (
+        <button
+          type="button"
+          className="tr-fold tr-how-fold"
+          aria-expanded
+          onClick={() => setOpen(false)}
+        >
+          How {run.agent.name} got there{" "}
+          <span className="muted">
+            · {run.steps.length} steps{cost > 0 ? ` · $${cost.toFixed(3)}` : ""}
+          </span>
+        </button>
+      )}
       <ol className="tr-steps" aria-label="Steps">
         {run.steps.map((step, i) => (
           <Step
@@ -264,51 +286,6 @@ function Step({
   );
 }
 
-function WatchFor({
-  run,
-  alerts,
-  onSetAlert,
-}: {
-  run: AgentRun;
-  alerts: PriceAlert[];
-  onSetAlert: (w: { price: string; direction: "above" | "below"; note: string }) => void;
-}) {
-  const lines = run.signal?.watchFor ?? [];
-  if (lines.length === 0) return null;
-  const set = (w: { price: string; direction: string }) =>
-    alerts.some(
-      (a) =>
-        Number(a.price) === Number(w.price) && a.direction === w.direction && a.triggered === null,
-    );
-  return (
-    <div className="tr-watch">
-      <h3>Watch for</h3>
-      <ul>
-        {lines.map((w) => (
-          <li key={`${w.direction}-${w.price}`}>
-            <span>
-              {w.direction === "above" ? "Above" : "Below"} <b className="num">{big(w.price)}</b>{" "}
-              <span className="muted">{w.note}</span>
-            </span>
-            {set(w) ? (
-              <span className="muted">Alert set</span>
-            ) : (
-              <button
-                className="link"
-                type="button"
-                aria-label={`Set alert ${w.direction} ${price(w.price)}`}
-                onClick={() => onSetAlert(w)}
-              >
-                Set alert
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 function withinLine(run: AgentRun): string {
   const g = run.guardrails;
   const parts = [
@@ -336,6 +313,7 @@ export function TicketCard({
   onDismiss: () => void;
   onSetAlert: (w: { price: string; direction: "above" | "below"; note: string }) => void;
 }) {
+  const [why, setWhy] = useState(false);
   const signal = run.signal;
   if (!signal) return null;
   const ticket = run.ticket;
@@ -344,111 +322,92 @@ export function TicketCard({
   const tone = actionTone(action);
   const model = run.steps.find((s) => s.key === "decision")?.model;
   const inv = signal.zones?.invalidation;
-  const why = signal.why;
+  const reasons = signal.why
+    ? [
+        { mark: "+", tone: "up", label: "For", text: signal.why.bull },
+        { mark: "−", tone: "down", label: "Against", text: signal.why.bear },
+        {
+          mark: "?",
+          tone: "muted",
+          label: "What would change the call",
+          text: signal.why.changeMind,
+        },
+      ]
+    : signal.reasons.map((r) => ({ mark: "·", tone: "muted", label: "", text: r }));
+  const watch = run.signal?.watchFor ?? [];
+  const isSet = (w: { price: string; direction: string }) =>
+    alerts.some(
+      (a) =>
+        Number(a.price) === Number(w.price) && a.direction === w.direction && a.triggered === null,
+    );
   return (
-    <article className="tr-ticket" aria-label={`${name}'s call`}>
-      <div className="tr-ticket-head">
-        <div>
-          <div className="tr-stamp">
-            Decision · {name}
-            {model && ` · ${model}`}
-          </div>
-          <div
-            className={`tr-verdict ${tone === "buy" ? "up" : tone === "sell" ? "down" : "wait"}`}
-          >
-            {action}
-          </div>
-          {run.outOfDate && <OutOfDate because="your Profile or agent changed" />}
-        </div>
-        <div className="tr-conf">
-          <b className="num">{signal.confidence}%</b>
-          <div className="tr-stamp">
-            confidence
-            {signal.confidenceBefore != null && ` · was ${signal.confidenceBefore}%`}
-          </div>
-        </div>
+    <article
+      className="tr-decision"
+      aria-label={`${name}'s call`}
+      title={`${name}${model ? ` on ${model}` : ""} · Agent v${run.agentVersion} · Profile v${run.profileVersion}`}
+    >
+      {/* The call in one line: what, how sure, and whether it still stands. */}
+      <div className="tr-decision-head">
+        <span className={`tr-verdict ${tone === "buy" ? "up" : tone === "sell" ? "down" : "wait"}`}>
+          {action}
+        </span>
+        <span className="tr-conf num">
+          {signal.confidence}% sure
+          {signal.confidenceBefore != null && (
+            <small className="muted"> was {signal.confidenceBefore}%</small>
+          )}
+        </span>
+        {run.outOfDate && <OutOfDate because="your Profile or agent changed" />}
+        <span className="spacer" />
+        {run.choice && (
+          <span className="tr-choice">
+            {run.choice === "used"
+              ? "You used this order"
+              : run.choice === "edited"
+                ? "You edited this order"
+                : "Dismissed, logged"}
+          </span>
+        )}
       </div>
-      <div
-        className="tr-meter"
-        role="progressbar"
-        aria-label="Confidence"
-        aria-valuenow={signal.confidence}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        <i style={{ width: `${Math.max(0, Math.min(100, signal.confidence))}%` }} />
-      </div>
-      {signal.summary && <p className="tr-summary">{signal.summary}</p>}
+      {signal.summary && <p className="tr-do">{signal.summary}</p>}
+
+      {/* The order, if there is one: one line and three buttons. */}
       {ticket ? (
-        <dl className="tr-order">
-          <div>
-            <dt>Order</dt>
-            <dd className={ticket.side === "buy" ? "up" : "down"}>
+        <div className="tr-order-line">
+          <span className="tr-order-what num">
+            <b className={ticket.side === "buy" ? "up" : "down"}>
               Limit {ticket.side === "buy" ? "buy" : "sell"}
-            </dd>
-          </div>
-          <div>
-            <dt>Size</dt>
-            <dd className="num">
-              {aud(ticket.totalAud)} · {amount(ticket.qty)} {run.coin}
-            </dd>
-          </div>
-          <div>
-            <dt>Price</dt>
-            <dd className="num">{price(ticket.price)}</dd>
-          </div>
-          <div>
-            <dt>Invalidation</dt>
-            <dd className="num">{inv ? `Daily close under ${price(inv.price)}` : "–"}</dd>
-          </div>
-        </dl>
+            </b>{" "}
+            {amount(ticket.qty)} {run.coin} at <b>{big(ticket.price)}</b>{" "}
+            <span className="muted">{aud(ticket.totalAud)}</span>
+            {inv && <small className="muted">Out on a daily close under {big(inv.price)}</small>}
+          </span>
+          {run.choice !== "dismissed" && (
+            <span className="tr-order-btns">
+              <button className="btn btn-accent" type="button" disabled={busy} onClick={onUse}>
+                Use this order
+              </button>
+              <button className="btn" type="button" disabled={busy} onClick={onEdit}>
+                Edit
+              </button>
+              <button className="btn tr-ghost" type="button" disabled={busy} onClick={onDismiss}>
+                Dismiss
+              </button>
+            </span>
+          )}
+        </div>
       ) : (
-        <p className="tr-noticket">{run.noTicket ?? "No order this time."}</p>
+        <p className="tr-noorder muted">{run.noTicket ?? "No order this time."}</p>
       )}
-      {why ? (
-        <ul className="tr-why">
-          <li>
-            <i className="up" aria-label="For">
-              +
-            </i>
-            {why.bull}
-          </li>
-          <li>
-            <i className="down" aria-label="Against">
-              −
-            </i>
-            {why.bear}
-          </li>
-          <li>
-            <i className="muted" aria-label="What would change the call">
-              ?
-            </i>
-            {why.changeMind}
-          </li>
-        </ul>
-      ) : (
-        signal.reasons.length > 0 && (
-          <ul className="tr-why">
-            {signal.reasons.map((r) => (
-              <li key={r}>
-                <i className="muted" aria-hidden="true">
-                  ·
-                </i>
-                {r}
-              </li>
-            ))}
-          </ul>
-        )
-      )}
-      <WatchFor run={run} alerts={alerts} onSetAlert={onSetAlert} />
+
       {ticket &&
         (ticket.breaks.length === 0 ? (
           ticket.side === "sell" ? (
             <p className="tr-check plain">Sells don&apos;t count against your buy rules.</p>
           ) : (
-            <div className="tr-check ok">
+            <p className="tr-check ok">
               <span aria-hidden="true">✓</span> {withinLine(run)}
-            </div>
+            </p>
           )
         ) : (
           <div className="tr-check bad" role="note">
@@ -467,33 +426,54 @@ export function TicketCard({
             </ul>
           </div>
         ))}
-      <div className="tr-ticket-foot">
-        {ticket && run.choice !== "dismissed" && (
-          <>
-            <button className="btn btn-accent" type="button" disabled={busy} onClick={onUse}>
-              Use this order
-            </button>
-            <button className="btn" type="button" disabled={busy} onClick={onEdit}>
-              Edit
-            </button>
-            <button className="btn tr-ghost" type="button" disabled={busy} onClick={onDismiss}>
-              Dismiss
-            </button>
-          </>
-        )}
-        {run.choice && (
-          <span className="tr-choice">
-            {run.choice === "used"
-              ? "You used this order"
-              : run.choice === "edited"
-                ? "You edited this order"
-                : "Dismissed, logged"}
-          </span>
-        )}
-        <span className="tr-stamp tr-stamp-end">
-          Agent v{run.agentVersion} · Profile v{run.profileVersion}
-        </span>
-      </div>
+
+      {/* Prices worth an alert, each one click. */}
+      {watch.length > 0 && (
+        <div className="tr-watch" aria-label="Watch for">
+          {watch.map((w) => (
+            <span key={`${w.direction}-${w.price}`} className="tr-watch-chip" title={w.note}>
+              {w.direction === "above" ? "Above" : "Below"} <b className="num">{big(w.price)}</b>
+              {isSet(w) ? (
+                <span className="muted">Alert set</span>
+              ) : (
+                <button
+                  className="link"
+                  type="button"
+                  aria-label={`Set alert ${w.direction} ${price(w.price)}`}
+                  onClick={() => onSetAlert(w)}
+                >
+                  Set alert
+                </button>
+              )}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {reasons.length > 0 && (
+        <div className="tr-why-box">
+          <button
+            type="button"
+            className="tr-fold"
+            aria-expanded={why}
+            onClick={() => setWhy(!why)}
+          >
+            Why
+          </button>
+          {why && (
+            <ul className="tr-why">
+              {reasons.map((r) => (
+                <li key={r.text}>
+                  <i className={r.tone} aria-label={r.label || undefined} aria-hidden={!r.label}>
+                    {r.mark}
+                  </i>
+                  {r.text}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </article>
   );
 }

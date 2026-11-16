@@ -42,3 +42,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 66. The Journal as a sentence of rules kept, the last 30 days as a strip of trades, then the ledger with a filter and the tag lists last. [Record](decisions/from-58.md)
 67. Trade leads with the agent's call; the steps fold to a line under How it got there; the levels are a ladder around today's price; prices from 1,000 are whole. [Record](decisions/from-58.md)
 68. DCA and Grid bots share one Bots page: a sentence, a filter by type, a section a type; the old links open it filtered; rebalancing is next on TODO. [Record](decisions/from-58.md)
+69. Trade keeps only what you can act on: the verdict and how sure, one line on what to do, the order and its buttons, the rule check and alert chips; the reasons and the steps fold away. [Record](decisions/from-58.md)
