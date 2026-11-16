@@ -776,55 +776,25 @@ function Checked({ found, busy, onFix }: { found: DcaCheck; busy: boolean; onFix
   );
 }
 
-// ---------------------------------------------------------------- the book against targets
+// ---------------------------------------------------------------- money per coin
 
-// Each coin's share of the book now against its target, with any open limit waiting on it.
-function Targets({ book }: { book: DcaBook }) {
+// What sits in open buy orders for a coin, and the share of the book against its target.
+const openOf = (book: DcaBook, coin?: string) =>
+  book.orders
+    .filter((o) => isOpen(o) && o.side === "buy" && (!coin || o.coin === coin))
+    .reduce((s, o) => s + Number(o.spend ?? 0), 0);
+function mixOf(book: DcaBook) {
   const plan = book.plan?.orders ?? [];
   const spend = plan.reduce((s, o) => s + Number(o.spend), 0) || 1;
   const value = book.positions.reduce((s, p) => s + Number(p.value ?? 0), 0);
-  const targetOf = (coin: string) =>
+  const target = (coin: string) =>
     (plan.filter((o) => o.coin === coin).reduce((s, o) => s + Number(o.spend), 0) * 100) / spend;
-  const nowOf = (v: string | null) => (value > 0 ? (Number(v ?? 0) * 100) / value : 0);
-  // Room past the biggest share or target, so a tick is never on the bar's end.
+  const now = (v: string | null) => (value > 0 ? (Number(v ?? 0) * 100) / value : 0);
   const scale = Math.max(
     1,
-    ...book.positions.map((p) => Math.max(targetOf(p.coin), nowOf(p.value)) * 1.15),
+    ...book.positions.map((p) => Math.max(target(p.coin), now(p.value)) * 1.15),
   );
-  return (
-    <ul className="dcb-targets" aria-label="The book against its targets">
-      {book.positions.map((p) => {
-        const target = targetOf(p.coin);
-        const now = nowOf(p.value);
-        const waiting = book.orders.filter(
-          (o) => o.coin === p.coin && isOpen(o) && o.side === "buy",
-        );
-        return (
-          <li key={p.coin}>
-            <a className="dcb-coin" href={`#/dca-book?coin=${p.coin}`}>
-              <CoinIcon coin={p.coin} />
-              {p.coin}
-            </a>
-            <span className="dcb-tbar" aria-hidden="true">
-              <span className="dcb-tnow" style={{ width: `${(now / scale) * 100}%` }} />
-              <span className="dcb-ttarget" style={{ left: `${(target / scale) * 100}%` }} />
-            </span>
-            <span className="num">
-              <b>{Math.round(now)}%</b>{" "}
-              <span className="muted">of {Math.round(target * 10) / 10}%</span>
-            </span>
-            <small className="num">
-              {waiting.length
-                ? `${dollars(waiting.reduce((s, o) => s + Number(o.spend ?? 0), 0))} waiting`
-                : Number(p.qty) > 0
-                  ? `${qty(p.qty)} ${p.coin}`
-                  : "Nothing bought yet"}
-            </small>
-          </li>
-        );
-      })}
-    </ul>
-  );
+  return { target, now, scale };
 }
 
 // Show more and the chat are remembered per browser; storage may be blocked, then they start
@@ -944,6 +914,8 @@ export default function DcaBookPage() {
 
   const t = book.totals;
   const p = book.progress;
+  const openTotal = openOf(book);
+  const mix = mixOf(book);
   const pnl = Number(t.pnl);
   const bought = book.orders.some((o) => Number(o.filledQty) > 0);
   const backed = new Set(book.orders.filter((o) => o.source === "buy-back").map((o) => o.link));
@@ -1075,25 +1047,27 @@ export default function DcaBookPage() {
         <div className="dcb-top">
           <div>
             <h1 className="dcb-headline">
-              {book.positions.length} positions, week {p?.week ?? 1} of {p?.weeks ?? "—"}.
-              {bought && t.pnlPct !== null && (
+              {bought ? (
                 <>
-                  {" "}
-                  {pnl >= 0 ? "Up" : "Down"} {two(Math.abs(Number(t.pnlPct)))}% on what you've put
-                  in.
+                  {dollars(t.added)} in, worth <Live value={t.value}>{dollars(t.value)}</Live>.
                 </>
+              ) : (
+                "Nothing bought yet."
               )}
+              {openTotal > 0 && <> {dollars(openTotal)} more in open orders.</>}
             </h1>
             <p className="muted dcb-sub">
-              {bought
-                ? `${dollars(t.added)} ${book.quote} added, now worth ${dollars(t.value)}${Number(t.realised) ? `, with ${dollars(t.realised, true)} realised on trims` : ""}. `
-                : "Nothing bought yet: the book starts with your first order. "}
-              {p && `Friday buys: ${dollars(p.onPlan)} of ${dollars(p.planTotal)} over 3 years.`}
+              {book.positions.length} positions for life, week {p?.week ?? 1} of {p?.weeks ?? "—"}.
+              {bought && t.pnlPct !== null
+                ? ` ${pnl >= 0 ? "Up" : "Down"} ${two(Math.abs(Number(t.pnlPct)))}% on what you've put in, after ${dollars(t.fees)} in fees.`
+                : " The book starts with your first order."}
+              {Number(t.realised) ? ` ${dollars(t.realised, true)} realised on trims.` : ""}
+              {p && ` Friday buys: ${dollars(p.onPlan)} of ${dollars(p.planTotal)} over 3 years.`}
             </p>
           </div>
           <dl className="dcb-totals">
             <div>
-              <dt>Added</dt>
+              <dt>Put in</dt>
               <dd className="num">{dollars(t.added)}</dd>
             </div>
             <div>
@@ -1109,8 +1083,8 @@ export default function DcaBookPage() {
               </dd>
             </div>
             <div>
-              <dt>Fees</dt>
-              <dd className="num">{dollars(t.fees)}</dd>
+              <dt>Open orders</dt>
+              <dd className="num dcb-open">{dollars(openTotal)}</dd>
             </div>
           </dl>
         </div>
@@ -1119,40 +1093,6 @@ export default function DcaBookPage() {
             Binance didn't answer ({book.priceError}), so value and P&amp;L are missing. Quantities
             and costs are from the desk's own records.
           </p>
-        )}
-
-        <Targets book={book} />
-
-        {said && (
-          <p className="muted" role="status">
-            {said}
-          </p>
-        )}
-
-        <Planner key={planning ? "plan" : "week"} book={book} onPlaced={load} start={planning} />
-
-        {funds && (
-          <DcaFunds
-            key={funds}
-            side={funds}
-            quote={book.quote}
-            onClose={() => setFunds(null)}
-            onPlaced={(words) => {
-              setSaid(words);
-              load();
-            }}
-          />
-        )}
-
-        {book.orders.some((o) => isOpen(o) && o.kind === "limit") && (
-          <DcaOpen
-            orders={book.orders.filter((o) => isOpen(o) && o.kind === "limit")}
-            quote={book.quote}
-            onChanged={(words) => {
-              setSaid(words);
-              load();
-            }}
-          />
         )}
 
         <section className="dcb-section" aria-labelledby="dcb-pos-title">
@@ -1180,9 +1120,11 @@ export default function DcaBookPage() {
               <thead>
                 <tr>
                   <th>Position</th>
-                  <th className="r">Added</th>
+                  <th className="r">Put in</th>
                   <th className="r">Value</th>
-                  <th className="r">P&amp;L on added</th>
+                  <th className="r">P&amp;L</th>
+                  <th className="r">Open orders</th>
+                  <th>Share of the book</th>
                   <th>
                     <span className="visually-hidden">Trim</span>
                   </th>
@@ -1193,6 +1135,9 @@ export default function DcaBookPage() {
                   const n = Number(pos.pnl);
                   const opened = openCoin === pos.coin;
                   const mine = book.orders.filter((o) => o.coin === pos.coin);
+                  const open = openOf(book, pos.coin);
+                  const now = mix.now(pos.value);
+                  const target = mix.target(pos.coin);
                   return (
                     <Fragment key={pos.coin}>
                       <tr id={`pos-${pos.coin}`} className={opened ? "is-open" : ""}>
@@ -1228,6 +1173,27 @@ export default function DcaBookPage() {
                             <span className="muted"> ({signed(pos.pnlPct)}%)</span>
                           )}
                         </td>
+                        <td className={`r num ${open > 0 ? "dcb-open" : "muted"}`}>
+                          {open > 0 ? dollars(open) : "—"}
+                        </td>
+                        <td>
+                          <span className="dcb-mix">
+                            <span className="dcb-tbar" aria-hidden="true">
+                              <span
+                                className="dcb-tnow"
+                                style={{ width: `${(now / mix.scale) * 100}%` }}
+                              />
+                              <span
+                                className="dcb-ttarget"
+                                style={{ left: `${(target / mix.scale) * 100}%` }}
+                              />
+                            </span>
+                            <span className="num">
+                              {Math.round(now)}%{" "}
+                              <span className="muted">of {Math.round(target * 10) / 10}%</span>
+                            </span>
+                          </span>
+                        </td>
                         <td className="r">
                           <button
                             type="button"
@@ -1251,6 +1217,38 @@ export default function DcaBookPage() {
             book can differ from your Binance balance. Tax parcels are on the Tax page.
           </p>
         </section>
+
+        {said && (
+          <p className="muted" role="status">
+            {said}
+          </p>
+        )}
+
+        <Planner key={planning ? "plan" : "week"} book={book} onPlaced={load} start={planning} />
+
+        {funds && (
+          <DcaFunds
+            key={funds}
+            side={funds}
+            quote={book.quote}
+            onClose={() => setFunds(null)}
+            onPlaced={(words) => {
+              setSaid(words);
+              load();
+            }}
+          />
+        )}
+
+        {book.orders.some((o) => isOpen(o) && o.kind === "limit") && (
+          <DcaOpen
+            orders={book.orders.filter((o) => isOpen(o) && o.kind === "limit")}
+            quote={book.quote}
+            onChanged={(words) => {
+              setSaid(words);
+              load();
+            }}
+          />
+        )}
 
         <button type="button" className="dcb-more" aria-expanded={more} onClick={toggleMore}>
           {more ? "Show less" : "Show more: every order, the 3-year plan, Check against Binance"}

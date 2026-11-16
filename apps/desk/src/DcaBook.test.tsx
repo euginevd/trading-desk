@@ -252,7 +252,7 @@ describe("DCA widget", () => {
       }),
     ).toBeTruthy();
     const coins = screen.getByRole("list", { name: "This week's coins against their targets" });
-    expect(within(coins).getByText(/^\$[0-9]+ waiting$/)).toBeTruthy();
+    expect(within(coins).getByText(/^\$[0-9]+ in open orders$/)).toBeTruthy();
     expect(within(coins).getByText("0.0112 ETH, +1.56%")).toBeTruthy(); // its target met: held, with P&L
     fireEvent.click(screen.getByRole("button", { name: "Close out early" }));
     expect(sent(fetch, "/dca/close-out")).toHaveLength(0); // the confirm first
@@ -294,7 +294,7 @@ describe("DCA book page", () => {
   it("shows the positions with their lifelong IDs and every order", async () => {
     serve(book());
     render(<DcaBookPage />);
-    expect(await screen.findByText(/2 positions, week 2 of 156\. Up 1\.56%/)).toBeTruthy();
+    expect(await screen.findByText(/2 positions for life, week 2 of 156. Up 1.56%/)).toBeTruthy();
     const positions = screen.getByRole("table", { name: "Positions" });
     expect(within(positions).getByText(/DCA-ETH since/)).toBeTruthy();
     expect(within(positions).getByText(/DCA-BTC, nothing bought yet/)).toBeTruthy();

@@ -76,7 +76,7 @@ export default function DcaOpen({
         <summary className="dcb-section-head">
           <h2 id="dco-title">Open orders</h2>
           <span className="muted">
-            {orders.length} waiting for their price, $
+            {orders.length} {orders.length === 1 ? "order" : "orders"}, $
             {two(orders.reduce((s, o) => s + Number(o.spend ?? 0), 0))} {quote}
           </span>
         </summary>

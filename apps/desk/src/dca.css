@@ -1457,3 +1457,19 @@ dialog:has(.dcr) {
     transition: none;
   }
 }
+
+/* Open orders read in the wait colour: money set aside, not yet spent. */
+.dcb-open {
+  color: var(--wait);
+}
+.dcb-totals dd.dcb-open {
+  color: var(--wait);
+}
+/* The share of the book against its target, small, in the positions table. */
+.dcb-mix {
+  display: grid;
+  grid-template-columns: 90px auto;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}

@@ -66,7 +66,7 @@ function coinWeek(
     .filter((o) => isOpen(o) && o.kind === "limit")
     .reduce((s, o) => s + Number(o.spend ?? 0), 0);
   const held = Number(position?.qty ?? 0);
-  if (open > 0) return { bought, done, line: `$${whole(open)} waiting`, tone: "is-open" };
+  if (open > 0) return { bought, done, line: `$${whole(open)} in open orders`, tone: "is-open" };
   if (held > 0) {
     const pnl =
       position?.pnlPct === null || position?.pnlPct === undefined
