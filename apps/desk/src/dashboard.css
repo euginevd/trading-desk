@@ -188,6 +188,9 @@
   border-top: 1px solid var(--line);
   padding-top: 14px;
 }
+.dash-ledger.is-single {
+  grid-template-columns: minmax(0, 760px);
+}
 .dash-col h2,
 .dash-recap h2 {
   margin: 0 0 6px;

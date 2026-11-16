@@ -214,24 +214,6 @@ describe("the Dashboard", () => {
     expect(within(watch).getByText(/is in its add zone/)).toBeTruthy();
   });
 
-  it("asks Morgan first, and opens Riley's thread", async () => {
-    coach = { ...down, pending: false };
-    render(<CoachPage />);
-    const morgan = await screen.findByRole("button", { name: "Morgan, Desk Coordinator" });
-    expect(morgan.getAttribute("aria-pressed")).toBe("true");
-    expect(getAgent).toHaveBeenCalledWith("desk");
-    expect(screen.getByText("Advice only. Nothing is placed from the Dashboard.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Riley, Risk Officer" }));
-    await waitFor(() => expect(getAgent).toHaveBeenCalledWith("risk"));
-    expect(screen.getByText("Sizes and limits.")).toBeTruthy();
-    fireEvent.change(screen.getByLabelText("Message to Riley"), {
-      target: { value: "Should I add TAO?" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    expect(sendAgent).toHaveBeenCalledWith("risk", "Should I add TAO?");
-    expect(await screen.findByText("Riley will answer here soon.")).toBeTruthy();
-  });
-
   it("says when the first recap comes, and writes one now", async () => {
     coach = { ...down, pending: false };
     render(<CoachPage />);

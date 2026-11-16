@@ -4,18 +4,12 @@
 // model's when it has written them, the plain ones until then.
 import DcaWidget from "./DcaWidget";
 import { useCallback, useEffect, useState } from "react";
-import { getAgent, getAgents, getCoach, getRecaps, sendAgent, writeCoach, writeRecap } from "./api";
+import { getCoach, getRecaps, writeCoach, writeRecap } from "./api";
 import { km, Live } from "./Figures";
 import { fetchedAt, longDate, percent, price } from "./format";
 import { ResetIcon } from "./icons";
 import { OutOfDate } from "./RuleMarks";
-import type {
-  AgentInfo,
-  AgentThread,
-  Coach as CoachData,
-  KeyPoint,
-  Recap as RecapData,
-} from "./types";
+import type { Coach as CoachData, KeyPoint, Recap as RecapData } from "./types";
 import "./dashboard.css";
 
 const REFRESH_MS = 60_000;
@@ -94,9 +88,9 @@ export default function Coach() {
         <>
           <Hero coach={coach} fetched={fetched} loading={loading} onRefresh={refresh} />
           <DcaWidget />
-          <div className="dash-ledger">
+          {/* Ask the desk is off until the desk's new agents arrive (TODO 10). */}
+          <div className="dash-ledger is-single">
             <Watch coach={coach} />
-            <Desk />
           </div>
           <RecapLine round={round} />
         </>
@@ -252,142 +246,6 @@ function Watch({ coach }: { coach: CoachData }) {
           </a>
         )}
       </div>
-    </section>
-  );
-}
-
-type TeamState = { kind: "loading" } | { kind: "error" } | { kind: "ready"; agents: AgentInfo[] };
-
-function initial(name: string): string {
-  return name.trim().charAt(0).toUpperCase() || "?";
-}
-
-// Ask the desk (decision 59): the Desk Coordinator by default, or a specialist. Advice only.
-function Desk() {
-  const [team, setTeam] = useState<TeamState>({ kind: "loading" });
-  const [retry, setRetry] = useState(0);
-  const [chosen, setChosen] = useState("desk");
-  const [thread, setThread] = useState<AgentThread | null>(null);
-  const [text, setText] = useState("");
-  const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    getAgents().then(
-      (r) => live && setTeam({ kind: "ready", agents: r.agents }),
-      () => live && setTeam({ kind: "error" }),
-    );
-    return () => {
-      live = false;
-    };
-  }, [retry]);
-  useEffect(() => {
-    let live = true;
-    getAgent(chosen).then(
-      (t) => live && setThread(t),
-      () => live && setThread(null),
-    );
-    return () => {
-      live = false;
-    };
-  }, [chosen]);
-
-  const send = () => {
-    if (!text.trim()) return;
-    setSending(true);
-    sendAgent(chosen, text).then(
-      (next) => {
-        setThread(next);
-        setText("");
-        setSending(false);
-      },
-      () => setSending(false),
-    );
-  };
-
-  const agents = team.kind === "ready" ? team.agents : [];
-  const lead = agents.find((a) => a.reportsTo === null) ?? null;
-  const ordered = lead ? [lead, ...agents.filter((a) => a !== lead)] : agents;
-  const info = agents.find((a) => a.id === chosen);
-  const shown = thread?.id === chosen ? thread : null;
-  const name = info?.name ?? shown?.name ?? "the desk";
-
-  return (
-    <section className="dash-col dash-desk" aria-labelledby="dash-desk">
-      <h2 id="dash-desk">Ask the desk</h2>
-      {team.kind === "loading" && (
-        <p className="muted" aria-busy="true">
-          Meeting the team…
-        </p>
-      )}
-      {team.kind === "error" && (
-        <div className="alert" role="alert">
-          <span>The team couldn&apos;t load. Check the api is running.</span>
-          <button
-            className="btn btn-small"
-            type="button"
-            onClick={() => {
-              setTeam({ kind: "loading" });
-              setRetry((n) => n + 1);
-            }}
-          >
-            Try again
-          </button>
-        </div>
-      )}
-      {ordered.length > 0 && (
-        <div className="dash-team" role="group" aria-label="Who to ask">
-          {ordered.map((a) => (
-            <button
-              key={a.id}
-              type="button"
-              className={`dash-ava${a === lead ? " lead" : ""}`}
-              aria-pressed={a.id === chosen}
-              aria-label={`${a.name}, ${a.title}`}
-              title={`${a.name}, ${a.title}: ${a.remit}`}
-              onClick={() => {
-                if (a.id === chosen) return;
-                setThread(null);
-                setChosen(a.id);
-              }}
-            >
-              {initial(a.name)}
-            </button>
-          ))}
-        </div>
-      )}
-      {info && (
-        <p key={info.id} className="dash-who">
-          <strong>{info.name}</strong>, {info.title}. <span className="muted">{info.remit}</span>
-        </p>
-      )}
-      <div className="dash-thread" aria-live="polite">
-        {(shown?.messages ?? []).length === 0 && <p className="muted">Ask {name} anything.</p>}
-        {shown?.messages.map((m) => (
-          <p key={`${m.time}-${m.role}-${m.text}`} className={`dash-bubble ${m.role}`}>
-            {m.text}
-          </p>
-        ))}
-      </div>
-      <form
-        className="dash-ask"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send();
-        }}
-      >
-        <input
-          aria-label={`Message to ${name}`}
-          placeholder={`Ask ${name}…`}
-          value={text}
-          maxLength={1000}
-          onChange={(e) => setText(e.target.value)}
-        />
-        <button type="submit" className="btn" disabled={sending || !text.trim()}>
-          Send
-        </button>
-      </form>
-      <p className="dash-note">Advice only. Nothing is placed from the Dashboard.</p>
     </section>
   );
 }
