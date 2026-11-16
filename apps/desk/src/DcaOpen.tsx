@@ -24,17 +24,6 @@ export default function DcaOpen({
   const [busy, setBusy] = useState<"apply" | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const chosen = changes.filter((c) => c.on && !c.result);
-  // The same coin, side and limit already open under an earlier reference.
-  const twinOf = (o: DcaOrder) =>
-    orders.find(
-      (x) =>
-        x.ref !== o.ref &&
-        x.coin === o.coin &&
-        x.side === o.side &&
-        Number(x.price) === Number(o.price) &&
-        x.created < o.created,
-    );
-
   // By hand: every open order as a change, at its own price, to edit.
   const byHand = () =>
     setChanges(
@@ -81,7 +70,6 @@ export default function DcaOpen({
     if (done) onChanged(`${done} open ${done === 1 ? "order" : "orders"} changed.`);
   };
 
-  const twins = orders.filter((o) => twinOf(o)).length;
   return (
     <section className="dcb-section dco" aria-labelledby="dco-title">
       <details className="dco-fold" open={changes.length > 0 || undefined}>
@@ -90,18 +78,12 @@ export default function DcaOpen({
           <span className="muted">
             {orders.length} waiting for their price, $
             {two(orders.reduce((s, o) => s + Number(o.spend ?? 0), 0))} {quote}
-            {twins > 0 && (
-              <span className="dco-twin">
-                , {twins} {twins === 1 ? "repeats" : "repeat"} an earlier order
-              </span>
-            )}
           </span>
         </summary>
         <ul className="dco-list">
           {orders.map((o) => {
-            const twin = twinOf(o);
             return (
-              <li key={o.ref} className={twin ? "is-twin" : ""}>
+              <li key={o.ref}>
                 <span className="dcb-coin">
                   <CoinIcon coin={o.coin} />
                   {o.coin}
@@ -111,8 +93,7 @@ export default function DcaOpen({
                 </span>
                 <span className="num">${two(o.spend)}</span>
                 <small className="dcb-id">{o.ref}</small>
-                <small className="num muted">{when(o.created)}</small>
-                <small className="dco-twin">{twin ? `Same as ${twin.ref}` : ""}</small>
+                <small className="num muted">{when(o.created)}</small>{" "}
               </li>
             );
           })}

@@ -625,7 +625,7 @@ td.dcb-id {
 }
 .dco-list li {
   display: grid;
-  grid-template-columns: 100px 150px 70px 170px 150px minmax(0, 1fr);
+  grid-template-columns: 100px 150px 70px 170px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   padding: 8px 0;
@@ -636,13 +636,6 @@ td.dcb-id {
 }
 .dco-list li > :nth-child(3) {
   text-align: right;
-}
-.dco-twin {
-  color: var(--wait);
-}
-.dco-list li.is-twin {
-  box-shadow: inset 2px 0 0 var(--wait);
-  padding-left: 8px;
 }
 .dco-ask {
   align-items: center;
