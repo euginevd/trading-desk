@@ -1,0 +1,221 @@
+/* risk-agent's page (RiskPage.tsx). Prefixed rk-. It shares the DCA book's top, totals and
+   sections (dca.css); its own pieces are the gauge rows and the review beside them. The gauges
+   are the one bold thing: a fill per limit, its warning band amber, its limit a red tick. */
+
+.rk-lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+.rk-said.is-near {
+  color: var(--wait);
+}
+.rk-said.is-broken {
+  color: var(--down);
+}
+.rk-n.is-kept {
+  color: var(--up);
+}
+.rk-n.is-near {
+  color: var(--wait);
+}
+.rk-n.is-broken {
+  color: var(--down);
+}
+
+.rk-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 32px;
+  align-items: start;
+}
+.rk-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.rk-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1fr) minmax(120px, 1.1fr) minmax(130px, 0.9fr) 72px;
+  grid-template-areas:
+    "name gauge figure state"
+    "words words words words";
+  align-items: center;
+  gap: 4px 18px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.rk-name {
+  grid-area: name;
+  display: grid;
+  gap: 2px;
+}
+.rk-name small {
+  font-size: 11.5px;
+}
+.rk-figure {
+  grid-area: figure;
+  display: grid;
+  gap: 2px;
+  text-align: right;
+}
+.rk-figure small {
+  font-size: 11.5px;
+}
+.rk-words {
+  grid-area: words;
+  margin: 2px 0 0;
+  font-size: 12.5px;
+}
+.rk-state {
+  grid-area: state;
+  justify-self: end;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.rk-state.is-kept {
+  background: var(--up-soft);
+  color: var(--up);
+}
+.rk-state.is-near {
+  background: var(--wait-soft);
+  color: var(--wait);
+}
+.rk-state.is-broken {
+  background: var(--down-soft);
+  color: var(--down);
+}
+
+.rk-gauge {
+  grid-area: gauge;
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+}
+.rk-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--wait-soft);
+}
+.rk-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--w);
+  border-radius: 4px;
+  background: var(--up);
+}
+.rk-gauge.is-near .rk-fill {
+  background: var(--wait);
+}
+.rk-gauge.is-broken .rk-fill {
+  background: var(--down);
+}
+.rk-tick {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+}
+.rk-tick.is-warn {
+  background: var(--wait);
+}
+.rk-tick.is-limit {
+  background: var(--down);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .rk-fill {
+    animation: rk-grow 600ms var(--ease) both;
+  }
+  @keyframes rk-grow {
+    from {
+      width: 0;
+    }
+  }
+}
+
+.rk-side {
+  position: sticky;
+  top: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel);
+}
+.rk-side h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.rk-head {
+  margin: 0 0 2px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.rk-sec h3 {
+  margin: 14px 0 2px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.rk-sec p {
+  margin: 0;
+  color: var(--body);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.rk-action {
+  margin: 14px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  font-size: 13.5px;
+}
+.rk-side .btn {
+  margin-top: 12px;
+}
+.rk-jobs-title {
+  margin: 20px 0 6px;
+  font-size: 13px;
+}
+.rk-jobs {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.rk-jobs small {
+  display: block;
+}
+
+@media (max-width: 980px) {
+  .rk-cols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rk-side {
+    position: static;
+  }
+}
+@media (max-width: 640px) {
+  .rk-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name state"
+      "gauge gauge"
+      "figure figure"
+      "words words";
+  }
+  .rk-figure {
+    text-align: left;
+  }
+  .rk-lead {
+    gap: 12px;
+  }
+}

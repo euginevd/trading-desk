@@ -141,7 +141,7 @@ class PotAgent:
     def _rules(self) -> str:
         config = self._pot.config()
         if config["mode"] == "test":
-            allowed = self._pot.equity() * Decimal(config["riskPct"]) / 100
+            allowed = self._pot.allowed(self._pot.equity())
             fixed = Decimal(config["fixed"])
             widest = (
                 (allowed / fixed * 100 - Decimal("0.3")).quantize(Decimal("0.1")) if fixed else ZERO
@@ -151,9 +151,11 @@ class PotAgent:
                 f"within {widest}% of the entry."
             )
         else:
+            allowed = self._pot.allowed(self._pot.equity())
             sizing = (
-                f"Each trade risks {config['riskPct']}% of the pot; the desk sizes it from the "
-                "stop."
+                f"Each trade risks {config['riskPct']}% of the pot, at most "
+                f"{allowed:.2f} {QUOTE}; the desk sizes it from the stop, and a position is at "
+                "most 25% of the pot."
             )
         return (
             f"{sizing} Reward to risk at least 2 : 1 after fees (0.1% a side). Entries by limit "

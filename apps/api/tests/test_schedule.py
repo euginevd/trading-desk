@@ -27,14 +27,20 @@ def store(tmp_path: Path) -> Iterator[Store]:
 
 
 def test_each_job_has_a_slot_in_sydney_time() -> None:
-    scan, deposit, close = schedule.JOBS
+    scan, deposit, close, *_ = schedule.JOBS
     assert schedule.slot(scan, TUESDAY_NOON) == TUESDAY_NOON.replace(hour=11, minute=15)
     early = TUESDAY_NOON.replace(hour=9)
     assert schedule.slot(scan, early) == early.replace(hour=11, minute=15) - timedelta(days=1)
     assert schedule.slot(deposit, TUESDAY_NOON) == datetime(2026, 11, 13, 19, 0, tzinfo=SYDNEY)
     assert schedule.slot(close, TUESDAY_NOON) == datetime(2026, 11, 16, 17, 0, tzinfo=SYDNEY)
     assert schedule.next_slot(close, TUESDAY_NOON) == datetime(2026, 11, 23, 17, 0, tzinfo=SYDNEY)
-    assert [j.when() for j in schedule.JOBS] == ["Daily 11:15am", "Friday 7pm", "Monday 5pm"]
+    assert [j.when() for j in schedule.JOBS] == [
+        "Daily 11:15am",
+        "Friday 7pm",
+        "Monday 5pm",
+        "Daily 9pm",
+        "Sunday 6pm",
+    ]
 
 
 def test_a_slot_runs_once_within_its_grace_and_never_when_off(store: Store) -> None:
@@ -216,5 +222,11 @@ def test_the_switch_routes_reach_the_scheduler(services: Services) -> None:
     off = call("PUT", {"on": False})
     assert off["status"] == 200
     assert off["on"] is False
-    assert [j["key"] for j in off["jobs"]] == ["pot-scan", "dca-deposit", "dca-close-out"]
+    assert [j["key"] for j in off["jobs"]] == [
+        "pot-scan",
+        "dca-deposit",
+        "dca-close-out",
+        "risk-check",
+        "risk-review",
+    ]
     assert call("PUT", {"on": "yes"})["status"] == 400

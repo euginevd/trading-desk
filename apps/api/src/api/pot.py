@@ -29,7 +29,8 @@ COINS = ("BTC", "ETH", "SOL", "HYPE", "ZEC", "SUI", "NEAR")
 CONFIG_KEY = "pot_config"
 PROPOSALS_KEY = "pot_proposals"
 SCAN_KEY = "pot_last_scan"
-DEFAULT_CONFIG = {"mode": "test", "fixed": "10", "riskPct": "1"}
+# maxRisk: a cap in USDC on any one trade's risk, on top of riskPct ("" for none).
+DEFAULT_CONFIG = {"mode": "test", "fixed": "10", "riskPct": "1", "maxRisk": ""}
 FEE = Decimal("0.001")  # Binance spot, each side, before any BNB discount
 MIN_RR = Decimal(2)
 MAX_POSITION_PCT = Decimal(25)
@@ -152,10 +153,23 @@ class Pot:
         risk = number(body.get("riskPct", "1"), "Risk per trade")
         if risk > 2:  # noqa: PLR2004 - the agent's rules say 1%; 2% is the most the desk allows
             raise Refused("Risk per trade is at most 2% of the pot.")
-        config = {"mode": mode, "fixed": plain(fixed), "riskPct": plain(risk)}
+        raw_cap = body.get("maxRisk")
+        cap = "" if raw_cap in (None, "") else plain(number(raw_cap, "The most at risk"))
+        config = {"mode": mode, "fixed": plain(fixed), "riskPct": plain(risk), "maxRisk": cap}
         self._store.set_setting(CONFIG_KEY, json.dumps(config))
-        self._audit.record("pot", "Sizing", f"{mode}: {plain(fixed)} a trade, {plain(risk)}% risk")
+        capped = f", at most {cap} {QUOTE}" if cap else ""
+        self._audit.record(
+            "pot", "Sizing", f"{mode}: {plain(fixed)} a trade, {plain(risk)}% risk{capped}"
+        )
         return self.view()
+
+    def allowed(self, equity: Decimal) -> Decimal:
+        """The most one trade may risk: riskPct of the pot, and never past maxRisk."""
+        config = self.config()
+        allowed = equity * Decimal(config["riskPct"]) / HUNDRED
+        if config.get("maxRisk"):
+            allowed = min(allowed, Decimal(config["maxRisk"]))
+        return allowed
 
     def coins(self) -> list[str]:
         """The coins trading-agent's file names, else its usual seven."""
@@ -239,7 +253,7 @@ class Pot:
         config, equity = self.config(), self.equity()
         if equity <= ZERO:
             raise Refused("Put money in the pot first.")
-        allowed = equity * Decimal(config["riskPct"]) / HUNDRED
+        allowed = self.allowed(equity)
         if config["mode"] == "test":
             qty = rules.amount(Decimal(config["fixed"]) / entry)
             if qty * entry < Decimal(config["fixed"]):
@@ -959,6 +973,7 @@ class Pot:
         return {
             "quote": QUOTE,
             "config": self.config(),
+            "allowedRisk": _cents(self.allowed(self.equity())),
             "putIn": plain(put_in),
             "value": _cents(value),
             "result": _cents(value - put_in),

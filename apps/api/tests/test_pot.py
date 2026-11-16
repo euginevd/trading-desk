@@ -407,3 +407,16 @@ def test_analyse_fills_a_trade_by_hand_and_drops_levels_it_cant_size(pot: Pot) -
     assert bad["verdict"] == "pass"
     with pytest.raises(Refused, match="isn't one"):
         PotAgent(pot, Fake(reply)).analyse({"coin": "DOGE"})  # type: ignore[arg-type]
+
+
+def test_a_dollar_cap_keeps_each_trade_under_it(pot: Pot) -> None:
+    """The owner's rule of 18 Nov 2026: 1% risk, at most 10 USDC a trade."""
+    pot.put_in({"usdc": "1000"})  # 1,100 in: 1% would be 11
+    pot.set_config({"mode": "risk", "fixed": "10", "riskPct": "1", "maxRisk": "10"})
+    assert pot.allowed(pot.equity()) == Decimal(10)
+    sized = pot.size(SOL)
+    assert Decimal(sized["risk"]) <= Decimal("10.001")
+    assert pot.view()["allowedRisk"] == "10.00"
+    assert pot.config()["maxRisk"] == "10"
+    pot.set_config({"mode": "risk", "fixed": "10", "riskPct": "1"})
+    assert pot.allowed(pot.equity()) == Decimal(11)  # no cap: the percentage alone

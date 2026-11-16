@@ -585,6 +585,18 @@ class DcaBook:
         self._audit.record("dca", f"{row['ref']}: cancelled", done["status"])
         return order_view(done)
 
+    def open_weekly(self) -> list[dict[str, Any]]:
+        """This week's weekly limits not yet filled: what the close-out would buy."""
+        week, _ = week_of(self._now())
+        return [
+            r
+            for r in self._store.dca_orders()
+            if r["week"] == week
+            and r["source"] == "weekly"
+            and r["side"] == "buy"
+            and r["status"] in ("placing", "open")
+        ]
+
     @locked
     def close_out(self) -> dict[str, Any]:
         """This week's unfilled weekly limits: each cancelled, and what it didn't buy bought at

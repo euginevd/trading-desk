@@ -1384,6 +1384,37 @@ export interface PotProposal {
   crowding: string;
 }
 
+// risk-agent's board (GET /risk-board): every limit from the desk's figures.
+export interface RiskLimit {
+  key: string;
+  area: "Trading pot" | "DCA book" | "Deposits" | "Portfolio";
+  name: string;
+  value: string;
+  warn: string | null;
+  limit: string | null;
+  figure: string;
+  of: string;
+  rule: string;
+  owner: string;
+  state: "kept" | "near" | "broken";
+  words: string;
+}
+
+export interface RiskBoard {
+  sentence: string;
+  limits: RiskLimit[];
+  missing: string[];
+  review: {
+    at: number;
+    headline: string;
+    sections: { title: string; text: string }[];
+    action: string;
+  } | null;
+  checkedAt: number;
+  jobs: AgentJob[];
+  scheduleOn: boolean;
+}
+
 // trading-agent's read of one coin for New trade (POST /pot/analyse).
 export interface PotAnalysis {
   coin: string;
@@ -1430,7 +1461,8 @@ export interface PotPreview {
 
 export interface PotView {
   quote: string;
-  config: { mode: "test" | "risk"; fixed: string; riskPct: string };
+  config: { mode: "test" | "risk"; fixed: string; riskPct: string; maxRisk?: string };
+  allowedRisk?: string;
   putIn: string;
   value: string;
   result: string;

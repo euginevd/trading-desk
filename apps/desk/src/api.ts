@@ -2,6 +2,7 @@ import type {
   PotAction,
   PotCheck,
   PotAnalysis,
+  RiskBoard,
   PotPreview,
   PotTrade,
   PotTradeRequest,
@@ -247,6 +248,9 @@ export const getTradingAgent = () => call<AgentPage>("GET", "/agent");
 // The owner's files, read only (decision 61): they change them by asking Claude Code.
 export const getProfileFile = () => call<MarkdownFile>("GET", "/profile/file");
 // My agents (TODO 10): one file each in local/agents/, read only.
+// risk-agent (local/agents/risk-agent.md).
+export const getRiskBoard = () => call<RiskBoard>("GET", "/risk-board");
+export const writeRiskReview = () => call<RiskBoard>("POST", "/risk-board/review");
 export const getMyAgents = () => call<MyAgentsPage>("GET", "/my-agents");
 export const setAgentsOn = (on: boolean) => call<unknown>("PUT", "/my-agents/schedule", { on });
 export const getMyAgentFile = (slug: string) =>

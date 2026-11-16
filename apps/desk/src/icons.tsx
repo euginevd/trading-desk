@@ -56,6 +56,13 @@ export const TradeIcon = () => (
   </svg>
 );
 
+export const RiskIcon = () => (
+  <svg {...base}>
+    <path d="M12 3.5l7 2.8V11c0 4.4-2.9 7.8-7 9.5-4.1-1.7-7-5.1-7-9.5V6.3z" />
+    <path d="M12 8v4.5M12 15.5h.01" />
+  </svg>
+);
+
 export const DcaIcon = () => (
   <svg {...base}>
     <rect x="4" y="7" width="16" height="12" rx="3" />

@@ -533,7 +533,7 @@ export default function PotPage() {
                 : "Put money in to start; it's kept apart from the DCA book. "}
               {test
                 ? `Test phase: ${cash(pot.config.fixed)} a trade, at most ${putIn > 0 ? cash((putIn * Number(pot.config.riskPct)) / 100) : `${pot.config.riskPct}% of the pot`} at risk.`
-                : `${pot.config.riskPct}% risk a trade, sized from the stop.`}
+                : `${pot.config.riskPct}% risk a trade${pot.config.maxRisk ? `, at most ${cash(pot.config.maxRisk)}` : ""}, sized from the stop.`}
             </p>
           </div>
           {putIn > 0 && (

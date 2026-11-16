@@ -18,18 +18,28 @@ import {
   PowerIcon,
   SettingsIcon,
   TradeIcon,
+  RiskIcon,
   WalletIcon,
 } from "./icons";
 import ProfilePage from "./ProfilePage";
 import Portfolio from "./Portfolio";
 import { CURRENCIES, type Currency, money } from "./money";
 import PotPage from "./PotPage";
+import RiskPage from "./RiskPage";
 import type { MarketGlobal, Sentiment, Settings, TaoWallet, Ticker } from "./types";
 import { FearPanel } from "./WidgetDetails";
 import type { Status } from "./ui";
 
 type Page =
-  "dashboard" | "profile" | "portfolio" | "journal" | "trade" | "bots" | "settings" | "dca-book";
+  | "dashboard"
+  | "profile"
+  | "portfolio"
+  | "journal"
+  | "trade"
+  | "risk"
+  | "bots"
+  | "settings"
+  | "dca-book";
 const TICK_MS = 30_000;
 const CURRENCY_KEY = "desk.currency";
 function readCurrency(): Currency {
@@ -48,6 +58,7 @@ const PAGES: { page: Page; hash: string; name: string; Icon: () => React.JSX.Ele
   { page: "portfolio", hash: "#/portfolio", name: "Portfolio", Icon: PortfolioIcon },
   { page: "journal", hash: "#/journal", name: "Journal", Icon: JournalIcon },
   { page: "trade", hash: "#/trade", name: "Trade", Icon: TradeIcon },
+  { page: "risk", hash: "#/risk", name: "Risk", Icon: RiskIcon },
 ];
 // DCA and grid bots share one page (decision 68); the old links open it filtered.
 const BOTS_PAGE: (typeof PAGES)[number] = {
@@ -483,6 +494,8 @@ export default function App() {
           />
         ) : page === "dca-book" ? (
           <DcaBookPage />
+        ) : page === "risk" ? (
+          <RiskPage />
         ) : page === "settings" ? (
           <SettingsPage />
         ) : page === "profile" ? (

@@ -34,6 +34,7 @@ from api import (
     profile_routes,
     profile_v2,
     rebalance,
+    risk,
     schedule,
     tax,
     telegram,
@@ -733,6 +734,55 @@ def _funds(s: Services) -> Funds:
     return Funds(DcaBook(Trading(s.binance, s.store, s.audit)), s.signals)
 
 
+def risk_board(s: Services, now: datetime | None = None) -> dict[str, Any]:
+    """risk-agent's board: every limit from the desk's own figures, by area. A source that
+    can't be read is named, and its limits left out rather than shown as kept."""
+    now = now or datetime.now(SYDNEY)
+    desk = Trading(s.binance, s.store, s.audit)
+    rows: list[dict[str, Any]] = []
+    missing: list[str] = []
+    book = DcaBook(desk)
+    sources: list[tuple[str, Callable[[], list[dict[str, Any]]]]] = [
+        ("the trading pot", lambda: risk.pot_limits(Pot(desk).view())),
+        ("the DCA book", lambda: risk.dca_limits(book.view(), len(book.open_weekly()), now)),
+        ("deposits", lambda: risk.deposit_limits(_coach(s, write=False)["deposits"])),
+        ("the portfolio", lambda: risk.portfolio_limits((s.portfolio or live_portfolio)())),
+    ]
+    for name, read in sources:
+        try:
+            rows += read()
+        except Exception as error:  # noqa: BLE001 - one source down must not hide the rest
+            missing.append(name)
+            s.audit.record("risk", f"Board: {name}", f"Not read: {type(error).__name__}")
+    plan = schedule.view(s.store, now)
+    return {
+        "sentence": risk.sentence(rows),
+        "limits": rows,
+        "missing": missing,
+        "review": risk.last_review(s.store),
+        "checkedAt": int(now.timestamp() * 1000),
+        "jobs": [j for j in plan["jobs"] if j["agent"] == risk.AGENT],
+        "scheduleOn": plan["on"],
+    }
+
+
+def risk_model(s: Services) -> str:
+    listing = cast(list[dict[str, Any]], my_agents.listing(s.store)["agents"])
+    none: dict[str, Any] = {}
+    mine = next((a for a in listing if a["slug"] == risk.AGENT), none)
+    return str(cast(dict[str, Any], mine.get("model") or {}).get("id") or "")
+
+
+def _risk_review(s: Services) -> dict[str, Any]:
+    """risk-agent writes the weekly review now, from the board."""
+    board = risk_board(s)
+    try:
+        risk.review(s.store, s.signals, board["limits"], board["checkedAt"], lambda: risk_model(s))
+    except LookupError as error:
+        raise Refused(str(error)) from None
+    return risk_board(s)
+
+
 def _schedule_on(s: Services, body: dict[str, Any]) -> dict[str, Any]:
     """Agents running on their own, on or off: off, nothing wakes them; the desk still works."""
     on = body.get("on")
@@ -961,6 +1011,8 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ),
     ("POST", "/dca/funds/chat"): lambda s, _q, b: _funds(s).chat(b),
     ("POST", "/pot/scan"): lambda s, _q, _b: _pot_agent(s, None),
+    ("GET", "/risk-board"): lambda s, _q, _b: risk_board(s),
+    ("POST", "/risk-board/review"): lambda s, _q, _b: _risk_review(s),
     ("GET", "/my-agents/schedule"): lambda s, _q, _b: schedule.view(s.store, datetime.now(SYDNEY)),
     ("PUT", "/my-agents/schedule"): lambda s, _q, b: _schedule_on(s, b),
     ("POST", "/pot/agent"): lambda s, _q, b: _pot_agent(s, b),

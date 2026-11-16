@@ -182,6 +182,7 @@ describe("side panel", () => {
       "Portfolio",
       "Journal",
       "Trade",
+      "Risk",
       "Bots",
       "Profile",
       "Settings",

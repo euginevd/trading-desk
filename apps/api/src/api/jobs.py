@@ -8,10 +8,17 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, cast
 
-from api import schedule, telegram
+from api import risk, schedule, telegram
 from api.binance import BinanceError
 from api.dca_book import DcaBook, week_of
-from api.handler import SYDNEY, Services, _coach, _pot_agent  # pyright: ignore[reportPrivateUsage]
+from api.handler import (  # pyright: ignore[reportPrivateUsage]
+    SYDNEY,
+    Services,
+    _coach,  # pyright: ignore[reportPrivateUsage]
+    _pot_agent,  # pyright: ignore[reportPrivateUsage]
+    risk_board,
+    risk_model,
+)
 from api.pot import Pot
 from api.trading import Refused, Trading
 
@@ -86,20 +93,8 @@ def coach_line(dep: dict[str, Any]) -> str:
     return f" Deposits this month: A${month:,.0f} of A${cap:,.0f}."
 
 
-def open_limits(s: Services, now: datetime) -> list[dict[str, Any]]:
-    week, _ = week_of(int(now.timestamp() * 1000))
-    return [
-        r
-        for r in s.store.dca_orders()
-        if r["week"] == week
-        and r["source"] == "weekly"
-        and r["side"] == "buy"
-        and r["status"] in ("placing", "open")
-    ]
-
-
 def close_out(s: Services, now: datetime) -> str:
-    rows = open_limits(s, now)
+    rows = DcaBook(Trading(s.binance, s.store, s.audit)).open_weekly()
     if not rows:
         return "Every weekly limit filled: nothing to close out."
     left = [(r["coin"], Decimal(r["spend"] or "0") - Decimal(r["executed_quote"])) for r in rows]
@@ -119,11 +114,35 @@ def close_out(s: Services, now: datetime) -> str:
     return f"{len(rows)} open. {'Not sent: ' + missed if missed else 'Asked on Telegram.'}"
 
 
+def risk_check(s: Services, now: datetime) -> str:
+    """The daily check: plain code, a message only when a limit got worse since the last."""
+    board = risk_board(s, now)
+    worse = risk.changes(s.store, board["limits"])
+    line = board["sentence"]
+    if board["missing"]:
+        line += f" Not read: {', '.join(board['missing'])}."
+    if not worse:
+        return line
+    missed = _tell(s, risk.alert_text(worse))
+    return f"{line} {'Not sent: ' + missed if missed else 'Told you on Telegram.'}"
+
+
+def risk_review(s: Services, now: datetime) -> str:
+    board = risk_board(s, now)
+    kept = risk.review(
+        s.store, s.signals, board["limits"], board["checkedAt"], lambda: risk_model(s)
+    )
+    missed = _tell(s, f"risk-agent, weekly review: {kept['headline']}")
+    return f"{kept['headline']} {'Not sent: ' + missed if missed else ''}".strip()
+
+
 def runners(s: Services, now: datetime) -> dict[str, schedule.Runner]:
     return {
         "pot-scan": lambda: scan(s, now),
         "dca-deposit": lambda: deposit_day(s, now),
         "dca-close-out": lambda: close_out(s, now),
+        "risk-check": lambda: risk_check(s, now),
+        "risk-review": lambda: risk_review(s, now),
     }
 
 
