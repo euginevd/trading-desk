@@ -1,14 +1,12 @@
 import { useEffect, useState } from "react";
 import { ApiError, getDeposits } from "./api";
+import { km } from "./Figures";
+import { shortDate } from "./format";
 import type { FyDeposits } from "./types";
 
 // USDC deposits into Binance for the financial year, a bar a month, in AUD (decision 31): what
-// was paid where it's recorded, otherwise the amount at the AUD rate on the day it landed.
-const aud = (value: string | number, places = 0) =>
-  `A$${Number(value).toLocaleString("en-AU", {
-    minimumFractionDigits: places,
-    maximumFractionDigits: places,
-  })}`;
+// was paid where it's recorded, otherwise the amount at the AUD rate on the day it landed. The
+// Portfolio's "Money in": pick a month to read it, and open its deposits in place.
 const usdc = (value: string) => Number(value).toLocaleString("en-AU", { maximumFractionDigits: 2 });
 
 type State =
@@ -17,6 +15,7 @@ type State =
 export default function Deposits() {
   const [state, setState] = useState<State>({ kind: "loading" });
   const [picked, setPicked] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     getDeposits().then(
@@ -30,14 +29,12 @@ export default function Deposits() {
   }, []);
 
   if (state.kind === "loading") {
-    return (
-      <div aria-hidden="true" className="skeleton card" style={{ height: 220, marginTop: 10 }} />
-    );
+    return <div aria-hidden="true" className="skeleton" style={{ height: 180 }} />;
   }
   if (state.kind === "error") {
     return (
-      <section className="card stat widget deposits" aria-label="USDC deposits">
-        <div className="label">USDC deposits</div>
+      <section className="port-money" aria-label="USDC deposits">
+        <h2>Money in</h2>
         <p className="muted">{state.message}</p>
       </section>
     );
@@ -47,48 +44,74 @@ export default function Deposits() {
   const latest = [...data.months].reverse().find((m) => m.count > 0)?.month ?? null;
   const month = picked ?? latest;
   const chosen = data.months.find((m) => m.month === month);
-  const inMonth = data.deposits.filter((d) => d.day.startsWith(month ?? "-"));
+  const inMonth = data.deposits
+    .filter((d) => d.day.startsWith(month ?? "-"))
+    .sort((a, b) => b.time - a.time);
   const estimated = inMonth.filter((d) => d.basis !== "paid").length;
 
   return (
-    <section className="card stat widget deposits" aria-label="USDC deposits">
-      <div className="kv" style={{ padding: 0 }}>
-        <span className="label">Deposits</span>
-        <span className="label muted">FY {data.fy}</span>
-      </div>
-      <div className="big num">{aud(data.total.aud)}</div>
-      <div className="muted num" style={{ marginTop: 4 }}>
-        {usdc(data.total.usdc)} USDC
-        {data.total.audPerUsdc && <> · A${Number(data.total.audPerUsdc).toFixed(3)} each</>}
-      </div>
-      <div className="dep-bars" role="group" aria-label="Deposits by month">
-        {data.months.map((m) => {
-          const value = Number(m.aud);
-          return (
-            <button
-              key={m.month}
-              type="button"
-              aria-pressed={m.month === month}
-              aria-label={`${m.label}: ${aud(m.aud)} from ${m.count} deposit${m.count === 1 ? "" : "s"}`}
-              title={`${m.label}: ${aud(m.aud)}`}
-              disabled={m.count === 0}
-              onClick={() => setPicked(m.month)}
-            >
-              <span className="dep-bar" style={{ height: `${(value / top) * 100}%` }} />
-              <span className="dep-month">{m.label.charAt(0)}</span>
-            </button>
-          );
-        })}
+    <section className="port-money" aria-label="USDC deposits">
+      <h2>
+        Money in <span className="muted">FY {data.fy}</span>
+      </h2>
+      <p className="port-money-total num">
+        <strong title={`A$${Math.round(Number(data.total.aud)).toLocaleString("en-AU")}`}>
+          {km(data.total.aud)}
+        </strong>{" "}
+        <span className="muted">
+          for {usdc(data.total.usdc)} USDC
+          {data.total.audPerUsdc && <>, A${Number(data.total.audPerUsdc).toFixed(3)} each</>}
+        </span>
+      </p>
+      <div className="dep-bars port-dep-bars" role="group" aria-label="Deposits by month">
+        {data.months.map((m) => (
+          <button
+            key={m.month}
+            type="button"
+            aria-pressed={m.month === month}
+            aria-label={`${m.label}: ${km(m.aud)} from ${m.count} deposit${m.count === 1 ? "" : "s"}`}
+            title={`${m.label}: ${km(m.aud)}`}
+            disabled={m.count === 0}
+            onClick={() => {
+              setPicked(m.month);
+              setOpen(false);
+            }}
+          >
+            <span className="dep-bar" style={{ height: `${(Number(m.aud) / top) * 100}%` }} />
+            <span className="dep-month">{m.label.charAt(0)}</span>
+          </button>
+        ))}
       </div>
       {chosen && chosen.count > 0 && (
-        <div className="dep-line num">
-          <span>{chosen.label}</span>
-          <b>{aud(chosen.aud)}</b>
+        <p className="port-money-month num">
+          {chosen.label} <strong>{km(chosen.aud)}</strong>{" "}
           <span className="muted">
-            {chosen.count} deposit{chosen.count === 1 ? "" : "s"}
-            {estimated > 0 ? ` · ${estimated} estimated` : ""}
-          </span>
-        </div>
+            from {chosen.count} deposit{chosen.count === 1 ? "" : "s"}
+            {estimated > 0 ? `, ${estimated} estimated` : ""}.
+          </span>{" "}
+          <button
+            type="button"
+            className="dash-link"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+          >
+            {open ? "Hide them" : "See them"}
+          </button>
+        </p>
+      )}
+      {open && (
+        <ul className="port-money-list" aria-label={`Deposits in ${chosen?.label ?? ""}`}>
+          {inMonth.map((d) => (
+            <li key={d.time} className="num">
+              <span className="muted">{shortDate(d.day)}</span>
+              <span>{usdc(d.amount)} USDC</span>
+              <span>
+                {d.aud === null ? "–" : km(d.aud)}
+                {d.basis !== "paid" && <small className="muted"> est.</small>}
+              </span>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

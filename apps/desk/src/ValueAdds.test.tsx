@@ -117,7 +117,7 @@ describe("the Tax tab", () => {
 describe("the drift card", () => {
   it("links an order back to target, within the per-trade size", async () => {
     render(<DriftCard />);
-    const link = await screen.findByRole("link", { name: /Trim A\$500\.00/ });
+    const link = await screen.findByRole("link", { name: /^Trim A\$500/ });
     expect(link.getAttribute("href")).toBe(
       "#/trade?coin=TAO&side=sell&price=410&qty=0.813&why=rebalance",
     );

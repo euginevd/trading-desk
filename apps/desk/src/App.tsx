@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getGlobal, getPortfolio, getSettings, getTickers, setTrading } from "./api";
+import { getGlobal, getPortfolio, getSentiment, getSettings, getTickers, setTrading } from "./api";
 import { percent, price, trend, usdShort } from "./format";
 import Coach from "./Coach";
 import Journal from "./Journal";
@@ -24,7 +24,8 @@ import ProfilePage from "./ProfilePage";
 import Portfolio from "./Portfolio";
 import { CURRENCIES, type Currency, money } from "./money";
 import Trade from "./Trade";
-import type { MarketGlobal, Settings, TaoWallet, Ticker } from "./types";
+import type { MarketGlobal, Sentiment, Settings, TaoWallet, Ticker } from "./types";
+import { FearPanel } from "./WidgetDetails";
 import type { Status } from "./ui";
 
 type Page =
@@ -103,6 +104,12 @@ function taoPill(tao: TaoWallet["status"] | null): { word: string; dot: string; 
   return { word: "Wallet", dot: "quiet", title: "Not read yet" };
 }
 
+// The index's mood, as the Dashboard's colours: fear red, greed green, neutral amber.
+function fearMood(value: number): string {
+  if (value < 45) return "down";
+  return value > 55 ? "up" : "wait";
+}
+
 function Logo() {
   // A rising candle over the desk's edge.
   return (
@@ -145,6 +152,8 @@ export default function App() {
   const [switching, setSwitching] = useState(false);
   const [tickers, setTickers] = useState<Ticker[]>([]);
   const [global, setGlobal] = useState<MarketGlobal | null>(null);
+  const [fear, setFear] = useState<Sentiment | null>(null);
+  const [fearAt, setFearAt] = useState<DOMRect | null>(null);
   const [total, setTotal] = useState<{ usd: string; rates: Record<string, string> } | null>(null);
   const [currency, setCurrency] = useState<Currency>(readCurrency);
   const [currencyMenu, setCurrencyMenu] = useState(false);
@@ -178,6 +187,7 @@ export default function App() {
       );
       getGlobal().then(setGlobal, () => setGlobal(null));
     };
+    const mood = () => getSentiment().then(setFear, () => setFear(null));
     const sum = () =>
       getPortfolio().then(
         (p) => {
@@ -193,8 +203,12 @@ export default function App() {
       );
     tick();
     sum();
+    mood();
     const timer = window.setInterval(tick, TICK_MS);
-    const slow = window.setInterval(sum, TOTAL_MS);
+    const slow = window.setInterval(() => {
+      sum();
+      mood();
+    }, TOTAL_MS);
     return () => {
       window.clearInterval(timer);
       window.clearInterval(slow);
@@ -278,7 +292,7 @@ export default function App() {
             <span className={`dot ${wallet.dot}`} aria-hidden="true" />
           </span>
           <button
-            className="pill"
+            className="pill kill"
             type="button"
             aria-pressed={on}
             disabled={!settings || switching}
@@ -291,7 +305,9 @@ export default function App() {
             <span className="side-word">
               {settings ? (on ? "Trading on" : "Trading off") : "Trading unknown"}
             </span>
-            <span className={`dot ${on ? "" : "off"}`} aria-hidden="true" />
+            <span className={`switch${on ? " on" : ""}`} aria-hidden="true">
+              <i />
+            </span>
           </button>
         </div>
       </aside>
@@ -312,7 +328,6 @@ export default function App() {
           >
             <MenuIcon />
           </button>
-          <div className="spacer" />
           <div className="tickers num" aria-label="Market">
             {tickers.map((t) => (
               <a key={t.coin} className="tick" href="#/trade" title="Bitcoin's price">
@@ -343,9 +358,29 @@ export default function App() {
                 </span>
               </span>
             )}
+            {fear && (
+              <button
+                type="button"
+                className={`tick tick-fear ${fearMood(fear.value)}`}
+                aria-label={`Fear & Greed ${fear.value}, ${fear.label}: details`}
+                onClick={(e) => setFearAt(e.currentTarget.getBoundingClientRect())}
+              >
+                <span className="tick-coin">Fear &amp; Greed</span>
+                <span>
+                  <b>{fear.value}</b> <span className="tick-mood">{fear.label}</span>
+                </span>
+              </button>
+            )}
           </div>
+          <FearPanel at={fearAt} onClose={() => setFearAt(null)} />
+          <div className="spacer" />
           {total && (
-            <a className="head-total num" href="#/" aria-label="Total value">
+            <a
+              className="head-total num"
+              href="#/portfolio"
+              aria-label="Total value"
+              title="Your Portfolio"
+            >
               <WalletIcon />
               <span>
                 <b>{money(currency, total.rates).whole(total.usd)}</b>

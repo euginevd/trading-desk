@@ -7,12 +7,13 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 1. Shell scripts must keep LF line endings or bash fails on Windows; don't override `.gitattributes`.
 2. A `CLAUDE.md` in the repo makes Claude Code skip `AGENTS.md`. Don't add one.
 3. A page that pins its CSS or JavaScript by integrity hash goes unstyled or dead after an edit: recompute each `sha384` after the last edit and load the page in a browser.
-4. Run the web apps' tests from an upper-case `C:\` path (`Set-Location C:\<repo>\apps\<app>`): from `c:` Vitest loads twice and every jest-dom matcher fails as "Invalid Chai property".
+4. Run the web apps' tests from an upper-case `C:\` path (`Set-Location C:\<repo>\apps\<app>`): from `c:` Vitest loads twice and every jest-dom matcher fails as "Invalid Chai property", or every suite fails with "Vitest failed to find the current suite". In Git Bash, `cd "C:/<repo>/apps/<app>"`.
 5. Never rewrite a source file with Windows PowerShell `Get-Content`/`Set-Content`: it reads UTF-8 as ANSI and writes a BOM (`·` became `Â·`). Use the Edit tool, or Python with `encoding="utf-8"`.
 6. A script pasted into CloudShell runs interactively, where `!word` is history expansion (`!starts_with` dropped a check): write ``== `false` `` instead.
 7. The repo is public: never copy the owner's real balances, costs, deposits, wallet addresses or emails into tests, demo data or docs. Use made-up numbers, including in mockups built from the owner's screenshots; the owner's data lives only in `local/` (SQLite, audit log) and `.env`, both git-ignored.
 8. Run `bash .lefthook/pre-push-scan.sh </dev/null` by hand: without a terminal it waits on stdin for git's pushed refs and hangs for hours.
 9. Don't write Python or TypeScript edits through a bash heredoc: backslash escapes (`\n`, `\b`, `\1`) arrive as line breaks or control characters. Use the Edit or Write tool.
+10. Before deleting CSS rules whose class no source file names, grep for classes built in template strings (`` `on-${side}` ``): a word-search prune dropped the order sheet's Buy and Sell colours.
 
 ## CI
 
