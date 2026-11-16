@@ -36,7 +36,7 @@ const boughtOf = (orders: DcaOrder[]) =>
     .reduce((s, o) => s + Number(o.filledQuote), 0);
 
 function headline(quote: string, cycle: Cycle, now: number, total: number): string {
-  const amount = `${whole(total)} ${quote}`;
+  const amount = `$${whole(total)} ${quote}`;
   if (now < cycle.start) {
     const days = Math.ceil((cycle.start - now) / DAY);
     const when = cycle.start - now < 12 * HOUR ? "today" : `in ${plural(days, "day")}`;
@@ -106,9 +106,12 @@ export default function DcaWidget({ now: given }: { now?: number }) {
       <a className="dcw-agent" href="#/profile">
         dca-agent
       </a>
-      <a className="dcw-book" href="#/dca-book">
-        Open the DCA book
-      </a>
+      <nav className="dcw-links" aria-label="DCA">
+        <a href="#/dca-book?funds=add">Add funds</a>
+        <a href="#/dca-book?funds=remove">Remove funds</a>
+        <a href="#/dca-book?plan">Plan this week</a>
+        <a href="#/dca-book">Open the DCA book</a>
+      </nav>
     </header>
   );
 
@@ -209,7 +212,7 @@ export default function DcaWidget({ now: given }: { now?: number }) {
                   <CoinIcon coin={coin} />
                   {coin}
                 </span>
-                <b className="num">{whole(usdc)}</b>
+                <b className="num">${whole(usdc)}</b>
                 {cycle.orders.length > 0 && <small className="num">{state.words}</small>}
               </li>
             );

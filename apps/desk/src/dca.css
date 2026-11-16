@@ -18,8 +18,7 @@
   font-size: 15px;
   font-weight: 600;
 }
-.dcw-agent,
-.dcw-book {
+.dcw-agent {
   color: var(--muted);
   font-size: 13px;
   text-decoration: none;
@@ -27,9 +26,19 @@
 .dcw-agent:hover {
   color: var(--accent);
 }
-.dcw-book {
+.dcw-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
   margin-left: auto;
+}
+.dcw-links a {
   color: var(--accent);
+  font-size: 13px;
+  text-decoration: none;
+}
+.dcw-links a:hover {
+  text-decoration: underline;
 }
 .dcw-line {
   max-width: 44ch;
@@ -723,6 +732,13 @@ td.dcb-id {
   }
 }
 @media (max-width: 720px) {
+  .dcw-head {
+    flex-wrap: wrap;
+  }
+  .dcw-links {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
   .dcw-line {
     font-size: 18px;
   }

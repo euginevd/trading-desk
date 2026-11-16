@@ -275,16 +275,22 @@ type Row = {
   failed?: boolean;
 };
 
-function Planner({ book, onPlaced }: { book: DcaBook; onPlaced: () => void }) {
+function Planner({
+  book,
+  onPlaced,
+  start = false,
+}: {
+  book: DcaBook;
+  onPlaced: () => void;
+  start?: boolean;
+}) {
   const [rows, setRows] = useState<Row[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [held, setHeld] = useState<string | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
 
-  const plan = () => {
-    setError(null);
-    setRows(null);
+  const fetchPlan = useCallback(() => {
     suggestDca().then(
       (s) =>
         setRows(
@@ -298,7 +304,16 @@ function Planner({ book, onPlaced }: { book: DcaBook; onPlaced: () => void }) {
         ),
       (e: unknown) => setError(errorOf(e, "The desk couldn't plan this week.")),
     );
+  }, []);
+  const plan = () => {
+    setError(null);
+    setRows(null);
+    fetchPlan();
   };
+  // Opened from the Dashboard's Plan this week: the plan comes straight away.
+  useEffect(() => {
+    if (start) fetchPlan();
+  }, [start, fetchPlan]);
   const edit = (i: number, change: Partial<Row>) =>
     setRows((r) => r?.map((x, k) => (k === i ? { ...x, ...change } : x)) ?? null);
   const reOdds = (i: number) => {
@@ -712,7 +727,11 @@ export default function DcaBookPage() {
     setSheetState(next);
   };
   const [said, setSaid] = useState<string | null>(null);
-  const [funds, setFunds] = useState<"add" | "remove" | null>(null);
+  // The Dashboard's links open the book at Add funds or Remove funds.
+  const [funds, setFunds] = useState<"add" | "remove" | null>(() => {
+    const asked = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("funds");
+    return asked === "add" || asked === "remove" ? asked : null;
+  });
   const [cancelling, setCancelling] = useState<DcaOrder | null>(null);
   const cancelDialog = useRef<HTMLDialogElement>(null);
   const planning = window.location.hash.includes("?plan");
@@ -852,7 +871,7 @@ export default function DcaBookPage() {
         </p>
       )}
 
-      <Planner key={planning ? "plan" : "week"} book={book} onPlaced={load} />
+      <Planner key={planning ? "plan" : "week"} book={book} onPlaced={load} start={planning} />
 
       {funds && (
         <DcaFunds

@@ -233,7 +233,7 @@ describe("DCA widget", () => {
     serve(done);
     render(<DcaWidget now={START + 4 * 86_400_000} />);
     expect(
-      await screen.findByText("Next buy in 3 days: 70 USDC on 27 Nov (Fri) at 7pm."),
+      await screen.findByText("Next buy in 3 days: $70 USDC on 27 Nov (Fri) at 7pm."),
     ).toBeTruthy();
     expect(screen.getByText("Last week: 19.85 USDC bought.")).toBeTruthy();
   });
