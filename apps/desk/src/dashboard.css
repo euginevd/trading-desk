@@ -522,8 +522,13 @@
 .dash-deposits.is-over .dash-deposits-bar span {
   background: var(--down);
 }
-.dash-deposits.is-over .dash-deposits-words {
+.dash-deposits.is-over .dash-deposits-words,
+.dash-deposits.is-over b {
   color: var(--down);
+}
+.dash-deposits.is-over {
+  border-color: var(--down-soft);
+  background: var(--down-soft);
 }
 @media (max-width: 720px) {
   .dash-deposits {

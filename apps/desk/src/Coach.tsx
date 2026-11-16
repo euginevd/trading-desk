@@ -159,7 +159,6 @@ function Hero({
 
 // This month's fiat deposits against the monthly cap, in one line: how much is in, the room left,
 // and the days until the cap starts again on the 1st.
-const aud0 = (n: number) => `A$${Math.round(n).toLocaleString("en-AU")}`;
 function DepositStrip({ deposits }: { deposits: CoachData["deposits"] }) {
   if (!deposits.known || !deposits.capAud || !deposits.resetsOn) return null;
   const inMonth = Number(deposits.monthAud);
@@ -177,19 +176,19 @@ function DepositStrip({ deposits }: { deposits: CoachData["deposits"] }) {
   const state = deposits.overAud
     ? {
         tone: "is-over",
-        words: `${aud0(Number(deposits.overAud))} over the cap. It resets ${on}, in ${span}.`,
+        words: `Exceeded the cap by ${km(Number(deposits.overAud))}. The next month starts ${on}, in ${span}.`,
       }
     : Number(deposits.leftAud) <= 0
       ? { tone: "is-full", words: `Cap reached. Next deposit from ${on}, in ${span}.` }
       : {
           tone: "",
-          words: `${aud0(Number(deposits.leftAud))} of room, ${span} left in ${month}.`,
+          words: `${km(Number(deposits.leftAud))} of room, ${span} left in ${month}.`,
         };
   return (
     <section className={`dash-deposits ${state.tone}`} aria-label={`${month} deposits`}>
       <span className="dash-deposits-label">{month} deposits</span>
       <b className="num">
-        {aud0(inMonth)} <span className="muted">of {aud0(cap)}</span>
+        {km(inMonth)} <span className="muted">of {km(cap)}</span>
       </b>
       <i className="dash-deposits-bar" aria-hidden="true">
         <span style={{ width: `${pct}%` }} />

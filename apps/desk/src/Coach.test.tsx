@@ -154,8 +154,21 @@ describe("the Dashboard", () => {
   it("shows the month's deposits against the cap and the days until it resets", async () => {
     render(<CoachPage />);
     const strip = await screen.findByRole("region", { name: "November deposits" });
-    expect(strip.textContent).toContain("A$4,200 of A$6,000");
-    expect(strip.textContent).toContain("A$1,800 of room, 14 days left in November.");
+    expect(strip.textContent).toContain("A$4.2K of A$6K");
+    expect(strip.textContent).toContain("A$1.8K of room, 14 days left in November.");
+  });
+
+  it("shows a month over the cap in red, with by how much", async () => {
+    coach = {
+      ...down,
+      pending: false,
+      deposits: { ...down.deposits, monthAud: "8500", leftAud: "0", overAud: "2500" },
+    };
+    render(<CoachPage />);
+    const strip = await screen.findByRole("region", { name: "November deposits" });
+    expect(strip.className).toContain("is-over");
+    expect(strip.textContent).toContain("A$8.5K of A$6K");
+    expect(strip.textContent).toContain("Exceeded the cap by A$2.5K.");
   });
 
   it("refreshes from its button, busy while it reads", async () => {
