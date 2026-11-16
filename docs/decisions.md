@@ -39,3 +39,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 63. The Dashboard as the morning check: the day in a sentence, a week rail of the plan's buys, what to watch and the desk to ask. [Record](decisions/from-58.md)
 64. The Portfolio as what you hold in a sentence, one strip of it against your targets, then targets, money in and the holdings; Fear & Greed moves to the top bar; the side panel's connections become quiet rows and the kill switch a switch. [Record](decisions/from-58.md)
 65. Settings as a sentence and hairline sections; the name comes from the Profile only; each fact shown on one page; the top bar gives BTC dominance's move and BTC in whole dollars. [Record](decisions/from-58.md)
+66. The Journal as a sentence of rules kept, the last 30 days as a strip of trades, then the ledger with a filter and the tag lists last. [Record](decisions/from-58.md)

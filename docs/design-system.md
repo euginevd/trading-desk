@@ -49,6 +49,7 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 13e. Dashboard: the same language as the Profile (13d). The day as a sentence, then the week rail, Monday to Sunday on a line with the days already lived filled in mint: today a mint dot, the plan's buy days as rings, filled once bought, `wait` when due or missed or when the extra buy applies. Hover, focus or tap a day for a sentence on what it holds. Below, two hairline columns (Watch today; Ask the desk, the specialists as initials) and last week's recap in one line (decision 63).
 13f. Portfolio: the same language. What you hold as a sentence, then the strip: the holdings by coin, 44px, the targets under it at 18px in the same order and colours; with targets set, a coin without one is neutral (`line-2`). Light slices take dark ink, deep ones light ink. Hover, focus or tap a slice for a sentence. Below, two hairline columns (Against your targets; Money in) and the holdings table without a card (decision 64).
 13g. Settings: the same language. What the desk runs on as a sentence, then hairline sections with their status at the right; providers and models stay selectable cards, as they're choices (decision 65).
+13h. Journal: the same language. Rules kept as a sentence (the count in mint), then the strip: a column a day, 12px dots stacked from the bottom, mint kept and `wait` broke a rule; then the ledger without a card and the tag lists last (decision 66).
 
 ## Not this
 

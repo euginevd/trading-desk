@@ -30,6 +30,7 @@ Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 5
 | 69 | Dashboard redesign (decision 63): the day in a sentence, a week rail with the plan's weekly and extra buys marked due, done or missed (hover or focus a day to read it), what to watch with deposits against the cap, Ask the desk, last week's recap in a line; rounded figures that roll, one-minute refresh, responsive to phone width | Done | |
 | 70 | Portfolio redesign (decision 64): what you hold in a sentence, a strip of the holdings by coin with your targets under it (hover, focus or tap a slice to read it), targets and money in side by side, the holdings table with a value-against-cost bar; Fear & Greed in the top bar; quieter side panel with a kill switch that looks like one | Done | |
 | 71 | Settings redesign and dedupe (decision 65): what the desk runs on in a sentence, hairline sections, the name only from the Profile; each fact on one page; BTC dominance's 24h move and BTC in whole dollars in the top bar | Done | |
+| 72 | Journal redesign (decision 66): rules kept in a sentence, the last 30 days as a strip of trades (hover, focus or pick a dot), the ledger filtered to all, broke a rule or kept; responsive to phone width | Done | |
 | 68 | Portfolio refresh: the Portfolio page reads balances again every minute while in view, and when its tab comes back | Done | |
 
 ## `api`
