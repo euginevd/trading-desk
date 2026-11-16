@@ -2,8 +2,10 @@
 // close-out, and the week's orders beside them. The whole book is on its own page.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { closeOutDca, getDcaBook } from "./api";
+import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
-import { STATUS, isOpen, limit, two, weeklyTotal, when } from "./dcaFormat";
+import { STATUS, dated, isOpen, limit, two, weeklyTotal, when } from "./dcaFormat";
+import "./myagents.css";
 import type { DcaBook, DcaOrder } from "./types";
 
 type Step = { at: string; what: string; state: "done" | "now" | "later" };
@@ -15,22 +17,27 @@ function steps(book: DcaBook, now: number): Step[] {
   const closed = book.week.orders.some((o) => o.source === "close-out");
   const placed = weekly.length > 0;
   const done = placed && open === 0;
+  const firstPlaced = Math.min(...weekly.map((o) => o.created));
+  const lastFill = Math.max(
+    0,
+    ...weekly.filter((o) => o.status === "filled").map((o) => o.updated),
+  );
   return [
-    { at: when(book.week.start), what: "Deposit day", state: "done" },
+    { at: dated(book.week.start, true), what: "Deposit day", state: "done" },
     {
-      at: placed ? "Placed" : "Next",
+      at: placed ? dated(firstPlaced, true) : `${dated(now)} today`,
       what: placed
         ? `${weekly.length} ${weekly.length === 1 ? "limit" : "limits"} placed`
         : "Plan and place this week's limits",
       state: placed ? "done" : "now",
     },
     {
-      at: "Fills",
+      at: done && lastFill ? dated(lastFill, true) : `By ${dated(book.week.closeOut)}`,
       what: placed ? `${filled} of ${weekly.length} filled` : "Waiting for the limits",
       state: done ? "done" : placed ? "now" : "later",
     },
     {
-      at: when(book.week.closeOut),
+      at: dated(book.week.closeOut, true),
       what: closed
         ? "Closed out: what didn't fill was bought at market"
         : done
@@ -131,8 +138,11 @@ export default function DcaWidget({ now: given }: { now?: number }) {
     <section className="dcw" aria-label="Weekly DCA">
       <div>
         <p className="dcw-head">
+          <AgentAvatar icon="dca" slug="dca-agent" />
           <b>Weekly DCA</b>
-          <span className="muted">dca-agent</span>
+          <a className="muted dcw-agent" href="#/profile">
+            dca-agent
+          </a>
         </p>
         <p className="dcw-line">{sentence(book)}</p>
         <ol className="dcw-steps">

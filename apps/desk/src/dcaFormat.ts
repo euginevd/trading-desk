@@ -41,6 +41,18 @@ export function day(ms: number, withYear = false): string {
   });
 }
 
+// "20 Nov (Fri)", Sydney time; with the time, "20 Nov (Fri) 5pm".
+export function dated(ms: number, withTime = false): string {
+  const at = new Date(ms);
+  const date = at.toLocaleDateString(AU, {
+    day: "numeric",
+    month: "short",
+    timeZone: "Australia/Sydney",
+  });
+  const weekday = at.toLocaleDateString(AU, { weekday: "short", timeZone: "Australia/Sydney" });
+  return `${date} (${weekday})${withTime ? ` ${when(ms).split(" ")[1] ?? ""}` : ""}`;
+}
+
 // "Mon 7pm", Sydney time.
 export function when(ms: number): string {
   const at = new Date(ms);

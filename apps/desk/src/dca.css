@@ -79,8 +79,18 @@
 }
 .dcw-when {
   flex: none;
-  width: 92px;
+  width: 140px;
   color: var(--muted);
+}
+.dcw-head {
+  align-items: center;
+}
+.dcw-agent {
+  color: var(--muted);
+  text-decoration: none;
+}
+.dcw-agent:hover {
+  color: var(--accent);
 }
 .dcw-said {
   margin: 6px 0 0;

@@ -171,6 +171,8 @@ describe("DCA widget", () => {
     const fetch = serve(book());
     render(<DcaWidget now={START + 4 * 86_400_000} />);
     expect(await screen.findByText("This week's 70.00 USDC: 1 of 2 limits filled.")).toBeTruthy();
+    expect(screen.getByText("20 Nov (Fri) 5pm")).toBeTruthy(); // deposit day, dated
+    expect(screen.getByText("23 Nov (Mon) 7pm")).toBeTruthy(); // the close-out
     const table = screen.getByRole("table", { name: "This week's orders" });
     expect(within(table).getByText("63,837.40")).toBeTruthy();
     expect(within(table).getByText("Filled")).toBeTruthy();
