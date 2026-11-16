@@ -18,7 +18,7 @@ ROWS: list[dict[str, Any]] = [
     {
         "coin": "USDC",
         "status": 1,
-        "amount": "690",
+        "amount": "820",
         "network": "BASE",
         "insertTime": AUG_3 + 5 * DAY,
     },
@@ -73,14 +73,17 @@ def test_deposits_by_month_paid_where_known_estimated_otherwise(tmp_path: Path) 
     assert [m["label"] for m in got["months"]][:2] == ["Jul", "Aug"]
     assert got["months"][-1]["month"] == "2027-06"
     assert by_month["2026-08"]["count"] == 2
-    # 700.5 was paid A$1,000; 690 lands on Saturday 8 Aug: Friday's 1.52
-    assert by_month["2026-08"]["aud"] == "2048.8"
-    assert by_month["2026-11"]["aud"] == "999.97"  # 680.25 at 1.47
+    # 700.5 was paid A$1,000; 820 lands on Saturday 8 Aug: Friday's 1.52, A$1,246.40, too far
+    # from a whole A$1,000 to be one, so it stays an estimate.
+    assert by_month["2026-08"]["aud"] == "2246.4"
+    # 680.25 at 1.47 is A$999.97: within 5% of A$1,000, the owner's deposit size, so A$1,000.
+    assert by_month["2026-11"]["aud"] == "1000"
     assert by_month["2026-07"]["count"] == 0  # the June deposit is last year's
     basis = {d["amount"]: d["basis"] for d in got["deposits"]}
-    assert basis == {"700.5": "paid", "690": "estimate", "680.25": "estimate"}
+    assert basis == {"700.5": "paid", "820": "estimate", "680.25": "chunk"}
     assert got["total"]["paid"] == 1
-    assert got["total"]["aud"] == "3048.77"
+    assert got["total"]["chunks"] == 1
+    assert got["total"]["aud"] == "3246.4"
 
 
 def test_the_paid_route_records_and_audits_and_refuses_nonsense(

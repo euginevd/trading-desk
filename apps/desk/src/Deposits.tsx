@@ -7,9 +7,8 @@ import type { FyDeposits } from "./types";
 // USDC deposits into Binance for the financial year, a bar a month, in AUD (decision 31): what
 // was paid where it's recorded, otherwise the amount at the AUD rate on the day it landed. The
 // Portfolio's "Money in": pick a month to read it, and open its deposits in place.
-// Whole numbers: 677 USDC, A$1,000.
+// Whole numbers: 677 USDC; A$ as the bars show it, A$1K.
 const usdc = (value: string) => Math.round(Number(value)).toLocaleString("en-AU");
-const audWhole = (value: string) => `A$${Math.round(Number(value)).toLocaleString("en-AU")}`;
 const RECENT = 5;
 
 type State =
@@ -51,7 +50,8 @@ export default function Deposits() {
   const inMonth = data.deposits
     .filter((d) => d.day.startsWith(month ?? "-"))
     .sort((a, b) => b.time - a.time);
-  const estimated = inMonth.filter((d) => d.basis !== "paid").length;
+  // A deposit counted as a whole A$1,000 is how you pay, so it isn't marked as a guess.
+  const estimated = inMonth.filter((d) => d.basis === "estimate" || d.basis === "unknown").length;
 
   return (
     <section className="port-money" aria-label="USDC deposits">
@@ -116,8 +116,10 @@ export default function Deposits() {
               <span className="muted">{shortDate(d.day)}</span>
               <span>{usdc(d.amount)} USDC</span>
               <span>
-                {d.aud === null ? "–" : audWhole(d.aud)}
-                {d.basis !== "paid" && <small className="muted"> est.</small>}
+                {d.aud === null ? "–" : km(d.aud)}
+                {(d.basis === "estimate" || d.basis === "unknown") && (
+                  <small className="muted"> est.</small>
+                )}
               </span>
             </li>
           ))}

@@ -470,7 +470,7 @@ describe("portfolio page", () => {
     expect(within(list).getAllByRole("listitem")).toHaveLength(2);
     expect(within(list).getByText("690 USDC")).toBeTruthy(); // newest first
     expect(within(list).getByText("701 USDC")).toBeTruthy(); // whole numbers: 700.5 rounds up
-    expect(within(list).getByText("A$1,049")).toBeTruthy();
+    expect(within(list).getAllByText("A$1K")).toHaveLength(2); // A$1,048.80 and A$1,000
     expect(within(list).queryByRole("button", { name: /more/ })).toBeNull(); // 5 or fewer
   });
 

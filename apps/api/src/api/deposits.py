@@ -20,6 +20,8 @@ WINDOW = timedelta(days=89)  # Binance answers at most 90 days per call
 FX_RANGE_URL = "https://api.frankfurter.dev/v1/{start}..{end}?base=USD&symbols=AUD"
 OK = 200
 FY_FIRST_MONTH = 7  # July
+CHUNK_AUD = Decimal(1000)  # the owner deposits A$1,000 at a time (18 Nov 2026)
+CHUNK_NEAR = Decimal("0.05")  # an estimate within 5% of a whole chunk is that chunk
 MONTHS = ("Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar", "Apr", "May", "Jun")
 
 
@@ -101,6 +103,10 @@ def report(
             aud, basis = Decimal(known), "paid"
         elif rate is not None:
             aud, basis = (amount * rate).quantize(Decimal("0.01")), "estimate"
+            # Deposits go in whole A$1,000s: the ECB's rate lands near one, not on it.
+            whole = (aud / CHUNK_AUD).quantize(Decimal(1)) * CHUNK_AUD
+            if whole > 0 and abs(aud - whole) <= whole * CHUNK_NEAR:
+                aud, basis = whole, "chunk"
         else:
             aud, basis = None, "unknown"
         month = day[:7]
@@ -132,6 +138,7 @@ def report(
             "audPerUsdc": plain((aud_total / usdc).quantize(Decimal("0.0001"))) if usdc else None,
             "paid": sum(1 for d in deposits if d["basis"] == "paid"),
             "estimated": sum(1 for d in deposits if d["basis"] == "estimate"),
+            "chunks": sum(1 for d in deposits if d["basis"] == "chunk"),
         },
         "months": [
             {

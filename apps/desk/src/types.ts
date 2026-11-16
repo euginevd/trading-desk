@@ -431,7 +431,7 @@ export interface FyDeposits {
     amount: string;
     network: string;
     aud: Num;
-    basis: "paid" | "estimate" | "unknown";
+    basis: "paid" | "chunk" | "estimate" | "unknown";
     rate: Num;
   }[];
 }
