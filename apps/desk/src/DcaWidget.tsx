@@ -7,7 +7,7 @@ import { closeOutDca, getDcaBook } from "./api";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
 import PositionDrawer from "./DcaPosition";
-import { dated, isOpen, limit, qty, signed, two } from "./dcaFormat";
+import { dated, isOpen, qty, signed, two } from "./dcaFormat";
 import "./myagents.css";
 import type { DcaBook, DcaOrder, DcaPosition } from "./types";
 
@@ -29,7 +29,7 @@ export function cycleOf(book: DcaBook, now: number): Cycle {
 }
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
-const whole = (n: number) => two(n).replace(/\.00$/, "");
+const whole = (n: number) => Math.round(n).toLocaleString("en-AU");
 const weeklyOf = (orders: DcaOrder[]) => orders.filter((o) => o.source === "weekly");
 const boughtOf = (orders: DcaOrder[]) =>
   orders
@@ -62,9 +62,11 @@ function coinWeek(
   const mine = orders.filter((o) => o.coin === coin && o.side === "buy");
   const bought = mine.reduce((s, o) => s + Number(o.filledQuote), 0);
   const done = target > 0 && bought >= target * 0.95;
-  const open = mine.filter((o) => isOpen(o) && o.kind === "limit").map((o) => limit(o.price));
+  const open = mine
+    .filter((o) => isOpen(o) && o.kind === "limit")
+    .reduce((s, o) => s + Number(o.spend ?? 0), 0);
   const held = Number(position?.qty ?? 0);
-  if (open.length) return { bought, done, line: `Limit ${open.join(", ")} open`, tone: "is-open" };
+  if (open > 0) return { bought, done, line: `$${whole(open)} waiting`, tone: "is-open" };
   if (held > 0) {
     const pnl =
       position?.pnlPct === null || position?.pnlPct === undefined
@@ -122,20 +124,11 @@ export default function DcaWidget({ now: given }: { now?: number }) {
 
   const head = (
     <header className="dcw-head">
-      <AgentAvatar icon="dca" slug="dca-agent" />
-      <h2>Weekly DCA</h2>
-      <a className="dcw-agent" href="#/profile">
-        dca-agent
+      <a className="dcw-home" href="#/dca-book" aria-label="Weekly DCA: open the DCA book">
+        <AgentAvatar icon="dca" slug="dca-agent" />
+        <h2>Weekly DCA</h2>
+        <span className="dcw-agent">dca-agent</span>
       </a>
-      <nav className="dcw-links" aria-label="DCA">
-        <a className="dcw-chat" href="#/dca-book?chat">
-          Chat with dca-agent
-        </a>
-        <a href="#/dca-book?funds=add">Add funds</a>
-        <a href="#/dca-book?funds=remove">Remove funds</a>
-        <a href="#/dca-book?plan">Plan this week</a>
-        <a href="#/dca-book">Open the DCA book</a>
-      </nav>
     </header>
   );
 

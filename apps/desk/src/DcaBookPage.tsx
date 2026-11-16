@@ -783,17 +783,22 @@ function Targets({ book }: { book: DcaBook }) {
   const plan = book.plan?.orders ?? [];
   const spend = plan.reduce((s, o) => s + Number(o.spend), 0) || 1;
   const value = book.positions.reduce((s, p) => s + Number(p.value ?? 0), 0);
+  const targetOf = (coin: string) =>
+    (plan.filter((o) => o.coin === coin).reduce((s, o) => s + Number(o.spend), 0) * 100) / spend;
+  const nowOf = (v: string | null) => (value > 0 ? (Number(v ?? 0) * 100) / value : 0);
+  // Room past the biggest share or target, so a tick is never on the bar's end.
+  const scale = Math.max(
+    1,
+    ...book.positions.map((p) => Math.max(targetOf(p.coin), nowOf(p.value)) * 1.15),
+  );
   return (
     <ul className="dcb-targets" aria-label="The book against its targets">
       {book.positions.map((p) => {
-        const target =
-          (plan.filter((o) => o.coin === p.coin).reduce((s, o) => s + Number(o.spend), 0) * 100) /
-          spend;
-        const now = value > 0 ? (Number(p.value ?? 0) * 100) / value : 0;
+        const target = targetOf(p.coin);
+        const now = nowOf(p.value);
         const waiting = book.orders.filter(
           (o) => o.coin === p.coin && isOpen(o) && o.side === "buy",
         );
-        const scale = Math.max(target * 2, now, 1);
         return (
           <li key={p.coin}>
             <a className="dcb-coin" href={`#/dca-book?coin=${p.coin}`}>
@@ -810,7 +815,7 @@ function Targets({ book }: { book: DcaBook }) {
             </span>
             <small className="num">
               {waiting.length
-                ? `${two(waiting.reduce((s, o) => s + Number(o.spend ?? 0), 0))} waiting at ${waiting.map((o) => limit(o.price)).join(", ")}`
+                ? `${dollars(waiting.reduce((s, o) => s + Number(o.spend ?? 0), 0))} waiting`
                 : Number(p.qty) > 0
                   ? `${qty(p.qty)} ${p.coin}`
                   : "Nothing bought yet"}
@@ -1083,8 +1088,7 @@ export default function DcaBookPage() {
               {bought
                 ? `${dollars(t.added)} ${book.quote} added, now worth ${dollars(t.value)}${Number(t.realised) ? `, with ${dollars(t.realised, true)} realised on trims` : ""}. `
                 : "Nothing bought yet: the book starts with your first order. "}
-              {p &&
-                `Weekly plan: ${dollars(p.onPlan)} of ${dollars(p.planTotal)} ${book.quote} bought.`}
+              {p && `Friday buys: ${dollars(p.onPlan)} of ${dollars(p.planTotal)} over 3 years.`}
             </p>
           </div>
           <dl className="dcb-totals">
@@ -1176,14 +1180,9 @@ export default function DcaBookPage() {
               <thead>
                 <tr>
                   <th>Position</th>
-                  <th className="r">Quantity</th>
-                  <th className="r">Avg cost</th>
-                  <th className="r dcb-hide">A$</th>
                   <th className="r">Added</th>
                   <th className="r">Value</th>
                   <th className="r">P&amp;L on added</th>
-                  <th className="r dcb-hide">Realised</th>
-                  <th className="r dcb-hide">Fees</th>
                   <th>
                     <span className="visually-hidden">Trim</span>
                   </th>
@@ -1205,34 +1204,30 @@ export default function DcaBookPage() {
                             onClick={() => setOpenCoin(opened ? null : pos.coin)}
                           >
                             <Coin coin={pos.coin} />
-                            <span className="dcb-count">
-                              {mine.length
-                                ? `${mine.length} ${mine.length === 1 ? "order" : "orders"}`
-                                : ""}
-                            </span>
+                            <small className="dcb-id">
+                              {pos.id}
+                              {pos.since
+                                ? ` since ${day(pos.since, true)}`
+                                : ", nothing bought yet"}
+                              {mine.length > 0 && (
+                                <span className="dcb-count">
+                                  {", "}
+                                  {mine.length} {mine.length === 1 ? "order" : "orders"}
+                                </span>
+                              )}
+                            </small>
                           </button>
-                          <small className="dcb-id">
-                            {pos.id}
-                            {pos.since ? `, since ${day(pos.since, true)}` : ", nothing bought yet"}
-                          </small>
                         </td>
-                        <td className="r num">{qty(pos.qty)}</td>
-                        <td className="r num">{limit(pos.avgCost)}</td>
-                        <td className="r num muted dcb-hide">{two(pos.avgCostAud)}</td>
-                        <td className="r num">{two(pos.added)}</td>
-                        <td className="r num">{two(pos.value)}</td>
+                        <td className="r num">${Math.round(Number(pos.added))}</td>
+                        <td className="r num">
+                          <Live value={pos.value}>${Math.round(Number(pos.value ?? 0))}</Live>
+                        </td>
                         <td className={`r num ${n > 0 ? "up" : n < 0 ? "down" : ""}`}>
-                          {signed(pos.pnl)}
+                          {dollars(pos.pnl, true)}
                           {pos.pnlPct !== null && (
                             <span className="muted"> ({signed(pos.pnlPct)}%)</span>
                           )}
                         </td>
-                        <td
-                          className={`r num dcb-hide ${Number(pos.realised) > 0 ? "up" : "muted"}`}
-                        >
-                          {Number(pos.realised) ? signed(pos.realised) : "—"}
-                        </td>
-                        <td className="r num muted dcb-hide">{two(pos.fees)}</td>
                         <td className="r">
                           <button
                             type="button"

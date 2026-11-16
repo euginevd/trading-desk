@@ -4,7 +4,7 @@
 import { useRef, useState } from "react";
 import { amendDcaOrder, fundsOdds } from "./api";
 import CoinIcon from "./CoinIcon";
-import { limit, two } from "./dcaFormat";
+import { limit, two, when } from "./dcaFormat";
 import type { DcaOrder, OpenChange } from "./types";
 
 type Change = OpenChange & { on: boolean; result?: string; failed?: boolean };
@@ -24,6 +24,16 @@ export default function DcaOpen({
   const [busy, setBusy] = useState<"apply" | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const chosen = changes.filter((c) => c.on && !c.result);
+  // The same coin, side and limit already open under an earlier reference.
+  const twinOf = (o: DcaOrder) =>
+    orders.find(
+      (x) =>
+        x.ref !== o.ref &&
+        x.coin === o.coin &&
+        x.side === o.side &&
+        Number(x.price) === Number(o.price) &&
+        x.created < o.created,
+    );
 
   // By hand: every open order as a change, at its own price, to edit.
   const byHand = () =>
@@ -71,37 +81,50 @@ export default function DcaOpen({
     if (done) onChanged(`${done} open ${done === 1 ? "order" : "orders"} changed.`);
   };
 
+  const twins = orders.filter((o) => twinOf(o)).length;
   return (
     <section className="dcb-section dco" aria-labelledby="dco-title">
-      <div className="dcb-section-head">
-        <h2 id="dco-title">Open orders</h2>
-        <span className="muted">
-          {orders.length} waiting for their price,{" "}
-          {two(orders.reduce((s, o) => s + Number(o.spend ?? 0), 0))} {quote}
-        </span>
-      </div>
-      <ul className="dco-list">
-        {orders.map((o) => (
-          <li key={o.ref}>
-            <span className="dcb-coin">
-              <CoinIcon coin={o.coin} />
-              {o.coin}
-            </span>
-            <span className="num">
-              {o.side === "sell" ? "Sell" : "Buy"} at {limit(o.price)}
-            </span>
-            <span className="num muted">{two(o.spend)}</span>
-            <small className="dcb-id">{o.ref}</small>
-          </li>
-        ))}
-      </ul>
+      <details className="dco-fold" open={changes.length > 0 || undefined}>
+        <summary className="dcb-section-head">
+          <h2 id="dco-title">Open orders</h2>
+          <span className="muted">
+            {orders.length} waiting for their price, $
+            {two(orders.reduce((s, o) => s + Number(o.spend ?? 0), 0))} {quote}
+            {twins > 0 && (
+              <span className="dco-twin">
+                , {twins} {twins === 1 ? "repeats" : "repeat"} an earlier order
+              </span>
+            )}
+          </span>
+        </summary>
+        <ul className="dco-list">
+          {orders.map((o) => {
+            const twin = twinOf(o);
+            return (
+              <li key={o.ref} className={twin ? "is-twin" : ""}>
+                <span className="dcb-coin">
+                  <CoinIcon coin={o.coin} />
+                  {o.coin}
+                </span>
+                <span className="num">
+                  {o.side === "sell" ? "Sell" : "Buy"} at {limit(o.price)}
+                </span>
+                <span className="num">${two(o.spend)}</span>
+                <small className="dcb-id">{o.ref}</small>
+                <small className="num muted">{when(o.created)}</small>
+                <small className="dco-twin">{twin ? `Same as ${twin.ref}` : ""}</small>
+              </li>
+            );
+          })}
+        </ul>
 
-      <p className="dco-by-hand">
-        <button type="button" className="link" onClick={byHand}>
-          Change by hand
-        </button>
-        <span className="muted"> or ask dca-agent beside the book.</span>
-      </p>
+        <p className="dco-by-hand">
+          <button type="button" className="link" onClick={byHand}>
+            Change by hand
+          </button>
+          <span className="muted"> or ask dca-agent beside the book.</span>
+        </p>
+      </details>
 
       {changes.length > 0 && (
         <>
