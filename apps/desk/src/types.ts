@@ -125,18 +125,6 @@ export interface Terminal {
   openOrders: Order[];
 }
 
-export interface SmartTradeRequest {
-  clientId: string;
-  symbol: string;
-  entry: "market" | "limit";
-  limitPrice?: string;
-  spend: string;
-  takeProfit?: string;
-  stopLoss?: string;
-  // Past a Profile rule the pre-trade check named, by the owner's choice (decision 58).
-  override?: boolean;
-}
-
 // The AI desk (TODO 3): tickers, the watchlist, charts and signals (apps/api/src/api/handler.py).
 export interface Ticker {
   coin: string;
@@ -216,10 +204,13 @@ export interface AgentPage {
   steps: { key: AgentStepKey; title: string; who: string; fixed: boolean }[];
 }
 
-export interface AgentVersion {
-  n: number;
-  agent: AgentDoc;
-  changes: { label: string; from: string; to: string }[]; // from that version to the current
+// One of the owner's Markdown files (decision 61), exactly as written. `error` is set when the
+// latest edit didn't parse; the last good version stays in force.
+export interface MarkdownFile {
+  markdown: string;
+  version: number;
+  time: number | null;
+  error: string | null;
 }
 
 export interface RunStep {
@@ -382,19 +373,6 @@ export interface OrderRequest {
 }
 
 // Ladder buys (decision 39): limit buys from top to bottom, each a smart trade.
-export interface LadderRequest {
-  clientId: string;
-  symbol: string;
-  top: string;
-  bottom: string;
-  count: string;
-  spend: string;
-  weighting: "equal" | "lower";
-  takeProfit?: string;
-  stopLoss?: string;
-  override?: boolean;
-}
-
 // The api's /deposits reply (apps/api/src/api/deposits.py, decision 31).
 export interface FyDeposits {
   fy: string;
@@ -887,16 +865,6 @@ export interface ProfileVersion {
   author: string;
   summary: string;
   reason: string;
-}
-export type CommandReply =
-  | { kind: "answer"; answer: string; question: string; profileVersion: number }
-  | { kind: "change"; suggestion: ProfileSuggestion };
-export interface ScoreRow {
-  rule: string;
-  label: string;
-  kept: number;
-  broken: number;
-  brokenResultPct: string | null;
 }
 export interface RuleBreak {
   rule: string;

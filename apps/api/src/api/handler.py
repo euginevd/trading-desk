@@ -25,6 +25,7 @@ from api import (
     env_file,
     journal,
     ledger,
+    md_files,
     profile,
     profile_ai,
     profile_live,
@@ -446,6 +447,7 @@ def live_services() -> Generator[Services]:
     store = Store(store_path())
     audit = _audit()
     try:
+        md_files.sync(store, audit, _now_ms())  # the owner's files are the source (decision 61)
         with _binance() as binance:
             signals = Signals(_ask(store), store, audit, _cap(), capped=lambda: capped(store))
             yield Services(binance, store, signals, audit)
@@ -836,6 +838,7 @@ def _now_ms() -> int:
 
 SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("GET", "/agent"): lambda s, _q, _b: trading_agent.view(s.store),
+    ("GET", "/agent/file"): lambda s, _q, _b: md_files.file_view(s.store, "agent"),
     ("PUT", "/agent"): lambda s, _, b: trading_agent.save(
         s.store, s.audit, b.get("agent"), now=_now_ms()
     ),

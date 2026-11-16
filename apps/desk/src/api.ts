@@ -7,15 +7,10 @@ import type {
   AgentThread,
   Coach,
   AgentInfo,
-  CommandReply,
-  ProfileDoc,
   ProfilePage,
-  ProfileSection,
   ProfileVersion,
-  PlannerReview,
   Recap,
   RuleBreak,
-  ScoreRow,
   AiMode,
   AiSettings,
   Interval,
@@ -23,8 +18,6 @@ import type {
   OrderRequest,
   Portfolio,
   Settings,
-  SmartTrade,
-  SmartTradeRequest,
   Terminal,
   Ticker,
   Watchlist,
@@ -42,13 +35,11 @@ import type {
   GridBots,
   GridPreview,
   GridRequest,
-  LadderRequest,
   AgentCall,
-  AgentDoc,
   AgentPage,
   AgentRun,
-  AgentVersion,
   CoinRank,
+  MarkdownFile,
   PriceAlert,
   TicketChoice,
 } from "./types";
@@ -108,10 +99,6 @@ export const finishSignIn = (code: string) =>
 export const setTrading = (on: boolean) => call<Settings>("PUT", "/trading", { on });
 export const setLimits = (perOrder: string, perDay: string) =>
   call<Settings>("PUT", "/limits", { perOrder, perDay });
-export const placeTrade = (request: SmartTradeRequest) =>
-  call<SmartTrade>("POST", "/trades", request);
-export const cancelTrade = (id: number) => call<SmartTrade>("POST", `/trades/${id}/cancel`, {});
-export const closeTrade = (id: number) => call<SmartTrade>("POST", `/trades/${id}/close`, {});
 
 export const getTickers = (coins: string[]) =>
   call<{ tickers: Ticker[] }>("GET", `/tickers?coins=${encodeURIComponent(coins.join(","))}`);
@@ -172,8 +159,6 @@ export const switchGrid = (id: number, on: boolean) =>
   call<GridBots>("POST", `/grids/${id}/switch`, { on, confirmed: on });
 
 // Ladder buys on the smart trade (decision 39): all rungs checked together, then placed.
-export const placeLadder = (request: LadderRequest) =>
-  call<{ message: string }>("POST", "/orders/ladder", request);
 
 // Smart trades (decision 41): one-off DCA deals, entered at the owner's price.
 export const getSmart = () => call<DcaBots>("GET", "/smart");
@@ -222,42 +207,16 @@ export const linkTelegram = () => call<TelegramSettings>("POST", "/settings/tele
 
 // The Profile (decision 58).
 export const getProfilePage = () => call<ProfilePage>("GET", "/profile");
-export const saveProfileSection = <K extends ProfileSection | "locks">(
-  section: K,
-  value: ProfileDoc[K],
-  reason = "",
-) => call<ProfilePage>("PUT", `/profile/${section}`, { value, reason });
 export const getProfileVersions = () =>
   call<{ versions: ProfileVersion[] }>("GET", "/profile/versions");
-export const getProfileVersion = (n: number) =>
-  call<ProfileVersion & { profile: ProfileDoc }>("GET", `/profile/versions/${n}`);
-export const restoreProfile = (n: number) => call<ProfilePage>("POST", "/profile/restore", { n });
-export const importProfile = (markdown: string) =>
-  call<ProfilePage>("POST", "/profile/import", { markdown });
-export const exportProfile = () =>
-  call<{ markdown: string; version: number }>("GET", "/profile/export");
-export const askProfile = (text: string) =>
-  call<CommandReply>("POST", "/profile/command", { text });
-export const acceptSuggestion = (id: string, reason = "") =>
-  call<ProfilePage>("POST", `/profile/suggestions/${id}/accept`, { reason });
-export const rejectSuggestion = (id: string) =>
-  call<unknown>("POST", `/profile/suggestions/${id}/reject`, {});
-export const reviewAllocation = () =>
-  call<{ planner: PlannerReview }>("POST", "/profile/planner", {});
-export const getScorecard = () =>
-  call<{ windows: Record<string, ScoreRow[]> }>("GET", "/profile/scorecard");
 export const getRecaps = () => call<{ recaps: Recap[] }>("GET", "/recaps");
 export const writeRecap = () => call<{ recap: Recap }>("POST", "/recaps", {});
 
-// The trading agent (TODO 6): its profile, versioned like the Profile, and Analyse runs.
+// The trading agent (TODO 6): its profile, read from local/trade.md, and Analyse runs.
 export const getTradingAgent = () => call<AgentPage>("GET", "/agent");
-export const saveTradingAgent = (agent: AgentDoc) => call<AgentPage>("PUT", "/agent", { agent });
-export const getTradingAgentVersion = (n: number) =>
-  call<AgentVersion>("GET", `/agent/version?n=${encodeURIComponent(n)}`);
-export const restoreTradingAgent = (n: number) => call<AgentPage>("POST", "/agent/restore", { n });
-export const exportTradingAgent = () => call<{ markdown: string }>("GET", "/agent/export");
-export const importTradingAgent = (markdown: string) =>
-  call<AgentPage>("POST", "/agent/import", { markdown });
+// The owner's files, read only (decision 61): they change them by asking Claude Code.
+export const getProfileFile = () => call<MarkdownFile>("GET", "/profile/file");
+export const getAgentFile = () => call<MarkdownFile>("GET", "/agent/file");
 
 // Analyse: start a run, then ask for one step at a time until it isn't running.
 export const startAnalysis = (coin: string) => call<AgentRun>("POST", "/analyse", { coin });

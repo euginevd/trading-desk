@@ -19,10 +19,7 @@
 .pf-spacer {
   flex: 1;
 }
-.pf-intro {
-  margin: 0;
-  max-width: 760px;
-}
+
 .pf-version {
   border-radius: 999px;
   padding: 4px 12px;
@@ -30,16 +27,6 @@
   color: var(--accent);
   border-color: var(--accent);
   background: var(--accent-soft);
-}
-.pf-note {
-  color: var(--up);
-  margin: 0;
-}
-.pf-empty {
-  padding: 14px 16px;
-}
-.pf-empty p {
-  margin: 0;
 }
 
 /* Buttons, as the desk's .btn (styles.css), unless they're a pencil or a link. */
@@ -72,17 +59,6 @@
   color: var(--accent);
   background: var(--accent-soft);
   border-radius: 999px;
-}
-.pf-page .pf-chip-btn,
-.pf-page .pf-lock,
-.pf-page .pf-seg {
-  border-radius: 999px;
-  font-size: 12px;
-}
-.pf-page .pf-seg.on,
-.pf-page .pf-lock.on {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 .pf-live-off {
@@ -143,70 +119,7 @@
   background: var(--down);
 }
 
-/* The command bar. */
-.pf-command-bar {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  background: var(--panel);
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
-  padding: 6px 6px 6px 14px;
-}
-.pf-command-bar:focus-within {
-  border-color: var(--accent);
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-.pf-command-bar input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: 0;
-  color: var(--text);
-  font: inherit;
-  font-size: 14px;
-  padding: 6px 0;
-}
-.pf-command-bar input:focus {
-  outline: none;
-}
-.pf-chips {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 8px;
-}
-.pf-chip-btn {
-  border-radius: 999px;
-  padding: 4px 12px;
-  font-size: 12px;
-  min-height: 28px;
-}
-.pf-answer {
-  margin-top: 10px;
-  border-left: 2px solid var(--accent);
-  background: var(--panel);
-  padding: 8px 12px;
-  border-radius: 0 8px 8px 0;
-}
-.pf-answer p {
-  margin: 0 0 4px;
-}
-
-/* Cards. */
-.pf-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-.pf-card {
-  padding: 14px 16px;
-  min-width: 0;
-}
-.pf-card.wide {
-  grid-column: 1 / -1;
-}
+/* Card heads, tags and links. */
 .pf-head {
   display: flex;
   align-items: center;
@@ -219,11 +132,7 @@
   font-weight: 600;
   margin: 0;
 }
-.pf-updated {
-  font-size: 11px;
-  color: var(--dim);
-  margin-left: auto;
-}
+
 .pf-pencil {
   border: 0;
   background: none;
@@ -235,57 +144,12 @@
 .pf-pencil:hover {
   color: var(--accent);
 }
-.pf-badge {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-radius: 5px;
-  font-size: 11px;
-  padding: 2px 7px;
-}
-.pf-lock {
-  font-size: 11px;
-  min-height: 24px;
-  padding: 2px 8px;
-  border-radius: 999px;
-  color: var(--muted);
-}
-.pf-lock.on {
-  color: var(--text);
-  border-color: var(--muted);
-}
-.pf-dl {
-  margin: 0;
-  display: grid;
-  grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.6fr) auto;
-  gap: 6px 12px;
-  align-items: baseline;
-}
-.pf-dl-row {
-  display: contents;
-}
-.pf-dl dt {
-  color: var(--muted);
-}
-.pf-dl dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-.pf-dl-extra {
-  justify-self: end;
-}
-.pf-unset {
-  color: var(--dim);
-  font-style: italic;
-}
+
 .pf-hint {
   color: var(--dim);
   font-size: 11px;
 }
-.pf-prose {
-  margin: 0 0 8px;
-  white-space: pre-wrap;
-}
+
 .pf-tag {
   display: inline-flex;
   gap: 4px;
@@ -311,158 +175,13 @@
   background: var(--panel-2);
   color: var(--muted);
 }
-.pf-chip {
-  background: var(--panel-2);
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-size: 12px;
-}
-.pf-timeline {
-  list-style: none;
-  margin: 0;
-  padding: 0 0 0 14px;
-  border-left: 1px solid var(--line-2);
-}
-.pf-timeline li {
-  margin-bottom: 8px;
-}
-.pf-timeline strong {
-  margin-right: 6px;
-}
-.pf-quotes {
-  margin: 0;
-  padding-left: 18px;
-}
-.pf-more,
-.pf-pre {
-  white-space: pre-wrap;
-  font: inherit;
-}
-.pf-more {
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 12px;
-  margin: 10px 0 0;
-}
-.pf-table-wrap {
-  overflow-x: auto;
-}
-.pf-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-.pf-table th,
-.pf-table td {
-  text-align: left;
-  padding: 7px 8px;
-  border-bottom: 1px solid var(--line);
-  vertical-align: top;
-}
-.pf-table th {
-  color: var(--muted);
-  font-weight: 500;
-  font-size: 11px;
-}
-.pf-table .n {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
+
 .pf-link {
   border: 0;
   background: none;
   color: var(--accent);
   padding: 0;
   min-height: 24px;
-}
-
-/* Editing. */
-.pf-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.pf-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.pf-field label {
-  font-size: 12px;
-  color: var(--muted);
-}
-.pf-field input,
-.pf-field select,
-.pf-field textarea {
-  background: var(--panel-2);
-  border: 1px solid var(--line-2);
-  color: var(--text);
-  border-radius: 7px;
-  padding: 6px 8px;
-  font: inherit;
-}
-.pf-check {
-  display: inline-flex;
-  gap: 6px;
-  align-items: center;
-}
-.pf-row {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px 12px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 8px 12px;
-}
-.pf-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.pf-actions .primary,
-.pf-command-bar .primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
-}
-
-/* A proposed change on its card. */
-.pf-diff {
-  margin-top: 12px;
-  border: 1px solid var(--accent);
-  border-radius: 10px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.pf-diff-head {
-  margin: 0;
-}
-.pf-diff-list {
-  margin: 0;
-  padding-left: 18px;
-}
-.pf-old {
-  color: var(--muted);
-}
-.pf-new {
-  color: var(--up);
-  font-weight: 600;
-  text-decoration: none;
-}
-.pf-conflict {
-  margin: 0;
-  background: var(--wait-soft);
-  color: var(--wait);
-  border-radius: 7px;
-  padding: 6px 10px;
-}
-.pf-conflict.bad {
-  background: var(--down-soft);
-  color: var(--down);
 }
 
 /* History. */
@@ -482,87 +201,12 @@
   padding: 6px 0;
   border-bottom: 1px solid var(--line);
 }
-.pf-compare {
-  margin-top: 12px;
-}
-.pf-compare h3 {
-  font-size: 13px;
-  margin: 0 0 8px;
-}
-
-/* Scorecard, what-if, review. */
-.pf-score {
-  margin-top: 12px;
-  border-top: 1px solid var(--line);
-  padding-top: 10px;
-}
-.pf-score-head {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-.pf-seg {
-  font-size: 11px;
-  min-height: 24px;
-  padding: 2px 8px;
-}
-.pf-seg.on {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-.pf-sim {
-  display: grid;
-  grid-template-columns: 240px minmax(0, 1fr);
-  gap: 16px;
-}
-.pf-sim .pf-field {
-  margin-bottom: 10px;
-}
-.pf-sim-result {
-  margin: 4px 0;
-}
-.pf-sim-goals {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-.pf-path {
-  stroke: var(--accent);
-  stroke-width: 2;
-}
-.pf-goal-line {
-  stroke: var(--wait);
-}
-.pf-axis-line {
-  stroke: var(--line-2);
-}
-.pf-axis {
-  fill: var(--muted);
-  font-size: 11px;
-}
-.pf-gaps {
-  margin: 0 0 8px;
-  padding-left: 18px;
-}
-.pf-gaps li {
-  margin-bottom: 6px;
-}
 
 @media (max-width: 760px) {
-  .pf-strip,
-  .pf-grid,
-  .pf-sim {
+  .pf-strip {
     grid-template-columns: 1fr;
   }
-  .pf-dl {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-  .pf-dl dt {
-    grid-column: 1 / -1;
-  }
+
   .pf-versions li {
     grid-template-columns: 1fr 1fr;
   }
@@ -589,41 +233,6 @@
 }
 
 /* The trading agent tab (TODO 6). Prefixed ag-. */
-.ag-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: 16px;
-  align-items: start;
-}
-.ag-sec {
-  padding: 16px;
-  margin-bottom: 12px;
-}
-.ag-sec h2 {
-  margin: 0 0 4px;
-  font-size: 14px;
-  font-weight: 600;
-}
-.ag-sec h3 {
-  margin: 12px 0 6px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.ag-sub {
-  margin: 0 0 12px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.ag-h2-gap {
-  margin-top: 16px;
-}
-.ag-note {
-  margin: 0 0 12px;
-}
-.ag-hint {
-  margin: 12px 0 0;
-  font-size: 12px;
-}
 .ag-skeleton {
   height: 140px;
   margin-bottom: 12px;
@@ -638,6 +247,7 @@
   display: flex;
   gap: 14px;
   align-items: center;
+  flex-wrap: wrap;
 }
 .ag-ava {
   width: 36px;
@@ -656,199 +266,54 @@
   height: 52px;
   font-size: 18px;
 }
-.ag-two {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.ag-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 11px;
-  color: var(--muted);
-}
-.ag-inp {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--line-2);
-  border-radius: 7px;
-  padding: 8px 10px;
-  color: var(--text);
-  font: inherit;
-}
-.ag-inp:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-.ag-inp::placeholder {
-  color: var(--dim);
-}
-.ag-brief {
-  min-height: 84px;
-  resize: vertical;
-}
-.ag-count {
-  margin: 4px 0 0;
-  font-size: 11px;
-  text-align: right;
-}
-.ag-select {
-  width: auto;
-  padding: 5px 8px;
-}
-.ag-opts {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.pf-page .ag-opt {
-  min-height: 0;
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: var(--bg);
-  text-align: left;
-}
-.pf-page .ag-opt.on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.ag-opt small {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 400;
-}
-.ag-lst {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.ag-lst li {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  border-top: 1px solid var(--line);
-}
-.ag-lst li:first-child {
-  border-top: 0;
-}
-.ag-rm {
-  min-width: 24px;
-  min-height: 24px;
-  color: var(--dim);
-  font-size: 16px;
-}
-.ag-none {
-  margin: 0;
-  font-size: 12px;
-}
-.ag-add {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-}
-.ag-steps th,
-.ag-steps td {
-  padding: 9px 8px;
-}
-.ag-steps th {
-  font-size: 11px;
-}
-.pf-page .ag-steps .toggle {
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 10px;
-}
-.ag-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0 4px;
-  font-size: 12px;
-}
-.ag-row label {
-  color: var(--muted);
-}
-.ag-range {
-  width: 100%;
-  accent-color: var(--accent);
-}
-.ag-save {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  align-items: center;
-  flex-wrap: wrap;
-}
-.ag-save .dim {
-  font-size: 12px;
-}
-.ag-vers {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.pf-page .ag-ver {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 0;
-  padding: 8px;
-  border-radius: 7px;
-  border-color: transparent;
-  background: none;
-  text-align: left;
-  font-size: 12px;
-}
-.pf-page .ag-ver.on {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.pf-page .ag-ver:disabled {
-  opacity: 1;
-  cursor: default;
-}
-.ag-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 10px;
-}
-.ag-compare {
-  margin-top: 10px;
-}
-.ag-told {
-  white-space: pre-wrap;
-  font:
-    12px/1.5 ui-monospace,
-    Consolas,
-    monospace;
-  color: var(--muted);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 12px;
-  margin: 0;
-  max-height: 260px;
-  overflow: auto;
-}
 
-@media (max-width: 1100px) {
-  .ag-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 @media (max-width: 640px) {
-  .ag-two {
-    grid-template-columns: 1fr;
-  }
   .ag-persona {
     align-items: flex-start;
   }
+}
+
+/* The files behind both tabs (decision 61): read only. */
+.pf-file-error {
+  margin: 0;
+}
+.pf-file-note {
+  margin: 0;
+  font-size: 12px;
+}
+.pf-file-note code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--text);
+}
+.ag-card {
+  padding: 16px;
+  max-width: 760px;
+}
+.ag-who {
+  flex: 1;
+  min-width: 0;
+}
+.ag-who h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.ag-who p {
+  margin: 2px 0 0;
+}
+.ag-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 14px 0 0;
+}
+.ag-facts dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+.ag-facts dd {
+  margin: 0;
+  font-weight: 500;
 }

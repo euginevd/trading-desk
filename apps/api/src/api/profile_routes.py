@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from api import profile, profile_ai, profile_live
+from api import md_files, profile, profile_ai, profile_live
 from api.binance import BinanceError, plain
 from api.profile_md import export, parse
 from api.tao import TaoError
@@ -271,6 +271,7 @@ def route(  # noqa: PLR0911, PLR0913, PLR0917 - one return per route; each input
         ("POST", "/profile/restore"): lambda: _restore(s, body),
         ("POST", "/profile/import"): lambda: _import(s, body),
         ("GET", "/profile/export"): lambda: _export(s),
+        ("GET", "/profile/file"): lambda: md_files.file_view(s.store, "profile"),
         ("POST", "/profile/command"): lambda: _command(s, read, body),
         ("POST", "/profile/planner"): lambda: _planner(s, read),
         ("GET", "/profile/scorecard"): lambda: _scorecard(s, read, journal),

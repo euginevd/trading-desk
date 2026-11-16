@@ -168,8 +168,8 @@ class Store:
             "profile.md" if path.stem == "desk" else f"{path.stem}-profile.md"
         )
         # The same for the trading agent's profile (decision 60).
-        self.agent_md = path.parent / (
-            "agent.md" if path.stem == "desk" else f"{path.stem}-agent.md"
+        self.trade_md = path.parent / (
+            "trade.md" if path.stem == "desk" else f"{path.stem}-trade.md"
         )
 
     def close(self) -> None:

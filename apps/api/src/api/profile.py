@@ -430,8 +430,11 @@ def save(  # noqa: PLR0913 - each is a separate fact about the save
     now: int,
     reason: str = "",
     summary_text: str | None = None,
+    write: bool = True,
 ) -> dict[str, Any]:
-    """Saves a new version and its Markdown. Only the owner may change a locked field."""
+    """Saves a new version and, unless it came from the file, its Markdown. Only the owner may
+    change a locked field."""
+    from api.md_files import written  # noqa: PLC0415 - the files read this module
     from api.profile_md import export  # noqa: PLC0415 - the Markdown reads this module
 
     _, old = current(store)
@@ -446,7 +449,10 @@ def save(  # noqa: PLR0913 - each is a separate fact about the save
     line = summary_text or summary(found)
     why = " ".join(str(reason or "").split())[:200]
     version = store.add_profile_version(now, author[:40], line, why, json.dumps(new))
-    store.profile_md.write_text(export(new, version, now), encoding="utf-8")
+    if write:
+        text = export(new, version, now)
+        store.profile_md.write_text(text, encoding="utf-8")
+        written(store, "profile", text)
     audit.record("profile", f"Profile v{version} by {author}", line)
     return view(store)
 

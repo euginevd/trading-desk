@@ -1,40 +1,16 @@
-// The Profile (decision 58): the owner's Investment Policy Statement, written when calm to hold
-// them to their plan when they're not. Every agent reads it. Each save is a version.
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  acceptSuggestion,
-  askProfile,
-  exportProfile,
-  getProfilePage,
-  importProfile,
-  rejectSuggestion,
-  restoreProfile,
-  saveProfileSection,
-} from "./api";
-import { audText, dayOf, dayText, SECTIONS } from "./profileFields";
-import { Card, CheckTag, Editor, SectionView, SuggestionDiff } from "./ProfileCards";
-import { AllocationReview, HistoryDrawer, Scorecard, WhatIf } from "./ProfileTools";
+// The Profile (decisions 58 and 61): the owner's Investment Policy Statement and their trading
+// agent, each a Markdown file in local/ that the owner changes by asking Claude Code. The desk only
+// reads them: it shows where they stand, and opens each file in a reader.
+import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { getProfileFile, getProfilePage, getProfileVersions } from "./api";
 import AgentProfile from "./AgentProfile";
-import type { CommandReply, ProfileDoc, ProfilePage as Page, ProfileSection } from "./types";
+import { dateTime } from "./format";
+import { Reader, useMarkdownFile, FileNote } from "./Markdown";
+import { audText, dayOf, dayText } from "./profileFields";
+import type { CheckStatus, ProfilePage as Page, ProfileVersion } from "./types";
 import "./profile.css";
 
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
-const WIDE: ProfileSection[] = ["strategy", "rules", "holdings", "additional_info"];
-const LOCKS: Partial<Record<ProfileSection, { key: keyof ProfileDoc["locks"]; label: string }[]>> =
-  {
-    goals: [{ key: "goals", label: "Goals" }],
-    foundations: [{ key: "min_cash", label: "Minimum cash" }],
-    rules: [{ key: "deposit_cap", label: "Deposit cap" }],
-  };
-const CHIPS: { label: string; fill?: string; ask?: string; edit?: ProfileSection }[] = [
-  { label: "Update holdings", edit: "holdings" },
-  { label: "Log a lesson", fill: "Add a lesson: " },
-  {
-    label: "Review my rules",
-    ask: "Which of my rules am I breaking, and do any clash with my goals?",
-  },
-  { label: "Monthly check-in", ask: "Monthly check-in: how did this month go against my Profile?" },
-];
 
 type Tab = "policy" | "agent";
 const TABS: { tab: Tab; label: string }[] = [
@@ -75,16 +51,8 @@ export default function ProfilePage() {
 function Policy() {
   const [page, setPage] = useState<Page | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [editing, setEditing] = useState<{
-    section: ProfileSection;
-    value?: unknown;
-    from?: string;
-  } | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
   const [history, setHistory] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const doc = useMarkdownFile(getProfileFile);
 
   const fetchPage = useCallback(() => {
     getProfilePage().then(setPage, (e: unknown) =>
@@ -122,84 +90,30 @@ function Policy() {
     );
   }
 
-  const save = (
-    section: ProfileSection | "locks",
-    value: unknown,
-    reason: string,
-    from?: string,
-  ) => {
-    setSaving(true);
-    setSaveError(null);
-    saveProfileSection(section, value as never, reason)
-      .then(async (next) => {
-        if (from) await rejectSuggestion(from).catch(() => undefined); // edited: the owner's own now
-        setPage(from ? await getProfilePage() : next);
-        setEditing(null);
-        setNote({ ok: true, text: `Saved as v${next.version}.` });
-      })
-      .catch((e: unknown) => setSaveError(message(e, "Not saved. Try again.")))
-      .finally(() => setSaving(false));
-  };
-  const act = (work: Promise<unknown>, done: string) => {
-    setBusy(true);
-    setNote(null);
-    work
-      .then(() => getProfilePage())
-      .then((next) => {
-        setPage(next);
-        setNote({ ok: true, text: done });
-      })
-      .catch((e: unknown) =>
-        setNote({ ok: false, text: message(e, "That didn't work. Try again.") }),
-      )
-      .finally(() => setBusy(false));
-  };
-  const restore = (n: number) =>
-    restoreProfile(n).then(
-      (next) => {
-        setPage(next);
-        setNote({ ok: true, text: `v${n} restored as v${next.version}.` });
-      },
-      (e: unknown) => setNote({ ok: false, text: message(e, "Not restored. Try again.") }),
-    );
-
-  const doc = page.profile;
-  const touching = (section: ProfileSection) =>
-    page.suggestions.filter((s) => s.changes.some((c) => c.section === section));
-
+  const stamp = page.version && page.time ? `v${page.version} · ${dayOf(page.time)}` : null;
   return (
     <>
       <div className="pf-title">
-        <button
-          type="button"
-          className="pf-version"
-          onClick={() => setHistory(!history)}
-          aria-expanded={history}
-          aria-label={`Version history, now v${page.version}`}
-        >
-          {page.version && page.time ? `v${page.version} · ${dayOf(page.time)}` : "No versions yet"}
-        </button>
+        {stamp ? (
+          <button
+            type="button"
+            className="pf-version"
+            onClick={() => setHistory(!history)}
+            aria-expanded={history}
+            aria-label={`Version history, now v${page.version}`}
+          >
+            {stamp}
+          </button>
+        ) : (
+          <span className="muted">No versions yet</span>
+        )}
         <span className="pf-spacer" />
-        <button type="button" disabled title="Coming later">
-          Set up with wizard
+        <button type="button" className="primary" onClick={() => doc.setOpen(true)}>
+          Show Profile
         </button>
-        <ImportExport onImported={(next) => setPage(next)} onNote={setNote} />
       </div>
-      <p className="muted pf-intro">
-        Your Investment Policy Statement: who you are, your money, goals and rules. Every agent
-        reads it before advising you, and a rule you haven't set is never enforced.
-      </p>
-      {note && (
-        <p className={note.ok ? "pf-note" : "error-text"} role={note.ok ? "status" : "alert"}>
-          {note.text}
-        </p>
-      )}
-      {page.version === 0 && (
-        <div className="card pf-empty">
-          <p>No profile yet. Import your profile.md, or fill in each card with its pencil.</p>
-        </div>
-      )}
-
+      <FileNote name="profile.md" file={doc.file} version={page.version} />
+      {history && <History current={page.version} onClose={() => setHistory(false)} />}
       {!page.live.known && (
         <p className="pf-live-off" role="alert">
           Live figures couldn't be read, so totals and checks that need Binance or the wallet show
@@ -210,98 +124,95 @@ function Policy() {
         </p>
       )}
       <Strip page={page} />
-      <CommandBar
-        onChange={(next) => setPage(next)}
-        onEdit={(section) => setEditing({ section })}
-      />
-
-      {history && (
-        <HistoryDrawer
-          current={page.version}
-          onClose={() => setHistory(false)}
-          onRestore={restore}
+      {doc.open && (
+        <Reader
+          title="Profile"
+          meta={`${stamp ?? "Not saved yet"} · read-only`}
+          markdown={doc.file?.markdown ?? null}
+          error={doc.error}
+          fileName="profile.md"
+          onClose={() => doc.setOpen(false)}
+          onRetry={doc.retry}
         />
       )}
-
-      <div className="pf-grid">
-        {SECTIONS.map((section) => {
-          const pending = touching(section);
-          const locks = LOCKS[section] ?? [];
-          const open = editing?.section === section;
-          return (
-            <Card
-              key={section}
-              section={section}
-              updated={page.updated[section]}
-              badge={pending.length}
-              wide={WIDE.includes(section)}
-              onEdit={open ? undefined : () => setEditing({ section })}
-              lock={locks.map((l) => (
-                <button
-                  key={l.key}
-                  type="button"
-                  className={`pf-lock${doc.locks[l.key] ? " on" : ""}`}
-                  aria-pressed={doc.locks[l.key]}
-                  disabled={saving}
-                  title={
-                    doc.locks[l.key]
-                      ? "Agents can't propose changes. Click to unlock."
-                      : "Click to lock against agents' changes."
-                  }
-                  onClick={() => save("locks", { ...doc.locks, [l.key]: !doc.locks[l.key] }, "")}
-                >
-                  <span aria-hidden="true">{doc.locks[l.key] ? "●" : "○"}</span> {l.label}{" "}
-                  {doc.locks[l.key] ? "locked" : "unlocked"}
-                </button>
-              ))}
-            >
-              {open ? (
-                <Editor
-                  section={section}
-                  value={editing.value ?? doc[section]}
-                  saving={saving}
-                  error={saveError}
-                  onSave={(value, reason) => save(section, value, reason, editing.from)}
-                  onCancel={() => {
-                    setEditing(null);
-                    setSaveError(null);
-                  }}
-                />
-              ) : (
-                <SectionView section={section} page={page} />
-              )}
-              {section === "rules" && !open && <Scorecard version={page.version} />}
-              {!open &&
-                pending.map((s) => (
-                  <SuggestionDiff
-                    key={s.id}
-                    suggestion={s}
-                    section={section}
-                    busy={busy}
-                    onAccept={(reason) =>
-                      act(acceptSuggestion(s.id, reason), "Accepted as a new version.")
-                    }
-                    onReject={() => act(rejectSuggestion(s.id), "Rejected: nothing changed.")}
-                    onEdit={() =>
-                      setEditing({
-                        section,
-                        value: s.sections[section] ?? doc[section],
-                        from: s.id,
-                      })
-                    }
-                  />
-                ))}
-            </Card>
-          );
-        })}
-      </div>
-
-      <AllocationReview review={page.planner} onDone={load} />
-      <WhatIf page={page} />
     </>
   );
 }
 
+// Every version of profile.md the desk has read, newest first. Read only.
+function History({ current, onClose }: { current: number; onClose: () => void }) {
+  const [versions, setVersions] = useState<ProfileVersion[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const fetchVersions = useCallback(() => {
+    getProfileVersions().then(
+      (r) => setVersions(r.versions),
+      (e: unknown) => setError(message(e, "The history couldn't be read.")),
+    );
+  }, []);
+  useEffect(() => fetchVersions(), [fetchVersions, current]);
+  return (
+    <aside className="pf-drawer card" aria-label="Version history">
+      <div className="pf-head">
+        <h2>History</h2>
+        <button type="button" className="pf-pencil" onClick={onClose} aria-label="Close history">
+          <span aria-hidden="true">✕</span>
+        </button>
+      </div>
+      {error && (
+        <p className="error-text" role="alert">
+          {error}{" "}
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              fetchVersions();
+            }}
+          >
+            Try again
+          </button>
+        </p>
+      )}
+      {!versions && !error && <p className="muted">Loading the history…</p>}
+      {versions?.length === 0 && <p className="muted">No versions yet.</p>}
+      {versions && versions.length > 0 && (
+        <ol className="pf-versions">
+          {versions.map((v) => (
+            <li key={v.n}>
+              <strong>
+                v{v.n}
+                {v.n === current && " · current"}
+              </strong>
+              <span className="muted">{dateTime(v.time)}</span>
+              <span>{v.author}</span>
+              <span>
+                {v.summary}
+                {v.reason && <span className="muted"> · “{v.reason}”</span>}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
+    </aside>
+  );
+}
+
+// Status is a word and a mark, never colour alone (code-standards 26).
+const CHECK: Record<CheckStatus, { mark: string; tone: string }> = {
+  ok: { mark: "✓", tone: "ok" },
+  attention: { mark: "▲", tone: "warn" },
+  broken: { mark: "✕", tone: "bad" },
+  unset: { mark: "–", tone: "dim" },
+};
+
+function CheckTag({ status, children }: { status: CheckStatus; children: ReactNode }) {
+  return (
+    <span className={`pf-tag ${CHECK[status].tone}`}>
+      <span aria-hidden="true">{CHECK[status].mark}</span> {children}
+    </span>
+  );
+}
+
+// Where the owner stands: a placeholder for the dashboard the owner designs next.
 function Strip({ page }: { page: Page }) {
   const s = page.live.strip;
   const known = page.live.known;
@@ -336,7 +247,7 @@ function Strip({ page }: { page: Page }) {
             tone={s.cash.status === "ok" ? "ok" : "warn"}
           />
         )}
-        {s.cash.status === "attention" && <CheckTag status="attention" text="Below the floor" />}
+        {s.cash.status === "attention" && <CheckTag status="attention">Below the floor</CheckTag>}
       </div>
       <div className="card pf-tile">
         <span className="muted">Bought this month</span>
@@ -355,7 +266,7 @@ function Strip({ page }: { page: Page }) {
           />
         )}
         {!s.month.cap && <span className="pf-hint">No monthly cap set</span>}
-        {s.month.status === "broken" && <CheckTag status="broken" text="Over the cap" />}
+        {s.month.status === "broken" && <CheckTag status="broken">Over the cap</CheckTag>}
       </div>
     </section>
   );
@@ -374,161 +285,5 @@ function Meter({ pct, label, tone }: { pct: number; label: string; tone: string 
     >
       <i style={{ width: `${shown}%` }} />
     </div>
-  );
-}
-
-function CommandBar({
-  onChange,
-  onEdit,
-}: {
-  onChange: (page: Page) => void;
-  onEdit: (section: ProfileSection) => void;
-}) {
-  const [text, setText] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [reply, setReply] = useState<CommandReply | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const input = useRef<HTMLInputElement>(null);
-
-  const send = (asked: string) => {
-    if (!asked.trim()) return;
-    setBusy(true);
-    setError(null);
-    setReply(null);
-    askProfile(asked)
-      .then(async (r) => {
-        setReply(r);
-        setText("");
-        if (r.kind === "change") {
-          onChange(await getProfilePage());
-          const first = r.suggestion.changes[0]?.section;
-          if (first)
-            document.getElementById(`pf-card-${first}`)?.scrollIntoView?.({ block: "center" });
-        }
-      })
-      .catch((e: unknown) => setError(message(e, "No answer came back. Try again.")))
-      .finally(() => setBusy(false));
-  };
-
-  return (
-    <section className="pf-command" aria-label="Command bar">
-      <form
-        className="pf-command-bar"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send(text);
-        }}
-      >
-        <label htmlFor="pf-command" className="visually-hidden">
-          Ask or change your profile
-        </label>
-        <input
-          id="pf-command"
-          ref={input}
-          value={text}
-          placeholder="Ask or change your profile…"
-          onChange={(e) => setText(e.target.value)}
-          disabled={busy}
-        />
-        <button type="submit" className="primary" disabled={busy || !text.trim()}>
-          {busy ? "Thinking…" : "Send"}
-        </button>
-      </form>
-      <div className="pf-chips">
-        {CHIPS.map((c) => (
-          <button
-            key={c.label}
-            type="button"
-            className="pf-chip-btn"
-            disabled={busy}
-            onClick={() => {
-              if (c.edit) onEdit(c.edit);
-              else if (c.ask) send(c.ask);
-              else {
-                setText(c.fill ?? "");
-                input.current?.focus();
-              }
-            }}
-          >
-            {c.label}
-          </button>
-        ))}
-      </div>
-      {error && (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      )}
-      {reply?.kind === "answer" && (
-        <div className="pf-answer" role="status">
-          <p className="muted">{reply.question}</p>
-          <p className="pf-prose">{reply.answer}</p>
-          <p className="pf-hint">
-            AI answer from Profile v{reply.profileVersion}, advice only. Nothing was changed.{" "}
-            <button type="button" className="pf-link" onClick={() => setReply(null)}>
-              Dismiss
-            </button>
-          </p>
-        </div>
-      )}
-      {reply?.kind === "change" && (
-        <p className="pf-note" role="status">
-          Proposed: {reply.suggestion.summary}. It's on the card below to accept, edit or reject.
-        </p>
-      )}
-    </section>
-  );
-}
-
-function ImportExport({
-  onImported,
-  onNote,
-}: {
-  onImported: (page: Page) => void;
-  onNote: (note: { ok: boolean; text: string }) => void;
-}) {
-  const file = useRef<HTMLInputElement>(null);
-  const download = () =>
-    exportProfile().then(
-      (r) => {
-        const url = URL.createObjectURL(new Blob([r.markdown], { type: "text/markdown" }));
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = "profile.md";
-        link.click();
-        URL.revokeObjectURL(url);
-      },
-      (e: unknown) => onNote({ ok: false, text: message(e, "Not exported. Try again.") }),
-    );
-  return (
-    <>
-      <input
-        ref={file}
-        type="file"
-        accept=".md,text/markdown,text/plain"
-        className="visually-hidden"
-        aria-label="Import profile.md"
-        tabIndex={-1}
-        onChange={(e) => {
-          const chosen = e.target.files?.[0];
-          e.target.value = "";
-          if (!chosen) return;
-          chosen
-            .text()
-            .then(importProfile)
-            .then((next) => {
-              onImported(next);
-              onNote({ ok: true, text: `Imported as v${next.version}.` });
-            })
-            .catch((err: unknown) => onNote({ ok: false, text: message(err, "Not imported.") }));
-        }}
-      />
-      <button type="button" onClick={() => file.current?.click()}>
-        Import .md
-      </button>
-      <button type="button" onClick={download}>
-        Export .md
-      </button>
-    </>
   );
 }

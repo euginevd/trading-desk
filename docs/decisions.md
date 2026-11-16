@@ -34,3 +34,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 58. The Profile is the owner's Investment Policy Statement: typed, versioned, read by every agent; unset rules are never enforced. [Record](decisions/from-58.md)
 59. The agents are a team of five under a Desk Coordinator, each with a name, title and remit. [Record](decisions/from-58.md)
 60. A trading agent with a versioned profile; Analyse runs one coin step by step and proposes an order; Trade rebuilt around it. [Record](decisions/from-58.md)
+61. profile.md and trade.md are the source, changed through Claude Code; the desk renders them read-only. [Record](decisions/from-58.md)

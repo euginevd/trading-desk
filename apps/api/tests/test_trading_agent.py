@@ -76,7 +76,7 @@ def test_the_agent_starts_from_defaults_and_each_save_is_a_version(
         {"label": "Confidence floor", "from": "60%", "to": "50%"}
     ]
     assert "Say what would change your mind" in page["told"]
-    assert store.agent_md.read_text(encoding="utf-8").startswith("# Trading agent")
+    assert store.trade_md.read_text(encoding="utf-8").startswith("# Trading agent")
 
 
 def test_fields_are_checked_and_fixed_steps_stay_on() -> None:
@@ -184,7 +184,7 @@ def run_all(call: Any, coin: str = "BTC") -> dict[str, Any]:
 def test_a_run_goes_step_by_step_on_each_steps_model(call: Any, store: Store) -> None:
     profile.save(
         store,
-        Audit(store.agent_md.parent / "a.jsonl"),
+        Audit(store.trade_md.parent / "a.jsonl"),
         profile.empty() | {"rules": profile.empty()["rules"] | {"per_trade_aud": "300"}},
         author=profile.OWNER,
         now=NOW,

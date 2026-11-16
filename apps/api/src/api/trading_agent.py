@@ -197,10 +197,19 @@ def summary(found: list[dict[str, str]]) -> str:
 # Saving.
 
 
-def save(
-    store: Store, audit: Audit, doc: object, *, now: int, summary_text: str | None = None
+def save(  # noqa: PLR0913 - each is a separate fact about the save
+    store: Store,
+    audit: Audit,
+    doc: object,
+    *,
+    now: int,
+    summary_text: str | None = None,
+    write: bool = True,
 ) -> dict[str, Any]:
-    """A new version and its Markdown; history is never rewritten."""
+    """A new version and, unless it came from the file, its Markdown; history is never
+    rewritten."""
+    from api.md_files import written  # noqa: PLC0415 - the files read this module
+
     n, old = current(store)
     new = clean(doc)
     found = changes(old, new)
@@ -208,7 +217,10 @@ def save(
         raise Refused("Nothing changed.")
     line = summary_text or (summary(found) if n > 0 else "First version")
     version = store.add_agent_version(now, OWNER, line, json.dumps(new))
-    store.agent_md.write_text(export(new, version, now), encoding="utf-8")
+    if write:
+        text = export(new, version, now)
+        store.trade_md.write_text(text, encoding="utf-8")
+        written(store, "agent", text)
     audit.record("agent", f"Trading agent v{version}", line)
     return view(store)
 

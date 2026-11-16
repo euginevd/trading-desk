@@ -1,13 +1,13 @@
-// The Profile page (decision 58). Made-up figures only (known-mistakes 7).
+// The Profile page, read only (decisions 58 and 61). Made-up figures only (known-mistakes 7).
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { project } from "./ProfileTools";
 import type {
+  AgentPage,
+  MarkdownFile,
   ProfileDoc,
   ProfileGoal,
   ProfileHolding,
   ProfilePage,
-  ProfileSuggestion,
 } from "./types";
 
 function doc(): ProfileDoc {
@@ -120,204 +120,145 @@ function page(version = 14, changes: Partial<ProfilePage> = {}): ProfilePage {
   };
 }
 
-const suggestion: ProfileSuggestion = {
-  id: "abc123abc123",
-  time: 1,
-  author: "Command bar",
-  baseVersion: 14,
-  sections: { rules: { ...doc().rules, max_pct_per_coin: "35" } },
-  changes: [
-    { section: "rules", key: "max_pct_per_coin", label: "Max % per coin", from: "40%", to: "35%" },
-  ],
-  summary: "Max per coin 40% → 35%",
-  reason: "",
-  conflicts: ["ETH is 52% already, over a 35% max: no more buying it."],
-  blocked: null,
-};
+const PROFILE_MD = `# Profile
+
+## Identity
+
+- Name: Sam
+- Date of birth: Not set
+
+## Rules
+
+- Max % per coin: **40%**
+- Behaviour: No buying after a 20% day | Since: 2025
+`;
+
+const TRADE_MD = `# Trading agent
+
+## Identity
+
+- Name: Jordan
+- Style: Balanced
+`;
+
+function file(markdown: string, error: string | null = null): MarkdownFile {
+  return { markdown, version: 14, time: Date.UTC(2026, 10, 15, 2), error };
+}
 
 const api = {
   getProfilePage: vi.fn(),
-  saveProfileSection: vi.fn(),
-  askProfile: vi.fn(),
-  acceptSuggestion: vi.fn(),
-  rejectSuggestion: vi.fn(),
+  getProfileFile: vi.fn(),
   getProfileVersions: vi.fn(),
-  getProfileVersion: vi.fn(),
-  restoreProfile: vi.fn(),
-  getScorecard: vi.fn(),
   getTradingAgent: vi.fn(),
+  getAgentFile: vi.fn(),
 };
 vi.mock("./api", () => ({
   getProfilePage: () => api.getProfilePage(),
-  saveProfileSection: (s: string, v: unknown, r: string) => api.saveProfileSection(s, v, r),
-  askProfile: (t: string) => api.askProfile(t),
-  acceptSuggestion: (id: string, r: string) => api.acceptSuggestion(id, r),
-  rejectSuggestion: (id: string) => api.rejectSuggestion(id),
+  getProfileFile: () => api.getProfileFile(),
   getProfileVersions: () => api.getProfileVersions(),
-  getProfileVersion: (n: number) => api.getProfileVersion(n),
-  restoreProfile: (n: number) => api.restoreProfile(n),
-  getScorecard: () => api.getScorecard(),
-  importProfile: vi.fn(),
-  exportProfile: vi.fn(),
-  reviewAllocation: vi.fn(),
   getTradingAgent: () => api.getTradingAgent(),
-  saveTradingAgent: vi.fn(),
-  getTradingAgentVersion: vi.fn(),
-  restoreTradingAgent: vi.fn(),
-  exportTradingAgent: vi.fn(),
-  importTradingAgent: vi.fn(),
+  getAgentFile: () => api.getAgentFile(),
 }));
 
 const { default: Profile } = await import("./ProfilePage");
 
-function card(section: string) {
-  const found = document.getElementById(`pf-card-${section}`);
-  if (!found) throw new Error(`No ${section} card`);
-  return within(found);
-}
+const agentPage: AgentPage = {
+  version: 3,
+  time: Date.UTC(2026, 10, 14, 2),
+  agent: {
+    name: "Jordan",
+    title: "Trader",
+    style: "balanced",
+    focus: "both",
+    brief: "",
+    always: [],
+    never: [],
+    confidenceFloor: 50,
+    autonomy: "propose",
+    steps: {
+      macro: { on: true, model: "haiku" },
+      technical: { on: true, model: "haiku" },
+      planfit: { on: true, model: "haiku" },
+      debate: { on: false, model: "sonnet" },
+      risk: { on: true, model: "haiku" },
+      decision: { on: true, model: "opus" },
+    },
+  },
+  history: [],
+  told: "",
+  estimate: "0.08",
+  models: [],
+  steps: [],
+};
 
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.getProfilePage.mockResolvedValue(page());
-  api.getScorecard.mockResolvedValue({
-    windows: {
-      "30": [
-        {
-          rule: "max_pct_per_coin",
-          label: "Max % per coin",
-          kept: 3,
-          broken: 1,
-          brokenResultPct: "-6",
-        },
-      ],
-      "90": [],
-    },
+  api.getProfileFile.mockResolvedValue(file(PROFILE_MD));
+  api.getProfileVersions.mockResolvedValue({
+    versions: [
+      { n: 14, time: Date.UTC(2026, 10, 15), author: "owner", summary: "Rules", reason: "" },
+      { n: 13, time: Date.UTC(2026, 10, 9), author: "owner", summary: "Goals", reason: "" },
+    ],
   });
+  api.getTradingAgent.mockResolvedValue(agentPage);
+  api.getAgentFile.mockResolvedValue(file(TRADE_MD));
 });
 afterEach(cleanup);
 
 describe("Profile", () => {
-  it("shows every section, the version chip, the strip and unset rules as Not set", async () => {
+  it("is read only: the version, Show Profile, how to change it and the strip", async () => {
     render(<Profile />);
     expect(await screen.findByRole("button", { name: "Version history, now v14" })).toBeTruthy();
     expect(screen.getByText("v14 · 15 Nov 2026")).toBeTruthy();
-    for (const title of [
-      "Identity",
-      "Income",
-      "Goals",
-      "Foundations",
-      "Strategy",
-      "Rules",
-      "Holdings",
-      "Lessons",
-      "Quotes",
-      "Additional info",
-    ])
-      expect(screen.getByRole("heading", { name: title })).toBeTruthy();
-    expect(screen.getByText("A$212,400")).toBeTruthy();
-    expect(screen.getByText("A$45,000 / A$60,000")).toBeTruthy();
-    const rules = card("rules");
-    expect(rules.getByText("ETH 52% vs max 40%")).toBeTruthy();
-    expect(rules.getAllByText("Not set").length).toBeGreaterThan(2);
-    expect(rules.getAllByText("Not checked").length).toBeGreaterThan(0);
-    expect(rules.getByText("Deposit cap locked")).toBeTruthy();
-    expect(await rules.findByText(/Max % per coin: broken 1 of 4/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Set up with wizard" })).toHaveProperty(
-      "disabled",
-      true,
+    expect(screen.getByRole("button", { name: "Show Profile" })).toBeTruthy();
+    expect(screen.getByText(/To change it, ask Claude Code to edit/).textContent).toContain(
+      "local/profile.md",
     );
+    const strip = screen.getByRole("region", { name: "Where you stand" });
+    expect(within(strip).getByText("A$212,400")).toBeTruthy();
+    expect(within(strip).getByText("Below the floor")).toBeTruthy();
+    // Nothing on the page edits the Profile.
+    expect(screen.queryByRole("button", { name: /Import|Export|Save|Restore/ })).toBeNull();
+    expect(screen.queryByRole("textbox")).toBeNull();
   });
 
-  it("saves a card's edit as a new version", async () => {
-    api.saveProfileSection.mockResolvedValue(page(15));
+  it("opens profile.md in the reader, with its headings, fields and Not set", async () => {
     render(<Profile />);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit rules" }));
-    fireEvent.change(screen.getByLabelText("Per-trade size"), { target: { value: "2K" } });
-    fireEvent.change(screen.getByLabelText("Why (optional, kept with the version)"), {
-      target: { value: "Smaller bites" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save as a new version" }));
-    await waitFor(() => expect(api.saveProfileSection).toHaveBeenCalled());
-    const [section, value, reason] = api.saveProfileSection.mock.calls[0] ?? [];
-    expect([section, (value as ProfileDoc["rules"]).per_trade_aud, reason]).toEqual([
-      "rules",
-      "2K",
-      "Smaller bites",
-    ]);
-    expect((value as ProfileDoc["rules"]).max_loss_pct).toBeNull(); // still Not set
-    expect(await screen.findByText("Saved as v15.")).toBeTruthy();
+    fireEvent.click(await screen.findByRole("button", { name: "Show Profile" }));
+    const reader = await screen.findByRole("dialog", { name: "Profile" });
+    expect(within(reader).getByText(/v14 · 15 Nov 2026 · read-only/)).toBeTruthy();
+    expect(within(reader).getByRole("heading", { level: 2, name: "Rules" })).toBeTruthy();
+    const contents = within(reader).getByRole("navigation", { name: "Contents" });
+    expect(within(contents).getByRole("button", { name: "Identity" })).toBeTruthy();
+    const field = within(reader).getByText("Max % per coin").closest("li");
+    expect(field?.className).toBe("md-field");
+    expect(field?.querySelector("strong")?.textContent).toBe("40%");
+    expect(within(reader).getByText("Not set").className).toBe("md-unset");
+    expect(within(reader).getByRole("button", { name: "Export .md" })).toBeTruthy();
+    fireEvent.click(within(reader).getByRole("button", { name: "Close" }));
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Profile" })).toBeNull());
   });
 
-  it("shows a command bar change as a diff with conflicts, and accepts it", async () => {
-    api.askProfile.mockResolvedValue({ kind: "change", suggestion });
-    api.getProfilePage
-      .mockResolvedValueOnce(page())
-      .mockResolvedValue(page(14, { suggestions: [suggestion] }));
-    api.acceptSuggestion.mockResolvedValue(page(15));
-    render(<Profile />);
-    fireEvent.change(await screen.findByLabelText("Ask or change your profile"), {
-      target: { value: "max per coin 35%" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    const rulesCard = card("rules");
-    expect(await rulesCard.findByText("1 suggestion")).toBeTruthy();
-    expect(rulesCard.getByText("40%", { selector: "del" })).toBeTruthy();
-    expect(rulesCard.getByText("35%", { selector: "ins" })).toBeTruthy();
-    expect(rulesCard.getByText(/Conflict: ETH is 52% already/)).toBeTruthy();
-    fireEvent.click(rulesCard.getByRole("button", { name: "Accept" }));
-    await waitFor(() => expect(api.acceptSuggestion).toHaveBeenCalledWith("abc123abc123", ""));
-  });
-
-  it("answers a question under the bar and changes nothing", async () => {
-    api.askProfile.mockResolvedValue({
-      kind: "answer",
-      answer: "Behind: 28% of the way.",
-      question: "am I on track?",
-      profileVersion: 14,
-    });
-    render(<Profile />);
-    fireEvent.click(await screen.findByRole("button", { name: "Review my rules" }));
-    expect(await screen.findByText("Behind: 28% of the way.")).toBeTruthy();
-    expect(api.askProfile).toHaveBeenCalledWith(expect.stringContaining("Which of my rules"));
-    expect(api.saveProfileSection).not.toHaveBeenCalled();
-  });
-
-  it("blocks accepting a change to a locked field", async () => {
-    const locked = { ...suggestion, blocked: "Deposit cap locked: unlock on the card first." };
-    api.getProfilePage.mockResolvedValue(page(14, { suggestions: [locked] }));
-    render(<Profile />);
-    const card = within(await screen.findByLabelText("Suggested by Command bar"));
-    expect(card.getByText(/Deposit cap locked/)).toBeTruthy();
-    expect(card.getByRole("button", { name: "Accept" })).toHaveProperty("disabled", true);
-  });
-
-  it("compares two versions and restores one as a new version", async () => {
-    api.getProfileVersions.mockResolvedValue({
-      versions: [
-        { n: 14, time: 2, author: "You", summary: "Max % per coin 35% → 40%", reason: "" },
-        { n: 13, time: 1, author: "Command bar", summary: "Added 2025 lesson", reason: "" },
-      ],
-    });
-    const older = doc();
-    older.rules.max_pct_per_coin = "35";
-    api.getProfileVersion.mockImplementation((n: number) =>
-      Promise.resolve({
-        n,
-        time: n,
-        author: "You",
-        summary: "",
-        reason: "",
-        profile: n === 13 ? older : doc(),
-      }),
+  it("says when profile.md has a problem and which version is in force", async () => {
+    api.getProfileFile.mockResolvedValue(
+      file(PROFILE_MD, "Start the file with “# Profile”, as an export does."),
     );
-    api.restoreProfile.mockResolvedValue(page(15));
+    render(<Profile />);
+    expect(
+      await screen.findByText(
+        "profile.md has a problem: Start the file with “# Profile”, as an export does. The desk is still using v14.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("lists the versions read only", async () => {
     render(<Profile />);
     fireEvent.click(await screen.findByRole("button", { name: "Version history, now v14" }));
-    fireEvent.click(await screen.findByLabelText("Compare v14"));
-    fireEvent.click(screen.getByLabelText("Compare v13"));
-    expect(await screen.findByText("Rules · Max % per coin")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Restore v13" }));
-    expect(await screen.findByText("v13 restored as v15.")).toBeTruthy();
+    const history = await screen.findByRole("complementary", { name: "Version history" });
+    expect(await within(history).findByText("v14 · current")).toBeTruthy();
+    expect(within(history).getByText("v13")).toBeTruthy();
+    expect(within(history).queryByRole("button", { name: /Restore/ })).toBeNull();
   });
 
   it("says when live figures couldn't be read, with dashes for the totals", async () => {
@@ -335,27 +276,38 @@ describe("Profile", () => {
       .mockRejectedValueOnce(new Error("The api couldn't answer."))
       .mockResolvedValue(page());
     render(<Profile />);
-    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(await screen.findByText("The api couldn't answer.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByRole("heading", { name: "Rules" })).toBeTruthy();
-  });
-
-  it("keeps the policy and the trading agent on two tabs", async () => {
-    api.getTradingAgent.mockRejectedValue(new Error("Your trading agent couldn't be read."));
-    render(<Profile />);
-    expect(screen.getByRole("tab", { name: "My policy" }).getAttribute("aria-selected")).toBe(
-      "true",
-    );
-    expect(await screen.findByRole("button", { name: "Version history, now v14" })).toBeTruthy();
-    fireEvent.click(screen.getByRole("tab", { name: "Trading agent" }));
-    expect(await screen.findByText("Your trading agent couldn't be read.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Version history, now v14" })).toBeNull();
+    expect(await screen.findByRole("button", { name: "Show Profile" })).toBeTruthy();
   });
 });
 
-describe("What-if", () => {
-  it("compounds monthly with each month's amount added", () => {
-    expect(project(1000, 100, 0, 3)).toEqual([1000, 1100, 1200, 1300]);
-    expect(project(1000, 0, 12, 12).at(-1)).toBeGreaterThan(1120);
+describe("Trading agent tab", () => {
+  it("shows the agent read only and opens trade.md", async () => {
+    render(<Profile />);
+    fireEvent.click(screen.getByRole("tab", { name: "Trading agent" }));
+    const card = await screen.findByRole("region", { name: "Jordan" });
+    expect(within(card).getByText("Trader · Balanced · DCA and swing")).toBeTruthy();
+    expect(within(card).getByText("Propose")).toBeTruthy();
+    expect(within(card).getByText("about $0.08")).toBeTruthy();
+    expect(screen.getByText(/To change it, ask Claude Code to edit/).textContent).toContain(
+      "local/trade.md",
+    );
+    fireEvent.click(within(card).getByRole("button", { name: "Show Jordan's profile" }));
+    const reader = await screen.findByRole("dialog", { name: "Jordan's profile" });
+    expect(api.getAgentFile).toHaveBeenCalled();
+    expect(within(reader).getByRole("heading", { level: 1, name: "Trading agent" })).toBeTruthy();
+    expect(within(reader).getByText("Style").closest("li")?.className).toBe("md-field");
+  });
+
+  it("says when trade.md has a problem", async () => {
+    api.getAgentFile.mockResolvedValue(file(TRADE_MD, "Unknown style “bold”."));
+    render(<Profile />);
+    fireEvent.click(screen.getByRole("tab", { name: "Trading agent" }));
+    expect(
+      await screen.findByText(
+        "trade.md has a problem: Unknown style “bold”. The desk is still using v3.",
+      ),
+    ).toBeTruthy();
   });
 });

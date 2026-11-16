@@ -44,6 +44,7 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 13. Coin mark: the coin's own logo, 24px (decision 25); its letters on `panel-2` when there's none.
 13a. Rule-break banner (red, Keep to my rules first, Place anyway (logged) set apart), an Out of date tag (`wait`), and agent cards with an initials avatar, the Coordinator leading (decisions 58, 59).
 13b. The trading agent: a run as a numbered timeline (done, working, skipped, failed, each with its model and cost), a ticket edged in `accent`, and Agent and Profile versions stamped on every call (decision 60).
+13c. Reader: a Markdown file (profile.md, trade.md) opens full page, read-only, with Contents down the side and a 760px reading column; a "Label: value" line reads as a label and value, "Not set" in `dim` (decision 61).
 
 ## Not this
 
