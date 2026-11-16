@@ -53,3 +53,20 @@ def test_an_extra_day_past_sunday_and_a_plan_without_a_day_leave_the_rail_plain(
     assert [d["kind"] for d in late["days"]].count("extra") == 0
     plain = coach_week.week(DCA | {"day": None}, [], MON)
     assert (plain["buy"], plain["extra"]) == (None, None)
+
+
+def test_the_dca_book_decides_fridays_buy() -> None:
+    plan = {
+        "start": "2026-11-16",
+        "weeks": 156,
+        "orders": [{"coin": "BTC", "spend": "300", "odds": 60}],
+    }
+    rail = coach_week.week({"day": "Friday", "weekly": D(1000)}, [], date(2026, 11, 21))
+    row = {"week": "26W47", "side": "buy", "source": "weekly", "executed_quote": "150"}
+    half = coach_week.with_book(rail, plan, [row], "USDC")
+    assert half["buy"]["usdc"] == "300"
+    assert half["buy"]["state"] == "due"
+    done = coach_week.with_book(rail, plan, [row, row | {"source": "close-out"}], "USDC")
+    assert done["buy"]["state"] == "done"
+    assert done["buy"]["boughtUsdc"] == "300"
+    assert coach_week.with_book(rail, None, [row], "USDC") == rail

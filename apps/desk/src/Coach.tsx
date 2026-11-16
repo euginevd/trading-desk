@@ -264,6 +264,16 @@ function dayLabel(
   extraOn: boolean | null,
   fg: Sentiment | null,
 ): string {
+  if (kind === "buy" && week.buy?.usdc) {
+    const usdc = `${Number(week.buy.usdc).toLocaleString("en-AU")} ${week.buy.quote ?? "USDC"}`;
+    return {
+      done: `✓ ${usdc} bought`,
+      due: `${usdc} DCA now`,
+      missed: `${usdc} not bought`,
+      upcoming: `${usdc} DCA`,
+      unknown: `${usdc} DCA`,
+    }[week.buy.state];
+  }
   if (kind === "buy" && week.buy) {
     const amount = km(week.buy.aud);
     return {
@@ -291,6 +301,19 @@ function readout(date: string, week: CoachWeek, fg: Sentiment | null, extraOn: b
     date === week.today ? "Today" : `${DAY_NAMES[day.name] ?? day.name} ${shortDate(date)}`;
   const buy = week.buy;
   const extra = week.extra;
+  if (day.kind === "buy" && buy?.usdc) {
+    const quote = buy.quote ?? "USDC";
+    const usdc = `${Number(buy.usdc).toLocaleString("en-AU")} ${quote}`;
+    const coins = (buy.coins ?? []).join(", ").replace(/, ([^,]*)$/, " and $1");
+    const so = {
+      done: `${Number(buy.boughtUsdc ?? 0).toLocaleString("en-AU")} ${quote} bought into the DCA book. Done for the week.`,
+      due: `plan this week's ${usdc} on the DCA book; whatever hasn't filled by Monday 7pm buys at market.`,
+      missed: `nothing bought into the DCA book yet. Buy at market, as the plan says.`,
+      upcoming: `deposit ${km(buy.aud)}; ${usdc} of it buys ${coins || "your DCA coins"} by limit orders, the rest goes to the trading pot.`,
+      unknown: "Binance couldn't be read, so whether it's bought isn't known.",
+    }[buy.state];
+    return `${when}: your weekly DCA. ${so[0]?.toUpperCase()}${so.slice(1)}`;
+  }
   if (day.kind === "buy" && buy) {
     const amount = km(buy.aud);
     const so = {
@@ -312,9 +335,13 @@ function readout(date: string, week: CoachWeek, fg: Sentiment | null, extraOn: b
   }
   const next = [buy, extra].find((b) => b && b.date > date && b.state !== "done");
   const nextText = next
-    ? ` Next: ${next === buy ? `your ${km(buy?.aud)} buy` : `the extra ${km(extra?.aud)}`} on ${
-        DAY_NAMES[week.days.find((d) => d.date === next.date)?.name ?? ""] ?? next.date
-      }.`
+    ? ` Next: ${
+        next === buy
+          ? buy?.usdc
+            ? `your ${Number(buy.usdc).toLocaleString("en-AU")} ${buy.quote ?? "USDC"} DCA`
+            : `your ${km(buy?.aud)} buy`
+          : `the extra ${km(extra?.aud)}`
+      } on ${DAY_NAMES[week.days.find((d) => d.date === next.date)?.name ?? ""] ?? next.date}.`
     : "";
   const bought =
     week.boughtAud && Number(week.boughtAud) > 0

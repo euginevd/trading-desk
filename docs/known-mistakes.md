@@ -15,6 +15,8 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 9. Don't write Python or TypeScript edits through a bash heredoc: backslash escapes (`\n`, `\b`, `\1`) arrive as line breaks or control characters. Use the Edit or Write tool.
 10. Before deleting CSS rules whose class no source file names, grep for classes built in template strings (`` `on-${side}` ``): a word-search prune dropped the order sheet's Buy and Sell colours and Settings' status dots (`is-${tone}`). Read the whole list: a `head -20` hid the second.
 11. Before naming a new CSS class, grep the app's stylesheets for it: a new `tr-call` for Trade's decision took the coin list's existing `tr-call` styles, right-aligning the call and stretching every coin row.
+- Docker Compose v5 on Windows refuses its bake build ("additional privileges requested: --allow=fs.read=apps\api\Dockerfile"): build each image with `docker build -f apps/<app>/Dockerfile -t trading-desk-<app> .`, then `docker compose up -d --no-build`.
+- A parser change doesn't reach a Profile version already saved: its typed fields are fixed at save, so profile.md needs a real edit (or a new version) to pick the change up.
 
 ## CI
 

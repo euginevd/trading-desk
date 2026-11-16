@@ -731,7 +731,17 @@ export type BuyState = "upcoming" | "due" | "done" | "missed" | "unknown";
 export interface CoachWeek {
   today: string;
   days: { date: string; name: string; kind: "" | "buy" | "extra" }[];
-  buy: { date: string; aud: string; boughtAud: string | null; state: BuyState } | null;
+  buy: {
+    date: string;
+    aud: string;
+    boughtAud: string | null;
+    state: BuyState;
+    // With a DCA book plan (decision 72): the weekly buy in the quote, and what's bought of it.
+    usdc?: string;
+    boughtUsdc?: string;
+    quote?: string;
+    coins?: string[];
+  } | null;
   extra: { date: string; aud: string; fearGreedBelow: number | null; state: BuyState } | null;
   boughtAud: string | null;
   maxWeekAud: string | null;

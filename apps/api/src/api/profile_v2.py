@@ -286,6 +286,8 @@ def _dca(found: dict[str, list[str]]) -> dict[str, Any]:
     weekly_line = found.get("5.2", [None])[0] if found.get("5.2") else None
     day = re.search(r"every\s+([A-Z][a-z]+)", plain_text(weekly_line or ""))
     extra_line = _find(found, "5.2", "fear & greed")
+    # The cap may sit on the extra buy's line (older profiles) or on its own.
+    cap_line = _find(found, "5.2", "cap") or extra_line
     fg = re.search(r"below\s+(\d+)", extra_line or "", re.IGNORECASE)
     split_line = _find(found, "5.3", "split")
     btc = re.search(r"A\$\s?(\d[\d,]*(?:\.\d+)?[KkMm]?)\s+BTC", plain_text(split_line or ""))
@@ -295,8 +297,8 @@ def _dca(found: dict[str, list[str]]) -> dict[str, Any]:
         "day": day.group(1) if day else None,
         "extra": _first(extra_line),
         "fearGreedBelow": int(fg.group(1)) if fg else None,
-        "maxWeek": _after(extra_line, r"max"),
-        "maxMonth": _last(extra_line) if extra_line and "month" in extra_line.lower() else None,
+        "maxWeek": _after(cap_line, r"max"),
+        "maxMonth": _last(cap_line) if cap_line and "month" in cap_line.lower() else None,
         "investMonthly": _after(monthly, r"up to"),
         "btcWeekly": _first(f"A${btc.group(1)}") if btc else None,
         "extraAfterDays": int(after.group(1))

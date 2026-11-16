@@ -366,3 +366,14 @@ def test_an_edit_that_misses_the_file_or_breaks_it_is_refused(
     call.replies.append({"kind": "answer", "answer": "A$12K of A$20K.", "edits": [], "reason": ""})
     status, reply = call("POST", "/profile/command", {"text": "How's my emergency fund?"})
     assert (status, reply["answer"]) == (200, "A$12K of A$20K.")
+
+
+def test_the_deposit_cap_can_stand_without_an_extra_buy() -> None:
+    text = SAMPLE.replace(
+        "4. Fear & Greed below 40: extra A$250, 2 days after | **max A$750 a week, A$3K a month**",
+        "4. No extra buys on fear | **deposit cap A$7K a month**, tracked, never blocks a buy",
+    )
+    dca = profile_v2.values(text)["dca"]
+    assert dca["maxMonth"] == D(7000)
+    assert dca["extra"] is None
+    assert dca["extraAfterDays"] is None

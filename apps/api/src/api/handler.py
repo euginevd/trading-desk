@@ -1031,7 +1031,10 @@ def _week(s: Services, plan: dict[str, Any]) -> dict[str, Any] | None:
         buys: list[tuple[date, Decimal]] | None = [(f.day, f.aud) for f in fills if f.buy]
     except (BinanceError, httpx.HTTPError, LookupError, ValueError):
         buys = None  # the rail still shows the plan; nothing is marked done or missed
-    return coach_week.week(profile_v2.values(plan["markdown"])["dca"], buys, today)
+    rail = coach_week.week(profile_v2.values(plan["markdown"])["dca"], buys, today)
+    raw = s.store.setting("dca_plan", "")
+    book_plan = json.loads(raw) if raw else None
+    return coach_week.with_book(rail, book_plan, s.store.dca_orders(), QUOTE)
 
 
 def _dated_message(message: dict[str, Any], kept: dict[str, Any] | None, n: int) -> dict[str, Any]:

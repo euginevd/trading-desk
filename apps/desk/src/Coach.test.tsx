@@ -212,6 +212,39 @@ describe("the Dashboard", () => {
     ).toBeTruthy();
   });
 
+  it("shows the DCA book's weekly buy in USDC when there's a plan", async () => {
+    const base = week();
+    coach = {
+      ...down,
+      pending: false,
+      week: {
+        ...base,
+        days: base.days.map((d) => (d.kind === "extra" ? { ...d, kind: "" } : d)),
+        extra: null,
+        buy: base.buy && {
+          ...base.buy,
+          usdc: "600",
+          boughtUsdc: "0",
+          quote: "USDC",
+          coins: ["BTC", "ETH", "SOL"],
+        },
+      },
+    };
+    render(<CoachPage />);
+    const rail = await screen.findByRole("region", { name: "This week" });
+    const days = within(rail).getAllByRole("button");
+    expect(days[4]?.getAttribute("aria-label")).toBe("Friday 20 Nov: 600 USDC DCA");
+    expect(
+      within(rail).getByText("Today: nothing planned. Next: your 600 USDC DCA on Friday."),
+    ).toBeTruthy();
+    fireEvent.focus(part(days[4]));
+    expect(
+      await within(rail).findByText(
+        "Friday 20 Nov: your weekly DCA. Deposit A$500; 600 USDC of it buys BTC, ETH and SOL by limit orders, the rest goes to the trading pot.",
+      ),
+    ).toBeTruthy();
+  });
+
   it("says when the buy is due, done or missed", async () => {
     coach = { ...down, pending: false, week: week("due", "2026-11-20") };
     render(<CoachPage />);

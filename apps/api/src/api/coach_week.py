@@ -12,6 +12,8 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from api.binance import plain
+from api.dca_book import SYDNEY as BOOK_TZ
+from api.dca_book import week_of
 
 SYDNEY = ZoneInfo("Australia/Sydney")
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
@@ -91,4 +93,45 @@ def week(
         "boughtAud": _whole(sum((aud for _, aud in buys), ZERO)) if buys is not None else None,
         "maxWeekAud": _whole(dca.get("maxWeek")),
         "maxMonthAud": _whole(dca.get("maxMonth")),
+    }
+
+
+def with_book(
+    rail: dict[str, Any], plan: dict[str, Any] | None, rows: list[dict[str, Any]], quote: str
+) -> dict[str, Any]:
+    """With a DCA book plan (decision 72), Friday's buy is the plan's weekly amount in the
+    quote, done once that DCA week's weekly and close-out buys reach it. The deposit stays A$."""
+    buy = rail.get("buy")
+    if not plan or not buy:
+        return rail
+    weekly = sum((Decimal(o["spend"]) for o in plan["orders"]), ZERO)
+    friday = date.fromisoformat(buy["date"])
+    opens = datetime(friday.year, friday.month, friday.day, 17, tzinfo=BOOK_TZ)
+    key, _ = week_of(int(opens.timestamp() * 1000))
+    bought = sum(
+        (
+            Decimal(r["executed_quote"])
+            for r in rows
+            if r["week"] == key and r["side"] == "buy" and r["source"] in ("weekly", "close-out")
+        ),
+        ZERO,
+    )
+    today = date.fromisoformat(rail["today"])
+    state = (
+        "done"
+        if weekly > ZERO and bought >= weekly * NEAR_ENOUGH
+        else "upcoming"
+        if friday > today
+        else "due"  # the DCA week runs to Monday's close-out, past this rail's Sunday
+    )
+    coins = list(dict.fromkeys(o["coin"] for o in plan["orders"]))
+    return rail | {
+        "buy": buy
+        | {
+            "usdc": plain(weekly),
+            "boughtUsdc": plain(bought.quantize(Decimal("0.01"))),
+            "quote": quote,
+            "coins": coins,
+            "state": state,
+        }
     }
