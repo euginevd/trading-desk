@@ -121,7 +121,7 @@ def pot_limits(pot: dict[str, Any]) -> list[dict[str, Any]]:
             allowed,
             allowed,
             figure=_pct(worst),
-            of=f"{allowed}% a trade",
+            of=f"{allowed.normalize():f}% a trade",
             rule="5.4.3",
             owner=owner,
             words="Largest risk of any open trade, as a share of the pot.",
