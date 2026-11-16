@@ -152,6 +152,16 @@ tr.jr-lit td {
   background: var(--accent-soft);
   transition: background 1200ms ease-out;
 }
+.jr-more-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0 2px;
+}
+.jr-more-row .muted {
+  margin-left: auto;
+  font-size: 12px;
+}
 .jr-note {
   margin: 10px 0 0;
   font-size: 12px;
@@ -231,7 +241,8 @@ tr.jr-lit td {
     animation: jr-rise 360ms var(--ease) both;
     animation-delay: calc(var(--i, 0) * 18ms + 120ms);
   }
-  .jr-readout {
+  .jr-readout,
+  .jr-ledger tbody tr {
     animation: jr-fade 200ms ease-out both;
   }
 }

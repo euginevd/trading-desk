@@ -2320,44 +2320,6 @@ dialog.in-place .detail-head {
   color: var(--wait);
 }
 
-/* Drift from the targets (decision 55) */
-
-.drift-track {
-  position: relative;
-  height: 8px;
-  background: var(--panel-2);
-  border-radius: 999px;
-}
-.drift-band {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  background: var(--accent-soft);
-  border-left: 1px solid var(--accent);
-  border-right: 1px solid var(--accent);
-}
-.drift-dot {
-  position: absolute;
-  top: -3px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--text);
-  transform: translateX(-50%);
-}
-.drift-dot.out {
-  background: var(--wait);
-}
-.drift-act {
-  color: var(--wait);
-  text-decoration: none;
-  font-weight: 600;
-}
-.drift-note {
-  margin: 10px 0 0;
-  font-size: 12px;
-}
-
 /* The Journal (decision 56) */
 .journal {
   display: grid;

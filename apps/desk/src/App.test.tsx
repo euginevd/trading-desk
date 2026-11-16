@@ -301,8 +301,12 @@ describe("portfolio page", () => {
       "TAO: A$59K, 94% of what you hold. Target 60%, 34 points over.",
     );
     const targets = screen.getByRole("region", { name: "Against your targets" });
-    expect(within(targets).getByRole("link", { name: "Trim A$150 of A$21K" })).toBeTruthy();
-    expect(within(targets).getByRole("link", { name: "Add A$150 of A$21K" })).toBeTruthy();
+    const trim = within(targets).getByRole("link", { name: "Trim A$150" });
+    expect(trim.getAttribute("title")).toMatch(/^A\$21K to reach the target/);
+    expect(
+      within(targets).getByRole("img", { name: "TAO: 94% now, target 60%, 34 pts over" }),
+    ).toBeTruthy();
+    expect(within(targets).getByRole("link", { name: "Add A$150" })).toBeTruthy();
   });
 
   it("closes the average cost editor when focus leaves it", async () => {
@@ -437,7 +441,7 @@ describe("portfolio page", () => {
     render(<App />);
     const card = await screen.findByRole("region", { name: "USDC deposits" });
     await within(card).findByText("FY 2026-27");
-    expect(within(card).getAllByText("A$2K")).toHaveLength(2); // the year, and August
+    expect(within(card).getAllByText("A$2K")).toHaveLength(3); // the year, over August's bar, the line
     const bars = within(card).getByRole("group", { name: "Deposits by month" });
     expect(within(bars).getAllByRole("button")).toHaveLength(12);
     const aug = within(bars).getByRole("button", { name: /^Aug: A\$2K from 2 deposits/ });

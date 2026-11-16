@@ -10,6 +10,8 @@ import "./journal.css";
 
 const DAY_MS = 86_400_000;
 const STACK = 5; // dots shown a day; more say +n
+const ROWS = 10; // trades shown before Show more, so the page fits one screen
+const MORE = 20;
 type Show = "all" | "broke" | "kept";
 
 const sydneyDay = (ms: number) =>
@@ -37,6 +39,7 @@ export default function Journal() {
   const [editing, setEditing] = useState(false);
   const [show, setShow] = useState<Show>("all");
   const [lit, setLit] = useState<string | null>(null);
+  const [rows, setRows] = useState(ROWS);
   useEffect(() => {
     getJournal().then(setData, (e: unknown) =>
       setError(e instanceof Error ? e.message : "The journal couldn't be read."),
@@ -65,9 +68,17 @@ export default function Journal() {
     (e) => show === "all" || (show === "broke" ? e.broke.length > 0 : e.broke.length === 0),
   );
   const broke = data.entries.filter((e) => e.broke.length > 0).length;
+  const visible = shown.slice(0, rows);
+  const left = shown.length - visible.length;
+  const filter = (next: Show) => {
+    setShow(next);
+    setRows(ROWS);
+  };
   const jump = (key: string) => {
     setShow("all");
     setLit(key);
+    const at = data.entries.findIndex((e) => e.key === key);
+    if (at >= rows) setRows(Math.ceil((at + 1) / MORE) * MORE); // open far enough to show it
     window.setTimeout(() => {
       document.getElementById(`jr-${key}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
     }, 0);
@@ -137,7 +148,7 @@ export default function Journal() {
                 key={key}
                 type="button"
                 aria-pressed={show === key}
-                onClick={() => setShow(key)}
+                onClick={() => filter(key)}
               >
                 {label}
               </button>
@@ -167,7 +178,7 @@ export default function Journal() {
                 </tr>
               </thead>
               <tbody>
-                {shown.map((e) => (
+                {visible.map((e) => (
                   <Row
                     key={e.key}
                     entry={e}
@@ -178,6 +189,27 @@ export default function Journal() {
                 ))}
               </tbody>
             </table>
+            {(left > 0 || rows > ROWS) && (
+              <div className="jr-more-row">
+                {left > 0 && (
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    onClick={() => setRows(rows + MORE)}
+                  >
+                    Show {Math.min(MORE, left)} more
+                  </button>
+                )}
+                {rows > ROWS && (
+                  <button type="button" className="link" onClick={() => setRows(ROWS)}>
+                    Show fewer
+                  </button>
+                )}
+                <span className="muted">
+                  {visible.length} of {shown.length}
+                </span>
+              </div>
+            )}
           </div>
         )}
         <p className="muted jr-note">

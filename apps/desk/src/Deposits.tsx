@@ -59,7 +59,7 @@ export default function Deposits() {
           {km(data.total.aud)}
         </strong>{" "}
         <span className="muted">
-          for {usdc(data.total.usdc)} USDC
+          for {Math.round(Number(data.total.usdc)).toLocaleString("en-AU")} USDC
           {data.total.audPerUsdc && <>, A${Number(data.total.audPerUsdc).toFixed(3)} each</>}
         </span>
       </p>
@@ -77,7 +77,12 @@ export default function Deposits() {
               setOpen(false);
             }}
           >
-            <span className="dep-bar" style={{ height: `${(Number(m.aud) / top) * 100}%` }} />
+            {m.month === month && m.count > 0 && (
+              <span className="dep-figure num" aria-hidden="true">
+                {km(m.aud)}
+              </span>
+            )}
+            <span className="dep-bar" style={{ height: `${(Number(m.aud) / top) * 72}%` }} />
             <span className="dep-month">{m.label.charAt(0)}</span>
           </button>
         ))}

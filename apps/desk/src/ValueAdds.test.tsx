@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Drift, JournalData, TaxReport } from "./types";
+import type { Drift, JournalData, JournalEntry, TaxReport } from "./types";
 
 // Made-up figures only (known-mistakes 7).
 const tax: TaxReport = {
@@ -122,6 +122,25 @@ describe("the drift card", () => {
       "#/trade?coin=TAO&side=sell&price=410&qty=0.813&why=rebalance",
     );
     expect(screen.getByText("In band")).toBeTruthy();
+  });
+});
+
+describe("the Journal's ledger", () => {
+  it("shows ten trades, then more on asking, and folds back", async () => {
+    const one = book.entries[0] as JournalEntry;
+    const kept = book.entries;
+    book.entries = Array.from({ length: 34 }, (_, i) => ({ ...one, key: `SOLUSDC:${i}` }));
+    render(<Journal />);
+    const rows = () => document.querySelectorAll(".jr-ledger tbody tr").length;
+    await screen.findByText("10 of 34");
+    expect(rows()).toBe(10);
+    fireEvent.click(screen.getByRole("button", { name: "Show 20 more" }));
+    expect(rows()).toBe(30);
+    fireEvent.click(screen.getByRole("button", { name: "Show 4 more" }));
+    expect(rows()).toBe(34);
+    fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+    expect(rows()).toBe(10);
+    book.entries = kept;
   });
 });
 
