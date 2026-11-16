@@ -6,7 +6,7 @@ import { toCsv } from "./dcaFormat";
 import type { DcaBook, DcaOrder, DcaWeekPlan } from "./types";
 
 // Made-up figures only (known-mistakes 7).
-const START = Date.UTC(2026, 10, 20, 6, 0); // Fri 20 Nov, 5pm Sydney
+const START = Date.UTC(2026, 10, 20, 8, 0); // Fri 20 Nov, 7pm Sydney
 const order = (o: Partial<DcaOrder>): DcaOrder => ({
   ref: "DCA-BTC-26W47-1",
   coin: "BTC",
@@ -107,8 +107,13 @@ function book(over: Partial<DcaBook> = {}): DcaBook {
     week: {
       key: "26W47",
       start: START,
-      closeOut: START + 3 * 86_400_000 + 2 * 3_600_000,
+      closeOut: START + 3 * 86_400_000,
       orders: [order({}), filledEth],
+    },
+    next: {
+      key: "26W48",
+      start: START + 7 * 86_400_000,
+      closeOut: START + 10 * 86_400_000,
     },
     orders: [filledEth, order({})],
     priceError: null,
@@ -167,20 +172,38 @@ afterEach(() => {
 });
 
 describe("DCA widget", () => {
-  it("says the week in a sentence, shows its orders and closes out after asking", async () => {
+  it("shows the buying window, the coins' limits, and closes out after asking", async () => {
     const fetch = serve(book());
-    render(<DcaWidget now={START + 4 * 86_400_000} />);
-    expect(await screen.findByText("This week's 70.00 USDC: 1 of 2 limits filled.")).toBeTruthy();
-    expect(screen.getByText("20 Nov (Fri) 5pm")).toBeTruthy(); // deposit day, dated
-    expect(screen.getByText("23 Nov (Mon) 7pm")).toBeTruthy(); // the close-out
-    const table = screen.getByRole("table", { name: "This week's orders" });
-    expect(within(table).getByText("63,837.40")).toBeTruthy();
-    expect(within(table).getByText("Filled")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Close out now" }));
+    render(<DcaWidget now={START + 86_400_000} />);
+    expect(
+      await screen.findByText(
+        "1 of 2 limits filled. The rest buy at market on 23 Nov (Mon) at 7pm.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("img", {
+        name: "The buying window runs from 20 Nov (Fri) 7pm to 23 Nov (Mon) 7pm.",
+      }),
+    ).toBeTruthy();
+    const coins = screen.getByRole("list", { name: "This week's coins" });
+    expect(within(coins).getByText("Limit 63,837.40")).toBeTruthy();
+    expect(within(coins).getByText("Bought")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close out early" }));
     expect(sent(fetch, "/dca/close-out")).toHaveLength(0); // the confirm first
     fireEvent.click(screen.getByRole("button", { name: "Buy the rest at market" }));
     await waitFor(() => expect(sent(fetch, "/dca/close-out")).toHaveLength(1));
     expect(await screen.findByText("Bought at market: BTC 49.79.")).toBeTruthy();
+  });
+
+  it("looks ahead to the next buy once the window has closed", async () => {
+    const done = book();
+    done.week.orders = [filledEth];
+    serve(done);
+    render(<DcaWidget now={START + 4 * 86_400_000} />);
+    expect(
+      await screen.findByText("Next buy in 3 days: 70 USDC on 27 Nov (Fri) at 7pm."),
+    ).toBeTruthy();
+    expect(screen.getByText("Last week: 19.85 USDC bought.")).toBeTruthy();
   });
 
   it("asks for a plan when there's none", async () => {

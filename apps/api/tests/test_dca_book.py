@@ -73,9 +73,9 @@ def ms(*parts: int) -> int:
     return int(datetime(*parts, tzinfo=SYDNEY).timestamp() * 1000)  # type: ignore[misc]
 
 
-def test_the_week_runs_from_friday_5pm() -> None:
-    assert week_of(ms(2026, 11, 20, 16, 59))[0] == "26W46"
-    key, friday = week_of(ms(2026, 11, 20, 17, 0))
+def test_the_week_runs_from_friday_7pm() -> None:
+    assert week_of(ms(2026, 11, 20, 18, 59))[0] == "26W46"
+    key, friday = week_of(ms(2026, 11, 20, 19, 0))
     assert key == "26W47"
     assert week_of(ms(2026, 11, 23, 9, 0))[0] == "26W47"
     assert close_out_of(friday) == datetime(2026, 11, 23, 19, 0, tzinfo=SYDNEY)

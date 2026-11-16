@@ -1,19 +1,10 @@
 // The Dashboard (decisions 52, 59 and 63): the morning check. A sentence says how the day is
-// going; the week rail shows where this week's buys stand; below, what to watch and the desk to
-// ask, then last week's recap in one line. Every figure comes from the api; the words are the
+// going; the weekly DCA shows the buying window and where this week's buy stands; below, what to
+// watch and the desk to ask, then last week's recap in one line. Every figure comes from the api; the words are the
 // model's when it has written them, the plain ones until then.
 import DcaWidget from "./DcaWidget";
 import { useCallback, useEffect, useState } from "react";
-import {
-  getAgent,
-  getAgents,
-  getCoach,
-  getRecaps,
-  getSentiment,
-  sendAgent,
-  writeCoach,
-  writeRecap,
-} from "./api";
+import { getAgent, getAgents, getCoach, getRecaps, sendAgent, writeCoach, writeRecap } from "./api";
 import { km, Live } from "./Figures";
 import { fetchedAt, longDate, percent, price } from "./format";
 import { ResetIcon } from "./icons";
@@ -21,40 +12,23 @@ import { OutOfDate } from "./RuleMarks";
 import type {
   AgentInfo,
   AgentThread,
-  BuyState,
   Coach as CoachData,
-  CoachWeek,
   KeyPoint,
   Recap as RecapData,
-  Sentiment,
 } from "./types";
 import "./dashboard.css";
 
 const REFRESH_MS = 60_000;
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const DAY_NAMES: Record<string, string> = {
-  Mon: "Monday",
-  Tue: "Tuesday",
-  Wed: "Wednesday",
-  Thu: "Thursday",
-  Fri: "Friday",
-  Sat: "Saturday",
-  Sun: "Sunday",
-};
 
 function problem(e: unknown, fallback: string): string {
   return e instanceof Error && e.message ? e.message : fallback;
 }
-const dayOfMonth = (iso: string) => Number(iso.slice(8, 10));
-const shortDate = (iso: string) =>
-  `${dayOfMonth(iso)} ${MONTHS[Number(iso.slice(5, 7)) - 1] ?? ""}`;
 
 export default function Coach() {
   const [coach, setCoach] = useState<CoachData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetched, setFetched] = useState<string | null>(null);
-  const [fg, setFg] = useState<Sentiment | null>(null);
   // A refresh bumps the round: the coach and the recap read again.
   const [round, setRound] = useState(0);
 
@@ -79,10 +53,6 @@ export default function Coach() {
         if (!quiet) setError(problem(e, "The Dashboard couldn't load."));
         setLoading(false);
       },
-    );
-    getSentiment().then(
-      (s) => live && setFg(s),
-      () => undefined, // the rail still shows the plan without today's reading
     );
     return () => {
       live = false;
@@ -123,7 +93,6 @@ export default function Coach() {
       {coach ? (
         <>
           <Hero coach={coach} fetched={fetched} loading={loading} onRefresh={refresh} />
-          {coach.week && <WeekRail week={coach.week} fg={fg} />}
           <DcaWidget />
           <div className="dash-ledger">
             <Watch coach={coach} />
@@ -195,159 +164,6 @@ function Hero({
       </div>
     </section>
   );
-}
-
-// The week rail: Monday to Sunday, the buys on their days, today marked. Move over a day, or
-// focus it, to read what it holds.
-function WeekRail({ week, fg }: { week: CoachWeek; fg: Sentiment | null }) {
-  const [shown, setShown] = useState<string | null>(null);
-  const todayIndex = Math.max(
-    0,
-    week.days.findIndex((d) => d.date === week.today),
-  );
-  const extraOn =
-    week.extra?.fearGreedBelow !== null && week.extra?.fearGreedBelow !== undefined && fg
-      ? fg.value < week.extra.fearGreedBelow
-      : null;
-  const pick = shown ?? week.today;
-  return (
-    <section className="dash-week" aria-label="This week" onMouseLeave={() => setShown(null)}>
-      <div className="dash-rail" style={{ ["--today" as string]: todayIndex }}>
-        <span className="dash-rail-line" aria-hidden="true" />
-        <span className="dash-rail-past" aria-hidden="true" />
-        {week.days.map((d, i) => {
-          const isToday = d.date === week.today;
-          const past = d.date < week.today;
-          const label = dayLabel(d.kind, week, extraOn, fg);
-          return (
-            <button
-              key={d.date}
-              type="button"
-              className={`dash-day${isToday ? " today" : ""}${past ? " past" : ""}${
-                d.kind
-                  ? ` ${d.kind} ${state(d.kind, week)}${d.kind === "extra" && extraOn ? " on" : ""}`
-                  : ""
-              }${shown === d.date ? " picked" : ""}`}
-              style={{ animationDelay: `${120 + i * 55}ms` }}
-              aria-pressed={pick === d.date}
-              aria-label={`${DAY_NAMES[d.name] ?? d.name} ${shortDate(d.date)}${
-                isToday ? ", today" : ""
-              }${label ? `: ${label}` : ""}`}
-              onMouseEnter={() => setShown(d.date)}
-              onFocus={() => setShown(d.date)}
-              onClick={() => setShown(d.date)}
-            >
-              <span className="dash-day-name">{d.name}</span>
-              <span className="dash-dot" aria-hidden="true" />
-              <span className="dash-day-date">{dayOfMonth(d.date)}</span>
-              {label && <span className="dash-day-label">{label}</span>}
-            </button>
-          );
-        })}
-      </div>
-      <p key={pick} className="dash-readout" aria-live="polite">
-        {readout(pick, week, fg, extraOn)}
-      </p>
-    </section>
-  );
-}
-
-function state(kind: "" | "buy" | "extra", week: CoachWeek): BuyState | "" {
-  if (kind === "buy") return week.buy?.state ?? "";
-  if (kind === "extra") return week.extra?.state ?? "";
-  return "";
-}
-
-function dayLabel(
-  kind: "" | "buy" | "extra",
-  week: CoachWeek,
-  extraOn: boolean | null,
-  fg: Sentiment | null,
-): string {
-  if (kind === "buy" && week.buy?.usdc) {
-    const usdc = `${Number(week.buy.usdc).toLocaleString("en-AU")} ${week.buy.quote ?? "USDC"}`;
-    return {
-      done: `✓ ${usdc} bought`,
-      due: `${usdc} DCA now`,
-      missed: `${usdc} not bought`,
-      upcoming: `${usdc} DCA`,
-      unknown: `${usdc} DCA`,
-    }[week.buy.state];
-  }
-  if (kind === "buy" && week.buy) {
-    const amount = km(week.buy.aud);
-    return {
-      done: `✓ ${amount} bought`,
-      due: `${amount} buy today`,
-      missed: `${amount} not bought`,
-      upcoming: `${amount} buy`,
-      unknown: `${amount} buy`,
-    }[week.buy.state];
-  }
-  if (kind === "extra" && week.extra) {
-    if (week.extra.state === "done") return `✓ +${km(week.extra.aud)} bought`;
-    if (extraOn === false) return `No extra: F&G ${fg?.value ?? "?"}`;
-    if (extraOn === true) return `+${km(week.extra.aud)}: F&G ${fg?.value ?? "?"}`;
-    return `+${km(week.extra.aud)} if F&G < ${week.extra.fearGreedBelow ?? "?"}`;
-  }
-  return "";
-}
-
-// What a day holds, in a sentence. Today without a buy says what's next.
-function readout(date: string, week: CoachWeek, fg: Sentiment | null, extraOn: boolean | null) {
-  const day = week.days.find((d) => d.date === date);
-  if (!day) return "";
-  const when =
-    date === week.today ? "Today" : `${DAY_NAMES[day.name] ?? day.name} ${shortDate(date)}`;
-  const buy = week.buy;
-  const extra = week.extra;
-  if (day.kind === "buy" && buy?.usdc) {
-    const quote = buy.quote ?? "USDC";
-    const usdc = `${Number(buy.usdc).toLocaleString("en-AU")} ${quote}`;
-    const coins = (buy.coins ?? []).join(", ").replace(/, ([^,]*)$/, " and $1");
-    const so = {
-      done: `${Number(buy.boughtUsdc ?? 0).toLocaleString("en-AU")} ${quote} bought into the DCA book. Done for the week.`,
-      due: `plan this week's ${usdc} on the DCA book; whatever hasn't filled by Monday 7pm buys at market.`,
-      missed: `nothing bought into the DCA book yet. Buy at market, as the plan says.`,
-      upcoming: `deposit ${km(buy.aud)}; ${usdc} of it buys ${coins || "your DCA coins"} by limit orders, the rest goes to the trading pot.`,
-      unknown: "Binance couldn't be read, so whether it's bought isn't known.",
-    }[buy.state];
-    return `${when}: your weekly DCA. ${so[0]?.toUpperCase()}${so.slice(1)}`;
-  }
-  if (day.kind === "buy" && buy) {
-    const amount = km(buy.aud);
-    const so = {
-      done: `bought ${km(buy.boughtAud)} on Binance since. Done for the week.`,
-      due: "limit orders from your split; if they haven't filled by Monday evening, buy at market.",
-      missed: "nothing bought since. Buy at market, as the plan says.",
-      upcoming: "limit orders from your split, likely to fill within three days.",
-      unknown: "Binance couldn't be read, so whether it's bought isn't known.",
-    }[buy.state];
-    return `${when}: your ${amount} weekly buy. ${so[0]?.toUpperCase()}${so.slice(1)}`;
-  }
-  if (day.kind === "extra" && extra) {
-    const reading = fg ? `Fear & Greed is ${fg.value} (${fg.label.toLowerCase()})` : "";
-    const rule = `+${km(extra.aud)} when Fear & Greed is under ${extra.fearGreedBelow ?? "?"}`;
-    if (extra.state === "done") return `${when}: the extra ${km(extra.aud)} is bought.`;
-    if (extraOn === true) return `${when}: ${rule}. ${reading}, so it applies this week.`;
-    if (extraOn === false) return `${when}: ${rule}. ${reading}, so not this week.`;
-    return `${when}: ${rule}.`;
-  }
-  const next = [buy, extra].find((b) => b && b.date > date && b.state !== "done");
-  const nextText = next
-    ? ` Next: ${
-        next === buy
-          ? buy?.usdc
-            ? `your ${Number(buy.usdc).toLocaleString("en-AU")} ${buy.quote ?? "USDC"} DCA`
-            : `your ${km(buy?.aud)} buy`
-          : `the extra ${km(extra?.aud)}`
-      } on ${DAY_NAMES[week.days.find((d) => d.date === next.date)?.name ?? ""] ?? next.date}.`
-    : "";
-  const bought =
-    week.boughtAud && Number(week.boughtAud) > 0
-      ? ` ${km(week.boughtAud)} bought this week so far.`
-      : "";
-  return `${when}: nothing planned.${nextText}${bought}`;
 }
 
 export function pointText(p: KeyPoint): string {

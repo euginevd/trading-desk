@@ -1208,6 +1208,7 @@ export interface DcaBook {
     ticks: DcaTick[];
   } | null;
   week: { key: string; start: number; closeOut: number; orders: DcaOrder[] };
+  next: { key: string; start: number; closeOut: number };
   orders: DcaOrder[];
   priceError: string | null;
 }

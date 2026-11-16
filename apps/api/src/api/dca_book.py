@@ -34,13 +34,13 @@ MAX_PLAN_ORDERS = 12
 MAX_WEEKS = 520
 
 
-# The DCA week runs from Friday 5pm, Sydney, to the next; it is named by that Friday.
+# The DCA week runs from Friday 7pm, Sydney, to the next; it is named by that Friday.
 
 
 def week_of(ms: int) -> tuple[str, datetime]:
     at = datetime.fromtimestamp(ms / 1000, SYDNEY)
     friday = (at - timedelta(days=(at.weekday() - 4) % 7)).replace(
-        hour=17, minute=0, second=0, microsecond=0
+        hour=19, minute=0, second=0, microsecond=0
     )
     if at < friday:
         friday -= timedelta(days=7)
@@ -236,6 +236,22 @@ class DcaBook:
 
     def _now(self) -> int:
         return int(self._clock() * 1000)
+
+    # What Add and Remove funds share with the book (dca_funds).
+
+    @property
+    def binance(self) -> Any:
+        return self._binance
+
+    @property
+    def store(self) -> Any:
+        return self._store
+
+    def now_ms(self) -> int:
+        return self._now()
+
+    def prices(self, coins: list[str]) -> dict[str, Decimal]:
+        return self._prices(coins)
 
     def plan(self) -> dict[str, Any] | None:
         raw = self._store.setting(PLAN_KEY, "")
@@ -610,6 +626,11 @@ class DcaBook:
                 "start": int(friday.timestamp() * 1000),
                 "closeOut": int(close_out_of(friday).timestamp() * 1000),
                 "orders": [order_view(r) for r in rows if r["week"] == key],
+            },
+            "next": {
+                "key": week_of(int((friday + timedelta(days=7)).timestamp() * 1000))[0],
+                "start": int((friday + timedelta(days=7)).timestamp() * 1000),
+                "closeOut": int(close_out_of(friday + timedelta(days=7)).timestamp() * 1000),
             },
             "orders": [order_view(r) for r in reversed(rows)],
             "priceError": price_error,

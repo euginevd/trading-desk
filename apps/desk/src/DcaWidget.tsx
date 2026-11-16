@@ -1,66 +1,63 @@
-// The Dashboard's weekly DCA (TODO 11): this week as steps from deposit day to Monday's
-// close-out, and the week's orders beside them. The whole book is on its own page.
+// The Dashboard's weekly DCA (TODO 11): one section for the buying window. A sentence says where
+// the week stands; under it, eight days on a line with the window (Friday 7pm to Monday 7pm) as
+// a mint band, now marked and each fill a dot at its time; then the plan's coins with their
+// limits. It replaced the week rail and the step list, which said the same thing twice.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { closeOutDca, getDcaBook } from "./api";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
-import { STATUS, dated, isOpen, limit, two, weeklyTotal, when } from "./dcaFormat";
+import { dated, isOpen, limit, two } from "./dcaFormat";
 import "./myagents.css";
 import type { DcaBook, DcaOrder } from "./types";
 
-type Step = { at: string; what: string; state: "done" | "now" | "later" };
+const DAY = 86_400_000;
+const HOUR = 3_600_000;
+const AU = "en-AU";
+const SYD = "Australia/Sydney";
 
-function steps(book: DcaBook, now: number): Step[] {
-  const weekly = book.week.orders.filter((o) => o.source === "weekly");
-  const filled = weekly.filter((o) => o.status === "filled").length;
-  const open = weekly.filter(isOpen).length;
-  const closed = book.week.orders.some((o) => o.source === "close-out");
-  const placed = weekly.length > 0;
-  const done = placed && open === 0;
-  const firstPlaced = Math.min(...weekly.map((o) => o.created));
-  const lastFill = Math.max(
-    0,
-    ...weekly.filter((o) => o.status === "filled").map((o) => o.updated),
-  );
-  return [
-    { at: dated(book.week.start, true), what: "Deposit day", state: "done" },
-    {
-      at: placed ? dated(firstPlaced, true) : `${dated(now)} today`,
-      what: placed
-        ? `${weekly.length} ${weekly.length === 1 ? "limit" : "limits"} placed`
-        : "Plan and place this week's limits",
-      state: placed ? "done" : "now",
-    },
-    {
-      at: done && lastFill ? dated(lastFill, true) : `By ${dated(book.week.closeOut)}`,
-      what: placed ? `${filled} of ${weekly.length} filled` : "Waiting for the limits",
-      state: done ? "done" : placed ? "now" : "later",
-    },
-    {
-      at: dated(book.week.closeOut, true),
-      what: closed
-        ? "Closed out: what didn't fill was bought at market"
-        : done
-          ? "Nothing left to close out"
-          : !placed && now >= book.week.closeOut
-            ? "Close-out has passed; a buy placed now still counts this week"
-            : "Close-out: anything still open is bought at market",
-      state: closed || done ? "done" : placed && now >= book.week.closeOut ? "now" : "later",
-    },
-  ];
+type Cycle = { start: number; closeOut: number; orders: DcaOrder[]; current: boolean };
+
+// The cycle to show: this one while it's open or has limits waiting, else the next.
+export function cycleOf(book: DcaBook, now: number): Cycle {
+  const waiting = book.week.orders.some((o) => o.source === "weekly" && isOpen(o));
+  if (now < book.week.closeOut || waiting) {
+    const { start, closeOut, orders } = book.week;
+    return { start, closeOut, orders, current: true };
+  }
+  return { start: book.next.start, closeOut: book.next.closeOut, orders: [], current: false };
 }
 
-function sentence(book: DcaBook): string {
-  const total = weeklyTotal(book);
-  const weekly = book.week.orders.filter((o) => o.source === "weekly");
-  const spent = book.week.orders
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+const whole = (n: number) => two(n).replace(/\.00$/, "");
+const weeklyOf = (orders: DcaOrder[]) => orders.filter((o) => o.source === "weekly");
+const boughtOf = (orders: DcaOrder[]) =>
+  orders
     .filter((o) => o.side === "buy" && (o.source === "weekly" || o.source === "close-out"))
-    .reduce((sum, o) => sum + Number(o.filledQuote), 0);
-  if (weekly.length === 0) return `This week's ${two(total)} ${book.quote} isn't placed yet.`;
+    .reduce((s, o) => s + Number(o.filledQuote), 0);
+
+function headline(quote: string, cycle: Cycle, now: number, total: number): string {
+  const amount = `${whole(total)} ${quote}`;
+  if (now < cycle.start) {
+    const days = Math.ceil((cycle.start - now) / DAY);
+    const when = cycle.start - now < 12 * HOUR ? "today" : `in ${plural(days, "day")}`;
+    return `Next buy ${when}: ${amount} on ${dated(cycle.start)} at 7pm.`;
+  }
+  const weekly = weeklyOf(cycle.orders);
+  if (weekly.length === 0) return `The buying window is open: plan this week's ${amount}.`;
   const open = weekly.filter(isOpen).length;
+  if (open === 0) return `This week's buy is done: ${two(boughtOf(cycle.orders))} ${quote} bought.`;
   const filled = weekly.filter((o) => o.status === "filled").length;
-  if (open === 0) return `This week's buy is done: ${two(spent)} ${book.quote} bought.`;
-  return `This week's ${two(total)} ${book.quote}: ${filled} of ${weekly.length} limits filled.`;
+  return `${filled} of ${plural(weekly.length, "limit")} filled. The rest buy at market on ${dated(cycle.closeOut)} at 7pm.`;
+}
+
+function coinState(orders: DcaOrder[], coin: string): { cls: string; words: string } {
+  const mine = orders.filter((o) => o.coin === coin && o.side === "buy");
+  if (mine.some(isOpen)) {
+    const prices = mine.filter((o) => isOpen(o) && o.kind === "limit").map((o) => limit(o.price));
+    return { cls: "is-open", words: prices.length ? `Limit ${prices.join(", ")}` : "Open" };
+  }
+  if (mine.some((o) => o.status === "filled")) return { cls: "is-filled", words: "Bought" };
+  return { cls: "", words: "Not placed" };
 }
 
 export default function DcaWidget({ now: given }: { now?: number }) {
@@ -102,12 +99,23 @@ export default function DcaWidget({ now: given }: { now?: number }) {
     );
   };
 
+  const head = (
+    <header className="dcw-head">
+      <AgentAvatar icon="dca" slug="dca-agent" />
+      <h2>Weekly DCA</h2>
+      <a className="dcw-agent" href="#/profile">
+        dca-agent
+      </a>
+      <a className="dcw-book" href="#/dca-book">
+        Open the DCA book
+      </a>
+    </header>
+  );
+
   if (error && !book) {
     return (
       <section className="dcw" aria-label="Weekly DCA">
-        <p className="dcw-head">
-          <b>Weekly DCA</b>
-        </p>
+        {head}
         <p className="error-text" role="alert">
           {error}{" "}
           <button type="button" className="link" onClick={load}>
@@ -121,9 +129,7 @@ export default function DcaWidget({ now: given }: { now?: number }) {
   if (!book.plan) {
     return (
       <section className="dcw" aria-label="Weekly DCA">
-        <p className="dcw-head">
-          <b>Weekly DCA</b>
-        </p>
+        {head}
         <p className="dcw-line">Set your weekly plan and the desk keeps a book of every buy.</p>
         <a className="btn btn-accent dcw-start" href="#/dca-book">
           Set up the DCA book
@@ -132,91 +138,119 @@ export default function DcaWidget({ now: given }: { now?: number }) {
     );
   }
 
-  const openWeekly = book.week.orders.some((o) => o.source === "weekly" && isOpen(o));
-  const early = now < book.week.closeOut;
+  const cycle = cycleOf(book, now);
+  const coins = book.plan.orders.reduce<Record<string, number>>((acc, o) => {
+    acc[o.coin] = (acc[o.coin] ?? 0) + Number(o.spend);
+    return acc;
+  }, {});
+  const total = Object.values(coins).reduce((s, v) => s + v, 0);
+  // Monday midnight before the window's Friday 7pm, to Tuesday midnight after its close-out.
+  const from = cycle.start - 4 * DAY - 19 * HOUR;
+  const to = from + 8 * DAY;
+  const pct = (t: number) => Math.min(100, Math.max(0, ((t - from) / (to - from)) * 100));
+  const at = (t: number) => `${pct(t)}%`;
+  const inside = now >= cycle.start && now <= cycle.closeOut;
+  const waiting = weeklyOf(cycle.orders).some(isOpen);
+  const placed = weeklyOf(cycle.orders).length > 0;
+  const fills = cycle.orders.filter((o) => o.side === "buy" && Number(o.filledQty) > 0);
+  const last = cycle.current ? null : boughtOf(book.week.orders);
+  const today = Math.floor((now - from) / DAY);
+
   return (
     <section className="dcw" aria-label="Weekly DCA">
-      <div>
-        <p className="dcw-head">
-          <AgentAvatar icon="dca" slug="dca-agent" />
-          <b>Weekly DCA</b>
-          <a className="muted dcw-agent" href="#/profile">
-            dca-agent
-          </a>
-        </p>
-        <p className="dcw-line">{sentence(book)}</p>
-        <ol className="dcw-steps">
-          {steps(book, now).map((s) => (
-            <li key={s.at + s.what} className={`is-${s.state}`}>
-              <span className="dcw-when num">{s.at}</span>
-              <span>{s.what}</span>
-            </li>
-          ))}
+      {head}
+      <p className="dcw-line">{headline(book.quote, cycle, now, total)}</p>
+
+      <div
+        className="dcw-axis"
+        role="img"
+        aria-label={`The buying window runs from ${dated(cycle.start)} 7pm to ${dated(cycle.closeOut)} 7pm.`}
+      >
+        <ol className="dcw-days" aria-hidden="true">
+          {Array.from({ length: 8 }, (_, i) => {
+            const day = new Date(from + i * DAY + 12 * HOUR);
+            return (
+              <li key={i} className={i === today ? "is-today" : ""}>
+                <span>{day.toLocaleDateString(AU, { weekday: "short", timeZone: SYD })}</span>
+                <b className="num">
+                  {day.toLocaleDateString(AU, { day: "numeric", timeZone: SYD })}
+                </b>
+              </li>
+            );
+          })}
         </ol>
-        {said && (
-          <p className="muted dcw-said" role="status">
-            {said}
-          </p>
-        )}
+        <div className="dcw-track">
+          <span
+            className={`dcw-window${inside ? " is-open" : ""}`}
+            style={{ left: at(cycle.start), width: `${pct(cycle.closeOut) - pct(cycle.start)}%` }}
+          />
+          {now >= from && now <= to && <span className="dcw-now" style={{ left: at(now) }} />}
+          {fills.map((o) => (
+            <span key={o.ref} className="dcw-fill" style={{ left: at(o.updated) }} />
+          ))}
+        </div>
+        <div className="dcw-marks" aria-hidden="true">
+          <span style={{ left: at(cycle.start) }}>
+            <b>Fri 7pm</b> deposit, then limits
+          </span>
+          <span className="is-end" style={{ left: at(cycle.closeOut) }}>
+            <b>Mon 7pm</b> close-out
+          </span>
+        </div>
       </div>
-      <div>
-        {book.week.orders.length > 0 ? (
-          <table className="dcw-table" aria-label="This week's orders">
-            <thead>
-              <tr>
-                <th>Coin</th>
-                <th className="r">Limit</th>
-                <th className="r">{book.quote}</th>
-                <th>State</th>
-              </tr>
-            </thead>
-            <tbody>
-              {book.week.orders.map((o: DcaOrder) => (
-                <tr key={o.ref}>
-                  <td>
-                    <span className="dcb-coin">
-                      <CoinIcon coin={o.coin} />
-                      {o.coin}
-                    </span>
-                  </td>
-                  <td className="r num">{o.kind === "market" ? "Market" : limit(o.price)}</td>
-                  <td className="r num">{two(o.spend ?? o.filledQuote)}</td>
-                  <td>
-                    <span className={`dcb-tag is-${o.status}`}>{STATUS[o.status]}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        ) : (
-          <p className="muted dcw-none">No orders this week yet.</p>
-        )}
-        <div className="dcw-foot">
-          {openWeekly ? (
+
+      <div className="dcw-foot">
+        <ul className="dcw-coins" aria-label="This week's coins">
+          {Object.entries(coins).map(([coin, usdc]) => {
+            const state = coinState(cycle.orders, coin);
+            return (
+              <li key={coin} className={state.cls}>
+                <span className="dcb-coin">
+                  <CoinIcon coin={coin} />
+                  {coin}
+                </span>
+                <b className="num">{whole(usdc)}</b>
+                {cycle.orders.length > 0 && <small className="num">{state.words}</small>}
+              </li>
+            );
+          })}
+        </ul>
+        <div className="dcw-act">
+          {waiting ? (
             <button
               type="button"
-              className="btn btn-small"
+              className="btn"
               onClick={() => {
                 dialog.current?.showModal?.();
                 keep.current?.focus();
               }}
             >
-              {early ? "Close out early" : "Close out now"}
+              {now < cycle.closeOut ? "Close out early" : "Close out now"}
             </button>
-          ) : (
-            <a className="btn btn-small" href="#/dca-book?plan">
-              {book.week.orders.length ? "Add an order" : "Plan this week"}
+          ) : !placed && inside ? (
+            <a className="btn btn-accent" href="#/dca-book?plan">
+              Plan this week
             </a>
+          ) : null}
+          {last !== null && (
+            <small className="muted">
+              Last week: {last > 0 ? `${two(last)} ${book.quote} bought` : "nothing bought"}.
+            </small>
           )}
-          <a href="#/dca-book">Open the DCA book</a>
         </div>
       </div>
+      {said && (
+        <p className="muted dcw-said" role="status">
+          {said}
+        </p>
+      )}
+
       <dialog ref={dialog} aria-labelledby="dcw-close-title">
         <h2 id="dcw-close-title">Close out this week now?</h2>
         <p>
           Every weekly limit still open is cancelled, and what it didn't buy is bought at market
           straight away.
-          {early && ` The plan's close-out is ${when(book.week.closeOut)}.`}
+          {now < cycle.closeOut && ` The plan's close-out is ${dated(cycle.closeOut)} at 7pm.`}
         </p>
         <div className="dlg-btns">
           <button ref={keep} className="btn" type="button" onClick={() => dialog.current?.close()}>

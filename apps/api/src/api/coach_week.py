@@ -106,7 +106,7 @@ def with_book(
         return rail
     weekly = sum((Decimal(o["spend"]) for o in plan["orders"]), ZERO)
     friday = date.fromisoformat(buy["date"])
-    opens = datetime(friday.year, friday.month, friday.day, 17, tzinfo=BOOK_TZ)
+    opens = datetime(friday.year, friday.month, friday.day, 19, tzinfo=BOOK_TZ)
     key, _ = week_of(int(opens.timestamp() * 1000))
     bought = sum(
         (

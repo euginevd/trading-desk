@@ -131,11 +131,6 @@ vi.mock("./api", () => ({
 
 const { default: CoachPage } = await import("./Coach");
 
-function part<T>(value: T | undefined): T {
-  if (value === undefined) throw new Error("The fixture is missing a part.");
-  return value;
-}
-
 afterEach(() => {
   cleanup();
   coach = down;
@@ -181,91 +176,6 @@ describe("the Dashboard", () => {
     coach = { ...down, pending: false, message: { ...down.message, outOfDate: true } };
     render(<CoachPage />);
     expect(await screen.findByText(/Out of date · your Profile changed/)).toBeTruthy();
-  });
-
-  it("lays out the week with the plan's buys on their days", async () => {
-    coach = { ...down, pending: false };
-    render(<CoachPage />);
-    const rail = await screen.findByRole("region", { name: "This week" });
-    const days = within(rail).getAllByRole("button");
-    expect(days).toHaveLength(7);
-    expect(days[0]?.getAttribute("aria-label")).toBe("Monday 16 Nov, today");
-    expect(days[4]?.getAttribute("aria-label")).toBe("Friday 20 Nov: A$500 buy");
-    // Fear & Greed is 22, under 40: the extra buy applies this week.
-    await waitFor(() =>
-      expect(days[6]?.getAttribute("aria-label")).toBe("Sunday 22 Nov: +A$250: F&G 22"),
-    );
-    expect(
-      within(rail).getByText("Today: nothing planned. Next: your A$500 buy on Friday."),
-    ).toBeTruthy();
-    fireEvent.mouseEnter(part(days[6]));
-    expect(
-      await within(rail).findByText(
-        "Sunday 22 Nov: +A$250 when Fear & Greed is under 40. Fear & Greed is 22 (extreme fear), so it applies this week.",
-      ),
-    ).toBeTruthy();
-    fireEvent.focus(part(days[4]));
-    expect(
-      await within(rail).findByText(
-        "Friday 20 Nov: your A$500 weekly buy. Limit orders from your split, likely to fill within three days.",
-      ),
-    ).toBeTruthy();
-  });
-
-  it("shows the DCA book's weekly buy in USDC when there's a plan", async () => {
-    const base = week();
-    coach = {
-      ...down,
-      pending: false,
-      week: {
-        ...base,
-        days: base.days.map((d) => (d.kind === "extra" ? { ...d, kind: "" } : d)),
-        extra: null,
-        buy: base.buy && {
-          ...base.buy,
-          usdc: "600",
-          boughtUsdc: "0",
-          quote: "USDC",
-          coins: ["BTC", "ETH", "SOL"],
-        },
-      },
-    };
-    render(<CoachPage />);
-    const rail = await screen.findByRole("region", { name: "This week" });
-    const days = within(rail).getAllByRole("button");
-    expect(days[4]?.getAttribute("aria-label")).toBe("Friday 20 Nov: 600 USDC DCA");
-    expect(
-      within(rail).getByText("Today: nothing planned. Next: your 600 USDC DCA on Friday."),
-    ).toBeTruthy();
-    fireEvent.focus(part(days[4]));
-    expect(
-      await within(rail).findByText(
-        "Friday 20 Nov: your weekly DCA. Deposit A$500; 600 USDC of it buys BTC, ETH and SOL by limit orders, the rest goes to the trading pot.",
-      ),
-    ).toBeTruthy();
-  });
-
-  it("says when the buy is due, done or missed", async () => {
-    coach = { ...down, pending: false, week: week("due", "2026-11-20") };
-    render(<CoachPage />);
-    const rail = await screen.findByRole("region", { name: "This week" });
-    expect(within(rail).getByText("A$500 buy today")).toBeTruthy();
-    expect(within(rail).getByText(/^Today: your A\$500 weekly buy\. Limit orders/)).toBeTruthy();
-    cleanup();
-    coach = { ...down, pending: false, week: week("done", "2026-11-21") };
-    render(<CoachPage />);
-    expect(await screen.findByText("✓ A$500 bought")).toBeTruthy();
-    cleanup();
-    coach = { ...down, pending: false, week: week("missed", "2026-11-21") };
-    render(<CoachPage />);
-    expect(await screen.findByText("A$500 not bought")).toBeTruthy();
-  });
-
-  it("shows no rail before the plan is profile.md v2", async () => {
-    coach = { ...down, pending: false, week: null };
-    render(<CoachPage />);
-    expect(await screen.findByText("Evening, Sam.")).toBeTruthy();
-    expect(screen.queryByRole("region", { name: "This week" })).toBeNull();
   });
 
   it("shows the month's deposits against the cap and the owner's lesson", async () => {

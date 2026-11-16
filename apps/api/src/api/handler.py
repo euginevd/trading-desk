@@ -46,6 +46,7 @@ from api.audit import Audit
 from api.binance import Binance, BinanceError, plain
 from api.bots import Bots
 from api.dca_book import DcaBook
+from api.dca_funds import Funds
 from api.deposits import amount_key
 from api.deposits import report as deposit_report
 from api.grid import Grids
@@ -707,6 +708,11 @@ def _add_alert(s: Services, b: dict[str, Any]) -> dict[str, Any]:
     return {"alerts": s.store.alerts(coin)}
 
 
+def _funds(s: Services) -> Funds:
+    """Add and Remove funds on the DCA book, with dca-agent on the desk's AI provider."""
+    return Funds(DcaBook(Trading(s.binance, s.store, s.audit)), s.signals)
+
+
 ServiceRoute = Callable[[Services, dict[str, str], dict[str, Any]], object]
 
 
@@ -904,6 +910,13 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("POST", "/coach/message"): lambda s, _q, _b: _coach(s, write=True),
     ("GET", "/agents"): lambda _s, _q, _b: agents.listing(),
     ("GET", "/my-agents"): lambda s, _q, _b: my_agents.listing(s.store),
+    ("POST", "/dca/funds/analyse"): lambda s, _q, b: _funds(s).analyse(
+        b.get("side"), b.get("amount")
+    ),
+    ("POST", "/dca/funds/chat"): lambda s, _q, b: _funds(s).chat(b),
+    ("GET", "/dca/funds/odds"): lambda s, q, _b: _funds(s).odds(
+        str(q.get("coin", "")), q.get("price"), str(q.get("side", "add"))
+    ),
     ("GET", "/my-agents/file"): lambda s, q, _b: my_agents.file(s.store, str(q.get("slug", ""))),
     ("GET", "/tax"): lambda s, _q, _b: _tax(s),
     ("GET", "/tax/sell-check"): lambda s, q, _b: _sell_check(s, q),
