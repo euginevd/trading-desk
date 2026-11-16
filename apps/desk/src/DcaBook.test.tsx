@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import DcaBookPage from "./DcaBookPage";
 import DcaWidget from "./DcaWidget";
 import { toCsv } from "./dcaFormat";
-import type { DcaBook, DcaOrder, DcaWeekPlan } from "./types";
+import type { DcaBook, DcaOrder, DcaWeekPlan, FundsPlan } from "./types";
 
 // Made-up figures only (known-mistakes 7).
 const START = Date.UTC(2026, 10, 20, 8, 0); // Fri 20 Nov, 7pm Sydney
@@ -145,6 +145,37 @@ const plan: DcaWeekPlan = {
   ],
 };
 
+const funds: FundsPlan = {
+  side: "buy",
+  amount: "100",
+  quote: "USDC",
+  by: "dca-agent",
+  note: "Most to BTC, near last week's low.",
+  said: [],
+  orders: [
+    {
+      coin: "BTC",
+      pct: "70",
+      usdc: "70",
+      price: "63837.4",
+      now: "64500",
+      qty: "0.0011",
+      odds: { hit: 1750, windows: 2190, pct: 80 },
+      reason: "Just above Saturday's 63.3K low.",
+    },
+    {
+      coin: "ETH",
+      pct: "30",
+      usdc: "30",
+      price: "1772.37",
+      now: "1806",
+      qty: "0.017",
+      odds: { hit: 1760, windows: 2190, pct: 80 },
+      reason: "Above the 1,750 shelf.",
+    },
+  ],
+};
+
 function serve(reply: DcaBook) {
   const fetch = vi.fn((url: string, init?: RequestInit) => {
     const path = url.replace(/^\/api/, "");
@@ -153,6 +184,7 @@ function serve(reply: DcaBook) {
     if (path === "/dca") return json(reply);
     if (path === "/dca/suggest") return json(plan);
     if (path === "/dca/close-out") return json({ closed: ["BTC 49.79"] });
+    if (path === "/dca/funds/analyse") return json(funds);
     if (path === "/dca/orders") {
       const body = JSON.parse(String(init?.body)) as { coin: string };
       return json(order({ ref: `DCA-${body.coin}-26W47-9`, coin: body.coin }));
@@ -243,6 +275,35 @@ describe("DCA book page", () => {
       spend: "50",
       price: "63837.4",
       source: "weekly",
+      override: false,
+    });
+  });
+
+  it("adds funds: dca-agent's split, a hand edit, then one limit per coin", async () => {
+    const fetch = serve(book());
+    render(<DcaBookPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add funds" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Amount in USDC" }), {
+      target: { value: "100" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Analyse with dca-agent" }));
+    expect(await screen.findByText("Most to BTC, near last week's low.")).toBeTruthy();
+    expect(screen.getByText("Just above Saturday's 63.3K low.")).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "BTC share" }), {
+      target: { value: "60" },
+    });
+    expect(screen.getByRole("textbox", { name: "BTC amount" })).toHaveProperty("value", "60.00");
+    fireEvent.change(screen.getByRole("textbox", { name: "ETH share" }), {
+      target: { value: "40" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review 2 limit buys" }));
+    fireEvent.click(screen.getByRole("button", { name: "Place 2" }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders")).toHaveLength(2));
+    expect(JSON.parse(String(sent(fetch, "/dca/orders")[0]?.[1]?.body))).toEqual({
+      coin: "BTC",
+      spend: "60.00",
+      price: "63837.4",
+      source: "named",
       override: false,
     });
   });

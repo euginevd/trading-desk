@@ -35,6 +35,7 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 ## Motion
 
 9. 120ms for hover and press, 200ms for tabs and dialogs. Animate only `transform` and `opacity`, and respect reduced motion.
+9a. Anything that opens over the page (a dialog, a sheet, a menu) closes on Esc and on a click outside it; a drag that starts inside doesn't close it. Dialogs get this from one handler in `main.tsx` (`dismiss.ts`); a confirm closed this way keeps, as its default.
 10. Prices update in place; a change flashes its tint for 400ms at most. Nothing loops or scrolls on its own.
 
 ## Components

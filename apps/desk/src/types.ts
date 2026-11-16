@@ -1242,3 +1242,25 @@ export interface DcaOrderRequest {
   link?: string;
   override?: boolean;
 }
+
+// Add or Remove funds on the DCA book (TODO 11): dca-agent's split, checked by the desk.
+export interface FundsOrder {
+  coin: string;
+  pct: string;
+  usdc: string;
+  price: string;
+  now: string;
+  qty: string;
+  odds: { hit: number; windows: number; pct: number | null };
+  reason: string;
+}
+export interface FundsPlan {
+  side: "buy" | "sell";
+  amount: string;
+  quote: string;
+  orders: FundsOrder[];
+  note: string;
+  said: string[];
+  by: "dca-agent" | "desk";
+  reply?: string;
+}

@@ -312,7 +312,11 @@ class Funds:
                     "usdc": plain(r["usdc"].quantize(CENT)),
                     "price": plain(r["price"]),
                     "now": plain(now),
-                    "qty": plain(r["usdc"] / r["price"]),
+                    "qty": plain(
+                        (r["usdc"] / r["price"]).quantize(
+                            Decimal("0.00000001"), rounding=ROUND_DOWN
+                        )
+                    ),
                     "odds": self._odds(r["coin"], side, now, r["price"]),
                     "reason": str(r.get("reason") or "")[:240],
                 }
@@ -336,7 +340,9 @@ class Funds:
             (agent.get("markdown") or "You are dca-agent, the owner's patient DCA buyer.")
             + "\n\nYou are placing money the owner names now, not the Friday buy. Use only the "
             "desk's figures; never invent a price, level or odds. One order per coin. Each "
-            "reason is one plain sentence naming the level or fact the price rests on."
+            "reason is one plain sentence naming the level or fact the price rests on; don't "
+            "repeat the odds or window counts, the desk shows those. The note "
+            "is at most 50 words: what you did and why, in plain words."
         )
         try:
             reply, _cost, _name = self._signals.step(
@@ -402,7 +408,7 @@ class Funds:
                 raise
             reply, (rows, said) = None, self.settle(facts, amount, self.desk_plan(facts, amount))
         note = (
-            str(reply.get("note") or "")[:400]
+            str(reply.get("note") or "")[:700]
             if reply
             else "dca-agent couldn't be reached, so this is the desk's own plan."
         )
@@ -451,7 +457,7 @@ class Funds:
             "amount": plain(amount),
             "quote": QUOTE,
             "orders": rows,
-            "note": str(reply.get("note") or "")[:400],
+            "note": str(reply.get("note") or "")[:700],
             "said": said,
             "reply": str(reply.get("reply") or "")[:600],
             "by": AGENT,

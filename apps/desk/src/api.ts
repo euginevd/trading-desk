@@ -1,4 +1,5 @@
 import type {
+  FundsPlan,
   DcaBook,
   DcaOdds,
   DcaOrder,
@@ -280,3 +281,17 @@ export const placeDcaOrder = (order: DcaOrderRequest) =>
 export const cancelDcaOrder = (ref: string) =>
   call<DcaOrder>("POST", "/dca/orders/cancel", { ref });
 export const closeOutDca = () => call<{ closed: string[] }>("POST", "/dca/close-out");
+export const analyseFunds = (side: "add" | "remove", amount: string) =>
+  call<FundsPlan>("POST", "/dca/funds/analyse", { side, amount });
+export const chatFunds = (body: {
+  side: "add" | "remove";
+  amount: string;
+  orders: { coin: string; usdc: string; price: string; reason: string }[];
+  history: { who: "you" | "agent"; text: string }[];
+  message: string;
+}) => call<FundsPlan>("POST", "/dca/funds/chat", body);
+export const fundsOdds = (coin: string, price: string, side: "add" | "remove") =>
+  call<{ hit: number; windows: number; pct: number | null; now: string }>(
+    "GET",
+    `/dca/funds/odds?coin=${encodeURIComponent(coin)}&price=${encodeURIComponent(price)}&side=${side}`,
+  );

@@ -13,6 +13,7 @@ import {
   suggestDca,
 } from "./api";
 import CoinIcon from "./CoinIcon";
+import DcaFunds from "./DcaFunds";
 import {
   SOURCE,
   STATUS,
@@ -711,6 +712,7 @@ export default function DcaBookPage() {
     setSheetState(next);
   };
   const [said, setSaid] = useState<string | null>(null);
+  const [funds, setFunds] = useState<"add" | "remove" | null>(null);
   const [cancelling, setCancelling] = useState<DcaOrder | null>(null);
   const cancelDialog = useRef<HTMLDialogElement>(null);
   const planning = window.location.hash.includes("?plan");
@@ -852,18 +854,33 @@ export default function DcaBookPage() {
 
       <Planner key={planning ? "plan" : "week"} book={book} onPlaced={load} />
 
+      {funds && (
+        <DcaFunds
+          key={funds}
+          side={funds}
+          quote={book.quote}
+          onClose={() => setFunds(null)}
+          onPlaced={(words) => {
+            setSaid(words);
+            load();
+          }}
+        />
+      )}
+
       <section className="dcb-section" aria-labelledby="dcb-pos-title">
         <div className="dcb-section-head">
           <h2 id="dcb-pos-title">Positions</h2>
           <span className="dcb-actions">
+            <button type="button" className="btn btn-small" onClick={() => setFunds("add")}>
+              Add funds
+            </button>
             <button
               type="button"
               className="btn btn-small"
-              onClick={() =>
-                setSheet({ kind: "buy", coin: book.positions[0]?.coin ?? "", source: "desk" })
-              }
+              disabled={!book.positions.some((x) => Number(x.qty) > 0)}
+              onClick={() => setFunds("remove")}
             >
-              Add an order
+              Remove funds
             </button>
             <button type="button" className="link" onClick={() => setEditing(true)}>
               Change the plan

@@ -5,7 +5,10 @@ import "@fontsource/inter/500.css";
 import "@fontsource/inter/600.css";
 import "@fontsource/inter/700.css";
 import App from "./App";
+import { closeOnClickAway } from "./dismiss";
 import "./styles.css";
+
+closeOnClickAway(document); // design-system 9a: a click outside a box closes it
 
 const root = document.getElementById("root");
 if (root) {
