@@ -370,3 +370,289 @@ dialog:has(.pot-rv) {
     display: none;
   }
 }
+
+/* New trade: a trade by hand in a panel from the right. The form on the left, the trade
+   standing up on the right (target at the top, stop at the bottom), its numbers and rules. */
+.dcb-section-head .pot-new {
+  margin-left: auto;
+}
+.pot-rv-why {
+  margin: 10px 0 0;
+  color: var(--body);
+}
+dialog.pnt {
+  width: min(980px, 100vw);
+  display: flex;
+  flex-direction: column;
+}
+.pnt-coins,
+.pnt-setup,
+.pnt-days,
+.pnt-quick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.pnt-coins {
+  margin-bottom: 18px;
+}
+.pnt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--body);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.pnt-chip:hover {
+  border-color: var(--hover-line);
+}
+.pnt-chip.is-on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.pnt-chip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.pnt-body {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: 28px;
+  flex: 1;
+}
+.pnt-form {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+.pnt-now-line {
+  margin: 0 0 4px;
+}
+.pnt-now-line b {
+  color: var(--text);
+}
+.pnt-field {
+  display: grid;
+  gap: 4px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.pnt-field input,
+.pnt-field textarea {
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid var(--line-2);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.pnt-field.is-text input,
+.pnt-field.is-text textarea {
+  font-size: 14px;
+  resize: vertical;
+}
+.pnt-field input:focus,
+.pnt-field textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.pnt-field.is-stop input {
+  border-left-color: var(--down);
+}
+.pnt-field.is-target input {
+  border-left-color: var(--up);
+}
+.pnt-quick {
+  margin-top: -4px;
+}
+.pnt-setup {
+  margin: 8px 0 0;
+  padding: 0;
+  border: 0;
+}
+.pnt-setup legend {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.pnt-days {
+  font-size: 12.5px;
+}
+
+/* The ladder: zones between the lines, a label on each. */
+.pnt-ladder {
+  position: relative;
+  height: 340px;
+  margin-right: 4px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel);
+  overflow: hidden;
+}
+.pnt-ladder.is-empty {
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+.pnt-zone {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
+.pnt-zone.is-win {
+  background: var(--up-soft);
+}
+.pnt-zone.is-loss {
+  background: var(--down-soft);
+}
+.pnt-line,
+.pnt-now {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border-top: 1px solid var(--line-2);
+  font-size: 12.5px;
+  line-height: 1;
+  transform: translateY(-1px);
+  white-space: nowrap;
+}
+.pnt-line > span,
+.pnt-now > span {
+  position: relative;
+  top: -9px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--panel);
+}
+.pnt-line b,
+.pnt-now b {
+  font-weight: 600;
+}
+.pnt-line.is-target {
+  border-top: 2px solid var(--up);
+  color: var(--up);
+}
+.pnt-line.is-stop {
+  border-top: 2px solid var(--down);
+  color: var(--down);
+}
+.pnt-line.is-entry {
+  border-top: 2px solid var(--text);
+  color: var(--text);
+}
+.pnt-line.is-faint {
+  border-top-style: dashed;
+  color: var(--muted);
+  justify-content: flex-end;
+}
+.pnt-now {
+  border-top: 1px dashed var(--accent);
+  color: var(--accent);
+  justify-content: flex-end;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pnt-zone,
+  .pnt-line,
+  .pnt-now {
+    transition:
+      top 220ms var(--ease),
+      height 220ms var(--ease);
+  }
+}
+
+.pnt-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin: 16px 0 0;
+}
+.pnt-figures dt {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.pnt-figures dd {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 14px;
+}
+.pnt-figures .is-big dd {
+  font-size: 20px;
+  font-weight: 600;
+}
+.pnt-figures .is-big dd small {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 400;
+}
+.pnt-figures dd.up {
+  color: var(--up);
+}
+.pnt-figures dd.down {
+  color: var(--down);
+}
+.pnt-rules {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(46, 189, 133, 0.35);
+  border-radius: 8px;
+  background: var(--up-soft);
+  font-size: 13px;
+}
+.pnt-rules p {
+  margin: 0;
+}
+.pnt-rules.is-broken {
+  border-color: rgba(240, 97, 109, 0.4);
+  background: var(--down-soft);
+}
+.pnt-rules ul {
+  margin: 0;
+  padding-left: 18px;
+}
+.pnt-foot {
+  position: sticky;
+  bottom: -22px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 22px -24px -22px;
+  padding: 14px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--panel-2);
+}
+.pnt-foot > span {
+  margin-right: auto;
+  font-size: 13px;
+}
+@media (max-width: 760px) {
+  .pnt-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pnt-ladder {
+    height: 280px;
+  }
+  .pnt-figures {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pnt-foot {
+    flex-wrap: wrap;
+  }
+}

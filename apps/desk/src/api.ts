@@ -1,6 +1,7 @@
 import type {
   PotAction,
   PotCheck,
+  PotPreview,
   PotTrade,
   PotTradeRequest,
   PotView,
@@ -323,6 +324,12 @@ export const amendDcaOrder = (change: { ref: string; price: string; spend?: stri
 // The trading pot (docs/plan-trade.md).
 export const getPot = () => call<PotView>("GET", "/pot");
 export const putInPot = (usdc: string) => call<PotView>("POST", "/pot/put-in", { usdc });
+export const previewPotTrade = (body: {
+  coin: string;
+  entry?: string;
+  stop?: string;
+  target?: string;
+}) => call<PotPreview>("POST", "/pot/preview", body);
 export const placePotTrade = (body: PotTradeRequest) => call<PotTrade>("POST", "/pot/trades", body);
 export const cancelPotTrade = (ref: string) =>
   call<PotTrade>("POST", "/pot/trades/cancel", { ref });

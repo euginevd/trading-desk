@@ -122,6 +122,35 @@ function serve(reply: PotView) {
         trade({ ref: "TRD-SUI-26W47-1", coin: "SUI", status: "waiting", entry: "3.4172" }),
       );
     if (path === "/pot/trades/stop") return json(trade({ stop: "135.5" }));
+    if (path === "/pot/preview") {
+      const body = JSON.parse(String(init?.body)) as Record<string, string>;
+      const base = { coin: body.coin, ref: "TRD-SOL-26W47-2", now: "138.02", tick: "0.01" };
+      if (!body.stop) return json({ ...base, trade: null, problems: [] });
+      return json({
+        ...base,
+        trade: {
+          coin: "SOL",
+          entry: body.entry,
+          stop: body.stop,
+          target: body.target,
+          qty: "0.073",
+          spend: "10.08",
+          risk: "0.52",
+          stopPct: "5.0",
+          rr: "2.8",
+          reward: "1.47",
+          targetPct: "15.0",
+          riskOfPot: "0.51",
+          allowed: "1.01",
+          fees: "0.02",
+          breakeven: "138.31",
+        },
+        problems:
+          Number(body.target) < 150
+            ? ["Reward to risk is 1.4 : 1 after fees; the rules need 2 : 1."]
+            : [],
+      });
+    }
     if (path === "/pot/agent")
       return json({ reply: "No setup today: SOL hasn't held its 20-day.", actions: [], said: [] });
     return json({ error: "Not found." }, 404);
@@ -228,6 +257,54 @@ describe("the trading pot", () => {
     fireEvent.click(screen.getByRole("button", { name: "Put in" }));
     await waitFor(() => expect(sent(fetch, "/pot/put-in")).toHaveLength(1));
     expect(JSON.parse(String(sent(fetch, "/pot/put-in")[0]?.[1]?.body))).toEqual({ usdc: "100" });
+  });
+
+  it("builds a trade by hand, sized as it's typed, and reviews it with its note", async () => {
+    const fetch = serve(pot({ proposals: [], trades: [] }));
+    render(<PotPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "New trade" }));
+    fireEvent.click(screen.getByRole("radio", { name: "SOL" }));
+    const entry = screen.getByRole("textbox", { name: "Entry price" });
+    await waitFor(() => expect(entry).toHaveProperty("value", "138.02"));
+    expect(screen.getByText("Will be TRD-SOL-26W47-2")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "−5%" }));
+    expect(screen.getByRole("textbox", { name: "Stop loss price" })).toHaveProperty(
+      "value",
+      "131.11",
+    );
+    fireEvent.change(screen.getByRole("textbox", { name: "Take profit price" }), {
+      target: { value: "145" },
+    });
+    expect(
+      await screen.findByText("Reward to risk is 1.4 : 1 after fees; the rules need 2 : 1."),
+    ).toBeTruthy();
+    const review = screen.getByRole("button", { name: "Review" });
+    expect(review).toHaveProperty("disabled", true);
+    fireEvent.click(screen.getByRole("button", { name: "3R" }));
+    expect(await screen.findByText(/Every rule kept/)).toBeTruthy();
+    expect(screen.getByText("2.8 : 1")).toBeTruthy();
+    expect(review).toHaveProperty("disabled", true); // no reason yet
+    fireEvent.change(screen.getByRole("textbox", { name: "Why this trade" }), {
+      target: { value: "Held its 50-day twice on falling volume" },
+    });
+    fireEvent.click(review);
+    expect(screen.getByRole("list", { name: "The trade's orders" }).textContent).toContain(
+      "limit buy 138.02",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Place the trade" }));
+    await waitFor(() => expect(sent(fetch, "/pot/trades")).toHaveLength(1));
+    const placed = JSON.parse(String(sent(fetch, "/pot/trades")[0]?.[1]?.body)) as Record<
+      string,
+      string
+    >;
+    expect(placed).toMatchObject({
+      coin: "SOL",
+      entry: "138.02",
+      stop: "131.11",
+      setup: "Pullback",
+    });
+    expect(placed.target).toBe("158.75");
+    expect(placed.reason).toMatch(/^Held its 50-day twice on falling volume\. Review by /);
   });
 
   it("keeps trading-agent folded until asked, then talks", async () => {

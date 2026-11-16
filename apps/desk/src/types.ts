@@ -1372,6 +1372,32 @@ export interface PotProposal {
   crowding: string;
 }
 
+// A trade typed by hand, sized by the api as it's typed (POST /pot/preview).
+export interface PotPreview {
+  coin: string;
+  ref: string;
+  now: string | null;
+  tick: string;
+  trade: {
+    coin: string;
+    entry: string;
+    stop: string;
+    target: string;
+    qty: string;
+    spend: string;
+    risk: string;
+    stopPct: string;
+    rr: string;
+    reward: string;
+    targetPct: string;
+    riskOfPot: string;
+    allowed: string;
+    fees: string;
+    breakeven: string;
+  } | null;
+  problems: string[];
+}
+
 export interface PotView {
   quote: string;
   config: { mode: "test" | "risk"; fixed: string; riskPct: string };

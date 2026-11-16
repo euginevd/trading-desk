@@ -11,7 +11,7 @@ The trading pot becomes its own book, as the DCA book is (decision 72), and trad
 - **A trade's life:** trading-agent proposes (Scan now, or the chat) → the desk checks the risk rules (a fixed 10 USDC position while testing, else 1% of the pot at risk; 25% largest position; 3% open risk; 2 : 1 after fees; the month's 6% loss limit; Bear: no longs) → the owner reviews → a limit entry → once filled, a Binance OCO sell holding the stop and the target together, so they work with the desk off → the stop or target fills, the trade closes and books its R. The stop only ever moves toward profit (the desk cancels and replaces the OCO).
 - **Test phase (owner, 17 Nov 2026):** 100 USDC in, every trade a fixed 10 USDC position, at most 1% of the pot at risk (so a stop at most 10% under the entry), no half risk in Neutral. Once about A$1K is put in, positions are sized from the stop at 1% risk instead. Both are one setting on the pot, not code paths.
 - **The sync** runs in the watch loop beside the DCA book's: fills, OCO legs, cancellations, fees in BNB valued in USDC.
-- **The Trade page is replaced** by the mockup: a sentence and totals, the market strip with Scan now, proposals waiting for the owner, open trades as a stop–entry–target ladder that opens a panel (chart, orders, move the stop, close at market), Show more for every trade, the numbers (win rate, expectancy, drawdown, 1 of 30) and the ledger with Check against Binance. trading-agent's chat folds away on the right. Hand trades go through the chat, so every trade is in the book.
+- **The Trade page is replaced** by the mockup: a sentence and totals, the market strip with Scan now, proposals waiting for the owner, open trades as a stop–entry–target ladder that opens a panel (chart, orders, move the stop, close at market), Show more for every trade, the numbers (win rate, expectancy, drawdown, 1 of 30) and the ledger with Check against Binance. trading-agent's chat folds away on the right. Hand trades go through New trade (or the chat), so every trade is in the book.
 - Left alone: the DCA book, bots and grids. The old Trade page's per-coin Analyse moves into the trade panel later, not in this plan.
 
 ## Security risks
@@ -30,6 +30,8 @@ The trading pot becomes its own book, as the DCA book is (decision 72), and trad
 - [x] The new Trade page as the mockup, with loading, empty and error states
 - [x] Tests: refs and tags, sizing from the stop, each rule refusing, OCO after the fill, R after fees, the ledger, lost and refused replies
 - [x] Checks pass and a subagent review of the pot's money code (eight findings, all fixed)
+
+- [x] New trade: a trade by hand, sized and rule-checked as it's typed, drawn as a ladder, with its note (owner, 18 Nov 2026)
 
 ### 2. Later
 

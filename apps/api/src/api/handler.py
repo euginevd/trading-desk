@@ -493,6 +493,7 @@ POT_ROUTES: dict[tuple[str, str], Route] = {
     ("PUT", "/pot/config"): lambda desk, _q, b: Pot(desk).set_config(b),
     ("POST", "/pot/put-in"): lambda desk, _q, b: Pot(desk).put_in(b),
     ("POST", "/pot/trades"): lambda desk, _q, b: Pot(desk).place(b),
+    ("POST", "/pot/preview"): lambda desk, _q, b: Pot(desk).preview(b),
     ("POST", "/pot/trades/cancel"): lambda desk, _q, b: Pot(desk).cancel(b.get("ref")),
     ("POST", "/pot/trades/stop"): lambda desk, _q, b: Pot(desk).move_stop(b),
     ("POST", "/pot/trades/close"): lambda desk, _q, b: Pot(desk).close(b.get("ref")),

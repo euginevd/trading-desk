@@ -9,6 +9,7 @@ import CoinIcon from "./CoinIcon";
 import { dated, day, dollars, qty, when } from "./dcaFormat";
 import { Live } from "./Figures";
 import PotChat, { usePotChat } from "./PotChat";
+import PotNewTrade from "./PotNewTrade";
 import PotPanel, { px, rWord, rr, tone } from "./PotPanel";
 import type { PotAction, PotCheck, PotProposal, PotTrade, PotView } from "./types";
 import "./pot.css";
@@ -353,6 +354,7 @@ export default function PotPage() {
   const [chatOpen, setChatOpen] = useState(() => readFlag(CHAT_KEY));
   const [checked, setChecked] = useState<PotCheck | null>(null);
   const [checking, setChecking] = useState(false);
+  const [building, setBuilding] = useState(false);
   const review = useRef<HTMLDialogElement>(null);
   const chat = usePotChat();
 
@@ -465,6 +467,7 @@ export default function PotPage() {
         setPlacing(false);
         review.current?.close?.();
         setPending(null);
+        setBuilding(false);
         setSaid(`${t.ref} placed: the entry waits on Binance at ${px(t.entry)}.`);
         load();
       },
@@ -646,13 +649,20 @@ export default function PotPage() {
                 <span className="muted">
                   {on.length ? `${on.length} on, ${dollars(pot.openRisk)} at risk` : ""}
                 </span>
+                <button
+                  type="button"
+                  className="btn btn-small pot-new"
+                  onClick={() => setBuilding(true)}
+                >
+                  New trade
+                </button>
               </div>
               {on.length === 0 ? (
                 <p className="pot-empty">
                   <b>No trades on.</b>{" "}
                   {pot.lastScan
                     ? pot.lastScan.line
-                    : "Scan now, or ask trading-agent for a trade in your own words."}
+                    : "Scan now, or set up a trade of your own with New trade."}
                 </p>
               ) : (
                 <ul className="pot-trades">
@@ -841,6 +851,17 @@ export default function PotPage() {
         />
       )}
 
+      {building && (
+        <PotNewTrade
+          coins={pot.coins}
+          onClose={() => setBuilding(false)}
+          onReview={(t) => {
+            setPlaceError(null);
+            setPending(t);
+          }}
+        />
+      )}
+
       {openTrade && (
         <PotPanel
           key={openTrade.ref}
@@ -883,6 +904,11 @@ export default function PotPage() {
                 <span className="num up">{dollars(reward, true)}</span>
               </li>
             </ul>
+            {pending.reason && (
+              <p className="pot-rv-why">
+                <b>{pending.setup}.</b> {pending.reason}
+              </p>
+            )}
             <p className="muted">
               Reward to risk {rr(pending)} : 1. The entry goes to Binance now, tagged as the trade's
               reference. Once it fills, the desk places the stop and target there as one OCO order,

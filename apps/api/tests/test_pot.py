@@ -350,3 +350,28 @@ def test_a_refused_close_puts_the_exits_back(pot: Pot, monkeypatch: pytest.Monke
     live = pot.view()["trades"][0]
     assert live["status"] == "open"
     assert by_tag(f"{trade['ref']}-X2S")["status"] == "NEW"
+
+
+def test_a_trade_by_hand_previews_its_numbers_and_every_rule_it_breaks(pot: Pot) -> None:
+    empty = pot.preview({"coin": "SOL"})
+    assert empty["now"] == "212.4"
+    assert empty["trade"] is None
+    assert empty["problems"] == []
+    good = pot.preview(SOL)
+    assert good["problems"] == []
+    shown = good["trade"]
+    assert shown["spend"] == "10.00"
+    assert shown["stopPct"] == "5.0"
+    assert shown["targetPct"] == "15.0"
+    assert Decimal(shown["breakeven"]) > 200
+    assert Decimal(shown["reward"]) > 2 * Decimal(shown["risk"])
+    # Above the price, too wide a stop and under 2 : 1, all named at once, numbers still shown.
+    bad = pot.preview(SOL | {"entry": "220", "stop": "180", "target": "230"})
+    assert bad["trade"] is not None
+    assert len(bad["problems"]) == 3
+    assert "above the price now" in bad["problems"][0]
+    assert pot.preview(SOL | {"stop": "205"})["problems"] == [
+        "The stop goes under the entry and the target above it."
+    ]
+    with pytest.raises(Refused):
+        pot.preview({"coin": "DOGE"})

@@ -224,9 +224,9 @@ class Pot:
                 f"The entry is above the price now ({plain(now)}): a limit buy goes at or under it."
             )
 
-    def size(self, body: dict[str, Any]) -> dict[str, Any]:
+    def _numbers(self, body: dict[str, Any]) -> dict[str, Any]:
         """A trade's prices to Binance's steps, its size by the pot's sizing, and its risk and
-        reward after fees; refuses one that breaks a sizing rule."""
+        reward after fees; refuses only what can't be sized at all."""
         coin = str(body.get("coin", "")).upper()
         if coin not in self.coins():
             raise Refused(f"{coin or 'That coin'} isn't one trading-agent trades.")
@@ -236,7 +236,6 @@ class Pot:
         target = rules.price(number(body.get("target"), "Target"))
         if not stop < entry < target:
             raise Refused("The stop goes under the entry and the target above it.")
-        self._under_now(coin, entry)
         config, equity = self.config(), self.equity()
         if equity <= ZERO:
             raise Refused("Put money in the pot first.")
@@ -251,28 +250,114 @@ class Pot:
         spend = qty * entry
         risk = qty * (entry - stop) + spend * FEE + qty * stop * FEE
         reward = qty * (target - entry) - spend * FEE - qty * target * FEE
-        stop_pct = (entry - stop) / entry * HUNDRED
         if qty <= ZERO or spend < rules.min_notional:
             raise Refused(f"That's under Binance's smallest order of {rules.min_notional}.")
+        return {
+            "coin": coin,
+            "entry": entry,
+            "stop": stop,
+            "target": target,
+            "qty": qty,
+            "spend": spend,
+            "risk": risk,
+            "reward": reward,
+            "allowed": allowed,
+            "equity": equity,
+        }
+
+    @staticmethod
+    def _shown(n: dict[str, Any]) -> dict[str, Any]:
+        entry = n["entry"]
+        return {
+            "coin": n["coin"],
+            "entry": plain(entry),
+            "stop": plain(n["stop"]),
+            "target": plain(n["target"]),
+            "qty": plain(n["qty"]),
+            "spend": _cents(n["spend"]),
+            "risk": _cents(n["risk"]),
+            "stopPct": str(((entry - n["stop"]) / entry * HUNDRED).quantize(Decimal("0.1"))),
+            "rr": str((n["reward"] / n["risk"]).quantize(Decimal("0.1"))),
+        }
+
+    @classmethod
+    def _limits(cls, n: dict[str, Any]) -> None:
+        """The sizing rules: the risk a trade allows, and 2 : 1 after fees."""
+        cls._risk_rule(n)
+        cls._rr_rule(n)
+
+    @staticmethod
+    def _risk_rule(n: dict[str, Any]) -> None:
+        risk, allowed = n["risk"], n["allowed"]
         if risk > allowed * Decimal("1.0001"):
+            stop_pct = (n["entry"] - n["stop"]) / n["entry"] * HUNDRED
             raise Refused(
                 f"The stop is {stop_pct:.1f}% under the entry: that risks ${risk:.2f}, over the "
                 f"${allowed:.2f} a trade allows. A closer stop, or pass."
             )
-        rr = reward / risk
+
+    @staticmethod
+    def _rr_rule(n: dict[str, Any]) -> None:
+        rr = n["reward"] / n["risk"]
         if rr < MIN_RR:
             raise Refused(f"Reward to risk is {rr:.1f} : 1 after fees; the rules need 2 : 1.")
-        return {
+
+    def size(self, body: dict[str, Any]) -> dict[str, Any]:
+        """A trade sized and shown; refuses one that breaks a sizing rule."""
+        n = self._numbers(body)
+        self._under_now(n["coin"], n["entry"])
+        self._limits(n)
+        return self._shown(n)
+
+    def preview(self, body: dict[str, Any]) -> dict[str, Any]:
+        """A trade typed by hand, before it's placed: the price now, its numbers, and every rule
+        it breaks (not just the first), so the page can draw it as it's typed."""
+        coin = str(body.get("coin", "")).upper()
+        if coin not in self.coins():
+            raise Refused(f"{coin or 'That coin'} isn't one trading-agent trades.")
+        now = self.prices([coin]).get(coin)
+        rules = self._rules_of(coin)
+        out: dict[str, Any] = {
             "coin": coin,
-            "entry": plain(entry),
-            "stop": plain(stop),
-            "target": plain(target),
-            "qty": plain(qty),
-            "spend": _cents(spend),
-            "risk": _cents(risk),
-            "stopPct": str(stop_pct.quantize(Decimal("0.1"))),
-            "rr": str(rr.quantize(Decimal("0.1"))),
+            "ref": self._ref(coin),  # the reference it would get, if placed now
+            "now": plain(now) if now is not None else None,
+            "tick": plain(rules.tick),
+            "trade": None,
+            "problems": [],
         }
+        if not all(body.get(k) for k in ("entry", "stop", "target")):
+            return out
+        try:
+            n = self._numbers(body)
+        except Refused as error:
+            out["problems"] = [str(error)]
+            return out
+        fees = n["spend"] * FEE + n["qty"] * n["target"] * FEE
+        out["trade"] = {
+            **self._shown(n),
+            "reward": _cents(n["reward"]),
+            "targetPct": str(
+                ((n["target"] - n["entry"]) / n["entry"] * HUNDRED).quantize(Decimal("0.1"))
+            ),
+            "riskOfPot": str((n["risk"] / n["equity"] * HUNDRED).quantize(Decimal("0.01"))),
+            "allowed": _cents(n["allowed"]),
+            "fees": _cents(fees),
+            # The price that pays back both fees, a tick up so it's never under.
+            "breakeven": plain(rules.price(n["entry"] * (1 + FEE) / (1 - FEE)) + rules.tick),
+        }
+        problems: list[str] = []
+        for step in (
+            lambda: self._under_now(n["coin"], n["entry"]),
+            lambda: self._risk_rule(n),
+            lambda: self._rr_rule(n),
+            lambda: self.check_rules(self._shown(n)),
+        ):
+            try:
+                step()
+            except Refused as error:
+                problems.append(str(error))
+        out["problems"] = problems
+        return out
 
     def _live(self) -> list[dict[str, Any]]:
         return [r for r in self._store.pot_trades() if r["status"] in LIVE]
