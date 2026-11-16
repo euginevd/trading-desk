@@ -178,12 +178,12 @@ dialog.drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; max-width:
     <div class="top">
       <div>
         <h1>Pot $101.36, up $1.36 from trading. One trade on, one waiting for you.</h1>
-        <p class="sub">$100 put in on 17 Nov. Neutral market, so half risk: about $0.50 a trade. Next goal A$5K.</p>
+        <p class="sub">$100 put in on 17 Nov. Test phase: $10 a trade, at most $1 at risk. Next goal A$5K.</p>
       </div>
       <dl class="totals">
         <div><dt>Put in</dt><dd class="num">$100</dd></div>
         <div><dt>Trading result</dt><dd class="num up">+$1.36</dd></div>
-        <div><dt>Open risk</dt><dd class="num">$0.50</dd></div>
+        <div><dt>Open risk</dt><dd class="num">$1.38</dd></div>
         <div><dt>Month's loss limit</dt><dd class="num">$0 <span class="muted" style="font-size:12px;font-weight:400">of $6</span></dd></div>
       </dl>
     </div>
@@ -207,8 +207,8 @@ dialog.drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; max-width:
             <div><dt>Entry, limit</dt><dd class="num">3.4172</dd></div>
             <div><dt>Stop</dt><dd class="num down">3.1388</dd></div>
             <div><dt>Target</dt><dd class="num up">4.0091</dd></div>
-            <div><dt>Size</dt><dd class="num">$6.14 <span class="muted">(1.8 SUI)</span></dd></div>
-            <div><dt>At risk</dt><dd class="num">$0.50</dd></div>
+            <div><dt>Size</dt><dd class="num">$10.00 <span class="muted">(2.93 SUI)</span></dd></div>
+            <div><dt>At risk</dt><dd class="num">$0.81 <span class="muted">(8.1%)</span></dd></div>
             <div><dt>Reward to risk</dt><dd class="num">2.1 : 1</dd></div>
             <div><dt>Crowding</dt><dd>Clear</dd></div>
           </dl>
@@ -222,7 +222,7 @@ dialog.drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; max-width:
     </section>
 
     <section aria-labelledby="o-title">
-      <div class="head"><h2 id="o-title">Open trades</h2><span class="muted">2 on, $1.00 at risk</span></div>
+      <div class="head"><h2 id="o-title">Open trades</h2><span class="muted">2 on, $1.38 at risk</span></div>
       <ul class="trades">
         <li><button data-open="drawer" aria-label="SOL trade: open its panel">
           <span><span class="coin"><span class="mark m-sol">S</span>SOL</span><br><span class="id">TRD-SOL-26W47-1, pullback</span></span>
@@ -233,7 +233,7 @@ dialog.drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; max-width:
             <span class="pin tgt" style="left:100%">144.10</span>
             <span class="now" style="left:52%"></span>
           </span>
-          <span class="r"><span class="big-r up num">+0.6R</span><br><span class="up num">+$0.31</span></span>
+          <span class="r"><span class="big-r up num">+0.6R</span><br><span class="up num">+$0.19</span></span>
           <span class="r"><span class="tag live">In trade</span></span>
         </button></li>
         <li><button data-open="drawer" aria-label="ETH trade: open its panel">
@@ -296,7 +296,7 @@ dialog.drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; max-width:
     <div class="top">
       <div>
         <h1>Pot $100. No trades yet: trading-agent waits for its setup.</h1>
-        <p class="sub">$100 put in today. Neutral market, so half risk: about $0.50 a trade, sized from the stop.</p>
+        <p class="sub">$100 put in today. Test phase: every trade is $10, with at most $1 at risk (a stop within 10%).</p>
       </div>
       <dl class="totals">
         <div><dt>Put in</dt><dd class="num">$100</dd></div>
@@ -371,8 +371,8 @@ dialog.drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; max-width:
     <text x="6" y="18" fill="#2ebd85" font-size="11">Target 144.10</text>
   </svg>
   <dl class="facts" style="gap:10px 28px">
-    <div><dt>Size</dt><dd class="num">$8.44 <span class="muted">(0.0623 SOL)</span></dd></div>
-    <div><dt>At risk</dt><dd class="num">$0.27</dd></div>
+    <div><dt>Size</dt><dd class="num">$10.00 <span class="muted">(0.0738 SOL)</span></dd></div>
+    <div><dt>At risk</dt><dd class="num">$0.32</dd></div>
     <div><dt>Reward to risk</dt><dd class="num">2.0 : 1</dd></div>
     <div><dt>Fees so far</dt><dd class="num">$0.01</dd></div>
     <div><dt>Rules</dt><dd>All kept</dd></div>
@@ -397,9 +397,9 @@ dialog.drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; max-width:
 <dialog id="review" aria-labelledby="r-title">
   <h2 id="r-title">Place the SUI trade?</h2>
   <ul class="rv">
-    <li><span class="tag live">Entry</span><span><b>SUI</b> limit buy 3.4172</span><span class="num">$6.14</span></li>
-    <li><span class="tag lost">Stop</span><span>sell all at 3.1388</span><span class="num down">−$0.50</span></li>
-    <li><span class="tag won">Target</span><span>sell all at 4.0091</span><span class="num up">+$1.06</span></li>
+    <li><span class="tag live">Entry</span><span><b>SUI</b> limit buy 3.4172</span><span class="num">$10.00</span></li>
+    <li><span class="tag lost">Stop</span><span>sell all at 3.1388</span><span class="num down">−$0.81</span></li>
+    <li><span class="tag won">Target</span><span>sell all at 4.0091</span><span class="num up">+$1.73</span></li>
   </ul>
   <p class="muted">The entry goes to Binance now, tagged TRD-SUI-26W47-1. Once it fills, the desk places the stop and target there as one OCO order, so they hold even if the desk is off.</p>
   <div class="btns"><button data-close>Not yet</button><button class="primary" data-close>Place the trade</button></div>
