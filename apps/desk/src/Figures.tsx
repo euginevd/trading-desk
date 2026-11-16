@@ -5,7 +5,7 @@ import type { Num } from "./types";
 
 const n = (v: Num | number | undefined) => (v === null || v === undefined ? null : Number(v));
 
-// Rounded with K or M: US$98K, A$145K, US$1M; one decimal below 10K (A$6.2K), so a small figure
+// Rounded with K or M: US$42K, A$63K, US$1M; one decimal below 10K (A$4.7K), so a small figure
 // still moves when it changes.
 export function km(value: Num | number | undefined, currency: "A$" | "US$" | "" = "A$"): string {
   const v = n(value);
