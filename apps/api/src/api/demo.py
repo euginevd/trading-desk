@@ -130,6 +130,7 @@ class Exchange:
     def __init__(self) -> None:
         self.orders: dict[int, dict[str, Any]] = {}
         self.lists: dict[int, list[int]] = {}
+        self.names: dict[str, int] = {}
         self.next_id = 100
         for n, o in enumerate(ORDERS, start=1):  # the demo's standing orders, cancellable
             self.orders[n] = {
@@ -185,23 +186,25 @@ class Exchange:
         made = self._new({k: v for k, v in p.items() if k != "cancelOrderId"})
         return httpx.Response(200, json={"cancelResult": "SUCCESS", "newOrderResponse": made})
 
-    def handle(self, request: httpx.Request) -> httpx.Response:
-        p = dict(request.url.params)
-        path, method = request.url.path, request.method
-        if path == "/api/v3/myTrades":
-            order = self.orders[int(p["orderId"])]
-            fills = [{"commission": "0", "commissionAsset": "USDT"}]
-            return httpx.Response(200, json=fills if order["status"] == "FILLED" else [])
+    def _list(self, path: str, method: str, p: dict[str, str]) -> httpx.Response:
+        """OCO exits: placed, looked up by id or client id, cancelled."""
         if path == "/api/v3/orderList/oco":
+            above = {"newClientOrderId": p.get("aboveClientOrderId", "")}
+            below = {"newClientOrderId": p.get("belowClientOrderId", "")}
             legs = [
-                self._new({**p, "type": "LIMIT_MAKER"}),
-                self._new({**p, "type": "STOP_LOSS"}),
+                self._new({**p, **above, "type": "LIMIT_MAKER", "price": p["abovePrice"]}),
+                self._new({**p, **below, "type": "STOP_LOSS", "price": p["belowStopPrice"]}),
             ]
             list_id = self._id()
             self.lists[list_id] = [leg["orderId"] for leg in legs]
+            if p.get("listClientOrderId"):
+                self.names[p["listClientOrderId"]] = list_id
             return httpx.Response(200, json={"orderListId": list_id, "orders": legs})
         if path == "/api/v3/orderList":
-            ids = self.lists[int(p["orderListId"])]
+            if "origClientOrderId" in p and p["origClientOrderId"] not in self.names:
+                return httpx.Response(400, json={"msg": "Order list does not exist."})
+            found = self.names.get(p.get("origClientOrderId", ""), int(p.get("orderListId", 0)))
+            ids = self.lists[found]
             filled = any(self.orders[i]["status"] == "FILLED" for i in ids)
             for i in ids:  # as on Binance: once one leg fills, the other is cancelled
                 if method == "DELETE" or (filled and self.orders[i]["status"] == "NEW"):
@@ -209,7 +212,19 @@ class Exchange:
             done = all(self.orders[i]["status"] != "NEW" for i in ids)
             status = "ALL_DONE" if done else "EXECUTING"
             orders = [{"orderId": i} for i in ids]
-            return httpx.Response(200, json={"listOrderStatus": status, "orders": orders})
+            body = {"orderListId": found, "listOrderStatus": status, "orders": orders}
+            return httpx.Response(200, json=body)
+        return httpx.Response(400, json={"msg": "Unknown order list call."})
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        p = dict(request.url.params)
+        path, method = request.url.path, request.method
+        if path == "/api/v3/myTrades":
+            order = self.orders[int(p["orderId"])]
+            fills = [{"commission": "0", "commissionAsset": "USDT"}]
+            return httpx.Response(200, json=fills if order["status"] == "FILLED" else [])
+        if path.startswith("/api/v3/orderList"):
+            return self._list(path, method, p)
         if method == "POST":
             return httpx.Response(200, json=self._new(p))
         if "origClientOrderId" in p:

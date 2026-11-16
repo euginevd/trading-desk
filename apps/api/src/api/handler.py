@@ -52,6 +52,8 @@ from api.deposits import report as deposit_report
 from api.grid import Grids
 from api.icons import Icons
 from api.market import QUOTE, MarketError, coin_symbol, market
+from api.pot import Pot
+from api.pot_agent import PotAgent
 from api.profile_md import for_agents
 from api.sentiment import SentimentError, fear_and_greed, fear_and_greed_detail, market_global
 from api.service import CostRules, TradeCache, Wallet, fetch
@@ -485,6 +487,18 @@ DCA_ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/dca/check"): lambda desk, _q, _b: DcaBook(desk).check(),
     ("POST", "/dca/check/fix"): lambda desk, _q, _b: DcaBook(desk).repair(),
 }
+# The trading pot (docs/plan-trade.md): trading-agent's book, every trade by its reference.
+POT_ROUTES: dict[tuple[str, str], Route] = {
+    ("GET", "/pot"): lambda desk, _q, _b: Pot(desk).view(),
+    ("PUT", "/pot/config"): lambda desk, _q, b: Pot(desk).set_config(b),
+    ("POST", "/pot/put-in"): lambda desk, _q, b: Pot(desk).put_in(b),
+    ("POST", "/pot/trades"): lambda desk, _q, b: Pot(desk).place(b),
+    ("POST", "/pot/trades/cancel"): lambda desk, _q, b: Pot(desk).cancel(b.get("ref")),
+    ("POST", "/pot/trades/stop"): lambda desk, _q, b: Pot(desk).move_stop(b),
+    ("POST", "/pot/trades/close"): lambda desk, _q, b: Pot(desk).close(b.get("ref")),
+    ("POST", "/pot/proposals/dismiss"): lambda desk, _q, b: Pot(desk).dismiss(b),
+    ("GET", "/pot/check"): lambda desk, _q, _b: Pot(desk).check(),
+}
 ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/trade"): lambda desk, q, _: desk.terminal(coin_symbol(q.get("symbol") or "BTC")),
     ("GET", "/settings"): lambda desk, _q, _b: desk.settings(),
@@ -498,6 +512,7 @@ ROUTES: dict[tuple[str, str], Route] = {
         b.get("symbol"), b.get("orderId")
     ),
     **DCA_ROUTES,
+    **POT_ROUTES,
 }
 
 
@@ -716,6 +731,18 @@ def _funds(s: Services) -> Funds:
     return Funds(DcaBook(Trading(s.binance, s.store, s.audit)), s.signals)
 
 
+def _pot_agent(s: Services, body: dict[str, Any] | None) -> dict[str, Any]:
+    """trading-agent's scan (no body) or chat, with Binance's public futures data for crowding;
+    the demo has none."""
+    pot = Pot(Trading(s.binance, s.store, s.audit))
+    if _demo():
+        agent = PotAgent(pot, s.signals)
+        return agent.scan() if body is None else agent.chat(body)
+    with httpx.Client(timeout=TIMEOUT_SECONDS) as futures:
+        agent = PotAgent(pot, s.signals, futures)
+        return agent.scan() if body is None else agent.chat(body)
+
+
 ServiceRoute = Callable[[Services, dict[str, str], dict[str, Any]], object]
 
 
@@ -917,6 +944,8 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
         b.get("side"), b.get("amount"), b.get("agent", True) is not False
     ),
     ("POST", "/dca/funds/chat"): lambda s, _q, b: _funds(s).chat(b),
+    ("POST", "/pot/scan"): lambda s, _q, _b: _pot_agent(s, None),
+    ("POST", "/pot/agent"): lambda s, _q, b: _pot_agent(s, b),
     ("POST", "/dca/agent"): lambda s, _q, b: _funds(s).agent(b),
     ("GET", "/dca/funds/odds"): lambda s, q, _b: _funds(s).odds(
         str(q.get("coin", "")), q.get("price"), str(q.get("side", "add"))

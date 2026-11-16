@@ -238,11 +238,25 @@ class Binance:
         params |= {"quantity": plain(qty), "stopPrice": plain(stop)}
         return self._order(params, f"stop-loss sell {plain(qty)} {symbol} at {plain(stop)}")
 
-    def sell_oco(self, symbol: str, qty: Decimal, take: Decimal, stop: Decimal) -> dict[str, Any]:
-        """Take-profit above as a limit maker, stop-loss below as a stop: whichever fills first."""
+    def sell_oco(
+        self,
+        symbol: str,
+        qty: Decimal,
+        take: Decimal,
+        stop: Decimal,
+        client_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Take-profit above as a limit maker, stop-loss below as a stop: whichever fills first.
+        A client id names the pair of orders and each leg (-T the target, -S the stop)."""
         params = {"symbol": symbol, "side": "SELL", "quantity": plain(qty)}
         params |= {"aboveType": "LIMIT_MAKER", "abovePrice": plain(take)}
         params |= {"belowType": "STOP_LOSS", "belowStopPrice": plain(stop)}
+        if client_id:
+            params |= {
+                "listClientOrderId": client_id,
+                "aboveClientOrderId": f"{client_id}T",
+                "belowClientOrderId": f"{client_id}S",
+            }
         label = f"exits for {plain(qty)} {symbol}: {plain(take)} or {plain(stop)}"
         return dict(self._signed("/api/v3/orderList/oco", params, label, "POST"))
 
@@ -278,6 +292,11 @@ class Binance:
     def order_list(self, list_id: int) -> dict[str, Any]:
         params = {"orderListId": str(list_id)}
         return dict(self._signed("/api/v3/orderList", params, f"exits {list_id}"))
+
+    def order_list_by_client(self, client_id: str) -> dict[str, Any]:
+        """An OCO found by the id the desk gave it, for one whose reply never arrived."""
+        params = {"origClientOrderId": client_id}
+        return dict(self._signed("/api/v3/orderList", params, f"exits {client_id}"))
 
     def cancel_list(self, symbol: str, list_id: int) -> dict[str, Any]:
         params = {"symbol": symbol, "orderListId": str(list_id)}

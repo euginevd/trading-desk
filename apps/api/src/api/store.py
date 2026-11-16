@@ -161,6 +161,64 @@ CREATE TABLE IF NOT EXISTS agent_versions (
 CREATE TABLE IF NOT EXISTS agent_runs (
     id INTEGER PRIMARY KEY, coin TEXT NOT NULL, started INTEGER NOT NULL, doc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pot_moves (
+    id INTEGER PRIMARY KEY,
+    ref TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL,
+    usdc TEXT NOT NULL,
+    created INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pot_trades (
+    id INTEGER PRIMARY KEY,
+    ref TEXT NOT NULL UNIQUE,
+    coin TEXT NOT NULL,
+    setup TEXT NOT NULL,
+    regime TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    entry TEXT NOT NULL,
+    stop TEXT NOT NULL,
+    first_stop TEXT NOT NULL,
+    target TEXT NOT NULL,
+    qty TEXT NOT NULL,
+    spend TEXT NOT NULL,
+    risk TEXT NOT NULL,
+    mode TEXT NOT NULL,
+    status TEXT NOT NULL,
+    fill_qty TEXT NOT NULL DEFAULT '0',
+    fill_quote TEXT NOT NULL DEFAULT '0',
+    exit_qty TEXT NOT NULL DEFAULT '0',
+    exit_quote TEXT NOT NULL DEFAULT '0',
+    exit_kind TEXT,
+    fees_usd TEXT NOT NULL DEFAULT '0',
+    rules_kept INTEGER NOT NULL DEFAULT 1,
+    note TEXT,
+    created INTEGER NOT NULL,
+    filled INTEGER,
+    closed INTEGER,
+    updated INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS pot_orders (
+    id INTEGER PRIMARY KEY,
+    ref TEXT NOT NULL UNIQUE,
+    trade_ref TEXT NOT NULL,
+    role TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    side TEXT NOT NULL,
+    price TEXT,
+    stop TEXT,
+    qty TEXT NOT NULL,
+    spend TEXT,
+    client_id TEXT NOT NULL UNIQUE,
+    order_id INTEGER,
+    list_id INTEGER,
+    legs TEXT,
+    status TEXT NOT NULL,
+    executed_qty TEXT NOT NULL DEFAULT '0',
+    executed_quote TEXT NOT NULL DEFAULT '0',
+    fee_usd TEXT NOT NULL DEFAULT '0',
+    created INTEGER NOT NULL,
+    updated INTEGER NOT NULL
+);
 """
 FIELDS = (
     "status",
@@ -298,7 +356,19 @@ class Store:
             ),
             Decimal(0),
         )
-        return trades + bots + gridded + booked
+        pot = self._db.execute(
+            "SELECT status, spend, executed_quote FROM pot_orders "
+            "WHERE role = 'entry' AND created >= ?",
+            (since_ms,),
+        )
+        potted = sum(
+            (
+                Decimal(r["executed_quote"] if r["status"] == "cancelled" else r["spend"] or "0")
+                for r in pot
+            ),
+            Decimal(0),
+        )
+        return trades + bots + gridded + booked + potted
 
     def order_owner(self, order_id: int) -> str | None:
         """Which bot or grid placed this Binance order, by its reference, if any."""
@@ -478,6 +548,81 @@ class Store:
                 "executed_qty = :executed_qty, executed_quote = :executed_quote, "
                 "fee_base = :fee_base, fee_quote = :fee_quote, fee_usd = :fee_usd, "
                 "updated = :updated WHERE id = :id",
+                order,
+            )
+
+    # The trading pot (docs/plan-trade.md): money in and out, trades, and every order they
+    # sent. Permanent like the DCA book: rows are added and updated, never deleted.
+
+    def add_pot_move(self, kind: str, usdc: str, created: int) -> str:
+        with self._db:
+            n = self._db.execute("SELECT COUNT(*) FROM pot_moves WHERE kind = ?", (kind,))
+            ref = f"POT-{kind.upper()}-{int(n.fetchone()[0]) + 1}"
+            self._db.execute(
+                "INSERT INTO pot_moves (ref, kind, usdc, created) VALUES (?, ?, ?, ?)",
+                (ref, kind, usdc, created),
+            )
+        return ref
+
+    def pot_moves(self) -> list[dict[str, Any]]:
+        rows = self._db.execute("SELECT * FROM pot_moves ORDER BY created, id")
+        return [dict(r) for r in rows]
+
+    def add_pot_trade(self, trade: dict[str, Any]) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT INTO pot_trades (ref, coin, setup, regime, reason, entry, stop, "
+                "first_stop, target, qty, spend, risk, mode, status, created, updated) VALUES "
+                "(:ref, :coin, :setup, :regime, :reason, :entry, :stop, :stop, :target, :qty, "
+                ":spend, :risk, :mode, 'placing', :created, :created)",
+                trade,
+            )
+
+    def pot_trades(self) -> list[dict[str, Any]]:
+        rows = self._db.execute("SELECT * FROM pot_trades ORDER BY created DESC, id DESC")
+        return [dict(r) for r in rows]
+
+    def pot_trade(self, ref: str) -> dict[str, Any] | None:
+        row = self._db.execute("SELECT * FROM pot_trades WHERE ref = ?", (ref,)).fetchone()
+        return dict(row) if row else None
+
+    def save_pot_trade(self, trade: dict[str, Any]) -> None:
+        with self._db:
+            self._db.execute(
+                "UPDATE pot_trades SET stop = :stop, qty = :qty, status = :status, "
+                "fill_qty = :fill_qty, fill_quote = :fill_quote, exit_qty = :exit_qty, "
+                "exit_quote = :exit_quote, exit_kind = :exit_kind, fees_usd = :fees_usd, "
+                "rules_kept = :rules_kept, note = :note, filled = :filled, closed = :closed, "
+                "updated = :updated WHERE id = :id",
+                trade,
+            )
+
+    def add_pot_order(self, order: dict[str, Any]) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT INTO pot_orders (ref, trade_ref, role, kind, side, price, stop, qty, "
+                "spend, client_id, status, created, updated) VALUES (:ref, :trade_ref, :role, "
+                ":kind, :side, :price, :stop, :qty, :spend, :ref, 'placing', :created, :created)",
+                order,
+            )
+            # The reference is the Binance client id (TRD-SOL-26W47-1-E), so each order can be
+            # found on Binance by it, with or without this database.
+
+    def pot_orders(self) -> list[dict[str, Any]]:
+        rows = self._db.execute("SELECT * FROM pot_orders ORDER BY created, id")
+        return [dict(r) for r in rows]
+
+    def pot_order(self, ref: str) -> dict[str, Any] | None:
+        row = self._db.execute("SELECT * FROM pot_orders WHERE ref = ?", (ref,)).fetchone()
+        return dict(row) if row else None
+
+    def save_pot_order(self, order: dict[str, Any]) -> None:
+        with self._db:
+            self._db.execute(
+                "UPDATE pot_orders SET order_id = :order_id, list_id = :list_id, legs = :legs, "
+                "status = :status, executed_qty = :executed_qty, "
+                "executed_quote = :executed_quote, fee_usd = :fee_usd, updated = :updated "
+                "WHERE id = :id",
                 order,
             )
 

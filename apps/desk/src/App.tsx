@@ -23,7 +23,7 @@ import {
 import ProfilePage from "./ProfilePage";
 import Portfolio from "./Portfolio";
 import { CURRENCIES, type Currency, money } from "./money";
-import Trade from "./Trade";
+import PotPage from "./PotPage";
 import type { MarketGlobal, Sentiment, Settings, TaoWallet, Ticker } from "./types";
 import { FearPanel } from "./WidgetDetails";
 import type { Status } from "./ui";
@@ -245,7 +245,6 @@ export default function App() {
 
   const onStatus = useCallback((next: Status) => setStatus(next), []);
   const onTao = useCallback((next: TaoWallet["status"]) => setTao(next), []);
-  const onSettings = useCallback((next: Settings) => setSettings(next), []);
 
   const toggle = () => {
     if (!settings) return;
@@ -463,7 +462,7 @@ export default function App() {
           </div>
         </header>
         {page === "trade" ? (
-          <Trade settings={settings} onSettings={onSettings} onStatus={onStatus} />
+          <PotPage />
         ) : page === "bots" ? (
           <BotsPage
             kind={botKind}

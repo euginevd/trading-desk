@@ -1314,3 +1314,125 @@ export interface DcaAction {
   odds?: { hit: number; windows: number; pct: number | null };
   reason: string;
 }
+
+// The trading pot (docs/plan-trade.md): its own book, run by trading-agent.
+export interface PotOrder {
+  ref: string;
+  role: "entry" | "exit" | "close";
+  kind: "limit" | "oco" | "market";
+  price: string | null;
+  stop: string | null;
+  qty: string;
+  status: "placing" | "open" | "filled" | "cancelled";
+  created: number;
+}
+
+export interface PotTrade {
+  ref: string;
+  coin: string;
+  setup: string;
+  regime: string;
+  reason: string;
+  status: "placing" | "waiting" | "open" | "closed" | "cancelled";
+  entry: string;
+  stop: string;
+  target: string;
+  qty: string;
+  spend: string;
+  risk: string;
+  fillPrice: string | null;
+  now: string | null;
+  exitPrice: string | null;
+  exitKind: "target" | "stop" | "market" | null;
+  result: string | null;
+  r: string | null;
+  fees: string;
+  rulesKept: boolean;
+  created: number;
+  filled: number | null;
+  closed: number | null;
+  note: string | null;
+  orders: PotOrder[];
+}
+
+export interface PotProposal {
+  id: string;
+  created: number;
+  coin: string;
+  setup: string;
+  reason: string;
+  entry: string;
+  stop: string;
+  target: string;
+  qty: string;
+  spend: string;
+  risk: string;
+  stopPct: string;
+  rr: string;
+  crowding: string;
+}
+
+export interface PotView {
+  quote: string;
+  config: { mode: "test" | "risk"; fixed: string; riskPct: string };
+  putIn: string;
+  value: string;
+  result: string;
+  resultPct: string | null;
+  cash: string;
+  openRisk: string;
+  fees: string;
+  monthResult: string;
+  monthLimit: string;
+  regime: { state: "bull" | "neutral" | "bear" | null; words: string };
+  nextScan: number;
+  lastScan: { at: number; line: string } | null;
+  proposals: PotProposal[];
+  trades: PotTrade[];
+  moves: { ref: string; kind: "in" | "out"; usdc: string; created: number }[];
+  stats: {
+    trades: number;
+    wins: number;
+    losses: number;
+    winRate: string | null;
+    avgWinR: string | null;
+    avgLossR: string | null;
+    expectancyR: string | null;
+    drawdownPct: string;
+    judgeAfter: number;
+  };
+  coins: string[];
+  priceError: string | null;
+}
+
+export interface PotAction {
+  type: "open" | "stop" | "close" | "cancel";
+  ref: string | null;
+  coin: string | null;
+  setup: string | null;
+  entry: string | null;
+  stop: string | null;
+  target: string | null;
+  qty: string | null;
+  spend: string | null;
+  risk: string | null;
+  rr: string | null;
+  reason: string;
+}
+
+export interface PotCheck {
+  matched: number;
+  missing: string[];
+  unknown: string[];
+  differ: { ref: string; desk: string; binance: string }[];
+}
+
+export interface PotTradeRequest {
+  coin: string;
+  entry: string;
+  stop: string;
+  target: string;
+  setup: string;
+  reason: string;
+  proposal?: string;
+}

@@ -24,12 +24,12 @@ The trading pot becomes its own book, as the DCA book is (decision 72), and trad
 
 ### 1. The pot book and the page
 
-- [ ] `pot_trades`, `pot_orders`, `pot_moves`; Put in, refs and Binance tags; Check against Binance
-- [ ] Entry, OCO exit, stop moves, close at market, cancel an unfilled entry; the sync books R and fees
-- [ ] trading-agent: Scan now and the chat, proposals as cards, the desk's rule checks
-- [ ] The new Trade page as the mockup, with loading, empty and error states
-- [ ] Tests: refs and tags, sizing from the stop, each rule refusing, OCO after the fill, R after fees, the ledger
-- [ ] Checks pass and one subagent review of the branch
+- [x] `pot_trades`, `pot_orders`, `pot_moves`; Put in, refs and Binance tags; Check against Binance
+- [x] Entry, OCO exit, stop moves, close at market, cancel an unfilled entry; the sync books R and fees
+- [x] trading-agent: Scan now and the chat, proposals as cards, the desk's rule checks
+- [x] The new Trade page as the mockup, with loading, empty and error states
+- [x] Tests: refs and tags, sizing from the stop, each rule refusing, OCO after the fill, R after fees, the ledger, lost and refused replies
+- [x] Checks pass and a subagent review of the pot's money code (eight findings, all fixed)
 
 ### 2. Later
 

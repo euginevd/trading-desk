@@ -1,4 +1,9 @@
 import type {
+  PotAction,
+  PotCheck,
+  PotTrade,
+  PotTradeRequest,
+  PotView,
   DcaAction,
   DcaCheck,
   FundsPlan,
@@ -311,3 +316,22 @@ export const agentChat = (message: string, history: { who: string; text: string 
   );
 export const amendDcaOrder = (change: { ref: string; price: string; spend?: string }) =>
   call<DcaOrder>("POST", "/dca/orders/amend", change);
+
+// The trading pot (docs/plan-trade.md).
+export const getPot = () => call<PotView>("GET", "/pot");
+export const putInPot = (usdc: string) => call<PotView>("POST", "/pot/put-in", { usdc });
+export const placePotTrade = (body: PotTradeRequest) => call<PotTrade>("POST", "/pot/trades", body);
+export const cancelPotTrade = (ref: string) =>
+  call<PotTrade>("POST", "/pot/trades/cancel", { ref });
+export const movePotStop = (ref: string, stop: string) =>
+  call<PotTrade>("POST", "/pot/trades/stop", { ref, stop });
+export const closePotTrade = (ref: string) => call<PotTrade>("POST", "/pot/trades/close", { ref });
+export const scanPot = () => call<PotView>("POST", "/pot/scan");
+export const dismissPotProposal = (id: string) =>
+  call<PotView>("POST", "/pot/proposals/dismiss", { id });
+export const potAgent = (message: string, history: { who: string; text: string }[]) =>
+  call<{ reply: string; actions: PotAction[]; said: string[] }>("POST", "/pot/agent", {
+    message,
+    history,
+  });
+export const checkPot = () => call<PotCheck>("GET", "/pot/check");
