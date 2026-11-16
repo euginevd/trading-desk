@@ -8,12 +8,31 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from "lightweight-charts";
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { getWatchlist } from "./api";
 import CoinIcon from "./CoinIcon";
 
 // Shared by the DCA and grid bots and the ladder: the owner's watchlist coins, the Create bot
 // menu, and a candlestick chart with the bot's price levels drawn on it.
+
+// A bot type's wrapper: a section of the Bots page (decision 68), or a page of its own.
+export function Shell({
+  embedded,
+  label,
+  children,
+}: {
+  embedded: boolean;
+  label: string;
+  children: ReactNode;
+}) {
+  return embedded ? (
+    <section className="bots-section" aria-label={label}>
+      {children}
+    </section>
+  ) : (
+    <main className="wrap dca-page">{children}</main>
+  );
+}
 
 // Every coin across the owner's watchlists, in list order, each once.
 export function useWatchCoins(): string[] | null {

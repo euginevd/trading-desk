@@ -182,17 +182,27 @@ describe("side panel", () => {
       "Portfolio",
       "Journal",
       "Trade",
-      "DCA Bot",
-      "Grid Bot",
+      "Bots",
       "Profile",
       "Settings",
     ]);
     fireEvent.click(screen.getByRole("button", { name: "Collapse side panel" }));
     expect(screen.getByRole("button", { name: "Expand side panel" })).toBeTruthy();
     expect(window.localStorage.getItem("desk.side.folded")).toBe("1");
+    // The old Grid Bot link opens Bots, filtered to grids.
     window.location.hash = "#/grid";
     fireEvent(window, new HashChangeEvent("hashchange"));
-    expect(await screen.findByRole("heading", { name: "Grid Bot" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "Bots" })).toBeTruthy();
+    const show = screen.getByRole("group", { name: "Show bots" });
+    expect(within(show).getByRole("button", { name: "Grid" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(
+      screen.getByRole("region", { name: "Grid bots", hidden: true }).closest("[hidden]"),
+    ).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "DCA bots", hidden: true }).closest("[hidden]"),
+    ).not.toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Expand side panel" }));
   });
 });

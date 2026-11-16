@@ -41,3 +41,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 65. Settings as a sentence and hairline sections; the name comes from the Profile only; each fact shown on one page; the top bar gives BTC dominance's move and BTC in whole dollars. [Record](decisions/from-58.md)
 66. The Journal as a sentence of rules kept, the last 30 days as a strip of trades, then the ledger with a filter and the tag lists last. [Record](decisions/from-58.md)
 67. Trade leads with the agent's call; the steps fold to a line under How it got there; the levels are a ladder around today's price; prices from 1,000 are whole. [Record](decisions/from-58.md)
+68. DCA and Grid bots share one Bots page: a sentence, a filter by type, a section a type; the old links open it filtered; rebalancing is next on TODO. [Record](decisions/from-58.md)

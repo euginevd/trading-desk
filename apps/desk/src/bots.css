@@ -1,0 +1,68 @@
+/* The Bots page (decision 68), on design-system.md's tokens; prefixed bots-. The language of the
+   other pages: a sentence, a filter, then a hairline section a bot type. */
+.bots {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.bots-headline {
+  margin: 0 0 6px;
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+}
+.bots-lead {
+  margin: 0;
+  color: var(--body);
+  font-size: 15px;
+  max-width: 72ch;
+}
+.bots-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.bots-section {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.bots-section .bots-section-head {
+  margin-bottom: 10px;
+}
+.bots-section .bots-section-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+/* In a section, the new-bot button is quiet (two bright buttons would compete) and the list sits
+   on hairlines, not in a box. */
+.bots-section .bots-section-head .btn-accent {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  background: none;
+  color: var(--text);
+}
+.bots-section .bots-section-head .btn-accent:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.bots-section .card.scroll {
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.bots-section .bot-empty {
+  padding: 18px 0;
+}
+@media (max-width: 520px) {
+  .bots-headline {
+    font-size: 23px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bots-headline {
+    animation: dash-rise 420ms var(--ease) both;
+  }
+}

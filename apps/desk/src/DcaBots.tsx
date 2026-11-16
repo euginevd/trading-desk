@@ -10,7 +10,15 @@ import {
   suggestBot,
   switchBot,
 } from "./api";
-import { BotChart, CoinSelect, CreateMenu, RobotIcon, useWatchCoins, type Level } from "./BotKit";
+import {
+  BotChart,
+  CoinSelect,
+  CreateMenu,
+  RobotIcon,
+  Shell,
+  useWatchCoins,
+  type Level,
+} from "./BotKit";
 import CoinIcon from "./CoinIcon";
 import { dateTime, price } from "./format";
 import type {
@@ -56,7 +64,14 @@ type View =
   | { kind: "copy"; bot: DcaBot }
   | { kind: "bot"; id: number };
 
-export default function DcaBots() {
+// On the Bots page (decision 68) each type is a section: it tells the page what it read, and
+// whether one of its bots or its setup is open, so the page can give that the whole screen.
+export interface Embed<T> {
+  onData: (data: T) => void;
+  onFocus: (open: boolean) => void;
+}
+
+export default function DcaBots({ embed }: { embed?: Embed<Bots> } = {}) {
   const [view, setView] = useState<Bots | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<View>({ kind: "list" });
@@ -74,6 +89,15 @@ export default function DcaBots() {
       (e: unknown) => setError(message(e)),
     );
   }, []);
+
+  const onData = embed?.onData;
+  const onFocus = embed?.onFocus;
+  useEffect(() => {
+    if (view) onData?.(view);
+  }, [view, onData]);
+  useEffect(() => {
+    onFocus?.(page.kind !== "list");
+  }, [page.kind, onFocus]);
 
   useEffect(() => {
     load();
@@ -118,10 +142,16 @@ export default function DcaBots() {
   const create = (coin: string) => setPage({ kind: "new", coin });
 
   return (
-    <main className="wrap dca-page">
-      <div className="head-row">
-        <h1 className="visually-hidden">DCA Bot</h1>
-        {page.kind === "list" && <CreateMenu coins={coins} onPick={create} />}
+    <Shell embedded={Boolean(embed)} label="DCA bots">
+      <div className="head-row bots-section-head">
+        {embed ? (
+          page.kind === "list" && <h2>DCA bots</h2>
+        ) : (
+          <h1 className="visually-hidden">DCA Bot</h1>
+        )}
+        {page.kind === "list" && (
+          <CreateMenu coins={coins} onPick={create} label={embed ? "New DCA bot" : undefined} />
+        )}
       </div>
 
       {error && (
@@ -129,7 +159,7 @@ export default function DcaBots() {
           {error}
         </div>
       )}
-      {view && !view.tradingOn && (
+      {view && !view.tradingOn && !embed && (
         <div className="alert notice" role="status">
           Trading is off, so bots stay stopped until you turn it on.
         </div>
@@ -204,7 +234,7 @@ export default function DcaBots() {
           </button>
         </div>
       </dialog>
-    </main>
+    </Shell>
   );
 }
 

@@ -9,7 +9,15 @@ import {
   suggestGrid,
   switchGrid,
 } from "./api";
-import { BotChart, CoinSelect, CreateMenu, RobotIcon, useWatchCoins, type Level } from "./BotKit";
+import {
+  BotChart,
+  CoinSelect,
+  CreateMenu,
+  RobotIcon,
+  Shell,
+  useWatchCoins,
+  type Level,
+} from "./BotKit";
 import CoinIcon from "./CoinIcon";
 import { ORDER_STATUS, message, quoteAmount } from "./DcaBots";
 import { dateTime, price } from "./format";
@@ -55,7 +63,14 @@ type View =
   | { kind: "copy"; grid: GridBot }
   | { kind: "grid"; id: number };
 
-export default function GridBots() {
+// On the Bots page (decision 68) each type is a section: it tells the page what it read, and
+// whether one of its bots or its setup is open, so the page can give that the whole screen.
+export interface Embed<T> {
+  onData: (data: T) => void;
+  onFocus: (open: boolean) => void;
+}
+
+export default function GridBots({ embed }: { embed?: Embed<Grids> } = {}) {
   const [view, setView] = useState<Grids | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<View>({ kind: "list" });
@@ -73,6 +88,15 @@ export default function GridBots() {
       (e: unknown) => setError(message(e)),
     );
   }, []);
+
+  const onData = embed?.onData;
+  const onFocus = embed?.onFocus;
+  useEffect(() => {
+    if (view) onData?.(view);
+  }, [view, onData]);
+  useEffect(() => {
+    onFocus?.(page.kind !== "list");
+  }, [page.kind, onFocus]);
 
   useEffect(() => {
     load();
@@ -118,10 +142,16 @@ export default function GridBots() {
   const create = (coin: string) => setPage({ kind: "new", coin });
 
   return (
-    <main className="wrap dca-page">
-      <div className="head-row">
-        <h1 className="visually-hidden">Grid Bot</h1>
-        {page.kind === "list" && <CreateMenu coins={coins} onPick={create} />}
+    <Shell embedded={Boolean(embed)} label="Grid bots">
+      <div className="head-row bots-section-head">
+        {embed ? (
+          page.kind === "list" && <h2>Grid bots</h2>
+        ) : (
+          <h1 className="visually-hidden">Grid Bot</h1>
+        )}
+        {page.kind === "list" && (
+          <CreateMenu coins={coins} onPick={create} label={embed ? "New Grid bot" : undefined} />
+        )}
       </div>
 
       {error && (
@@ -129,7 +159,7 @@ export default function GridBots() {
           {error}
         </div>
       )}
-      {view && !view.tradingOn && (
+      {view && !view.tradingOn && !embed && (
         <div className="alert notice" role="status">
           Trading is off, so grids stay stopped until you turn it on.
         </div>
@@ -204,7 +234,7 @@ export default function GridBots() {
           </button>
         </div>
       </dialog>
-    </main>
+    </Shell>
   );
 }
 

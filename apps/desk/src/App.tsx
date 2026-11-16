@@ -3,14 +3,12 @@ import { getGlobal, getPortfolio, getSentiment, getSettings, getTickers, setTrad
 import { percent, trend, usdShort } from "./format";
 import Coach from "./Coach";
 import Journal from "./Journal";
-import DcaBots from "./DcaBots";
-import GridBots from "./GridBots";
+import BotsPage, { type BotKind } from "./BotsPage";
 import SettingsPage from "./SettingsPage";
 import {
   CollapseIcon,
   DashboardIcon,
   DcaIcon,
-  GridIcon,
   JournalIcon,
   MenuIcon,
   PlanIcon,
@@ -28,8 +26,7 @@ import type { MarketGlobal, Sentiment, Settings, TaoWallet, Ticker } from "./typ
 import { FearPanel } from "./WidgetDetails";
 import type { Status } from "./ui";
 
-type Page =
-  "dashboard" | "profile" | "portfolio" | "journal" | "trade" | "dca" | "grid" | "settings";
+type Page = "dashboard" | "profile" | "portfolio" | "journal" | "trade" | "bots" | "settings";
 const TICK_MS = 30_000;
 const CURRENCY_KEY = "desk.currency";
 function readCurrency(): Currency {
@@ -49,10 +46,19 @@ const PAGES: { page: Page; hash: string; name: string; Icon: () => React.JSX.Ele
   { page: "journal", hash: "#/journal", name: "Journal", Icon: JournalIcon },
   { page: "trade", hash: "#/trade", name: "Trade", Icon: TradeIcon },
 ];
-const BOT_PAGES: typeof PAGES = [
-  { page: "dca", hash: "#/dca", name: "DCA Bot", Icon: DcaIcon },
-  { page: "grid", hash: "#/grid", name: "Grid Bot", Icon: GridIcon },
-];
+// DCA and grid bots share one page (decision 68); the old links open it filtered.
+const BOTS_PAGE: (typeof PAGES)[number] = {
+  page: "bots",
+  hash: "#/bots",
+  name: "Bots",
+  Icon: DcaIcon,
+};
+const OLD_BOT_LINKS: Record<string, BotKind> = { "#/dca": "dca", "#/grid": "grid" };
+
+function botKindFromHash(): BotKind {
+  const [path, query] = window.location.hash.split("?");
+  return OLD_BOT_LINKS[path ?? ""] ?? (query === "dca" || query === "grid" ? query : "all");
+}
 const PROFILE_PAGE: (typeof PAGES)[number] = {
   page: "profile",
   hash: "#/profile",
@@ -67,8 +73,9 @@ const SETTINGS_PAGE: (typeof PAGES)[number] = {
 };
 
 function pageFromHash(): Page {
-  const hash = window.location.hash.split("?")[0]; // "#/dca?new" opens the DCA wizard
-  const found = [...PAGES, ...BOT_PAGES, PROFILE_PAGE, SETTINGS_PAGE].find((p) => p.hash === hash);
+  const hash = window.location.hash.split("?")[0] ?? "";
+  if (hash in OLD_BOT_LINKS) return "bots";
+  const found = [...PAGES, BOTS_PAGE, PROFILE_PAGE, SETTINGS_PAGE].find((p) => p.hash === hash);
   return found?.page ?? "dashboard";
 }
 
@@ -158,6 +165,7 @@ function PillLogo({ coin }: { coin: string }) {
 
 export default function App() {
   const [page, setPage] = useState<Page>(pageFromHash);
+  const [botKind, setBotKind] = useState<BotKind>(botKindFromHash);
   const [status, setStatus] = useState<Status>("fetching");
   const [tao, setTao] = useState<TaoWallet["status"] | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -184,6 +192,7 @@ export default function App() {
   useEffect(() => {
     const follow = () => {
       setPage(pageFromHash());
+      setBotKind(botKindFromHash());
       setDrawer(false);
     };
     window.addEventListener("hashchange", follow);
@@ -285,9 +294,7 @@ export default function App() {
         </button>
         <nav className="side-nav" aria-label="Main">
           {PAGES.map(link)}
-          <div className="side-rule" />
-          <div className="side-label side-word">Bots</div>
-          {BOT_PAGES.map(link)}
+          {link(BOTS_PAGE)}
           <div className="side-rule" />
           {link(PROFILE_PAGE)}
           {link(SETTINGS_PAGE)}
@@ -450,10 +457,13 @@ export default function App() {
         </header>
         {page === "trade" ? (
           <Trade settings={settings} onSettings={onSettings} onStatus={onStatus} />
-        ) : page === "dca" ? (
-          <DcaBots />
-        ) : page === "grid" ? (
-          <GridBots />
+        ) : page === "bots" ? (
+          <BotsPage
+            kind={botKind}
+            onKind={(k) => {
+              window.location.hash = k === "all" ? "#/bots" : `#/bots?${k}`;
+            }}
+          />
         ) : page === "settings" ? (
           <SettingsPage />
         ) : page === "profile" ? (
