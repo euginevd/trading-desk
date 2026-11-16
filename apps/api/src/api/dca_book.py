@@ -275,6 +275,15 @@ class DcaBook:
     def prices(self, coins: list[str]) -> dict[str, Decimal]:
         return self._prices(coins)
 
+    def limits(self) -> dict[str, str]:
+        """What the desk's limits leave for buys: per order, and today."""
+        settings = self._desk.settings()
+        return {
+            "perOrder": settings["perOrder"],
+            "leftToday": settings["leftToday"],
+            "tradingOn": "yes" if settings["tradingOn"] else "no",
+        }
+
     def plan(self) -> dict[str, Any] | None:
         raw = self._store.setting(PLAN_KEY, "")
         return json.loads(raw) if raw else None

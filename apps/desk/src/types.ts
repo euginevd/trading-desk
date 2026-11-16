@@ -1298,3 +1298,17 @@ export interface OpenChange {
   odds: { hit: number; windows: number; pct: number | null };
   reason: string;
 }
+
+// One action dca-agent proposes in the book's chat, already checked by the desk.
+export interface DcaAction {
+  type: "buy" | "sell" | "change" | "cancel";
+  coin: string;
+  ref: string;
+  side: "buy" | "sell";
+  was: string | null;
+  price: string;
+  usdc: string;
+  now?: string;
+  odds?: { hit: number; windows: number; pct: number | null };
+  reason: string;
+}

@@ -124,10 +124,32 @@ def test_amounts_and_chat_are_checked(book: DcaBook) -> None:
     assert funds.odds("BTC", "90000", "add")["windows"] > 0
 
 
-def test_asking_about_open_orders_needs_the_agent(book: DcaBook) -> None:
+def test_the_books_chat_checks_everycheck_action(book: DcaBook) -> None:
     funds = Funds(book, None)
-    with pytest.raises(Refused, match="no open orders"):
-        funds.ask_open({"message": "move BTC lower"})
-    book.place({"coin": "BTC", "spend": "40", "price": "97000"})
     with pytest.raises(Refused, match="couldn't be reached"):
-        funds.ask_open({"message": "move BTC lower"})
+        funds.agent({"message": "add 50"})
+    placed = book.place({"coin": "BTC", "spend": "40", "price": "97000"})
+    opened = {placed["ref"]: funds.open_orders()[0]}
+    facts = {"buy": funds.facts("buy")}
+    keep = funds.check_action(
+        {"type": "buy", "coin": "ETH", "ref": "", "usdc": "20", "price": "3000", "reason": "x"},
+        facts,
+        opened,
+    )
+    assert keep is not None
+    assert (keep["type"], keep["coin"], keep["usdc"]) == ("buy", "ETH", "20")
+    small = {"type": "buy", "coin": "ETH", "ref": "", "usdc": "5", "price": "3000", "reason": ""}
+    assert funds.check_action(small, facts, opened) is None  # under 10
+    cancel = {
+        "type": "cancel",
+        "coin": "",
+        "ref": placed["ref"],
+        "usdc": "",
+        "price": "",
+        "reason": "y",
+    }
+    gone = funds.check_action(cancel, facts, opened)
+    assert gone is not None
+    assert gone["type"] == "cancel"
+    ghost = cancel | {"ref": "DCA-BTC-26W45-9"}
+    assert funds.check_action(ghost, facts, opened) is None  # not open

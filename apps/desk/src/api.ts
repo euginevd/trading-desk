@@ -1,5 +1,5 @@
 import type {
-  OpenChange,
+  DcaAction,
   DcaCheck,
   FundsPlan,
   DcaBook,
@@ -299,10 +299,14 @@ export const fundsOdds = (coin: string, price: string, side: "add" | "remove") =
   );
 export const checkDca = () => call<DcaCheck>("GET", "/dca/check");
 export const fixDca = () => call<DcaCheck>("POST", "/dca/check/fix");
-export const askOpenOrders = (message: string, history: { who: string; text: string }[]) =>
-  call<{ reply: string; changes: OpenChange[]; quote: string }>("POST", "/dca/open/ask", {
-    message,
-    history,
-  });
+export const agentChat = (message: string, history: { who: string; text: string }[]) =>
+  call<{ reply: string; actions: DcaAction[]; said: string[]; quote: string }>(
+    "POST",
+    "/dca/agent",
+    {
+      message,
+      history,
+    },
+  );
 export const amendDcaOrder = (change: { ref: string; price: string; spend?: string }) =>
   call<DcaOrder>("POST", "/dca/orders/amend", change);

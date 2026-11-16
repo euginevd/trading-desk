@@ -1,15 +1,13 @@
-// Open orders on the DCA book (TODO 11): ask dca-agent to change them ("move BTC a bit lower"),
-// or change a price by hand. Each change cancels the old order and places a new one linked to it,
+// Open orders on the DCA book (TODO 11): what's waiting, and changing a price by hand (dca-agent's
+// chat beside the book does it in words). Each change cancels the old order and places a new one linked to it,
 // so the book keeps both. The desk works out each new price's 24-hour odds.
 import { useRef, useState } from "react";
-import { amendDcaOrder, askOpenOrders, fundsOdds } from "./api";
-import AgentAvatar from "./AgentIcons";
+import { amendDcaOrder, fundsOdds } from "./api";
 import CoinIcon from "./CoinIcon";
 import { limit, two } from "./dcaFormat";
 import type { DcaOrder, OpenChange } from "./types";
 
 type Change = OpenChange & { on: boolean; result?: string; failed?: boolean };
-type Line = { who: "you" | "agent"; text: string };
 
 const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
@@ -23,31 +21,9 @@ export default function DcaOpen({
   onChanged: (said: string) => void;
 }) {
   const [changes, setChanges] = useState<Change[]>([]);
-  const [lines, setLines] = useState<Line[]>([]);
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState<"ask" | "apply" | null>(null);
+  const [busy, setBusy] = useState<"apply" | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const chosen = changes.filter((c) => c.on && !c.result);
-
-  const ask = () => {
-    const text = message.trim();
-    if (!text) return;
-    setBusy("ask");
-    const history = lines;
-    setLines([...history, { who: "you", text }]);
-    setMessage("");
-    askOpenOrders(text, history).then(
-      (r) => {
-        setChanges(r.changes.map((c) => ({ ...c, on: true })));
-        setLines((l) => [...l, { who: "agent", text: r.reply }]);
-        setBusy(null);
-      },
-      (e: unknown) => {
-        setLines((l) => [...l, { who: "agent", text: errorOf(e, "That didn't reach dca-agent.") }]);
-        setBusy(null);
-      },
-    );
-  };
 
   // By hand: every open order as a change, at its own price, to edit.
   const byHand = () =>
@@ -120,37 +96,12 @@ export default function DcaOpen({
         ))}
       </ul>
 
-      <form
-        className="dcf-say dco-ask"
-        onSubmit={(e) => {
-          e.preventDefault();
-          ask();
-        }}
-      >
-        <AgentAvatar icon="dca" slug="dca-agent" />
-        <input
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="Ask dca-agent to change them: move BTC a bit lower, give SOL better odds…"
-          aria-label="Ask dca-agent to change open orders"
-          maxLength={500}
-        />
-        <button type="submit" className="btn" disabled={!message.trim() || busy !== null}>
-          {busy === "ask" ? "Thinking…" : "Ask"}
-        </button>
+      <p className="dco-by-hand">
         <button type="button" className="link" onClick={byHand}>
           Change by hand
         </button>
-      </form>
-      {lines.length > 0 && (
-        <ol className="dcf-lines" aria-live="polite">
-          {lines.map((l, i) => (
-            <li key={i} className={`is-${l.who}`}>
-              {l.text}
-            </li>
-          ))}
-        </ol>
-      )}
+        <span className="muted"> or ask dca-agent beside the book.</span>
+      </p>
 
       {changes.length > 0 && (
         <>

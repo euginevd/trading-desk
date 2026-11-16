@@ -11,6 +11,20 @@ export function two(value: string | number | null | undefined): string {
   return n.toLocaleString(AU, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+// Dollars as a person reads them: whole from $10 ("$49", "−$1,204"), cents below ("$0.11").
+export function dollars(value: string | number | null | undefined, sign = false): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  const abs = Math.abs(n);
+  const body = abs.toLocaleString(AU, {
+    minimumFractionDigits: abs >= 10 || abs === 0 ? 0 : 2,
+    maximumFractionDigits: abs >= 10 ? 0 : 2,
+  });
+  const lead = n < 0 ? "−" : sign && n > 0 ? "+" : "";
+  return `${lead}$${body}`;
+}
+
 // "+12.40" or "−3.10", with a real minus sign.
 export function signed(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";

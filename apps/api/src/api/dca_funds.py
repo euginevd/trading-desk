@@ -457,66 +457,129 @@ class Funds:
             "by": AGENT if reply else "desk",
         }
 
-    def ask_open(self, body: dict[str, Any]) -> dict[str, Any]:
-        """The owner asks dca-agent to change open orders; it proposes a new price (and maybe
-        amount) for each it would change, and the desk checks each and works out its odds."""
-        text = " ".join(str(body.get("message") or "").split())[:CHAT_LENGTH]
-        if not text:
-            raise Refused("Type what to change first.")
-        raw = body.get("history")
-        history = cast(list[Any], raw)[-MAX_CHAT:] if isinstance(raw, list) else []
-        open_rows = [
-            r
-            for r in self._store.dca_orders()
-            if r["status"] in ("open", "placing") and r["kind"] == "limit"
-        ]
-        if not open_rows:
-            raise Refused("There are no open orders to change.")
-        sides = {r["side"] for r in open_rows}
-        facts = {s: self.facts(s) for s in sides}
-        orders = [
+    # The book's chat: one place to ask dca-agent to add, take out, change or cancel. It answers
+    # in words and with actions; the desk checks each action and works out its odds, and the
+    # owner places them after a review.
+
+    AGENT_SHAPE: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "reply": {"type": "string"},
+            "actions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "type": {"type": "string", "enum": ["buy", "sell", "change", "cancel"]},
+                        "coin": {"type": "string"},
+                        "ref": {"type": "string"},
+                        "usdc": {"type": "string"},
+                        "price": {"type": "string"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["type", "coin", "ref", "usdc", "price", "reason"],
+                    "additionalProperties": False,
+                },
+            },
+        },
+        "required": ["reply", "actions"],
+        "additionalProperties": False,
+    }
+
+    def open_orders(self) -> list[dict[str, Any]]:
+        return [
             {
                 "ref": r["ref"],
                 "coin": r["coin"],
                 "side": r["side"],
                 "price": r["price"],
                 "usdc": r["spend"] or plain(Decimal(r["qty"] or "0") * Decimal(r["price"] or "0")),
-                "placed": r["created"],
                 "source": r["source"],
             }
-            for r in open_rows
+            for r in self._store.dca_orders()
+            if r["status"] in ("open", "placing") and r["kind"] == "limit"
         ]
-        shape = {
-            "type": "object",
-            "properties": {
-                "reply": {"type": "string"},
-                "changes": {
-                    "type": "array",
-                    "items": {
-                        "type": "object",
-                        "properties": {
-                            "ref": {"type": "string"},
-                            "price": {"type": "string"},
-                            "usdc": {"type": "string"},
-                            "reason": {"type": "string"},
-                        },
-                        "required": ["ref", "price", "usdc", "reason"],
-                        "additionalProperties": False,
-                    },
-                },
-            },
-            "required": ["reply", "changes"],
-            "additionalProperties": False,
+
+    def check_action(
+        self,
+        item: dict[str, Any],
+        facts: dict[str, dict[str, Any]],
+        opened: dict[str, dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """One proposed action, checked; None when it can't stand."""
+        kind = str(item.get("type"))
+        if kind in ("change", "cancel"):
+            order = opened.get(str(item.get("ref")))
+            if order is None:
+                return None
+            if kind == "cancel":
+                return {
+                    "type": "cancel",
+                    "coin": order["coin"],
+                    "ref": order["ref"],
+                    "side": order["side"],
+                    "was": order["price"],
+                    "usdc": order["usdc"],
+                    "reason": str(item.get("reason") or "")[:240],
+                }
+            side, coin = order["side"], order["coin"]
+        else:
+            side = "sell" if kind == "sell" else "buy"
+            coin = str(item.get("coin", "")).upper()
+            order = None
+        fact = next((c for c in facts[side]["coins"] if c["coin"] == coin), None)
+        if fact is None:
+            return None
+        clean = self._clean(item, fact, side)
+        if clean is None or clean["usdc"] < MIN_ORDER:
+            return None
+        if side == "sell" and kind == "sell":
+            room = Decimal(fact["heldValue"]) * MAX_TRIM
+            if room < MIN_ORDER:
+                return None
+            clean["usdc"] = min(clean["usdc"], room)
+        now = Decimal(fact["now"])
+        return {
+            "type": kind,
+            "coin": coin,
+            "ref": order["ref"] if order else "",
+            "side": side,
+            "was": order["price"] if order else None,
+            "price": plain(clean["price"]),
+            "usdc": plain(clean["usdc"].quantize(CENT)),
+            "now": fact["now"],
+            "odds": self._odds(coin, side, now, clean["price"]),
+            "reason": str(item.get("reason") or "")[:240],
         }
+
+    def agent(self, body: dict[str, Any]) -> dict[str, Any]:
+        text = " ".join(str(body.get("message") or "").split())[:CHAT_LENGTH]
+        if not text:
+            raise Refused("Type what you'd like first.")
+        raw = body.get("history")
+        history = cast(list[Any], raw)[-MAX_CHAT:] if isinstance(raw, list) else []
+        opened = {o["ref"]: o for o in self.open_orders()}
+        facts = {"buy": self.facts("buy")}
+        if any(Decimal(c["held"]) > ZERO for c in facts["buy"]["coins"]) or any(
+            o["side"] == "sell" for o in opened.values()
+        ):
+            facts["sell"] = self.facts("sell")
+        limits = self._book.limits()
         prompt = (
-            "The owner wants to change orders that are still open. Propose a change only for the "
-            "orders the request is about, each with its new limit price, its amount in "
-            f"{QUOTE} (keep the amount unless asked) and one sentence on the level it rests on. "
-            "A buy stays at or under the price now and a sell at or over it; every order at "
-            f"least {MIN_ORDER} {QUOTE}. Leave the others out of changes. The reply, at most 60 "
-            "words, says what you changed and why, or why not if it breaks a rule.\n\n"
-            "OPEN ORDERS:\n"
-            + json.dumps(orders, indent=1)
+            "The owner is talking to you about the DCA book. Answer in plain words and, when "
+            "they ask for it, propose actions: buy (a new limit buy: coin, usdc, price), sell "
+            "(a limit sell that trims a position: coin, usdc, price), change (an open order by "
+            "ref: its new price and usdc) or cancel (an open order by ref). Leave unused fields "
+            "as empty strings. Only propose what was asked; a question gets an answer and no "
+            "actions. Rules: one order per coin per request; at least "
+            f"{MIN_ORDER} {QUOTE} each; a buy at or under the price now, a sell at or over it; "
+            "never sell more than a quarter of a position; stay within the limits below; aim "
+            f"for about {TARGET_ODDS}% odds of a fill within 24 hours unless asked otherwise. "
+            "The reply is at most 70 words.\n\n"
+            "LIMITS:\n"
+            + json.dumps(limits)
+            + "\n\nOPEN ORDERS:\n"
+            + json.dumps(list(opened.values()), indent=1)
             + "\n\nDESK FIGURES:\n"
             + json.dumps(list(facts.values()), indent=1)
             + "\n\nTHE CONVERSATION SO FAR:\n"
@@ -524,35 +587,29 @@ class Funds:
             + "\n\nTHE OWNER NOW SAYS:\n"
             + text
         )
-        reply = self._ask(prompt, shape, "Open orders: ask")
+        reply = self._ask(prompt, self.AGENT_SHAPE, "DCA book: chat")
         if reply is None:
-            raise Refused("dca-agent couldn't be reached. Change the price by hand.")
-        by_ref = {o["ref"]: o for o in orders}
-        found: list[dict[str, Any]] = []
-        for item in reply.get("changes", []):
-            order = by_ref.get(str(item.get("ref")))
-            if order is None:
+            raise Refused("dca-agent couldn't be reached. Try again in a minute.")
+        actions: list[dict[str, Any]] = []
+        dropped = 0
+        seen: set[str] = set()
+        for item in reply.get("actions", []):
+            found = self.check_action(item, facts, opened)
+            key = f"{found['type']}:{found['ref'] or found['coin']}" if found else ""
+            if found is None or key in seen:
+                dropped += 1
                 continue
-            fact = next(c for c in facts[order["side"]]["coins"] if c["coin"] == order["coin"])
-            clean = self._clean(item, fact, order["side"])
-            if clean is None:
-                continue
-            usdc = max(clean["usdc"], MIN_ORDER)
-            now = Decimal(fact["now"])
-            found.append(
-                {
-                    "ref": order["ref"],
-                    "coin": order["coin"],
-                    "side": order["side"],
-                    "was": order["price"],
-                    "price": plain(clean["price"]),
-                    "usdc": plain(usdc.quantize(CENT)),
-                    "now": fact["now"],
-                    "odds": self._odds(order["coin"], order["side"], now, clean["price"]),
-                    "reason": str(item.get("reason") or "")[:240],
-                }
-            )
-        return {"reply": str(reply.get("reply") or "")[:600], "changes": found, "quote": QUOTE}
+            seen.add(key)
+            actions.append(found)
+        said = (
+            [f"{dropped} of dca-agent's actions broke a rule and were left out."] if dropped else []
+        )
+        return {
+            "reply": str(reply.get("reply") or "")[:700],
+            "actions": actions,
+            "said": said,
+            "quote": QUOTE,
+        }
 
     def chat(self, body: dict[str, Any]) -> dict[str, Any]:
         side, amount = _side(body.get("side")), _amount(body.get("amount"))

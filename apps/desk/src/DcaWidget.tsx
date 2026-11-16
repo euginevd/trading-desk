@@ -6,9 +6,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { closeOutDca, getDcaBook } from "./api";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
-import { dated, isOpen, limit, two } from "./dcaFormat";
+import { dated, isOpen, limit, qty, signed, two } from "./dcaFormat";
 import "./myagents.css";
-import type { DcaBook, DcaOrder } from "./types";
+import type { DcaBook, DcaOrder, DcaPosition } from "./types";
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -50,14 +50,33 @@ function headline(quote: string, cycle: Cycle, now: number, total: number): stri
   return `${filled} of ${plural(weekly.length, "limit")} filled. The rest buy at market on ${dated(cycle.closeOut)} at 7pm.`;
 }
 
-function coinState(orders: DcaOrder[], coin: string): { cls: string; words: string } {
+// A coin's week: what's bought of its weekly target (every source counts), then what's held or
+// what's waiting. "Bought" only once the target is met, never for a starter order.
+function coinWeek(
+  orders: DcaOrder[],
+  coin: string,
+  target: number,
+  position: DcaPosition | undefined,
+): { bought: number; done: boolean; line: string; tone: string } {
   const mine = orders.filter((o) => o.coin === coin && o.side === "buy");
-  if (mine.some(isOpen)) {
-    const prices = mine.filter((o) => isOpen(o) && o.kind === "limit").map((o) => limit(o.price));
-    return { cls: "is-open", words: prices.length ? `Limit ${prices.join(", ")}` : "Open" };
+  const bought = mine.reduce((s, o) => s + Number(o.filledQuote), 0);
+  const done = target > 0 && bought >= target * 0.95;
+  const open = mine.filter((o) => isOpen(o) && o.kind === "limit").map((o) => limit(o.price));
+  const held = Number(position?.qty ?? 0);
+  if (open.length) return { bought, done, line: `Limit ${open.join(", ")} open`, tone: "is-open" };
+  if (held > 0) {
+    const pnl =
+      position?.pnlPct === null || position?.pnlPct === undefined
+        ? ""
+        : `, ${signed(position.pnlPct)}%`;
+    return {
+      bought,
+      done,
+      line: `${qty(position?.qty)} ${coin}${pnl}`,
+      tone: done ? "is-filled" : "",
+    };
   }
-  if (mine.some((o) => o.status === "filled")) return { cls: "is-filled", words: "Bought" };
-  return { cls: "", words: "Not placed" };
+  return { bought, done, line: "Nothing held yet", tone: "" };
 }
 
 export default function DcaWidget({ now: given }: { now?: number }) {
@@ -107,6 +126,9 @@ export default function DcaWidget({ now: given }: { now?: number }) {
         dca-agent
       </a>
       <nav className="dcw-links" aria-label="DCA">
+        <a className="dcw-chat" href="#/dca-book?chat">
+          Chat with dca-agent
+        </a>
         <a href="#/dca-book?funds=add">Add funds</a>
         <a href="#/dca-book?funds=remove">Remove funds</a>
         <a href="#/dca-book?plan">Plan this week</a>
@@ -203,17 +225,32 @@ export default function DcaWidget({ now: given }: { now?: number }) {
       </div>
 
       <div className="dcw-foot">
-        <ul className="dcw-coins" aria-label="This week's coins">
+        <ul className="dcw-coins" aria-label="This week's coins against their targets">
           {Object.entries(coins).map(([coin, usdc]) => {
-            const state = coinState(cycle.orders, coin);
+            const week = coinWeek(
+              cycle.orders,
+              coin,
+              usdc,
+              book.positions.find((x) => x.coin === coin),
+            );
+            const pct = usdc > 0 ? Math.min(100, (week.bought / usdc) * 100) : 0;
             return (
-              <li key={coin} className={state.cls}>
-                <span className="dcb-coin">
+              <li key={coin} className={`${week.tone}${week.done ? " is-done" : ""}`}>
+                <a
+                  className="dcb-coin dcw-coin"
+                  href={`#/dca-book?coin=${coin}`}
+                  aria-label={`${coin}: open its position and orders`}
+                >
                   <CoinIcon coin={coin} />
                   {coin}
+                </a>
+                <span className="num dcw-of">
+                  <b>${whole(week.bought)}</b> of ${whole(usdc)}
                 </span>
-                <b className="num">${whole(usdc)}</b>
-                {cycle.orders.length > 0 && <small className="num">{state.words}</small>}
+                <i className="dcw-bar" aria-hidden="true">
+                  <span style={{ width: `${pct}%` }} />
+                </i>
+                <small className="num">{week.line}</small>
               </li>
             );
           })}

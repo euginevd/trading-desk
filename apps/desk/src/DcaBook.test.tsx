@@ -197,6 +197,26 @@ function serve(reply: DcaBook) {
     if (path === "/dca/suggest") return json(plan);
     if (path === "/dca/close-out") return json({ closed: ["BTC 49.79"] });
     if (path === "/dca/funds/analyse") return json(funds);
+    if (path === "/dca/agent")
+      return json({
+        reply: "SOL $20 just above Saturday's low.",
+        said: [],
+        quote: "USDC",
+        actions: [
+          {
+            type: "buy",
+            coin: "SOL",
+            ref: "",
+            side: "buy",
+            was: null,
+            price: "69.27",
+            usdc: "20",
+            now: "70.9",
+            odds: { hit: 1750, windows: 2190, pct: 80 },
+            reason: "Above 69 and Saturday's 68.5 low.",
+          },
+        ],
+      });
     if (path === "/dca/orders/amend")
       return json(order({ ref: "DCA-BTC-26W47-2", link: "DCA-BTC-26W47-1" }));
     if (path === "/dca/orders") {
@@ -231,9 +251,9 @@ describe("DCA widget", () => {
         name: "The buying window runs from 20 Nov (Fri) 7pm to 23 Nov (Mon) 7pm.",
       }),
     ).toBeTruthy();
-    const coins = screen.getByRole("list", { name: "This week's coins" });
-    expect(within(coins).getByText("Limit 63,837.40")).toBeTruthy();
-    expect(within(coins).getByText("Bought")).toBeTruthy();
+    const coins = screen.getByRole("list", { name: "This week's coins against their targets" });
+    expect(within(coins).getByText("Limit 63,837.40 open")).toBeTruthy();
+    expect(within(coins).getByText("0.0112 ETH, +1.56%")).toBeTruthy(); // its target met: held, with P&L
     fireEvent.click(screen.getByRole("button", { name: "Close out early" }));
     expect(sent(fetch, "/dca/close-out")).toHaveLength(0); // the confirm first
     fireEvent.click(screen.getByRole("button", { name: "Buy the rest at market" }));
@@ -267,12 +287,34 @@ describe("DCA book page", () => {
     const positions = screen.getByRole("table", { name: "Positions" });
     expect(within(positions).getByText(/DCA-ETH, since/)).toBeTruthy();
     expect(within(positions).getByText(/DCA-BTC, nothing bought yet/)).toBeTruthy();
+    // A position opens to its own orders.
+    fireEvent.click(within(positions).getByRole("button", { name: /ETH/ }));
+    const eth = screen.getByRole("table", { name: "ETH orders" });
+    expect(within(eth).getByText("DCA-ETH-26W47-1")).toBeTruthy();
+    expect(within(eth).queryByText("DCA-BTC-26W47-1")).toBeNull();
+    // Every order sits behind Show more.
+    expect(screen.queryByRole("table", { name: "Every order" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Show more/ }));
     const orders = screen.getByRole("table", { name: "Every order" });
-    expect(within(orders).getByText("DCA-ETH-26W47-1")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "ETH" }));
-    expect(
-      within(screen.getByRole("table", { name: "Every order" })).queryByText("DCA-BTC-26W47-1"),
-    ).toBeNull();
+    expect(within(orders).getByText("DCA-BTC-26W47-1")).toBeTruthy();
+  });
+
+  it("asks dca-agent in words and places its checked actions after a review", async () => {
+    const fetch = serve(book());
+    render(<DcaBookPage />);
+    const say = await screen.findByRole("textbox", { name: "Message to dca-agent" });
+    fireEvent.change(say, { target: { value: "add $20 to SOL" } });
+    fireEvent.click(screen.getByRole("button", { name: "Send" }));
+    expect(await screen.findByText("SOL $20 just above Saturday's low.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Review 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "Place 1" }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders")).toHaveLength(1));
+    expect(JSON.parse(String(sent(fetch, "/dca/orders")[0]?.[1]?.body))).toEqual({
+      coin: "SOL",
+      spend: "20",
+      price: "69.27",
+      source: "named",
+    });
   });
 
   it("plans the week from the desk's odds and places after a review", async () => {
