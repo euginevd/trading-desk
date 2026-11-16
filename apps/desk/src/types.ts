@@ -1285,3 +1285,16 @@ export interface DcaCheck {
   fixed?: number;
   added?: number;
 }
+
+// A change dca-agent proposes to an open order, checked by the desk.
+export interface OpenChange {
+  ref: string;
+  coin: string;
+  side: "buy" | "sell";
+  was: string;
+  price: string;
+  usdc: string;
+  now: string;
+  odds: { hit: number; windows: number; pct: number | null };
+  reason: string;
+}

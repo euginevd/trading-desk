@@ -16,6 +16,7 @@ import {
 } from "./api";
 import CoinIcon from "./CoinIcon";
 import DcaFunds from "./DcaFunds";
+import DcaOpen from "./DcaOpen";
 import {
   SOURCE,
   dated,
@@ -951,6 +952,17 @@ export default function DcaBookPage() {
           quote={book.quote}
           onClose={() => setFunds(null)}
           onPlaced={(words) => {
+            setSaid(words);
+            load();
+          }}
+        />
+      )}
+
+      {book.orders.some((o) => isOpen(o) && o.kind === "limit") && (
+        <DcaOpen
+          orders={book.orders.filter((o) => isOpen(o) && o.kind === "limit")}
+          quote={book.quote}
+          onChanged={(words) => {
             setSaid(words);
             load();
           }}

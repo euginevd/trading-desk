@@ -553,6 +553,35 @@ td.dcb-id {
   gap: 6px;
 }
 
+/* Open orders: what's waiting, and a line to ask dca-agent to change them. */
+.dco-list {
+  display: grid;
+  gap: 0;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+.dco-list li {
+  display: grid;
+  grid-template-columns: 120px 180px 90px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.dco-list li .dcb-id {
+  display: inline;
+}
+.dco-ask {
+  align-items: center;
+  margin-bottom: 10px;
+}
+@media (max-width: 720px) {
+  .dco-list li {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
 /* Check against Binance. */
 .dcb-check {
   margin: 0 0 12px;

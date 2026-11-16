@@ -122,3 +122,12 @@ def test_amounts_and_chat_are_checked(book: DcaBook) -> None:
     with pytest.raises(Refused, match="couldn't be reached"):
         funds.chat({"side": "add", "amount": "50", "message": "more BTC", "orders": []})
     assert funds.odds("BTC", "90000", "add")["windows"] > 0
+
+
+def test_asking_about_open_orders_needs_the_agent(book: DcaBook) -> None:
+    funds = Funds(book, None)
+    with pytest.raises(Refused, match="no open orders"):
+        funds.ask_open({"message": "move BTC lower"})
+    book.place({"coin": "BTC", "spend": "40", "price": "97000"})
+    with pytest.raises(Refused, match="couldn't be reached"):
+        funds.ask_open({"message": "move BTC lower"})

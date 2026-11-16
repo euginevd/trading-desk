@@ -197,6 +197,8 @@ function serve(reply: DcaBook) {
     if (path === "/dca/suggest") return json(plan);
     if (path === "/dca/close-out") return json({ closed: ["BTC 49.79"] });
     if (path === "/dca/funds/analyse") return json(funds);
+    if (path === "/dca/orders/amend")
+      return json(order({ ref: "DCA-BTC-26W47-2", link: "DCA-BTC-26W47-1" }));
     if (path === "/dca/orders") {
       const body = JSON.parse(String(init?.body)) as { coin: string };
       return json(order({ ref: `DCA-${body.coin}-26W47-9`, coin: body.coin }));
@@ -321,6 +323,24 @@ describe("DCA book page", () => {
       source: "named",
       override: false,
     });
+  });
+
+  it("changes an open order by hand, linked to the one it replaces", async () => {
+    const fetch = serve(book());
+    render(<DcaBookPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Change by hand" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "DCA-BTC-26W47-1 new limit" }), {
+      target: { value: "63500.37" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Review 1 change" }));
+    fireEvent.click(screen.getByRole("button", { name: "Change 1" }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders/amend")).toHaveLength(1));
+    expect(JSON.parse(String(sent(fetch, "/dca/orders/amend")[0]?.[1]?.body))).toEqual({
+      ref: "DCA-BTC-26W47-1",
+      price: "63500.37",
+      spend: "49.79",
+    });
+    expect(await screen.findByText("Now DCA-BTC-26W47-2")).toBeTruthy();
   });
 
   it("starts with the plan form when there's no plan", async () => {

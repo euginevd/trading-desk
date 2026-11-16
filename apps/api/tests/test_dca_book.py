@@ -275,3 +275,22 @@ def test_check_against_binance_finds_and_fixes_differences(book: DcaBook) -> Non
     assert fixed["matched"] == 2
     eth = next(p for p in book.view()["positions"] if p["coin"] == "ETH")
     assert eth["qty"] == "0.01"
+
+
+def test_a_small_buy_rounds_up_to_stay_at_the_minimum(book: DcaBook) -> None:
+    # 10 at 3,333.33 is 0.003000003 ETH: down to the step it would be 9.99999, under 10.
+    placed = book.place({"coin": "ETH", "spend": "10", "price": "3333.33"})
+    assert Decimal(placed["spend"]) >= 10
+
+
+def test_an_open_order_is_changed_and_linked(book: DcaBook) -> None:
+    first = book.place({"coin": "BTC", "spend": "40", "price": "97000", "source": "weekly"})
+    changed = book.amend({"ref": first["ref"], "price": "95000.5"})
+    assert changed["link"] == first["ref"]
+    assert changed["source"] == "weekly"
+    assert changed["price"] == "95000.5"
+    assert changed["status"] == "open"
+    old = next(o for o in book.view()["orders"] if o["ref"] == first["ref"])
+    assert old["status"] == "cancelled"
+    with pytest.raises(Refused, match="Only an open limit"):
+        book.amend({"ref": first["ref"], "price": "94000"})

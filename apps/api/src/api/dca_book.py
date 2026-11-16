@@ -23,6 +23,7 @@ ZERO = Decimal(0)
 PLAN_KEY = "dca_plan"
 RATE_KEY = "aud_per_usd"  # the desk's remembered A$ per US$ (profile_live)
 SOURCES = ("weekly", "named", "close-out", "trim", "buy-back", "desk")
+MIN_ORDER = Decimal(10)  # the agent's rule: 10 USDC a coin at least
 IMPORTED = "imported"  # found on Binance by its reference, added back by Check against Binance
 TAG = "DCA-"
 REF = re.compile(r"DCA-([A-Z0-9]{1,10})-(\d{2}W\d{2})-\d+")
@@ -412,6 +413,10 @@ class DcaBook:
         spend = number(body.get("spend"), "Amount")
         qty = rules.amount(spend / price) if price is not None else None
         if qty is not None and price is not None:
+            # Binance takes whole steps of the coin: round down, unless that falls under the
+            # 10 USDC minimum, then up one step (a few cents more, never under the rule).
+            if qty * price < MIN_ORDER <= spend:
+                qty += rules.step
             spend = qty * price
         if spend < rules.min_notional or (qty is not None and qty <= ZERO):
             raise Refused(smallest)
@@ -614,6 +619,47 @@ class DcaBook:
             bought.append(f"{done['coin']} {plain(round(left, 2))}")
         self._audit.record("dca", f"Close-out {week}", ", ".join(bought) or "nothing left open")
         return {"closed": bought}
+
+    # Changing an open order: the old one is cancelled (its fills kept) and a new one placed
+    # under a new reference, linked to it, so the book keeps both.
+
+    @locked
+    def amend(self, body: dict[str, Any]) -> dict[str, Any]:
+        ref = str(body.get("ref", ""))
+        row = self._store.dca_order(ref)
+        if row is None:
+            raise Refused("There's no order with that reference.")
+        if row["status"] not in ("placing", "open") or row["kind"] != "limit":
+            raise Refused("Only an open limit order can be changed.")
+        price = number(body.get("price"), "Price")
+        done = self._cancel(row)
+        whole = Decimal(done["qty"] or "0")
+        if whole > ZERO and Decimal(done["executed_qty"]) >= whole:
+            raise Refused(f"{ref} filled before it could be changed. Nothing new was placed.")
+        change: dict[str, Any] = {
+            "coin": row["coin"],
+            "side": row["side"],
+            "kind": "limit",
+            "price": plain(price),
+            "source": row["source"],
+            # a buy-back stays tied to its trim; anything else points at the order it replaced
+            "link": row["link"] if row["source"] == "buy-back" else row["ref"],
+        }
+        if row["side"] == "buy":
+            left = Decimal(row["spend"] or "0") - Decimal(done["executed_quote"])
+            change["spend"] = body.get("spend") or plain(left)
+        else:
+            left = Decimal(row["qty"] or "0") - Decimal(done["executed_qty"])
+            change["qty"] = body.get("qty") or plain(left)
+        try:
+            placed = self.place(change)
+        except (Refused, BinanceError) as error:
+            words = error.message if isinstance(error, BinanceError) else str(error)
+            raise Refused(
+                f"{ref} is cancelled, but its replacement wasn't placed: {words}"
+            ) from error
+        self._audit.record("dca", f"{ref}: changed", f"now {placed['ref']} at {plain(price)}")
+        return placed
 
     # Check against Binance: every order tagged DCA- on Binance, against the book.
 
