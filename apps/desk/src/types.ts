@@ -910,6 +910,8 @@ export interface BoardRoad {
     monthsLeft: number;
   } | null;
   thenPct?: Num;
+  path: { date: string; usd: string }[];
+  today: string;
 }
 export interface BoardStack {
   known: boolean;

@@ -101,7 +101,7 @@ export default function CommandBar({
           type="text"
           value={text}
           maxLength={600}
-          placeholder="Ask or change your plan"
+          placeholder="Ask about your plan, or change a figure. Nothing changes until you accept it."
           onChange={(e) => setText(e.target.value)}
           disabled={busy}
         />

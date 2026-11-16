@@ -374,7 +374,7 @@ export function FileNote({
   name: string;
   file: MarkdownFile | null;
   version: number;
-  bar?: boolean; // the Profile also changes through its command bar (decision 62)
+  bar?: boolean; // the Profile changes through its command bar, which says so (decision 62)
 }) {
   return (
     <>
@@ -383,10 +383,11 @@ export function FileNote({
           {name} has a problem: {file.error.replace(/\.$/, "")}. The desk is still using v{version}.
         </p>
       )}
-      <p className="muted pf-file-note">
-        To change it, {bar ? "use the command bar, or " : ""}ask Claude Code to edit{" "}
-        <code>local/{name}</code>.
-      </p>
+      {!bar && (
+        <p className="muted pf-file-note">
+          To change it, ask Claude Code to edit <code>local/{name}</code>.
+        </p>
+      )}
     </>
   );
 }

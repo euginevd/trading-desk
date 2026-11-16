@@ -1,18 +1,15 @@
-// The Profile's four widgets (decision 62): the summary card, Road to US$1M, Stack to 1 BTC and
-// Cash floor. The api works out every figure from profile.md and the live portfolio; this file
-// only lays them out. Green is done or on track, amber in progress, red broken or risk, and each
-// status also has a word and a mark (code-standards 26).
+// The Profile's plan (decision 62), as a road and a ledger: one chart of the plan over time with
+// you on it, then the plan's terms beside the two things being built (the BTC stack and the cash
+// floor). The api works out every figure from profile.md and the live portfolio; this file only
+// lays them out. Mint is you and done, amber is next or short, red is risk; each also has words.
 import type { ReactNode } from "react";
 import type { BoardCash, BoardRoad, BoardStack, BoardSummary, Num, ProfileBoard } from "./types";
 
-type Tone = "ok" | "warn" | "bad" | "dim";
-const MARK: Record<Tone, string> = { ok: "✓", warn: "▲", bad: "✕", dim: "–" };
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 const n = (v: Num | number | undefined) => (v === null || v === undefined ? null : Number(v));
 
 // Whole numbers with K or M: A$12K, US$1M, A$2.5K.
-export function km(value: Num | number | undefined, currency: "A$" | "US$" = "A$"): string {
+export function km(value: Num | number | undefined, currency: "A$" | "US$" | "" = "A$"): string {
   const v = n(value);
   if (v === null || Number.isNaN(v)) return "—";
   const sign = v < 0 ? "−" : "";
@@ -33,450 +30,338 @@ const month = (iso: string | null | undefined) => {
 };
 const plural = (count: number, one: string, many = `${one}s`) =>
   `${count} ${count === 1 ? one : many}`;
+const days = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / 86_400_000;
 
-export function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
+// Where you stand against the plan's line today, in words.
+function standing(r: BoardRoad): string {
+  const total = n(r.totalUsd);
+  const line = n(r.pathUsd);
+  if (total === null || line === null || line === 0) return "";
+  if (total >= line) return "on or above the line";
+  return (line - total) / line < 0.05 ? "just under the line" : "behind the line";
+}
+
+// The road: the plan as a dashed line over time, milestones on it, and you today.
+function RoadChart({ r }: { r: BoardRoad }) {
+  const first = r.path[0];
+  const last = r.path[r.path.length - 1];
+  if (!first || !last) return null;
+  const start = Math.min(days(first.date), days(r.today));
+  const span = days(last.date) - start || 1;
+  const top = Number(r.goalUsd) || 1;
+  const x = (iso: string) => ((days(iso) - start) / span) * 100;
+  const y = (usd: Num | undefined) => 100 - Math.min(100, ((n(usd) ?? 0) / top) * 100);
+  const line = r.path.map((p) => `${x(p.date)},${y(p.usd)}`).join(" ");
+  const next = r.leg ? n(r.leg.toUsd) : null;
+  const you = r.known ? { left: x(r.today), top: y(r.totalUsd) } : null;
   return (
-    <span className={`pf-tag ${tone}`}>
-      <span aria-hidden="true">{MARK[tone]}</span> {children}
-    </span>
+    <figure className="pf-chart" aria-label="Your plan over time, and where you are today">
+      <div className="pf-chart-plot">
+        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          {[25, 50, 75].map((g) => (
+            <line key={g} x1="0" x2="100" y1={g} y2={g} className="pf-grid" />
+          ))}
+          <polyline points={line} className="pf-plan-line" />
+        </svg>
+        {r.path.slice(1).map((p, i) => {
+          const goal = i === r.path.length - 2;
+          const isNext = n(p.usd) === next;
+          return (
+            <span
+              key={p.date}
+              className={`pf-stop${goal ? " goal" : ""}${isNext ? " next" : ""}`}
+              style={{ left: `${x(p.date)}%`, top: `${y(p.usd)}%` }}
+            >
+              <i aria-hidden="true" />
+              <b>
+                {goal && (
+                  <span className="pf-flag" aria-hidden="true">
+                    ⚑{" "}
+                  </span>
+                )}
+                {km(p.usd, "US$")}
+              </b>
+            </span>
+          );
+        })}
+        {you && (
+          <span className="pf-you-dot" style={{ left: `${you.left}%`, top: `${you.top}%` }}>
+            <i aria-hidden="true" />
+            <b>You</b>
+          </span>
+        )}
+      </div>
+      <div className="pf-years" aria-hidden="true">
+        <span style={{ left: `${x(r.today)}%` }} className="today">
+          Today
+        </span>
+        {r.path.slice(1).map((p) => (
+          <span key={p.date} style={{ left: `${x(p.date)}%` }}>
+            {month(p.date)}
+          </span>
+        ))}
+      </div>
+    </figure>
   );
 }
 
-export function Meter({
-  value,
+function Road({ r }: { r: BoardRoad }) {
+  const where = standing(r);
+  const leg = r.leg;
+  return (
+    <section className="pf-road" aria-label={`Road to ${km(r.goalUsd, "US$")}`}>
+      {r.known ? (
+        <>
+          <h2 className="pf-headline">
+            {whole(r.totalUsd, "US$")} of {km(r.goalUsd, "US$")}. {pct(r.pct)} of the way
+            {where ? `, ${where}` : ""}.
+          </h2>
+          {r.parts && (
+            <p className="pf-sub">
+              {km(r.totalAud)}: TAO {km(r.parts.taoAud)}, Binance {km(r.parts.binanceAud)},
+              emergency fund {km(r.parts.emergencyAud)}.
+            </p>
+          )}
+        </>
+      ) : (
+        <h2 className="pf-headline">
+          The road to {km(r.goalUsd, "US$")} by {month(r.goalDate)}. Live figures couldn&apos;t be
+          read just now.
+        </h2>
+      )}
+      <RoadChart r={r} />
+      <p className="pf-road-note">
+        {leg && (
+          <>
+            Next: <strong>{km(leg.toUsd, "US$")}</strong> by Dec {leg.year},{" "}
+            {km(leg.toGoUsd, "US$")} to go in {plural(leg.monthsLeft, "month")}.{" "}
+          </>
+        )}
+        {r.then && (
+          <>
+            Then {km(r.then.usd, "US$")} by {r.then.year}
+            {r.thenPct ? `, ${pct(r.thenPct)} there` : ""}.
+          </>
+        )}
+      </p>
+    </section>
+  );
+}
+
+function Row({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="pf-row">
+      <dt>{label}</dt>
+      <dd>{children}</dd>
+    </div>
+  );
+}
+
+// The plan's terms: how money goes in, where it goes, and what never happens.
+function Terms({ s }: { s: BoardSummary }) {
+  const d = s.dca;
+  return (
+    <section className="pf-col" aria-label="The plan">
+      <h2>The plan</h2>
+      <dl className="pf-rows">
+        <Row label="Weekly DCA">
+          <span>
+            {km(d.weeklyAud)} every {d.day ?? "week"}
+          </span>
+          {d.extraAud && d.fearGreedBelow !== null && (
+            <span className="muted">
+              +{km(d.extraAud)} when Fear &amp; Greed is under {d.fearGreedBelow}
+            </span>
+          )}
+          {d.maxMonthAud && <span className="muted">{km(d.maxMonthAud)} a month at most</span>}
+        </Row>
+        {s.split.length > 0 && (
+          <Row label={s.splitLabel ?? "Split"}>
+            {s.split.map((part) => (
+              <span key={part}>{part}</span>
+            ))}
+          </Row>
+        )}
+        {s.chips.length > 0 && (
+          <Row label="Never break">
+            <ul className="pf-rules">
+              {s.chips.map((c) => (
+                <li key={c}>
+                  <span className="pf-tick-mark" aria-hidden="true">
+                    ✓
+                  </span>
+                  {c}
+                </li>
+              ))}
+            </ul>
+          </Row>
+        )}
+      </dl>
+    </section>
+  );
+}
+
+function Bar({
+  parts,
   label,
-  tone = "ok",
-  thin = false,
+  marks = [],
 }: {
-  value: Num | undefined;
+  parts: { at: number; tone: "mint" | "amber" }[];
   label: string;
-  tone?: Tone;
-  thin?: boolean;
+  marks?: number[];
 }) {
-  const shown = Math.max(0, Math.min(100, n(value) ?? 0));
+  const filled = Math.min(
+    100,
+    parts.reduce((t, p) => t + p.at, 0),
+  );
   return (
     <div
-      className={`pf-meter ${tone}${thin ? " thin" : ""}`}
+      className="pf-bar"
       role="progressbar"
       aria-label={label}
-      aria-valuenow={Math.round(shown)}
+      aria-valuenow={Math.round(filled)}
       aria-valuemin={0}
       aria-valuemax={100}
     >
-      <i style={{ width: `${shown}%` }} />
+      {parts.map((p, i) => (
+        <i key={i} className={p.tone} style={{ width: `${Math.max(0, Math.min(100, p.at))}%` }} />
+      ))}
+      {marks.map((m) => (
+        <b key={m} style={{ left: `${m}%` }} aria-hidden="true" />
+      ))}
     </div>
   );
 }
 
-interface Tick {
-  at: number; // 0 to 100 along the track
-  label: string;
-  sub?: string | null;
-  state: "passed" | "next" | "";
-  flag?: boolean;
-}
-
-// A track from 0 to the goal: filled parts, ticks with labels under them, and a You marker.
-function Track({
-  label,
-  parts,
-  ticks,
-  you,
-}: {
-  label: string;
-  parts: { at: number; tone: Tone }[];
-  ticks: Tick[];
-  you?: number | null;
-}) {
-  const clamp = (x: number) => Math.max(0, Math.min(100, x));
-  const filled = clamp(parts.reduce((s, p) => s + p.at, 0));
-  return (
-    <div className="pf-track-wrap">
-      {you !== null && you !== undefined && (
-        <div className="pf-you" style={{ left: `${clamp(you)}%` }} aria-hidden="true">
-          You
-        </div>
-      )}
-      <div
-        className="pf-track"
-        role="progressbar"
-        aria-label={label}
-        aria-valuenow={Math.round(filled)}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      >
-        {parts.map((p, i) => (
-          <i key={i} className={p.tone} style={{ width: `${clamp(p.at)}%` }} />
-        ))}
-        {ticks.map((t) => (
-          <b
-            key={t.label}
-            className={`pf-tick ${t.state}${t.flag ? " flag" : ""}`}
-            style={{ left: `${clamp(t.at)}%` }}
-            aria-hidden="true"
-          />
-        ))}
-      </div>
-      <div className="pf-tick-labels" aria-hidden="true">
-        {ticks.map((t) => (
-          <span
-            key={t.label}
-            className={`${t.state}${t.at > 85 ? " end" : ""}`}
-            style={{ left: `${clamp(t.at)}%` }}
-          >
-            {t.flag && <span className="pf-flag">⚑</span>}
-            {t.label}
-            {t.sub && <small>{t.sub}</small>}
-          </span>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function Leg({
-  title,
-  value,
-  text,
-  tone = "warn",
-}: {
-  title: string;
-  value: Num | undefined;
-  text: string;
-  tone?: Tone;
-}) {
-  return (
-    <div className="pf-leg">
-      <div className="pf-leg-head">
-        <span className="muted">{title}</span>
-        <span>{text}</span>
-      </div>
-      <Meter value={value} label={title} tone={tone} />
-    </div>
-  );
-}
-
-function Card({
-  title,
-  badge,
-  children,
-}: {
-  title: string;
-  badge?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="card pf-widget" aria-label={title}>
-      <div className="pf-head">
-        <h2>{title}</h2>
-        <span className="pf-spacer" />
-        {badge}
-      </div>
-      {children}
-    </section>
-  );
-}
-
-// 1. Who, the plan in four tiles, the rules never to break, and what's open.
-export function Summary({ s, road }: { s: BoardSummary; road: BoardRoad | null }) {
-  const dca = s.dca;
-  const [first, ...rest] = s.split;
-  const day = dca.day ? dca.day.slice(0, 3) : "";
-  return (
-    <section className="card pf-widget pf-summary" aria-label="Summary">
-      <div className="pf-who">
-        <span className="ag-ava ag-ava-lg" aria-hidden="true">
-          {(s.name ?? "?").slice(0, 1).toUpperCase()}
-        </span>
-        <div className="pf-who-text">
-          <strong>
-            {s.name ?? "Name not set"}
-            {s.age !== null && ` · ${s.age}`}
-          </strong>
-          {s.subline && <span className="muted">{s.subline}</span>}
-        </div>
-        <span className="pf-spacer" />
-        {s.risk && <Badge tone="bad">{s.risk}</Badge>}
-      </div>
-      <div className="pf-tiles">
-        <div className="pf-tile">
-          <span className="muted">Goal</span>
-          <span className="pf-big">{road ? km(road.goalUsd, "US$") : "Not set"}</span>
-          <span className="muted">
-            {road ? `by ${month(road.goalDate)}` : ""}
-            {s.goalPct !== null && ` · ${pct(s.goalPct)} done`}
-          </span>
-        </div>
-        <div className="pf-tile">
-          <span className="muted">Weekly DCA</span>
-          <span className="pf-big">
-            {km(dca.weeklyAud)} {day}
-          </span>
-          <span className="muted">
-            {dca.extraAud && dca.fearGreedBelow !== null
-              ? `+${km(dca.extraAud)} if Fear & Greed < ${dca.fearGreedBelow}`
-              : ""}
-            {dca.maxMonthAud && ` · max ${km(dca.maxMonthAud)}/mo`}
-          </span>
-        </div>
-        <div className="pf-tile">
-          <span className="muted">{s.splitLabel ?? "Split"}</span>
-          <span className="pf-big">{first ?? "Not set"}</span>
-          <span className="muted">{rest.join(" · ")}</span>
-        </div>
-        <div className="pf-tile">
-          <span className="muted">Cash floor</span>
-          <span className={`pf-big${s.cash.below ? " warn" : ""}`}>
-            {km(s.cash.totalAud)} / {km(s.cash.floorAud, "A$").replace("A$", "")}
-          </span>
-          {s.cash.below ? (
-            <Badge tone="warn">Below the floor</Badge>
-          ) : (
-            <Badge tone="ok">Full</Badge>
-          )}
-        </div>
-      </div>
-      {s.chips.length > 0 && (
-        <div className="pf-chips" aria-label="Never break">
-          <span className="muted">Never break</span>
-          {s.chips.map((c) => (
-            <span key={c} className="pf-chip">
-              {c}
-            </span>
-          ))}
-        </div>
-      )}
-      <div className="pf-foot">
-        {s.openItems.length > 0 ? (
-          <span title={s.openItems.join("\n")}>
-            <Badge tone="warn">{plural(s.openItems.length, "open item")}</Badge>
-          </span>
-        ) : (
-          <Badge tone="ok">No open items</Badge>
-        )}
-        {s.lesson && (
-          <span className="pf-lesson" title={s.lesson.story}>
-            <span className="muted">Biggest lesson · </span>
-            {s.lesson.lesson}
-          </span>
-        )}
-      </div>
-    </section>
-  );
-}
-
-// 2. Road to US$1M: the goal total against the milestones.
-export function Road({ r }: { r: BoardRoad }) {
-  const goal = Number(r.goalUsd);
-  const at = (usd: string | number) => (Number(usd) / goal) * 100;
-  const title = `Road to ${km(r.goalUsd, "US$")}`;
-  const ticks: Tick[] = r.ticks.map((t, i) => ({
-    at: at(t.usd ?? 0),
-    label: km(t.usd, "US$").replace("US$", ""),
-    sub: String(t.year),
-    state: t.state,
-    flag: i === r.ticks.length - 1,
-  }));
-  const leg = r.leg;
-  return (
-    <Card
-      title={title}
-      badge={
-        r.known ? (
-          r.onTrack ? (
-            <Badge tone="ok">On track</Badge>
-          ) : (
-            <Badge tone="warn">Behind</Badge>
-          )
-        ) : null
-      }
-    >
-      {r.known ? (
-        <>
-          <p className="pf-figure">
-            <span className="pf-huge">{whole(r.totalUsd, "US$")}</span>
-            <span className="muted">
-              {" "}
-              · {pct(r.pct)} of {km(r.goalUsd, "US$")}
-            </span>
-          </p>
-          {r.parts && (
-            <p className="muted pf-sub">
-              {km(r.totalAud)} = TAO {km(r.parts.taoAud)} + Binance {km(r.parts.binanceAud)} +
-              emergency {km(r.parts.emergencyAud)}
-            </p>
-          )}
-          <Track
-            label={`Goal total against ${km(r.goalUsd, "US$")}`}
-            parts={[{ at: at(r.totalUsd ?? 0), tone: r.onTrack ? "ok" : "warn" }]}
-            ticks={ticks}
-            you={at(r.totalUsd ?? 0)}
-          />
-          {leg && (
-            <Leg
-              title={`This leg · ${km(leg.fromUsd, "US$")} → ${km(leg.toUsd, "US$")}`}
-              value={leg.pct}
-              text={`${pct(leg.pct)} · ${km(leg.toGoUsd, "US$")} to go · ${plural(leg.monthsLeft, "month")} left`}
-            />
-          )}
-          {r.then && (
-            <div className="pf-then">
-              <span className="muted">
-                Then {km(r.then.usd, "US$")} by {r.then.year}
-              </span>
-              <Meter value={r.thenPct} label={`Toward ${km(r.then.usd, "US$")}`} thin />
-              <span className="muted">{pct(r.thenPct)}</span>
-            </div>
-          )}
-        </>
-      ) : (
-        <LiveOff />
-      )}
-    </Card>
-  );
-}
-
-// 3. Stack to 1 BTC: BTC held, the next step and the weekly buy.
-export function Stack({ b }: { b: BoardStack }) {
-  const target = Number(b.target);
-  const at = (v: string | number) => (Number(v) / target) * 100;
-  const next = b.next ? Number(b.next) : null;
-  const ticks: Tick[] = b.ticks.map((t, i) => {
-    const last = i === b.ticks.length - 1;
-    return {
-      at: at(t),
-      label: btc(t),
-      sub: last && b.projected ? month(b.projected) : null,
-      state: Number(t) <= Number(b.held ?? 0) ? "passed" : Number(t) === next ? "next" : "",
-      flag: last,
-    };
-  });
-  const badge =
-    b.bought === null ? (
-      <Badge tone="dim">Couldn&apos;t check this week</Badge>
-    ) : b.bought ? (
-      <Badge tone="ok">Bought this week</Badge>
-    ) : (
-      <Badge tone="warn">Not bought yet</Badge>
-    );
+function Stack({ b }: { b: BoardStack }) {
+  const target = Number(b.target) || 1;
   const leg = b.leg;
   return (
-    <Card title={`Stack to ${btc(b.target)} BTC`} badge={b.known ? badge : null}>
+    <div className="pf-goal" aria-label={`Stack to ${btc(b.target)} BTC`} role="group">
+      <h3>Stack to {btc(b.target)} BTC</h3>
       {b.known ? (
         <>
-          <p className="pf-figure">
-            <span className="pf-huge">{btc(b.held)} BTC</span>
+          <p className="pf-goal-line">
+            <strong>{btc(b.held)} BTC</strong>
             <span className="muted">
               {" "}
-              · {pct(b.pct)} of {btc(b.target)} BTC
+              of {btc(b.target)}, worth {km(b.valueAud)}.{" "}
             </span>
+            {b.bought === null ? (
+              <span className="muted">This week&apos;s buy couldn&apos;t be checked.</span>
+            ) : b.bought ? (
+              <span className="pf-done">✓ Bought this week</span>
+            ) : (
+              <span className="pf-due">Not bought yet this week</span>
+            )}
           </p>
-          <p className="muted pf-sub">
-            {km(b.valueAud)}
-            {b.weeklyAud && ` · ${km(b.weeklyAud)} every ${b.day ?? "week"}`}
-          </p>
-          <Track
+          <Bar
             label={`BTC held against ${btc(b.target)} BTC`}
-            parts={[{ at: at(b.held ?? 0), tone: "ok" }]}
-            ticks={ticks}
-            you={at(b.held ?? 0)}
+            parts={[{ at: n(b.pct) ?? 0, tone: "mint" }]}
+            marks={b.ticks.slice(0, -1).map((t) => (Number(t) / target) * 100)}
           />
-          {leg && (
-            <Leg
-              title={`This leg · ${btc(leg.from)} → ${btc(leg.to)} BTC`}
-              value={leg.pct}
-              text={`${pct(leg.pct)} · ${btc(leg.toGo)} BTC to go${
-                leg.weeksLeft !== null ? ` · ${plural(leg.weeksLeft, "weekly buy")}` : ""
-              }`}
-            />
-          )}
-          {b.projected && (
-            <p className="pf-note muted">
-              {btc(b.target)} BTC by {month(b.projected)} at today&apos;s price
-            </p>
-          )}
+          <p className="pf-note">
+            {leg && leg.weeksLeft !== null && (
+              <>
+                Next {btc(leg.to)} BTC in {plural(leg.weeksLeft, "weekly buy")} of {km(b.weeklyAud)}
+                .{" "}
+              </>
+            )}
+            {b.projected && (
+              <>
+                {btc(b.target)} BTC by {month(b.projected)} at today&apos;s price.
+              </>
+            )}
+          </p>
         </>
       ) : (
-        <LiveOff />
+        <p className="muted">Live figures couldn&apos;t be read just now.</p>
       )}
-    </Card>
+    </div>
   );
 }
 
-// 4. Cash floor: parked tax and the emergency fund against the minimum.
-export function Cash({ c }: { c: BoardCash }) {
-  const floor = Number(c.floorAud);
-  const ticks: Tick[] = c.ticks.map((t, i) => {
-    const last = i === c.ticks.length - 1;
-    return {
-      at: (Number(t.aud) / floor) * 100,
-      label: km(t.aud).replace("A$", ""),
-      sub: last && c.projected ? month(c.projected) : null,
-      state: t.state,
-      flag: last,
-    };
-  });
+function Cash({ c }: { c: BoardCash }) {
   const e = c.emergency;
   return (
-    <Card
-      title="Cash floor"
-      badge={
-        c.full ? <Badge tone="ok">Full</Badge> : <Badge tone="warn">{km(c.shortAud)} short</Badge>
-      }
-    >
-      <p className="pf-figure">
-        <span className="pf-huge">{km(c.totalAud)}</span>
-        <span className="muted">
-          {" "}
-          · {pct(c.pct)} of {km(c.floorAud)}
-        </span>
+    <div className="pf-goal" aria-label="Cash floor" role="group">
+      <h3>Cash floor</h3>
+      <p className="pf-goal-line">
+        <strong>{km(c.totalAud)}</strong>
+        <span className="muted"> of {km(c.floorAud)}. </span>
+        {c.full ? (
+          <span className="pf-done">✓ Full</span>
+        ) : (
+          <span className="pf-due">{km(c.shortAud)} short</span>
+        )}
       </p>
-      <p className="muted pf-sub">
-        Parked tax {km(c.parkedAud)} + emergency {km(c.emergencyAud)}
-        {c.monthlyAud && ` · ${km(c.monthlyAud)} a month in`}
-      </p>
-      <Track
+      <Bar
         label={`Cash against the ${km(c.floorAud)} floor`}
         parts={[
-          { at: n(c.parkedPct) ?? 0, tone: "ok" },
-          { at: n(c.emergencyPct) ?? 0, tone: "warn" },
+          { at: n(c.parkedPct) ?? 0, tone: "mint" },
+          { at: n(c.emergencyPct) ?? 0, tone: "amber" },
         ]}
-        ticks={ticks}
       />
-      <p className="pf-key muted">
-        <span className="pf-key-dot ok" aria-hidden="true" /> Parked tax
-        <span className="pf-key-dot warn" aria-hidden="true" /> Emergency fund
+      <p className="pf-note">
+        <span className="pf-key mint" aria-hidden="true" />
+        Parked tax {km(c.parkedAud)}, <span className="pf-key amber" aria-hidden="true" />
+        emergency fund {km(c.emergencyAud)}
+        {e?.targetAud ? ` of ${km(e.targetAud)}` : ""}.
+        {c.projected && c.monthlyAud && (
+          <>
+            {" "}
+            Full by {month(c.projected)} at {km(c.monthlyAud)} a month.
+          </>
+        )}
       </p>
-      {e && (
-        <Leg
-          title={`Emergency fund · ${km(c.emergencyAud)} of ${km(e.targetAud)}`}
-          value={e.pct}
-          text={
-            n(e.toGoAud)
-              ? `${km(e.toGoAud)} to go · ${plural(e.months, "month")}${c.monthlyAud ? ` at ${km(c.monthlyAud)}` : ""}`
-              : "Full"
-          }
-          tone={n(e.toGoAud) ? "warn" : "ok"}
-        />
-      )}
-      {c.projected && (
-        <p className="pf-note muted">Full by {month(c.projected)} at the monthly amount</p>
-      )}
-    </Card>
+    </div>
   );
 }
 
-function LiveOff() {
-  return <p className="muted">Live figures couldn&apos;t be read just now.</p>;
+function Building({ b, s }: { b: ProfileBoard; s: BoardSummary }) {
+  return (
+    <section className="pf-col" aria-label="Building">
+      <h2>Building</h2>
+      {b.stack && <Stack b={b.stack} />}
+      {b.cash && <Cash c={b.cash} />}
+      {(s.openItems.length > 0 || s.lesson) && (
+        <dl className="pf-rows pf-rows-tight">
+          {s.openItems.length > 0 && (
+            <Row label={s.openItems.length === 1 ? "Open item" : "Open items"}>
+              {s.openItems.map((o) => (
+                <span key={o} className="pf-due">
+                  {o}
+                </span>
+              ))}
+            </Row>
+          )}
+          {s.lesson && (
+            <Row label="Lesson">
+              <span title={s.lesson.story}>
+                {s.lesson.lesson.charAt(0).toUpperCase() + s.lesson.lesson.slice(1)}
+              </span>
+            </Row>
+          )}
+        </dl>
+      )}
+    </section>
+  );
 }
 
 export default function Board({ board }: { board: ProfileBoard }) {
+  const s = board.summary;
   return (
     <div className="pf-board">
-      <Summary s={board.summary} road={board.road} />
       {board.road && <Road r={board.road} />}
-      {board.stack && <Stack b={board.stack} />}
-      {board.cash && <Cash c={board.cash} />}
+      <div className="pf-ledger">
+        <Terms s={s} />
+        <Building b={board} s={s} />
+      </div>
+      <p className="pf-identity">
+        {s.name ?? "You"}
+        {s.age !== null && `, ${s.age}`}. {s.risk && <span className="pf-risk">{s.risk} risk</span>}
+        {s.subline && `: ${s.subline.toLowerCase().replace(" · ", "; ")}.`}
+      </p>
     </div>
   );
 }

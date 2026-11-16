@@ -69,54 +69,9 @@
   padding: 8px 12px;
 }
 
-/* The four widgets (decision 62): one column, same card style, works at ~650px. */
-.pf-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  background: var(--panel-2);
-  min-width: 0;
-}
-.pf-tile .muted {
-  font-size: 12px;
-}
-.pf-tile .pf-tag {
-  align-self: flex-start;
-}
-.pf-big {
-  font-size: 18px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.pf-big.warn {
-  color: var(--wait);
-}
-.pf-big.bad {
-  color: var(--down);
-}
 .pf-skeleton {
   min-height: 140px;
   background: var(--panel-2);
-}
-.pf-meter {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--panel-2);
-  overflow: hidden;
-  margin-top: 4px;
-}
-.pf-meter i {
-  display: block;
-  height: 100%;
-  background: var(--up);
-}
-.pf-meter.warn i {
-  background: var(--wait);
-}
-.pf-meter.bad i {
-  background: var(--down);
 }
 
 /* Card heads, tags and links. */
@@ -298,9 +253,48 @@
   background: var(--panel-2);
   color: var(--text);
 }
-.ag-card {
-  padding: 16px;
+.ag-sheet {
   max-width: 760px;
+}
+.ag-facts {
+  margin-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.ag-facts .pf-row {
+  grid-template-columns: 170px minmax(0, 1fr);
+}
+.ag-steps-h {
+  margin: 18px 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.ag-steps {
+  margin: 0;
+  padding: 0 0 0 22px;
+  font-variant-numeric: tabular-nums;
+}
+.ag-steps li {
+  padding: 8px 0 8px 4px;
+  border-bottom: 1px solid var(--line);
+}
+.ag-steps li::marker {
+  color: var(--muted);
+}
+.ag-steps li > span {
+  display: inline-block;
+}
+.ag-step-title {
+  min-width: 190px;
+}
+.ag-steps li .muted {
+  min-width: 170px;
+}
+.ag-step-model {
+  color: var(--accent);
+}
+.ag-steps li.off .ag-step-title,
+.ag-steps li.off .ag-step-model {
+  color: var(--dim);
 }
 .ag-who {
   flex: 1;
@@ -314,268 +308,327 @@
 .ag-who p {
   margin: 2px 0 0;
 }
-.ag-facts {
+
+/* The plan (decision 62): a road over time, then a ledger. No cards: hairlines carry structure,
+   and the chart is the one bold thing. Wide: two ledger columns; narrow (~650px): one. */
+.pf-top {
   display: flex;
+  align-items: center;
   flex-wrap: wrap;
-  gap: 8px 28px;
-  margin: 14px 0 0;
+  gap: 12px 20px;
 }
-.ag-facts dt {
-  font-size: 11px;
-  color: var(--muted);
-}
-.ag-facts dd {
-  margin: 0;
-  font-weight: 500;
-}
-
-/* The policy tab (decision 62). */
 .pf-lead {
+  margin: 0;
+  color: var(--body);
+}
+.pf-stamp {
   color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.pf-page button.pf-quiet {
+  background: none;
+}
+.pf-board {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 1180px;
 }
 
-/* Wide: the summary across the top, the three widgets side by side below it, all on one screen.
-   Narrow (the ~650px pane): one column. */
-.pf-board {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-}
-.pf-summary {
-  grid-column: 1 / -1;
-}
-@media (max-width: 1100px) {
-  .pf-board {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-.pf-widget {
-  padding: 16px;
-  border-radius: 12px;
-  border: 1px solid var(--line);
+.pf-road {
   min-width: 0;
 }
-.pf-widget .pf-head h2 {
-  font-size: 14px;
-}
-.pf-figure {
-  margin: 0;
-}
-.pf-huge {
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+.pf-headline {
+  margin: 4px 0 2px;
+  font-size: 28px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 .pf-sub {
-  margin: 2px 0 0;
-  font-size: 12px;
+  margin: 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
-.pf-note {
-  margin: 8px 0 0;
-  font-size: 12px;
-}
-
-/* The summary card. */
-.pf-who {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.pf-who-text {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-.pf-who-text strong {
-  font-size: 16px;
-}
-.pf-tiles {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 10px;
-}
-@media (max-width: 1100px) {
-  .pf-tiles {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-.pf-chips {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 10px;
-}
-.pf-chips .muted {
-  font-size: 12px;
-  margin-right: 2px;
-}
-.pf-chip {
-  font-size: 12px;
-  padding: 3px 9px;
-  border-radius: 999px;
-  border: 1px solid var(--line-2);
+.pf-road-note {
+  margin: 4px 0 0;
   color: var(--body);
-}
-.pf-foot {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--line);
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
-.pf-lesson {
-  flex: 1 1 240px;
-  min-width: 0;
+.pf-road-note strong {
+  color: var(--wait);
+  font-weight: 600;
 }
 
-/* Tracks: 0 to the goal, ticks under it, a You marker above. */
-.pf-track-wrap {
-  position: relative;
-  margin: 24px 0 22px;
+/* The chart: an SVG for the line, HTML for labels so text never stretches. */
+.pf-chart {
+  margin: 14px 0 0;
+  padding: 0 64px 0 0;
 }
-.pf-track {
+.pf-chart-plot {
   position: relative;
-  display: flex;
-  height: 10px;
-  border-radius: 5px;
-  background: var(--panel-2);
+  height: 210px;
+  border-left: 1px solid var(--line-2);
+  border-bottom: 1px solid var(--line-2);
 }
-.pf-track > i {
-  display: block;
+.pf-chart svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
   height: 100%;
+  overflow: visible;
 }
-.pf-track > i:first-child {
-  border-radius: 5px 0 0 5px;
+.pf-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
-.pf-track > i.ok {
-  background: var(--up);
+.pf-plan-line {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.5;
+  stroke-dasharray: 5 5;
+  vector-effect: non-scaling-stroke;
 }
-.pf-track > i.warn {
-  background: var(--wait);
-}
-.pf-tick {
+.pf-stop,
+.pf-you-dot {
   position: absolute;
-  top: -3px;
-  width: 2px;
-  height: 16px;
-  margin-left: -1px;
-  background: var(--line-2);
-}
-.pf-tick.passed {
-  background: var(--up);
-}
-.pf-tick.next {
-  background: none;
-  border-left: 2px dashed var(--wait);
-}
-.pf-tick.flag {
-  background: var(--accent);
-}
-.pf-you {
-  position: absolute;
-  top: -22px;
-  transform: translateX(-50%);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--accent);
-  white-space: nowrap;
-}
-.pf-you::after {
-  content: "";
-  display: block;
   width: 0;
   height: 0;
-  margin: 1px auto 0;
-  border: 4px solid transparent;
-  border-top-color: var(--accent);
 }
-.pf-tick-labels {
-  position: relative;
-  height: 26px;
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--muted);
-}
-.pf-tick-labels > span {
+.pf-stop i,
+.pf-you-dot i {
   position: absolute;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  left: -4px;
+  top: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--bg);
+  border: 1.5px solid var(--muted);
+}
+.pf-stop b {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
   white-space: nowrap;
-  line-height: 1.2;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
-.pf-tick-labels > span.end {
-  transform: translateX(-100%);
-  align-items: flex-end;
+.pf-stop.next i {
+  border-color: var(--wait);
 }
-.pf-tick-labels > span.next {
+.pf-stop.next b {
   color: var(--wait);
 }
-.pf-tick-labels > span.passed {
-  color: var(--up);
+.pf-stop.goal i {
+  border-color: var(--accent);
 }
-.pf-tick-labels small {
-  font-size: 10px;
-  color: var(--dim);
+.pf-stop.goal b {
+  right: auto;
+  left: 10px;
+  bottom: -7px;
+  color: var(--text);
 }
 .pf-flag {
   color: var(--accent);
-  margin-right: 2px;
+}
+.pf-you-dot i {
+  left: -6px;
+  top: -6px;
+  width: 12px;
+  height: 12px;
+  border: 0;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.pf-you-dot b {
+  position: absolute;
+  left: 12px;
+  bottom: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pf-you-dot i {
+    animation: pf-settle 600ms var(--ease) 200ms both;
+  }
+}
+@keyframes pf-settle {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+.pf-years {
+  position: relative;
+  height: 20px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+.pf-years span {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.pf-years span.today {
+  transform: none;
+  color: var(--accent);
 }
 
-.pf-leg {
-  margin-top: 4px;
-}
-.pf-leg-head {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 2px 12px;
-  font-size: 12px;
-}
-.pf-meter.thin {
-  height: 3px;
-}
-.pf-then {
+/* The ledger: label, value rows on hairlines. */
+.pf-ledger {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-  font-size: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 48px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
 }
-.pf-then .pf-meter {
-  margin-top: 0;
+.pf-col h2 {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.pf-rows {
+  margin: 0;
+}
+.pf-row {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.pf-row:last-child {
+  border-bottom: 0;
+}
+.pf-row dt {
+  color: var(--muted);
+  font-size: 13px;
+}
+.pf-row dd {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pf-rows-tight .pf-row {
+  padding: 7px 0;
+}
+.pf-rules {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+.pf-tick-mark {
+  color: var(--accent);
+  display: inline-block;
+  width: 18px;
+}
+.pf-goal {
+  padding: 9px 0 12px;
+  border-bottom: 1px solid var(--line);
+}
+.pf-goal h3 {
+  margin: 0 0 2px;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.pf-goal-line {
+  margin: 0 0 8px;
+  font-variant-numeric: tabular-nums;
+}
+.pf-goal-line strong {
+  font-size: 18px;
+  font-weight: 600;
+}
+.pf-done {
+  color: var(--accent);
+}
+.pf-due {
+  color: var(--wait);
+}
+.pf-bar {
+  position: relative;
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  overflow: hidden;
+}
+.pf-bar i {
+  display: block;
+  height: 100%;
+}
+.pf-bar i.mint {
+  background: var(--accent);
+}
+.pf-bar i.amber {
+  background: var(--wait);
+}
+.pf-bar b {
+  position: absolute;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  background: var(--bg);
+}
+.pf-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 .pf-key {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: -18px 0 10px;
-  font-size: 11px;
-}
-.pf-key-dot {
+  display: inline-block;
   width: 8px;
   height: 8px;
   border-radius: 2px;
-  margin-left: 6px;
+  margin-right: 5px;
 }
-.pf-key-dot:first-child {
-  margin-left: 0;
+.pf-key.mint {
+  background: var(--accent);
 }
-.pf-key-dot.ok {
-  background: var(--up);
-}
-.pf-key-dot.warn {
+.pf-key.amber {
   background: var(--wait);
+}
+.pf-identity {
+  margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+.pf-risk {
+  color: var(--down);
+}
+
+@media (max-width: 900px) {
+  .pf-ledger {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 22px;
+  }
+  .pf-headline {
+    font-size: 23px;
+  }
+  .pf-chart {
+    padding-right: 70px;
+  }
+  .pf-chart-plot {
+    height: 170px;
+  }
 }
 
 /* The command bar and its diff. */

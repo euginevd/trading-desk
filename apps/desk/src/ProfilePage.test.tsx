@@ -61,6 +61,13 @@ function board(): ProfileBoard {
         monthsLeft: 13,
       },
       thenPct: "0.8",
+      path: [
+        { date: "2026-11-01", usd: "26000" },
+        { date: "2027-12-31", usd: "150000" },
+        { date: "2029-12-31", usd: "500000" },
+        { date: "2030-12-31", usd: "1000000" },
+      ],
+      today: "2026-11-16",
     },
     stack: {
       known: true,
@@ -225,8 +232,15 @@ const agentPage: AgentPage = {
   history: [],
   told: "",
   estimate: "0.08",
-  models: [],
-  steps: [],
+  models: [
+    { id: "haiku", name: "Haiku 5.5" },
+    { id: "opus", name: "Opus 5.5" },
+  ],
+  steps: [
+    { key: "macro", title: "Macro", who: "Quinn", fixed: false },
+    { key: "debate", title: "Bull against bear", who: "Specialists", fixed: false },
+    { key: "decision", title: "Decision", who: "Jordan", fixed: true },
+  ],
 };
 
 beforeEach(() => {
@@ -251,54 +265,53 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe("Profile", () => {
-  it("shows the version, the file buttons, the line and the four widgets", async () => {
+  it("shows the plan as a road over time and a ledger", async () => {
     render(<Profile />);
-    expect(await screen.findByText("v4 · 15 Nov 2026")).toBeTruthy();
+    expect(await screen.findByText("v4, 15 Nov 2026")).toBeTruthy();
     expect(screen.getByRole("button", { name: "History" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "View profile.md" })).toBeTruthy();
-    expect(screen.getByText("Your plan. Every agent follows it.")).toBeTruthy();
+    expect(screen.getByText(/Your plan. Every agent follows it./)).toBeTruthy();
     expect(screen.getByRole("textbox", { name: "Ask or change your plan" })).toBeTruthy();
 
-    const summary = screen.getByRole("region", { name: "Summary" });
-    expect(within(summary).getByText("Sam · 36")).toBeTruthy();
-    expect(within(summary).getByText("Aggressive")).toBeTruthy();
-    expect(within(summary).getByText("US$1M")).toBeTruthy();
-    expect(within(summary).getByText(/by Dec 2030 · 3.8% done/)).toBeTruthy();
-    expect(within(summary).getByText("A$500 Fri")).toBeTruthy();
-    expect(within(summary).getByText(/\+A\$250 if Fear & Greed < 40 · max A\$3K\/mo/)).toBeTruthy();
-    expect(within(summary).getByText("2026 split")).toBeTruthy();
-    expect(within(summary).getByText("A$20K / 40K").className).toContain("warn");
-    expect(within(summary).getByText("Memes max 5%")).toBeTruthy();
-    expect(within(summary).getByText("2 open items")).toBeTruthy();
-    expect(within(summary).getByText("take profit at milestones")).toBeTruthy();
-
     const road = screen.getByRole("region", { name: "Road to US$1M" });
-    expect(within(road).getByText("US$38,000")).toBeTruthy();
-    expect(within(road).getByText("On track")).toBeTruthy();
-    expect(
-      within(road).getByText("A$57K = TAO A$21K + Binance A$24K + emergency A$12K"),
-    ).toBeTruthy();
-    expect(within(road).getByText("25.3% · US$112K to go · 13 months left")).toBeTruthy();
-    expect(within(road).getByText("Then US$5M by 2050")).toBeTruthy();
+    expect(within(road).getByRole("heading").textContent).toBe(
+      "US$38,000 of US$1M. 3.8% of the way, on or above the line.",
+    );
+    expect(road.textContent).toContain("A$57K: TAO A$21K, Binance A$24K, emergency fund A$12K.");
+    expect(road.textContent).toContain("Next: US$150K by Dec 2027, US$112K to go in 13 months.");
+    expect(road.textContent).toContain("Then US$5M by 2050, 0.8% there.");
+    const chart = within(road).getByRole("figure");
+    expect(within(chart).getByText("You")).toBeTruthy();
+    expect(within(chart).getByText("US$500K")).toBeTruthy();
 
-    const stack = screen.getByRole("region", { name: "Stack to 1 BTC" });
-    expect(within(stack).getByText("0.2 BTC")).toBeTruthy();
-    expect(within(stack).getByText("Not bought yet")).toBeTruthy();
-    expect(within(stack).getByText("A$18K · A$300 every Friday")).toBeTruthy();
-    expect(within(stack).getByText("66.7% · 0.05 BTC to go · 15 weekly buys")).toBeTruthy();
-    expect(within(stack).getByText("1 BTC by Jun 2031 at today's price")).toBeTruthy();
+    const plan = screen.getByRole("region", { name: "The plan" });
+    expect(plan.textContent).toContain("A$500 every Friday");
+    expect(plan.textContent).toContain("+A$250 when Fear & Greed is under 40");
+    expect(plan.textContent).toContain("A$3K a month at most");
+    expect(within(plan).getByText("2026 split")).toBeTruthy();
+    expect(within(plan).getByText("Memes max 5%")).toBeTruthy();
 
-    const cash = screen.getByRole("region", { name: "Cash floor" });
+    const building = screen.getByRole("region", { name: "Building" });
+    const stack = within(building).getByRole("group", { name: "Stack to 1 BTC" });
+    expect(stack.textContent).toContain("0.2 BTC of 1, worth A$18K.");
+    expect(within(stack).getByText("Not bought yet this week")).toBeTruthy();
+    expect(stack.textContent).toContain(
+      "Next 0.25 BTC in 15 weekly buys of A$300. 1 BTC by Jun 2031 at today's price.",
+    );
+    const cash = within(building).getByRole("group", { name: "Cash floor" });
     expect(within(cash).getByText("A$20K short")).toBeTruthy();
-    expect(within(cash).getByText(/Parked tax A\$8K \+ emergency A\$12K/)).toBeTruthy();
-    expect(within(cash).getByText("A$8K to go · 8 months at A$1K")).toBeTruthy();
+    expect(cash.textContent).toContain("Full by Jul 2028 at A$1K a month.");
+    expect(within(building).getByText("Open items")).toBeTruthy();
+    expect(within(building).getByText("Take profit at milestones")).toBeTruthy();
+    expect(screen.getByText(/^Sam, 36\./)).toBeTruthy();
+    expect(screen.getByText("Aggressive risk")).toBeTruthy();
   });
 
   it("opens profile.md in the reader, with the rate the desk uses", async () => {
     render(<Profile />);
     fireEvent.click(await screen.findByRole("button", { name: "View profile.md" }));
     const reader = await screen.findByRole("dialog", { name: "Profile" });
-    expect(within(reader).getByText(/v4 · 15 Nov 2026 · US\$1 = A\$1\.5000/)).toBeTruthy();
+    expect(within(reader).getByText(/v4, 15 Nov 2026\. US\$1 = A\$1\.5000/)).toBeTruthy();
     expect(within(reader).getByRole("heading", { level: 2, name: "2. Goals" })).toBeTruthy();
     expect(within(reader).getByRole("button", { name: "Export .md" })).toBeTruthy();
     expect(within(reader).queryByRole("button", { name: "Edit" })).toBeNull();
@@ -345,11 +358,11 @@ describe("Profile", () => {
     api.getProfilePage.mockResolvedValue(after);
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     await waitFor(() => expect(api.acceptSuggestion).toHaveBeenCalledWith("abc123abc123"));
-    expect(await screen.findByText("v5 · 15 Nov 2026")).toBeTruthy();
+    expect(await screen.findByText("v5, 15 Nov 2026")).toBeTruthy();
     await waitFor(() =>
       expect(screen.queryByRole("list", { name: "Changes to profile.md" })).toBeNull(),
     );
-    expect(screen.getByText(/emergency A\$15K/)).toBeTruthy();
+    expect(screen.getByText(/emergency fund A\$15K/)).toBeTruthy();
   });
 
   it("says why a change was refused", async () => {
@@ -406,8 +419,11 @@ describe("Profile", () => {
     api.getProfilePage.mockResolvedValue(off);
     render(<Profile />);
     expect(await screen.findByText(/Live figures couldn't be read, so/)).toBeTruthy();
-    expect(screen.getAllByText("Live figures couldn't be read just now.")).toHaveLength(2);
-    expect(screen.getByRole("region", { name: "Cash floor" })).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: /Live figures couldn't be read just now/ }),
+    ).toBeTruthy();
+    expect(screen.getByText("Live figures couldn't be read just now.")).toBeTruthy(); // the stack
+    expect(screen.getByRole("group", { name: "Cash floor" })).toBeTruthy(); // from the file
   });
 
   it("shows an error with a retry", async () => {
@@ -426,7 +442,13 @@ describe("Trading agent tab", () => {
     render(<Profile />);
     fireEvent.click(screen.getByRole("tab", { name: "Trading agent" }));
     const card = await screen.findByRole("region", { name: "Jordan" });
-    expect(within(card).getByText("Trader · Balanced · DCA and swing")).toBeTruthy();
+    expect(within(card).getByText("Trader. Balanced style, DCA and swing.")).toBeTruthy();
+    const steps = within(card).getByRole("list");
+    expect(
+      within(steps)
+        .getAllByRole("listitem")
+        .map((li) => li.textContent),
+    ).toEqual(["MacroQuinnHaiku 5.5", "Bull against bearSpecialistsOff", "DecisionJordanOpus 5.5"]);
     expect(within(card).getByText("Propose")).toBeTruthy();
     expect(within(card).getByText("about $0.08")).toBeTruthy();
     expect(screen.getByText(/To change it, ask Claude Code to edit/).textContent).toContain(

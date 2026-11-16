@@ -34,21 +34,23 @@ export default function ProfilePage() {
   );
   return (
     <main className="wrap pf-page">
-      <h1 className="pf-h1">Profile</h1>
-      <div className="tabs pf-tabs" role="tablist" aria-label="Profile">
-        {TABS.map((t) => (
-          <button
-            key={t.tab}
-            id={`pf-tab-${t.tab}`}
-            type="button"
-            role="tab"
-            aria-selected={tab === t.tab}
-            aria-controls="pf-tabpanel"
-            onClick={() => setTab(t.tab)}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="pf-top">
+        <h1 className="pf-h1">Profile</h1>
+        <div className="tabs pf-tabs" role="tablist" aria-label="Profile">
+          {TABS.map((t) => (
+            <button
+              key={t.tab}
+              id={`pf-tab-${t.tab}`}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.tab}
+              aria-controls="pf-tabpanel"
+              onClick={() => setTab(t.tab)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div id="pf-tabpanel" className="pf-page" role="tabpanel" aria-labelledby={`pf-tab-${tab}`}>
         {tab === "policy" ? <Policy /> : <AgentProfile />}
@@ -102,23 +104,24 @@ function Policy() {
     );
   }
 
-  const stamp = page.version && page.time ? `v${page.version} · ${dayOf(page.time)}` : null;
+  const stamp = page.version && page.time ? `v${page.version}, ${dayOf(page.time)}` : null;
   const fx = page.board?.fx;
   const rate = fx?.audPerUsd ? `US$1 = A$${Number(fx.audPerUsd).toFixed(4)}` : null;
   const pending = [...page.suggestions].reverse().find((s) => s.markdown) ?? null;
   return (
     <>
       <div className="pf-title">
-        {stamp ? (
-          <span className="pf-version" aria-label={`Version ${page.version}`}>
-            {stamp}
-          </span>
-        ) : (
-          <span className="muted">No versions yet</span>
-        )}
-        <span className="pf-lead">Your plan. Every agent follows it.</span>
+        <p className="pf-lead">
+          Your plan. Every agent follows it.{" "}
+          <span className="pf-stamp">{stamp ?? "No versions yet"}</span>
+        </p>
         <span className="pf-spacer" />
-        <button type="button" onClick={() => setHistory(!history)} aria-expanded={history}>
+        <button
+          type="button"
+          className="pf-quiet"
+          onClick={() => setHistory(!history)}
+          aria-expanded={history}
+        >
           History
         </button>
         <button type="button" className="primary" onClick={() => doc.setOpen(true)}>
@@ -148,7 +151,7 @@ function Policy() {
       {doc.open && (
         <Reader
           title="Profile"
-          meta={[stamp ?? "Not saved yet", rate].filter(Boolean).join(" · ")}
+          meta={[stamp ?? "Not saved yet", rate].filter(Boolean).join(". ")}
           markdown={doc.file?.markdown ?? null}
           error={doc.error}
           fileName="profile.md"

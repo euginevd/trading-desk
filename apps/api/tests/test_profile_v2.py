@@ -145,7 +145,7 @@ def test_the_file_reads_into_figures_and_the_typed_profile() -> None:
     assert v["chips"] == [
         "No leverage",
         "Sell only on thesis break",
-        "Take 20% at 500K · 1M",
+        "Take 20% at 500K and 1M",
         "Memes max 5%",
         "Ledger over A$2K",
     ]
@@ -199,6 +199,13 @@ def test_the_board_works_out_the_four_widgets() -> None:
         ("1000000", ""),
     ]
     assert len(profile_v2.values(SAMPLE)["goals"]) == 2  # the milestones line isn't a goal
+    assert road["path"] == [
+        {"date": "2026-11-01", "usd": "26000"},
+        {"date": "2027-12-31", "usd": "150000"},
+        {"date": "2028-12-31", "usd": "400000"},
+        {"date": "2030-12-31", "usd": "1000000"},
+    ]
+    assert road["today"] == "2026-11-16"
     assert (road["then"], road["thenPct"]) == ({"usd": "5000000", "year": 2050}, "0.8")
     stack = b["stack"]
     assert (stack["held"], stack["pct"], stack["valueAud"]) == ("0.2", "20", "18000")

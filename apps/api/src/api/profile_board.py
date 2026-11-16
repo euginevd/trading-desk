@@ -113,6 +113,9 @@ def road(
         "goalDate": goal["date"].isoformat(),
         "ticks": ticks,
         "then": {"usd": _s(then["amount"], "1"), "year": then["date"].year} if then else None,
+        # The plan as a line over time, for the chart: the file's start, each milestone, the goal.
+        "path": [{"date": d.isoformat(), "usd": _s(usd, "1")} for d, usd in _path(v, goal)],
+        "today": today.isoformat(),
     }
     if parts is None:
         return base | {"known": False}

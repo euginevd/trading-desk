@@ -62,10 +62,11 @@ export default function AgentProfile() {
 
   const a = page.agent;
   const name = a.name || "Your agent";
-  const stamp = page.version && page.time ? `v${page.version} · ${dayOf(page.time)}` : null;
+  const stamp = page.version && page.time ? `v${page.version}, ${dayOf(page.time)}` : null;
+  const model = (id: string) => page.models.find((m) => m.id === id)?.name ?? id;
   return (
     <>
-      <section className="card ag-card" aria-label={name}>
+      <section className="ag-sheet" aria-label={name}>
         <div className="ag-persona">
           <span className="ag-ava ag-ava-lg" aria-hidden="true">
             {initials(name)}
@@ -73,33 +74,54 @@ export default function AgentProfile() {
           <div className="ag-who">
             <h2>{name}</h2>
             <p className="muted">
-              {a.title || "Trader"} · {word(a.style)} · {FOCUS[a.focus]}
+              {a.title || "Trader"}. {word(a.style)} style, {FOCUS[a.focus]}.
             </p>
           </div>
+          <span className="pf-spacer" />
           <button type="button" className="primary" onClick={() => doc.setOpen(true)}>
             Show {name}&apos;s profile
           </button>
         </div>
-        <dl className="ag-facts">
-          <div>
+        <dl className="pf-rows ag-facts">
+          <div className="pf-row">
             <dt>Autonomy</dt>
             <dd>{word(a.autonomy)}</dd>
           </div>
-          <div>
+          <div className="pf-row">
             <dt>Version</dt>
             <dd>{stamp ?? "Defaults, no file yet"}</dd>
           </div>
-          <div>
+          <div className="pf-row">
             <dt>Estimated cost a run</dt>
             <dd className="num">about ${page.estimate}</dd>
           </div>
         </dl>
+        {page.steps.length > 0 && (
+          <>
+            <h3 className="ag-steps-h">How {name} runs Analyse</h3>
+            <ol className="ag-steps">
+              {page.steps.map((step) => {
+                const set = a.steps[step.key];
+                const on = step.fixed || set.on;
+                return (
+                  <li key={step.key} className={on ? "" : "off"}>
+                    <span className="ag-step-title">{step.title}</span>
+                    <span className="muted">
+                      {step.who.charAt(0).toUpperCase() + step.who.slice(1)}
+                    </span>
+                    <span className="ag-step-model">{on ? model(set.model) : "Off"}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          </>
+        )}
       </section>
       <FileNote name="trade.md" file={doc.file} version={page.version} />
       {doc.open && (
         <Reader
           title={`${name}'s profile`}
-          meta={`${stamp ?? "Defaults"} · read-only`}
+          meta={`${stamp ?? "Defaults"}. Read only`}
           markdown={doc.file?.markdown ?? null}
           error={doc.error}
           fileName="trade.md"

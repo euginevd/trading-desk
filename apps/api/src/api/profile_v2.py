@@ -202,7 +202,10 @@ def _chips(rules: list[dict[str, str]]) -> list[str]:
             chips.append("Sell only on thesis break")
         elif low.startswith("take profit"):
             pct = re.search(r"(\d+)%", r["text"])
-            steps = " · ".join(short(v) for _, v in amounts(r["title"]))
+            found = [short(v) for _, v in amounts(r["title"])]
+            steps = (
+                (", ".join(found[:-1]) + " and " + found[-1]) if len(found) > 1 else "".join(found)
+            )
             chips.append(f"Take {pct.group(1) if pct else '?'}% at {steps}")
         elif "speculation max" in low:
             pct = re.search(r"max\s+(\d+)%", r["text"], re.IGNORECASE)
