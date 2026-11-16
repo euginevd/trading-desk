@@ -553,6 +553,31 @@ td.dcb-id {
   gap: 6px;
 }
 
+/* Check against Binance. */
+.dcb-check {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--wait);
+  background: var(--wait-soft);
+  border-radius: 6px;
+}
+.dcb-check.is-ok {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.dcb-check p {
+  margin: 0 0 6px;
+  color: var(--text);
+}
+.dcb-check ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+.dcb-check b {
+  font-weight: 600;
+}
+
 /* ---- Add and Remove funds ---- */
 .dcf {
   margin-top: 22px;

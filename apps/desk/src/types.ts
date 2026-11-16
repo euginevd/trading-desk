@@ -1138,7 +1138,8 @@ export interface TelegramSettings {
 }
 
 // The DCA book (TODO 11): five lifelong positions fed only by orders placed from the desk.
-export type DcaSource = "weekly" | "named" | "close-out" | "trim" | "buy-back" | "desk";
+export type DcaSource =
+  "weekly" | "named" | "close-out" | "trim" | "buy-back" | "desk" | "imported";
 export interface DcaPlan {
   start: string;
   weeks: number;
@@ -1263,4 +1264,22 @@ export interface FundsPlan {
   said: string[];
   by: "dca-agent" | "desk";
   reply?: string;
+}
+
+// Check against Binance: every order tagged DCA- on Binance, against the book.
+export interface DcaCheck {
+  onBinance: number;
+  inBook: number;
+  matched: number;
+  differ: {
+    ref: string;
+    coin: string;
+    book: { status: string; filledQty: string };
+    binance: { status: string; filledQty: string };
+  }[];
+  onlyBook: DcaOrder[];
+  onlyBinance: { ref: string; coin: string; side: string; status: string; filledQty: string }[];
+  at: number;
+  fixed?: number;
+  added?: number;
 }

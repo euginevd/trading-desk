@@ -76,6 +76,7 @@ export const SOURCE: Record<DcaOrder["source"], string> = {
   trim: "Trim",
   "buy-back": "Buy-back",
   desk: "From the desk",
+  imported: "From Binance",
 };
 
 export const STATUS: Record<DcaOrder["status"], string> = {

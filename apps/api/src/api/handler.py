@@ -481,6 +481,8 @@ DCA_ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/dca/orders"): lambda desk, _q, b: DcaBook(desk).place(b),
     ("POST", "/dca/orders/cancel"): lambda desk, _q, b: DcaBook(desk).cancel(b.get("ref")),
     ("POST", "/dca/close-out"): lambda desk, _q, _b: DcaBook(desk).close_out(),
+    ("GET", "/dca/check"): lambda desk, _q, _b: DcaBook(desk).check(),
+    ("POST", "/dca/check/fix"): lambda desk, _q, _b: DcaBook(desk).repair(),
 }
 ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/trade"): lambda desk, q, _: desk.terminal(coin_symbol(q.get("symbol") or "BTC")),

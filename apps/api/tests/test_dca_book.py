@@ -26,7 +26,7 @@ from api.handler import handler
 from api.store import Store
 from api.trading import Refused, Trading
 
-NOW = 1_794_000_000.0  # Thu 12 Nov 2026, early afternoon in Sydney
+NOW = 1_794_000_000.0  # Sat 7 Nov 2026, 8:20am in Sydney: in the week of Fri 6 Nov
 PLAN = {
     "start": "2026-11-06",
     "weeks": 156,
@@ -73,11 +73,14 @@ def ms(*parts: int) -> int:
     return int(datetime(*parts, tzinfo=SYDNEY).timestamp() * 1000)  # type: ignore[misc]
 
 
-def test_the_week_runs_from_friday_7pm() -> None:
-    assert week_of(ms(2026, 11, 20, 18, 59))[0] == "26W46"
+def test_the_week_turns_over_at_mondays_close_out() -> None:
+    assert week_of(ms(2026, 11, 16, 18, 59))[0] == "26W46"  # Monday, before the close-out
+    assert week_of(ms(2026, 11, 16, 19, 0))[0] == "26W47"  # after it: the coming Friday's
     key, friday = week_of(ms(2026, 11, 20, 19, 0))
     assert key == "26W47"
-    assert week_of(ms(2026, 11, 23, 9, 0))[0] == "26W47"
+    assert friday == datetime(2026, 11, 20, 19, 0, tzinfo=SYDNEY)
+    assert week_of(ms(2026, 11, 23, 18, 59))[0] == "26W47"
+    assert week_of(ms(2026, 11, 23, 19, 0))[0] == "26W48"
     assert close_out_of(friday) == datetime(2026, 11, 23, 19, 0, tzinfo=SYDNEY)
 
 
@@ -235,3 +238,40 @@ def test_the_routes(desk: Trading) -> None:
     assert call("POST", "/dca/orders/cancel", {"ref": ref})["statusCode"] == 200
     assert call("POST", "/dca/orders/cancel", {"ref": ref})["statusCode"] == 400
     assert call("GET", "/dca")["statusCode"] == 200
+
+
+def test_check_against_binance_finds_and_fixes_differences(book: DcaBook) -> None:
+    placed = book.place({"coin": "BTC", "spend": "40", "price": "97000", "source": "weekly"})
+    assert book.check()["matched"] == 1
+    fill(max(demo.EXCHANGE.orders))  # filled on Binance; the book hasn't heard yet
+    found = book.check()
+    assert found["differ"] == [
+        {
+            "ref": placed["ref"],
+            "coin": "BTC",
+            "book": {"status": "open", "filledQty": "0"},
+            "binance": {"status": "filled", "filledQty": placed["qty"]},
+        }
+    ]
+    # An order on Binance the book lost, found by its tag and added back.
+    demo.EXCHANGE.orders[999] = {
+        "symbol": "ETHUSDT",
+        "orderId": 999,
+        "clientOrderId": "DCA-ETH-26W45-7",
+        "side": "BUY",
+        "type": "LIMIT",
+        "status": "FILLED",
+        "price": "3000",
+        "origQty": "0.01",
+        "executedQty": "0.01",
+        "cummulativeQuoteQty": "30",
+        "time": 1,
+    }
+    assert [o["ref"] for o in book.check()["onlyBinance"]] == ["DCA-ETH-26W45-7"]
+    fixed = book.repair()
+    assert (fixed["fixed"], fixed["added"]) == (1, 1)
+    assert fixed["differ"] == []
+    assert fixed["onlyBinance"] == []
+    assert fixed["matched"] == 2
+    eth = next(p for p in book.view()["positions"] if p["coin"] == "ETH")
+    assert eth["qty"] == "0.01"

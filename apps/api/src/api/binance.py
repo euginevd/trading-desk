@@ -167,6 +167,19 @@ class Binance:
                 return found
             from_id = int(page[-1]["id"]) + 1
 
+    def all_orders(self, symbol: str) -> list[dict[str, Any]]:
+        """Every order on one pair, oldest first, a page at a time (Binance may drop ones that were
+        cancelled or expired with nothing filled after about 90 days)."""
+        found: list[dict[str, Any]] = []
+        from_id = 0
+        while True:
+            params = {"symbol": symbol, "orderId": str(from_id), "limit": str(TRADES_PAGE)}
+            page = list(self._signed("/api/v3/allOrders", params, f"orders {symbol}"))
+            found.extend(page)
+            if len(page) < TRADES_PAGE:
+                return found
+            from_id = int(page[-1]["orderId"]) + 1
+
     def order_fills(self, symbol: str, order_id: int) -> list[dict[str, Any]]:
         params = {"symbol": symbol, "orderId": str(order_id)}
         return list(self._signed("/api/v3/myTrades", params, f"fills {symbol} {order_id}"))

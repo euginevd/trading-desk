@@ -1,4 +1,5 @@
 import type {
+  DcaCheck,
   FundsPlan,
   DcaBook,
   DcaOdds,
@@ -295,3 +296,5 @@ export const fundsOdds = (coin: string, price: string, side: "add" | "remove") =
     "GET",
     `/dca/funds/odds?coin=${encodeURIComponent(coin)}&price=${encodeURIComponent(price)}&side=${side}`,
   );
+export const checkDca = () => call<DcaCheck>("GET", "/dca/check");
+export const fixDca = () => call<DcaCheck>("POST", "/dca/check/fix");

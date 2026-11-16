@@ -23,6 +23,9 @@ ZERO = Decimal(0)
 PLAN_KEY = "dca_plan"
 RATE_KEY = "aud_per_usd"  # the desk's remembered A$ per US$ (profile_live)
 SOURCES = ("weekly", "named", "close-out", "trim", "buy-back", "desk")
+IMPORTED = "imported"  # found on Binance by its reference, added back by Check against Binance
+TAG = "DCA-"
+REF = re.compile(r"DCA-([A-Z0-9]{1,10})-(\d{2}W\d{2})-\d+")
 DAY_MS = 86_400_000
 WEEK_MS = 7 * DAY_MS
 ODDS_WEEKS = 52
@@ -34,16 +37,21 @@ MAX_PLAN_ORDERS = 12
 MAX_WEEKS = 520
 
 
-# The DCA week runs from Friday 7pm, Sydney, to the next; it is named by that Friday.
+# A DCA week is named by its Friday (the buying window opens Friday 7pm, Sydney, and closes
+# Monday 7pm). It runs from the last close-out to its own, so an order placed on Tuesday
+# already counts toward the coming Friday's buy.
 
 
 def week_of(ms: int) -> tuple[str, datetime]:
-    at = datetime.fromtimestamp(ms / 1000, SYDNEY)
+    # Four days on from Monday 7pm is Friday 7pm: shifting by four days turns a week that
+    # changes over at the close-out into one that changes over at its Friday.
+    at = datetime.fromtimestamp(ms / 1000, SYDNEY) + timedelta(days=4)
     friday = (at - timedelta(days=(at.weekday() - 4) % 7)).replace(
         hour=19, minute=0, second=0, microsecond=0
     )
     if at < friday:
         friday -= timedelta(days=7)
+    friday = friday.replace(tzinfo=SYDNEY)
     year, week, _ = friday.isocalendar()
     return f"{year % 100:02d}W{week:02d}", friday
 
@@ -202,6 +210,19 @@ def positions(rows: list[dict[str, Any]], coins: list[str]) -> dict[str, Positio
     for row in rows:
         found.setdefault(row["coin"], Position(row["coin"])).take(row)
     return found
+
+
+def binance_state(order: dict[str, Any]) -> tuple[str, Decimal]:
+    """A Binance order as the book words it: open, filled or cancelled, and how much filled."""
+    filled = Decimal(str(order.get("executedQty", "0")))
+    status = str(order.get("status", ""))
+    if status in ("NEW", "PARTIALLY_FILLED", "PENDING_NEW"):
+        return "open", filled
+    return ("filled" if status == "FILLED" or filled > ZERO else "cancelled"), filled
+
+
+def _never_placed(row: dict[str, Any]) -> bool:
+    return row["order_id"] is None and row["status"] == "cancelled"
 
 
 def order_view(row: dict[str, Any]) -> dict[str, Any]:
@@ -593,6 +614,116 @@ class DcaBook:
             bought.append(f"{done['coin']} {plain(round(left, 2))}")
         self._audit.record("dca", f"Close-out {week}", ", ".join(bought) or "nothing left open")
         return {"closed": bought}
+
+    # Check against Binance: every order tagged DCA- on Binance, against the book.
+
+    def _theirs(self, coins: list[str]) -> dict[str, dict[str, Any]]:
+        found: dict[str, dict[str, Any]] = {}
+        for coin in coins:
+            for order in self._binance.all_orders(f"{coin}{QUOTE}"):
+                tag = str(order.get("clientOrderId", ""))
+                if tag.startswith(TAG):
+                    found[tag] = order | {"coin": coin}
+        return found
+
+    def _both(self) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+        rows = {str(r["client_id"]): r for r in self._store.dca_orders() if not _never_placed(r)}
+        coins = list(dict.fromkeys([*self.coins(), *(r["coin"] for r in rows.values())]))
+        return rows, self._theirs(coins)
+
+    def check(self) -> dict[str, Any]:
+        rows, theirs = self._both()
+        differ: list[dict[str, Any]] = []
+        only_book: list[dict[str, Any]] = []
+        for tag, row in rows.items():
+            found = theirs.get(tag)
+            if found is None:
+                only_book.append(order_view(row))
+                continue
+            status, filled = binance_state(found)
+            if status != row["status"] or filled != Decimal(row["executed_qty"]):
+                differ.append(
+                    {
+                        "ref": row["ref"],
+                        "coin": row["coin"],
+                        "book": {"status": row["status"], "filledQty": row["executed_qty"]},
+                        "binance": {"status": status, "filledQty": plain(filled)},
+                    }
+                )
+        only_binance: list[dict[str, Any]] = []
+        for tag, order in theirs.items():
+            if tag in rows:
+                continue
+            status, filled = binance_state(order)
+            only_binance.append(
+                {
+                    "ref": tag,
+                    "coin": order["coin"],
+                    "side": str(order.get("side", "")).lower(),
+                    "status": status,
+                    "filledQty": plain(filled),
+                    "filledQuote": plain(Decimal(str(order.get("cummulativeQuoteQty", "0")))),
+                    "time": order.get("time"),
+                }
+            )
+        return {
+            "onBinance": len(theirs),
+            "inBook": len(rows),
+            "matched": len(rows) - len(differ) - len(only_book),
+            "differ": differ,
+            "onlyBook": only_book,
+            "onlyBinance": only_binance,
+            "at": self._now(),
+        }
+
+    def _import(self, tag: str, order: dict[str, Any]) -> bool:
+        """A tagged order the book lacks, added back as imported, with its fills and fees."""
+        match = REF.fullmatch(tag)
+        if not match or match.group(1) != order["coin"]:
+            return False
+        price = Decimal(str(order.get("price", "0")))
+        qty = Decimal(str(order.get("origQty", "0")))
+        buy = order.get("side") != "SELL"
+        limit = str(order.get("type", "")) == "LIMIT" and price > ZERO
+        spend = None
+        if buy:
+            spend = price * qty if limit else Decimal(str(order.get("cummulativeQuoteQty", "0")))
+        row_id = self._store.add_dca_order(
+            {
+                "ref": tag,
+                "coin": order["coin"],
+                "side": "buy" if buy else "sell",
+                "kind": "limit" if limit else "market",
+                "source": IMPORTED,
+                "link": None,
+                "week": match.group(2),
+                "price": plain(price) if limit else None,
+                "qty": plain(qty) if qty > ZERO else None,
+                "spend": plain(spend) if spend is not None else None,
+                "aud_rate": plain(self._rate()),
+                "created": int(order.get("time") or self._now()),
+            }
+        )
+        self._record(self._row(row_id), order)
+        return True
+
+    @locked
+    def repair(self) -> dict[str, Any]:
+        """The book brought in line with Binance: each differing order re-read with its fills
+        and fees, and each tagged order the book lacks added back as imported."""
+        rows, theirs = self._both()
+        fixed = added = 0
+        for tag, order in theirs.items():
+            row = rows.get(tag)
+            if row is None:
+                added += self._import(tag, order)
+                continue
+            status, filled = binance_state(order)
+            if status != row["status"] or filled != Decimal(row["executed_qty"]):
+                self._record(row, order)
+                fixed += 1
+        self._audit.record("dca", "Check against Binance", f"{fixed} updated, {added} added back")
+        return self.check() | {"fixed": fixed, "added": added}
 
     # The page.
 

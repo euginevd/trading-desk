@@ -84,6 +84,7 @@ def binance(request: httpx.Request) -> httpx.Response:
             <= t
             <= int(request.url.params.get("endTime", NOW_MS))
         ],
+        "/api/v3/allOrders": [o for o in EXCHANGE.orders.values() if o["symbol"] == symbol],
         "/api/v3/openOrders": [
             {"origQty": o.get("origQty", o["executedQty"]), "price": "0", **o}
             for o in EXCHANGE.orders.values()

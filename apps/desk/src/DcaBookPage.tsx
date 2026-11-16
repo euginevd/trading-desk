@@ -5,7 +5,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
   cancelDcaOrder,
+  checkDca,
   dcaOdds,
+  fixDca,
   getDcaBook,
   placeDcaOrder,
   sellCheck,
@@ -16,6 +18,7 @@ import CoinIcon from "./CoinIcon";
 import DcaFunds from "./DcaFunds";
 import {
   SOURCE,
+  dated,
   STATUS,
   amountOf,
   day,
@@ -29,6 +32,7 @@ import {
 } from "./dcaFormat";
 import type {
   DcaBook,
+  DcaCheck,
   DcaOdds,
   DcaOrder,
   DcaOrderRequest,
@@ -363,7 +367,7 @@ function Planner({
       <div className="dcb-section-head">
         <h2 id="dcb-plan-title">This week</h2>
         <span className="muted">
-          Week {book.week.key}, close-out {when(book.week.closeOut)}
+          Buying window {dated(book.week.start)} 7pm to {dated(book.week.closeOut)} 7pm, Sydney time
         </span>
       </div>
       {!rows ? (
@@ -711,6 +715,57 @@ function OrderSheet({
   );
 }
 
+// ---------------------------------------------------------------- check against Binance
+
+// Every order goes to Binance with its reference as its client order id; this reads them all
+// back and says what differs. Fixing re-reads each differing order and adds back any the book
+// lost.
+function Checked({ found, busy, onFix }: { found: DcaCheck; busy: boolean; onFix: () => void }) {
+  const issues = found.differ.length + found.onlyBinance.length + found.onlyBook.length;
+  const fixable = found.differ.length + found.onlyBinance.length;
+  const fixedWords =
+    found.fixed !== undefined ? ` Updated ${found.fixed}, added back ${found.added ?? 0}.` : "";
+  if (issues === 0) {
+    return (
+      <p className="dcb-check is-ok" role="status">
+        All {found.inBook} {found.inBook === 1 ? "order" : "orders"} in the book match Binance.
+        {fixedWords}
+      </p>
+    );
+  }
+  return (
+    <div className="dcb-check" role="status">
+      <p>
+        {found.matched} of {found.inBook} match Binance; {issues} to look at.{fixedWords}
+      </p>
+      <ul>
+        {found.differ.map((d) => (
+          <li key={d.ref}>
+            <b>{d.ref}</b>: the book says {d.book.status} ({qty(d.book.filledQty)} filled), Binance
+            says {d.binance.status} ({qty(d.binance.filledQty)} filled).
+          </li>
+        ))}
+        {found.onlyBinance.map((o) => (
+          <li key={o.ref}>
+            <b>{o.ref}</b>: on Binance ({o.side}, {o.status}), not in the book.
+          </li>
+        ))}
+        {found.onlyBook.map((o) => (
+          <li key={o.ref}>
+            <b>{o.ref}</b>: in the book, not found on Binance. Binance drops orders cancelled with
+            nothing filled after about 90 days.
+          </li>
+        ))}
+      </ul>
+      {fixable > 0 && (
+        <button type="button" className="btn btn-small" disabled={busy} onClick={onFix}>
+          Update the book from Binance
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------- the page
 
 type Filter = "all" | "trims" | string;
@@ -728,6 +783,8 @@ export default function DcaBookPage() {
   };
   const [said, setSaid] = useState<string | null>(null);
   // The Dashboard's links open the book at Add funds or Remove funds.
+  const [checked, setChecked] = useState<DcaCheck | null>(null);
+  const [checking, setChecking] = useState(false);
   const [funds, setFunds] = useState<"add" | "remove" | null>(() => {
     const asked = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("funds");
     return asked === "add" || asked === "remove" ? asked : null;
@@ -796,6 +853,20 @@ export default function DcaBookPage() {
     (o) =>
       filter === "all" || (filter === "trims" ? o.link || o.source === "trim" : o.coin === filter),
   );
+  const runCheck = (fix: boolean) => {
+    setChecking(true);
+    (fix ? fixDca() : checkDca()).then(
+      (found) => {
+        setChecked(found);
+        setChecking(false);
+        if (fix) load();
+      },
+      (e: unknown) => {
+        setChecking(false);
+        setSaid(errorOf(e, "Binance couldn't be read. Try again in a minute."));
+      },
+    );
+  };
   const exportCsv = () => {
     const blob = new Blob([toCsv(book.orders, book.quote)], { type: "text/csv" });
     const a = document.createElement("a");
@@ -996,8 +1067,17 @@ export default function DcaBookPage() {
             >
               Export CSV
             </button>
+            <button
+              type="button"
+              className="link"
+              disabled={checking}
+              onClick={() => runCheck(false)}
+            >
+              {checking ? "Checking Binance…" : "Check against Binance"}
+            </button>
           </div>
         </div>
+        {checked && <Checked found={checked} busy={checking} onFix={() => runCheck(true)} />}
         {shown.length === 0 ? (
           <p className="muted">No orders here yet.</p>
         ) : (

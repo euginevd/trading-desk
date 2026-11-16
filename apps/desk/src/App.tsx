@@ -377,7 +377,7 @@ export default function App() {
                     return moved === null ? null : (
                       <span className={trend(String(moved))}>
                         {moved > 0 ? "+" : moved < 0 ? "−" : ""}
-                        {Math.abs(moved).toFixed(1)} pts
+                        {Math.abs(moved).toFixed(1)}%
                       </span>
                     );
                   })()}
