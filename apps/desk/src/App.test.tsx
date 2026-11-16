@@ -194,15 +194,13 @@ describe("side panel", () => {
     fireEvent(window, new HashChangeEvent("hashchange"));
     expect(await screen.findByRole("heading", { level: 1, name: "Bots" })).toBeTruthy();
     const show = screen.getByRole("group", { name: "Show bots" });
-    expect(within(show).getByRole("button", { name: "Grid" }).getAttribute("aria-pressed")).toBe(
+    expect(within(show).getByRole("button", { name: /^Grid/ }).getAttribute("aria-pressed")).toBe(
       "true",
     );
-    expect(
-      screen.getByRole("region", { name: "Grid bots", hidden: true }).closest("[hidden]"),
-    ).toBeNull();
-    expect(
-      screen.getByRole("region", { name: "DCA bots", hidden: true }).closest("[hidden]"),
-    ).not.toBeNull();
+    expect(within(show).getByRole("button", { name: /^DCA/ }).getAttribute("aria-pressed")).toBe(
+      "false",
+    );
+    expect(within(show).getByRole("button", { name: /^Rebalancing Coming soon/ })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Expand side panel" }));
   });
 });

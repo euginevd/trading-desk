@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   createGrid,
   deleteGrid,
@@ -16,10 +16,11 @@ import {
   RobotIcon,
   Shell,
   useWatchCoins,
+  type BotAsk,
   type Level,
 } from "./BotKit";
 import CoinIcon from "./CoinIcon";
-import { ORDER_STATUS, message, quoteAmount } from "./DcaBots";
+import { ORDER_STATUS, message, quoteAmount, type Embed } from "./DcaBots";
 import { dateTime, price } from "./format";
 import type { GridBot, GridBots as Grids, GridDetail, GridPreview, GridRequest } from "./types";
 
@@ -62,13 +63,6 @@ type View =
   | { kind: "edit"; grid: GridBot }
   | { kind: "copy"; grid: GridBot }
   | { kind: "grid"; id: number };
-
-// On the Bots page (decision 68) each type is a section: it tells the page what it read, and
-// whether one of its bots or its setup is open, so the page can give that the whole screen.
-export interface Embed<T> {
-  onData: (data: T) => void;
-  onFocus: (open: boolean) => void;
-}
 
 export default function GridBots({ embed }: { embed?: Embed<Grids> } = {}) {
   const [view, setView] = useState<Grids | null>(null);
@@ -141,18 +135,31 @@ export default function GridBots({ embed }: { embed?: Embed<Grids> } = {}) {
   const grids = view?.grids ?? [];
   const create = (coin: string) => setPage({ kind: "new", coin });
 
+  // The Bots page's asks: open, edit, copy, start or stop, delete, or a new one.
+  useImperativeHandle(embed?.handle, () => ({
+    act: (ask: BotAsk) => {
+      if (ask.kind === "new") {
+        setPage({ kind: "new", coin: ask.coin });
+        return;
+      }
+      const b = view?.grids.find((x) => x.id === ask.id);
+      if (!b) return;
+      if (ask.kind === "open") setPage({ kind: "grid", id: b.id });
+      else if (ask.kind === "edit") setPage({ kind: "edit", grid: b });
+      else if (ask.kind === "copy") setPage({ kind: "copy", grid: b });
+      else if (ask.kind === "toggle") toggle(b);
+      else if (b.status === "off" || b.status === "paused") act(deleteGrid(b.id));
+    },
+  }));
+
   return (
     <Shell embedded={Boolean(embed)} label="Grid bots">
-      <div className="head-row bots-section-head">
-        {embed ? (
-          page.kind === "list" && <h2>Grid bots</h2>
-        ) : (
+      {!embed && (
+        <div className="head-row">
           <h1 className="visually-hidden">Grid Bot</h1>
-        )}
-        {page.kind === "list" && (
-          <CreateMenu coins={coins} onPick={create} label={embed ? "New Grid bot" : undefined} />
-        )}
-      </div>
+          {page.kind === "list" && <CreateMenu coins={coins} onPick={create} />}
+        </div>
+      )}
 
       {error && (
         <div className="alert" role="alert">
@@ -195,7 +202,7 @@ export default function GridBots({ embed }: { embed?: Embed<Grids> } = {}) {
         />
       )}
 
-      {page.kind === "list" && (
+      {page.kind === "list" && !embed && (
         <>
           {view === null && !error && <div className="skeleton" style={{ height: 160 }} />}
           {view && grids.length === 0 && (

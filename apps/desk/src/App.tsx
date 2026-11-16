@@ -57,7 +57,10 @@ const OLD_BOT_LINKS: Record<string, BotKind> = { "#/dca": "dca", "#/grid": "grid
 
 function botKindFromHash(): BotKind {
   const [path, query] = window.location.hash.split("?");
-  return OLD_BOT_LINKS[path ?? ""] ?? (query === "dca" || query === "grid" ? query : "all");
+  return (
+    OLD_BOT_LINKS[path ?? ""] ??
+    (query === "dca" || query === "grid" || query === "rebalance" ? query : "all")
+  );
 }
 const PROFILE_PAGE: (typeof PAGES)[number] = {
   page: "profile",

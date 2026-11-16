@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-import { said } from "./BotsPage";
+import { lasted, said, toRows } from "./BotsPage";
 import DcaBots from "./DcaBots";
 
 import type { DcaBot, DcaBots as Bots, DcaDetail, DcaPreview, DcaSuggestion } from "./types";
@@ -268,14 +268,17 @@ describe("DCA bot page", () => {
 
 describe("the Bots page's sentence", () => {
   it("counts the bots running and stopped, and what they've realised", () => {
-    const dca = (bots: DcaBot[]): Bots => ({ quote: "USDC", tradingOn: true, bots });
-    expect(said(dca([]), null)?.head).toBe("No bots yet.");
-    expect(said(dca([bot]), null)).toEqual({
+    const rows = (bots: DcaBot[]) => toRows({ quote: "USDC", tradingOn: true, bots }, null);
+    expect(said(rows([]), "USDC").head).toBe("No bots yet.");
+    expect(said(rows([bot]), "USDC")).toEqual({
       head: "1 bot, all stopped.",
-      lead: "They've realised +3.10 USDC so far, before what they still hold.",
+      lead: "Up 3.10 USDC in all, +3.10 of it realised.",
     });
     const on = { ...bot, id: 2, enabled: true, status: "waiting" as const, profit: "0" };
-    expect(said(dca([bot, on]), null)?.head).toBe("1 bot running, 1 stopped.");
-    expect(said(null, null)).toBeNull();
+    expect(said(rows([bot, on]), "USDC").head).toBe("1 bot running with 173.83 USDC, 1 stopped.");
+    // How long a bot has run, as the exchanges show it.
+    expect(lasted(0, 1000)).toBe("");
+    expect(lasted(1, 1 + (20 * 60 + 9) * 60_000)).toBe("20h 9m");
+    expect(lasted(1, 1 + (4 * 1440 + 9 * 60) * 60_000)).toBe("4d 9h");
   });
 });

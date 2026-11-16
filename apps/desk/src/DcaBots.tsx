@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   ApiError,
   createBot,
@@ -17,6 +17,8 @@ import {
   RobotIcon,
   Shell,
   useWatchCoins,
+  type BotAsk,
+  type BotHandle,
   type Level,
 } from "./BotKit";
 import CoinIcon from "./CoinIcon";
@@ -69,6 +71,7 @@ type View =
 export interface Embed<T> {
   onData: (data: T) => void;
   onFocus: (open: boolean) => void;
+  handle: React.Ref<BotHandle>;
 }
 
 export default function DcaBots({ embed }: { embed?: Embed<Bots> } = {}) {
@@ -141,18 +144,31 @@ export default function DcaBots({ embed }: { embed?: Embed<Bots> } = {}) {
   const bots = view?.bots ?? [];
   const create = (coin: string) => setPage({ kind: "new", coin });
 
+  // The Bots page's asks: open, edit, copy, start or stop, delete, or a new one.
+  useImperativeHandle(embed?.handle, () => ({
+    act: (ask: BotAsk) => {
+      if (ask.kind === "new") {
+        setPage({ kind: "new", coin: ask.coin });
+        return;
+      }
+      const b = view?.bots.find((x) => x.id === ask.id);
+      if (!b) return;
+      if (ask.kind === "open") setPage({ kind: "bot", id: b.id });
+      else if (ask.kind === "edit") setPage({ kind: "edit", bot: b });
+      else if (ask.kind === "copy") setPage({ kind: "copy", bot: b });
+      else if (ask.kind === "toggle") toggle(b);
+      else if (!b.enabled && b.deals.length === 0) act(deleteBot(b.id));
+    },
+  }));
+
   return (
     <Shell embedded={Boolean(embed)} label="DCA bots">
-      <div className="head-row bots-section-head">
-        {embed ? (
-          page.kind === "list" && <h2>DCA bots</h2>
-        ) : (
+      {!embed && (
+        <div className="head-row">
           <h1 className="visually-hidden">DCA Bot</h1>
-        )}
-        {page.kind === "list" && (
-          <CreateMenu coins={coins} onPick={create} label={embed ? "New DCA bot" : undefined} />
-        )}
-      </div>
+          {page.kind === "list" && <CreateMenu coins={coins} onPick={create} />}
+        </div>
+      )}
 
       {error && (
         <div className="alert" role="alert">
@@ -195,7 +211,7 @@ export default function DcaBots({ embed }: { embed?: Embed<Bots> } = {}) {
         />
       )}
 
-      {page.kind === "list" && (
+      {page.kind === "list" && !embed && (
         <>
           {view === null && !error && <div className="skeleton" style={{ height: 160 }} />}
           {view && bots.length === 0 && (

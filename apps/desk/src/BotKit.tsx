@@ -15,6 +15,14 @@ import CoinIcon from "./CoinIcon";
 // Shared by the DCA and grid bots and the ladder: the owner's watchlist coins, the Create bot
 // menu, and a candlestick chart with the bot's price levels drawn on it.
 
+// What the Bots page asks a bot type to do, through the handle the type gives it.
+export type BotAsk =
+  | { kind: "open" | "edit" | "copy" | "toggle" | "delete"; id: number }
+  | { kind: "new"; coin: string };
+export interface BotHandle {
+  act: (ask: BotAsk) => void;
+}
+
 // A bot type's wrapper: a section of the Bots page (decision 68), or a page of its own.
 export function Shell({
   embedded,
