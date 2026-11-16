@@ -152,6 +152,18 @@ const funds: FundsPlan = {
   by: "dca-agent",
   note: "Most to BTC, near last week's low.",
   said: [],
+  skipped: [
+    {
+      coin: "SOL",
+      pct: "0",
+      usdc: "0",
+      price: "69.27",
+      now: "70.9",
+      qty: "0",
+      odds: { hit: 1750, windows: 2190, pct: 80 },
+      reason: "Under the 10 USDC minimum.",
+    },
+  ],
   orders: [
     {
       coin: "BTC",
@@ -289,6 +301,9 @@ describe("DCA book page", () => {
     fireEvent.click(screen.getByRole("button", { name: "Analyse with dca-agent" }));
     expect(await screen.findByText("Most to BTC, near last week's low.")).toBeTruthy();
     expect(screen.getByText("Just above Saturday's 63.3K low.")).toBeTruthy();
+    // A coin left out still shows, with why, and stays out of the orders until given a share.
+    expect(screen.getByText("Under the 10 USDC minimum.")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "SOL amount" })).toHaveProperty("value", "");
     fireEvent.change(screen.getByRole("textbox", { name: "BTC share" }), {
       target: { value: "60" },
     });

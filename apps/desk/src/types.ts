@@ -1262,6 +1262,8 @@ export interface FundsPlan {
   orders: FundsOrder[];
   note: string;
   said: string[];
+  // Every plan coin not in the orders, at the desk's price, with why: a share brings it back.
+  skipped: FundsOrder[];
   by: "dca-agent" | "desk";
   reply?: string;
 }

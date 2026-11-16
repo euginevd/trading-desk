@@ -9,7 +9,8 @@ import { limit, two } from "./dcaFormat";
 import type { FundsOrder, FundsPlan } from "./types";
 
 type Side = "add" | "remove";
-type Row = FundsOrder & { result?: string; failed?: boolean };
+type Row = FundsOrder & { result?: string; failed?: boolean; skipped?: boolean };
+const MIN = 10; // the agent's rule: 10 USDC a coin at least
 type Line = { who: "you" | "agent"; text: string };
 
 const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
@@ -41,6 +42,14 @@ function Odds({ row, selling }: { row: Row; selling: boolean }) {
   );
 }
 
+// The split in words, for the bar's label: "BTC 50%, SOL 26%, ZEC 24%".
+function splitWords(rows: Row[], quote: string): string {
+  const shown = rows.filter((r) => !r.skipped && Number(r.usdc) > 0);
+  const sum = shown.reduce((s, r) => s + Number(r.usdc), 0) || 1;
+  const parts = shown.map((r) => `${r.coin} ${Math.round((Number(r.usdc) * 100) / sum)}%`);
+  return `The split of ${sum.toFixed(2)} ${quote}: ${parts.join(", ")}`;
+}
+
 export default function DcaFunds({
   side: first,
   quote,
@@ -66,11 +75,12 @@ export default function DcaFunds({
   const selling = side === "remove";
   const total = rows.reduce((s, r) => s + (Number(r.usdc) || 0), 0);
   const asked = Number(amount) || 0;
-  const pending = rows.filter((r) => !r.result);
+  const pending = rows.filter((r) => !r.result && !r.skipped && Number(r.usdc) > 0);
+  const tooSmall = pending.filter((r) => Number(r.usdc) < MIN).map((r) => r.coin);
 
   const take = (p: FundsPlan) => {
     setPlan(p);
-    setRows(p.orders);
+    setRows([...p.orders, ...(p.skipped ?? []).map((s) => ({ ...s, skipped: true }))]);
     setAmount(p.amount);
   };
   const analyse = () => {
@@ -99,7 +109,12 @@ export default function DcaFunds({
     chatFunds({
       side,
       amount,
-      orders: rows.map(({ coin, usdc, price, reason }) => ({ coin, usdc, price, reason })),
+      orders: rows.map(({ coin, usdc, price, reason, skipped }) => ({
+        coin,
+        usdc: skipped ? "0" : usdc,
+        price,
+        reason,
+      })),
       history,
       message: text,
     }).then(
@@ -118,10 +133,17 @@ export default function DcaFunds({
   // Hand edits: a share and its USDC move together; a new price fetches its odds.
   const edit = (i: number, change: Partial<Row>) =>
     setRows((r) => r.map((x, k) => (k === i ? { ...x, ...change } : x)));
-  const setPct = (i: number, pct: string) =>
-    edit(i, { pct, usdc: asked ? ((asked * (Number(pct) || 0)) / 100).toFixed(2) : "0" });
+  // A share on a left-out coin brings it back in; clearing one leaves it out.
+  const setPct = (i: number, pct: string) => {
+    const usdc = asked ? ((asked * (Number(pct) || 0)) / 100).toFixed(2) : "0";
+    edit(i, { pct, usdc, skipped: !(Number(usdc) > 0) });
+  };
   const setUsdc = (i: number, usdc: string) =>
-    edit(i, { usdc, pct: asked ? (((Number(usdc) || 0) * 100) / asked).toFixed(1) : "0" });
+    edit(i, {
+      usdc,
+      pct: asked ? (((Number(usdc) || 0) * 100) / asked).toFixed(1) : "0",
+      skipped: !(Number(usdc) > 0),
+    });
   const reOdds = (i: number) => {
     const r = rows[i];
     if (!r || !(Number(r.price) > 0)) return;
@@ -136,7 +158,7 @@ export default function DcaFunds({
     setHeld(null);
     const next = [...rows];
     for (const [i, r] of next.entries()) {
-      if (r.result) continue;
+      if (r.result || r.skipped || !(Number(r.usdc) > 0)) continue; // left-out coins stay out
       try {
         const placed = await placeDcaOrder(
           selling
@@ -245,6 +267,19 @@ export default function DcaFunds({
               ))}
             </ul>
           )}
+          <div className="dcf-split" role="img" aria-label={splitWords(rows, quote)}>
+            {rows
+              .filter((r) => !r.skipped && Number(r.usdc) > 0)
+              .map((r, i) => (
+                <span
+                  key={r.coin}
+                  className={`dcf-seg tone-${(i % 5) + 1}`}
+                  style={{ flexGrow: Number(r.usdc) }}
+                >
+                  <b>{r.coin}</b> {Math.round((Number(r.usdc) * 100) / Math.max(total, 1))}%
+                </span>
+              ))}
+          </div>
           <div className="dcb-scroll">
             <table
               className="dcb-table dcf-table"
@@ -262,7 +297,7 @@ export default function DcaFunds({
               </thead>
               <tbody>
                 {rows.map((r, i) => (
-                  <tr key={r.coin}>
+                  <tr key={r.coin} className={r.skipped ? "is-skipped" : ""}>
                     <td>
                       <span className="dcb-coin">
                         <CoinIcon coin={r.coin} />
@@ -275,7 +310,8 @@ export default function DcaFunds({
                         className="dcb-num dcf-pct"
                         aria-label={`${r.coin} share`}
                         inputMode="decimal"
-                        value={r.pct}
+                        value={r.skipped ? "" : r.pct}
+                        placeholder="0"
                         disabled={Boolean(r.result)}
                         onChange={(e) => setPct(i, e.target.value)}
                       />
@@ -285,7 +321,8 @@ export default function DcaFunds({
                         className="dcb-num"
                         aria-label={`${r.coin} amount`}
                         inputMode="decimal"
-                        value={r.usdc}
+                        value={r.skipped ? "" : r.usdc}
+                        placeholder="0"
                         disabled={Boolean(r.result)}
                         onChange={(e) => setUsdc(i, e.target.value)}
                       />
@@ -305,6 +342,12 @@ export default function DcaFunds({
                       <Odds row={r} selling={selling} />
                     </td>
                     <td className={`dcf-why ${r.failed ? "error-text" : ""}`}>
+                      {r.skipped && <span className="dcf-out">Left out. </span>}
+                      {!r.skipped && !r.result && Number(r.usdc) > 0 && Number(r.usdc) < MIN && (
+                        <span className="dcb-warn">
+                          Under {MIN} {quote}: raise it or clear it.{" "}
+                        </span>
+                      )}
                       {r.result ?? r.reason}
                     </td>
                   </tr>
@@ -371,7 +414,7 @@ export default function DcaFunds({
             <button
               type="button"
               className="btn btn-accent"
-              disabled={pending.length === 0 || busy !== null}
+              disabled={pending.length === 0 || tooSmall.length > 0 || busy !== null}
               onClick={() => dialog.current?.showModal?.()}
             >
               Review {pending.length} {selling ? "limit sells" : "limit buys"}

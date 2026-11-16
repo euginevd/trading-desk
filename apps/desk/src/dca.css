@@ -656,6 +656,76 @@ td.dcb-id {
   padding-left: 18px;
   color: var(--wait);
 }
+/* The split as one bar: each coin's share, in the Portfolio's allocation tones. */
+.dcf-split {
+  display: flex;
+  height: 30px;
+  margin: 14px 0 10px;
+  overflow: hidden;
+  border-radius: 6px;
+  gap: 2px;
+}
+.dcf-seg {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  color: var(--accent-ink);
+  font-size: 12px;
+  white-space: nowrap;
+  transition: flex-grow 200ms var(--ease);
+}
+.dcf-seg b {
+  margin-right: 4px;
+  font-weight: 600;
+}
+.dcf-seg.tone-1 {
+  background: var(--alloc-1);
+}
+.dcf-seg.tone-2 {
+  background: var(--alloc-2);
+  color: var(--text);
+}
+.dcf-seg.tone-3 {
+  background: var(--alloc-3);
+}
+.dcf-seg.tone-4 {
+  background: var(--alloc-4);
+}
+.dcf-seg.tone-5 {
+  background: var(--alloc-5);
+  color: var(--text);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dcf-seg {
+    transition: none;
+  }
+}
+/* Numbers first: the fields only look like fields on hover or focus. */
+.dcf-table input.dcb-num {
+  border-color: transparent;
+  background: transparent;
+}
+.dcf-table tr:hover input.dcb-num,
+.dcf-table input.dcb-num:focus {
+  border-color: var(--line-2);
+  background: var(--panel);
+}
+.dcf-table tr.is-skipped td {
+  color: var(--dim);
+}
+.dcf-table tr.is-skipped .dcb-coin,
+.dcf-table tr.is-skipped .dcf-odds b {
+  color: var(--muted);
+}
+.dcf-table tr.is-skipped .dcf-odds i span {
+  background: var(--line-2);
+}
+.dcf-out {
+  color: var(--muted);
+  font-weight: 500;
+}
 .dcf-table .dcf-pct {
   width: 72px;
 }

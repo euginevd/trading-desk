@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentInfo, AgentThread, Coach, CoachWeek, Recap, Sentiment } from "./types";
 
@@ -159,7 +159,6 @@ describe("the Dashboard", () => {
     expect(screen.getByRole("button", { name: "Refreshing" })).toHaveProperty("disabled", true);
     expect(await screen.findByText("Evening again, Sam.")).toBeTruthy();
     expect(getCoach).toHaveBeenCalledTimes(2);
-    expect(getRecaps).toHaveBeenCalledTimes(2);
   });
 
   it("reads again when the tab comes back, and rolls a figure that moved", async () => {
@@ -176,75 +175,5 @@ describe("the Dashboard", () => {
     coach = { ...down, pending: false, message: { ...down.message, outOfDate: true } };
     render(<CoachPage />);
     expect(await screen.findByText(/Out of date · your Profile changed/)).toBeTruthy();
-  });
-
-  it("shows the month's deposits against the cap and the owner's lesson", async () => {
-    coach = { ...down, pending: false };
-    render(<CoachPage />);
-    expect(await screen.findByText("A$4.2K")).toBeTruthy();
-    expect(screen.getByText(/of your A\$6K cap\. A\$1.8K left\./)).toBeTruthy();
-    expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("70");
-    expect(screen.queryByText(/this financial year/)).toBeNull(); // the Portfolio's Money in
-    expect(screen.getByText("Raised the monthly cap, and kept it lower after")).toBeTruthy();
-    expect(screen.queryByText(/ over\./)).toBeNull();
-  });
-
-  it("warns in amber over the cap", async () => {
-    coach = {
-      ...down,
-      pending: false,
-      deposits: {
-        ...down.deposits,
-        monthAud: "6500",
-        leftAud: "0",
-        overAud: "500",
-        usedPct: "108.3",
-      },
-    };
-    render(<CoachPage />);
-    expect((await screen.findByText("A$500 over.")).className).toBe("dash-over");
-  });
-
-  it("lists what to watch, rules marked", async () => {
-    coach = { ...down, pending: false };
-    render(<CoachPage />);
-    const watch = await screen.findByRole("region", { name: "Watch today" });
-    expect(watch.textContent).toContain("TAOis 41% of your portfolio, over your 25% cap.Rule");
-    expect(watch.textContent).toContain("SOLmoved most of what you hold: −18.2% today.");
-    expect(within(watch).getByText(/is in its add zone/)).toBeTruthy();
-  });
-
-  it("says when the first recap comes, and writes one now", async () => {
-    coach = { ...down, pending: false };
-    render(<CoachPage />);
-    expect(await screen.findByText("Your first recap comes on Sunday at 6 pm.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Write now" }));
-    expect(await screen.findByText("A calm week inside your rules.")).toBeTruthy();
-    expect(writeRecap).toHaveBeenCalledTimes(1);
-    expect(screen.getByText(/Week to 15 Nov 2026/)).toBeTruthy();
-  });
-
-  it("shows last week in a line, opens it, and lists the earlier weeks", async () => {
-    coach = { ...down, pending: false };
-    recaps = [
-      recap("2026-11-15", "Held steady through the dip.", true),
-      recap("2026-11-08", "A week of buys at your levels."),
-    ];
-    render(<CoachPage />);
-    expect(await screen.findByText("Held steady through the dip.")).toBeTruthy();
-    expect(screen.getByText(/Out of date · your Profile changed/)).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Read the recap" }));
-    expect(screen.getByText("Up 2% on the week.")).toBeTruthy();
-    fireEvent.click(screen.getByText("Earlier weeks (1)"));
-    expect(screen.getByText("A week of buys at your levels.")).toBeTruthy();
-  });
-
-  it("offers a retry when the recaps can't be read", async () => {
-    coach = { ...down, pending: false };
-    getRecaps.mockImplementationOnce(() => Promise.reject(new Error("The api couldn't answer.")));
-    render(<CoachPage />);
-    expect(await screen.findByText("The api couldn't answer.")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByText("Your first recap comes on Sunday at 6 pm.")).toBeTruthy();
   });
 });

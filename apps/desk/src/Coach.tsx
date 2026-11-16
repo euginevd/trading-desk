@@ -1,15 +1,14 @@
 // The Dashboard (decisions 52, 59 and 63): the morning check. A sentence says how the day is
-// going; the weekly DCA shows the buying window and where this week's buy stands; below, what to
-// watch and the desk to ask, then last week's recap in one line. Every figure comes from the api; the words are the
-// model's when it has written them, the plain ones until then.
+// going, then the weekly DCA shows the buying window and where this week's buy stands. Every
+// figure comes from the api; the words are the model's when it has written them.
 import DcaWidget from "./DcaWidget";
 import { useCallback, useEffect, useState } from "react";
-import { getCoach, getRecaps, writeCoach, writeRecap } from "./api";
+import { getCoach, writeCoach } from "./api";
 import { km, Live } from "./Figures";
-import { fetchedAt, longDate, percent, price } from "./format";
+import { fetchedAt, percent } from "./format";
 import { ResetIcon } from "./icons";
 import { OutOfDate } from "./RuleMarks";
-import type { Coach as CoachData, KeyPoint, Recap as RecapData } from "./types";
+import type { Coach as CoachData } from "./types";
 import "./dashboard.css";
 
 const REFRESH_MS = 60_000;
@@ -23,7 +22,7 @@ export default function Coach() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [fetched, setFetched] = useState<string | null>(null);
-  // A refresh bumps the round: the coach and the recap read again.
+  // A refresh bumps the round: the coach reads again.
   const [round, setRound] = useState(0);
 
   const load = useCallback((quiet: boolean) => {
@@ -88,11 +87,8 @@ export default function Coach() {
         <>
           <Hero coach={coach} fetched={fetched} loading={loading} onRefresh={refresh} />
           <DcaWidget />
-          {/* Ask the desk is off until the desk's new agents arrive (TODO 10). */}
-          <div className="dash-ledger is-single">
-            <Watch coach={coach} />
-          </div>
-          <RecapLine round={round} />
+          {/* Watch today, Ask the desk and the weekly recap are off until the desk's new
+              agents arrive (TODO 10); the Dashboard is the day and the weekly DCA. */}
         </>
       ) : (
         !error && (
@@ -156,220 +152,6 @@ function Hero({
           </p>
         )}
       </div>
-    </section>
-  );
-}
-
-export function pointText(p: KeyPoint): string {
-  switch (p.kind) {
-    case "concentration":
-      return `${p.coin} is ${p.pct}% of your portfolio, over your ${p.cap}% cap.`;
-    case "loss":
-      return `${p.coin} is ${percent(p.pct)} on its cost, past your ${p.cap}% max loss.`;
-    case "mover":
-      return `${p.coin} moved most of what you hold: ${percent(p.pct)} today.`;
-    case "addZone":
-      return `${p.coin} is in its add zone (${price(p.low)} to ${price(p.high)}) on its last plan.`;
-    case "nearInvalidation":
-      return `${p.coin} is ${percent(p.pct, false)} above its invalidation level (${price(p.price)}).`;
-  }
-}
-
-// What to watch today: the key points, then this month's deposits against the cap.
-function Watch({ coach }: { coach: CoachData }) {
-  const d = coach.deposits;
-  const used = Math.min(Number(d.usedPct ?? 0), 100);
-  return (
-    <section className="dash-col" aria-labelledby="dash-watch">
-      <h2 id="dash-watch">Watch today</h2>
-      {coach.keyPoints.length === 0 ? (
-        <p className="muted dash-empty">Nothing stands out today.</p>
-      ) : (
-        <ul className="dash-points">
-          {coach.keyPoints.map((p, i) => (
-            <li key={`${p.kind}-${p.coin}`} style={{ animationDelay: `${500 + i * 60}ms` }}>
-              <strong>{p.coin}</strong>
-              <span>{pointText(p).slice(p.coin.length + 1)}</span>
-              {p.rule && <span className="dash-rule">Rule</span>}
-            </li>
-          ))}
-        </ul>
-      )}
-      <div className="dash-deposits">
-        <h3>Deposited this month</h3>
-        {!d.known ? (
-          <p className="muted">Binance&apos;s deposit history couldn&apos;t be read just now.</p>
-        ) : (
-          <>
-            <p className="dash-dep-line">
-              <strong>
-                <Live value={d.monthAud}>{km(d.monthAud)}</Live>
-              </strong>
-              {d.capAud ? (
-                <span className="muted">
-                  {" "}
-                  of your {km(d.capAud)} cap.{" "}
-                  {d.overAud ? (
-                    <span className="dash-over">{km(d.overAud)} over.</span>
-                  ) : (
-                    `${km(d.leftAud)} left.`
-                  )}
-                </span>
-              ) : (
-                <span className="muted"> No monthly cap set.</span>
-              )}
-            </p>
-            {d.capAud && (
-              <div
-                className={`dash-bar${d.overAud ? " over" : ""}`}
-                role="progressbar"
-                aria-label="This month's deposits against the cap"
-                aria-valuenow={used}
-                aria-valuemin={0}
-                aria-valuemax={100}
-              >
-                <i style={{ width: `${used}%` }} />
-              </div>
-            )}
-            <p className="dash-note">{coach.message.source === "model" && coach.message.coach}</p>
-          </>
-        )}
-        {d.lesson && (
-          <p className="dash-lesson">
-            <span className="muted">Lesson: </span>
-            {d.lesson.text}
-          </p>
-        )}
-        {!d.capAud && (
-          <a className="dash-link" href="#/profile">
-            Set a monthly cap on your Profile
-          </a>
-        )}
-      </div>
-    </section>
-  );
-}
-
-type RecapState =
-  { kind: "loading" } | { kind: "error"; message: string } | { kind: "ready"; recaps: RecapData[] };
-
-// Last week's recap (decision 58) in one line; open it for the rest.
-function RecapLine({ round }: { round: number }) {
-  const [state, setState] = useState<RecapState>({ kind: "loading" });
-  const [retry, setRetry] = useState(0);
-  const [writing, setWriting] = useState(false);
-  const [writeError, setWriteError] = useState("");
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    getRecaps().then(
-      (r) => live && setState({ kind: "ready", recaps: r.recaps }),
-      (e: unknown) =>
-        live && setState({ kind: "error", message: problem(e, "The recaps couldn't load.") }),
-    );
-    return () => {
-      live = false;
-    };
-  }, [round, retry]);
-
-  const write = () => {
-    setWriting(true);
-    setWriteError("");
-    writeRecap().then(
-      ({ recap }) => {
-        setState((s) => ({
-          kind: "ready",
-          recaps: [
-            recap,
-            ...(s.kind === "ready" ? s.recaps : []).filter((r) => r.week !== recap.week),
-          ],
-        }));
-        setWriting(false);
-        setOpen(true);
-      },
-      (e: unknown) => {
-        setWriteError(problem(e, "The recap couldn't be written. Try again."));
-        setWriting(false);
-      },
-    );
-  };
-
-  const [newest, ...past] = state.kind === "ready" ? state.recaps : [];
-  return (
-    <section className="dash-recap" aria-labelledby="dash-recap">
-      <div className="dash-recap-line">
-        <h2 id="dash-recap">Last week</h2>
-        {state.kind === "loading" && <span className="muted">Reading your recaps…</span>}
-        {state.kind === "error" && (
-          <span role="alert">
-            {state.message}{" "}
-            <button
-              type="button"
-              className="dash-link"
-              onClick={() => {
-                setState({ kind: "loading" });
-                setRetry((n) => n + 1);
-              }}
-            >
-              Try again
-            </button>
-          </span>
-        )}
-        {state.kind === "ready" && !newest && (
-          <span className="muted">Your first recap comes on Sunday at 6 pm.</span>
-        )}
-        {newest && <span className="dash-recap-headline">{newest.headline}</span>}
-        {newest?.outOfDate && <OutOfDate />}
-        <span className="dash-spacer" />
-        {newest && (
-          <button
-            type="button"
-            className="dash-link"
-            aria-expanded={open}
-            onClick={() => setOpen(!open)}
-          >
-            {open ? "Close" : "Read the recap"}
-          </button>
-        )}
-        <button type="button" className="dash-link" disabled={writing} onClick={write}>
-          {writing ? "Writing…" : "Write now"}
-        </button>
-      </div>
-      {writeError && (
-        <p className="error-text" role="alert">
-          {writeError}
-        </p>
-      )}
-      {open && newest && (
-        <div className="dash-recap-body">
-          <p className="muted">
-            Week to {longDate(newest.week)},{" "}
-            {newest.source === "model"
-              ? "written by the AI from your figures."
-              : "a plain summary of your figures."}
-          </p>
-          {newest.lines.length > 0 && (
-            <ul>
-              {newest.lines.map((line, i) => (
-                <li key={`${i}-${line}`}>{line}</li>
-              ))}
-            </ul>
-          )}
-          {past.length > 0 && (
-            <details>
-              <summary>Earlier weeks ({past.length})</summary>
-              <ul>
-                {past.map((r) => (
-                  <li key={r.week}>
-                    {r.headline} <span className="muted">Week to {longDate(r.week)}.</span>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
-        </div>
-      )}
     </section>
   );
 }

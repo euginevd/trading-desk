@@ -323,6 +323,39 @@ class Funds:
             )
         return settled, said
 
+    @staticmethod
+    def left_out(
+        facts: dict[str, Any], settled: list[dict[str, Any]], proposed: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Every plan coin not in the orders, with why, at the desk's price, so the owner can
+        bring it back by giving it a share."""
+        placed = {r["coin"] for r in settled}
+        asked = {str(i.get("coin", "")).upper(): str(i.get("reason") or "") for i in proposed}
+        found: list[dict[str, Any]] = []
+        for fact in facts["coins"]:
+            coin = fact["coin"]
+            if coin in placed:
+                continue
+            if facts["side"] == "sell" and Decimal(fact["heldValue"]) <= ZERO:
+                why = "Nothing held in the book yet."
+            elif coin in asked:
+                why = asked[coin] or f"Under the {MIN_ORDER} {QUOTE} minimum."
+            else:
+                why = "dca-agent left it out this time."
+            found.append(
+                {
+                    "coin": coin,
+                    "pct": "0",
+                    "usdc": "0",
+                    "price": fact["deskPrice"],
+                    "now": fact["now"],
+                    "qty": "0",
+                    "odds": fact["deskOdds"],
+                    "reason": why[:240],
+                }
+            )
+        return found
+
     # The agent.
 
     def _ask(self, prompt: str, shape: dict[str, Any], label: str) -> dict[str, Any] | None:
@@ -339,7 +372,8 @@ class Funds:
         system = (
             (agent.get("markdown") or "You are dca-agent, the owner's patient DCA buyer.")
             + "\n\nYou are placing money the owner names now, not the Friday buy. Use only the "
-            "desk's figures; never invent a price, level or odds. One order per coin. Each "
+            "desk's figures; never invent a price, level or odds. One order per coin; a coin "
+            "you leave out goes in with usdc 0 and a reason saying why. Each "
             "reason is one plain sentence naming the level or fact the price rests on; don't "
             "repeat the odds or window counts, the desk shows those. The note "
             "is at most 50 words: what you did and why, in plain words."
@@ -406,7 +440,8 @@ class Funds:
         except Refused:
             if reply is None:
                 raise
-            reply, (rows, said) = None, self.settle(facts, amount, self.desk_plan(facts, amount))
+            proposed = self.desk_plan(facts, amount)
+            reply, (rows, said) = None, self.settle(facts, amount, proposed)
         note = (
             str(reply.get("note") or "")[:700]
             if reply
@@ -419,6 +454,7 @@ class Funds:
             "orders": rows,
             "note": note,
             "said": said,
+            "skipped": self.left_out(facts, rows, proposed),
             "by": AGENT if reply else "desk",
         }
 
@@ -459,6 +495,7 @@ class Funds:
             "orders": rows,
             "note": str(reply.get("note") or "")[:700],
             "said": said,
+            "skipped": self.left_out(facts, rows, reply["orders"]),
             "reply": str(reply.get("reply") or "")[:600],
             "by": AGENT,
         }

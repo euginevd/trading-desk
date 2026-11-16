@@ -74,6 +74,11 @@ def test_adding_splits_by_the_plan_without_the_agent(book: DcaBook) -> None:
     assert [o["coin"] for o in plan["orders"]] == ["BTC", "ETH", "SOL"]
     assert [o["usdc"] for o in plan["orders"]] == ["50", "25", "25"]
     assert sum(Decimal(o["usdc"]) for o in plan["orders"]) == Decimal(100)
+    assert plan["skipped"] == []
+    small = Funds(book, None).analyse("add", "30")  # 7.50 each for ETH and SOL: under 10
+    assert [o["coin"] for o in small["orders"]] == ["BTC"]
+    assert [(s["coin"], s["reason"]) for s in small["skipped"]][0][0] == "ETH"
+    assert all(Decimal(s["price"]) > 0 for s in small["skipped"])
     for o in plan["orders"]:
         assert Decimal(o["price"]) <= Decimal(o["now"])
 
