@@ -188,18 +188,34 @@
   list-style: none;
 }
 .dcw-coins li {
+  min-width: 150px;
+}
+/* The whole block opens the coin's position: name, figures, bar and what's waiting. */
+.dcw-coin {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 4px 12px;
-  min-width: 150px;
-}
-.dcw-coin {
-  padding: 0;
+  width: calc(100% + 16px);
+  margin: -6px -8px;
+  padding: 6px 8px;
   border: 0;
+  border-radius: 8px;
   background: none;
+  color: inherit;
   font: inherit;
+  text-align: left;
   cursor: pointer;
+  transition: background 0.15s var(--ease);
+}
+.dcw-coin:hover,
+.dcw-coin:focus-visible {
+  background: var(--accent-soft);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dcw-coin {
+    transition: none;
+  }
 }
 .dcb-drawer .dlg-btns a.btn {
   display: inline-flex;
@@ -208,7 +224,7 @@
   color: var(--text);
   text-decoration: none;
 }
-.dcw-coin:hover {
+.dcw-coin:hover .dcb-coin {
   color: var(--accent);
 }
 .dcw-of {

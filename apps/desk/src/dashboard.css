@@ -477,3 +477,60 @@
     opacity: 1;
   }
 }
+
+/* This month's deposits against the cap: one strip above the weekly DCA. */
+.dash-deposits {
+  display: grid;
+  grid-template-columns: auto auto minmax(80px, 200px) minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin: 4px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--panel);
+  font-size: 13px;
+}
+.dash-deposits-label {
+  color: var(--muted);
+}
+.dash-deposits b {
+  color: var(--text);
+  font-weight: 600;
+}
+.dash-deposits b .muted {
+  font-weight: 400;
+}
+.dash-deposits-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.dash-deposits-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+}
+.dash-deposits-words {
+  color: var(--body);
+}
+.dash-deposits.is-full .dash-deposits-words {
+  color: var(--accent);
+}
+.dash-deposits.is-over .dash-deposits-bar span {
+  background: var(--down);
+}
+.dash-deposits.is-over .dash-deposits-words {
+  color: var(--down);
+}
+@media (max-width: 720px) {
+  .dash-deposits {
+    grid-template-columns: auto 1fr;
+  }
+  .dash-deposits-bar,
+  .dash-deposits-words {
+    grid-column: 1 / -1;
+  }
+}

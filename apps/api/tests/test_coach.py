@@ -196,6 +196,8 @@ def test_the_deposit_card_shows_the_year_the_month_and_the_cap(store: Store, aud
         "leftAud": "1800",
         "overAud": None,
         "usedPct": "70",
+        "resetsOn": facts["deposits"]["resetsOn"],
+        "daysLeft": facts["deposits"]["daysLeft"],
         "lesson": None,
     }
     over = coach.deposits(
@@ -219,6 +221,13 @@ def test_a_lesson_about_the_cap_shows_on_the_deposit_card() -> None:
     card = coach.deposits(None, date(2026, 11, 15), None, lessons)
     assert card["lesson"]["year"] == "2026"
     assert card["known"] is False
+
+
+def test_the_cap_resets_on_the_first_of_next_month() -> None:
+    nov = coach.deposits(None, date(2026, 11, 17), None, [])
+    assert (nov["resetsOn"], nov["daysLeft"]) == ("2026-12-01", 14)
+    dec = coach.deposits(None, date(2026, 12, 31), None, [])
+    assert (dec["resetsOn"], dec["daysLeft"]) == ("2027-01-01", 1)
 
 
 # Key points from real data.

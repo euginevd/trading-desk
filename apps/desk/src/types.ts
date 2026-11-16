@@ -765,6 +765,8 @@ export interface Coach {
     leftAud: string | null;
     overAud: string | null;
     usedPct: string | null;
+    resetsOn?: string; // the 1st of next month, when the cap starts again
+    daysLeft?: number;
     lesson: ProfileLesson | null;
   };
   keyPoints: KeyPoint[];

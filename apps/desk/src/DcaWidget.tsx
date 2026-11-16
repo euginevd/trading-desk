@@ -233,20 +233,22 @@ export default function DcaWidget({ now: given }: { now?: number }) {
               <li key={coin} className={`${week.tone}${week.done ? " is-done" : ""}`}>
                 <button
                   type="button"
-                  className="dcb-coin dcw-coin"
+                  className="dcw-coin"
                   aria-label={`${coin}: open its position and orders`}
                   onClick={() => setOpenCoin(coin)}
                 >
-                  <CoinIcon coin={coin} />
-                  {coin}
+                  <span className="dcb-coin">
+                    <CoinIcon coin={coin} />
+                    {coin}
+                  </span>
+                  <span className="num dcw-of">
+                    <b>${whole(week.bought)}</b> of ${whole(usdc)}
+                  </span>
+                  <i className="dcw-bar" aria-hidden="true">
+                    <span style={{ width: `${pct}%` }} />
+                  </i>
+                  <small className="num">{week.line}</small>
                 </button>
-                <span className="num dcw-of">
-                  <b>${whole(week.bought)}</b> of ${whole(usdc)}
-                </span>
-                <i className="dcw-bar" aria-hidden="true">
-                  <span style={{ width: `${pct}%` }} />
-                </i>
-                <small className="num">{week.line}</small>
               </li>
             );
           })}

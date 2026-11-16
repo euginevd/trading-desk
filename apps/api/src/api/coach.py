@@ -94,6 +94,7 @@ def deposits(
     month = next((m for m in (report or {}).get("months", []) if m["month"] == month_key), None)
     in_month = Decimal(month["aud"]) if month else Decimal(0)
     left = cap - in_month if cap is not None else None
+    resets = date(today.year + (today.month == 12), today.month % 12 + 1, 1)  # noqa: PLR2004
     note = next(
         (
             item
@@ -111,6 +112,8 @@ def deposits(
         "leftAud": plain(max(left, Decimal(0))) if left is not None else None,
         "overAud": plain(-left) if left is not None and left < 0 else None,
         "usedPct": plain((in_month / cap * 100).quantize(Decimal("0.1"))) if cap else None,
+        "resetsOn": resets.isoformat(),
+        "daysLeft": (resets - today).days,
         "lesson": note,
     }
 

@@ -40,6 +40,8 @@ const down: Coach = {
     leftAud: "1800",
     overAud: null,
     usedPct: "70",
+    resetsOn: "2026-12-01",
+    daysLeft: 14,
     lesson: { year: "2026", text: "Raised the monthly cap, and kept it lower after" },
   },
   keyPoints: [
@@ -147,6 +149,13 @@ describe("the Dashboard", () => {
     await waitFor(() => expect(screen.getByText("A hard day, and it passes.")).toBeTruthy());
     expect(writeCoach).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/Out of date/)).toBeNull();
+  });
+
+  it("shows the month's deposits against the cap and the days until it resets", async () => {
+    render(<CoachPage />);
+    const strip = await screen.findByRole("region", { name: "November deposits" });
+    expect(strip.textContent).toContain("A$4,200 of A$6,000");
+    expect(strip.textContent).toContain("A$1,800 of room, 14 days left in November.");
   });
 
   it("refreshes from its button, busy while it reads", async () => {
