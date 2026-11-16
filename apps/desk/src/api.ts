@@ -75,10 +75,13 @@ export class ApiError extends Error {
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   let response: Response;
   try {
+    // The api takes changes only as JSON (its guard against other sites), so a change with
+    // nothing to say still sends an empty object.
+    const sent = body === undefined && method !== "GET" ? {} : body;
     response = await fetch(`/api${path}`, {
       method,
-      headers: body === undefined ? undefined : { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: sent === undefined ? undefined : { "content-type": "application/json" },
+      body: sent === undefined ? undefined : JSON.stringify(sent),
     });
   } catch {
     throw new ApiError("The desk's api isn't running. Start it, then try again.");

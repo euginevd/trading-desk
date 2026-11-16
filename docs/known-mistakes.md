@@ -42,6 +42,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 25a. A web font linked from Google Fonts breaks code-standards 27 and the desk's content security policy: install it from npm (`@fontsource/<font>`) and import it in `main.tsx`.
 25b. Headless Chrome on Windows lays a page out at 500px at least and crops a narrower screenshot: check phone layouts at `--window-size=500,…`, not 390.
 25c. On Windows, Git Bash at `/c/…` spells the drive `C:` while the project is `c:`: Vitest fails with "failed to find the runner" and `docker compose --build` asks for `--allow=fs.read`. Run both from `cd "c:/…"`.
+25d. The desk's api refuses any change that isn't JSON ("Send JSON.", its guard against other sites), so a POST with no body failed (Scan now): `call` in `api.ts` sends `{}` for a bodiless change, and testing an endpoint with `curl -d '{}'` hides it, so click the button too.
 26. Replacing a block of `styles.css` by slicing from its comment to the end of the file drops every rule appended after it (the sort headers lost their styles): slice to the next block's comment, then check the rules you didn't mean to touch are still there.
 
 ## Python and Postgres

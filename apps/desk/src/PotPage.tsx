@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { checkPot, dismissPotProposal, getPot, placePotTrade, putInPot, scanPot } from "./api";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
-import { dated, day, dollars, qty } from "./dcaFormat";
+import { dated, day, dollars, qty, when } from "./dcaFormat";
 import { Live } from "./Figures";
 import PotChat, { usePotChat } from "./PotChat";
 import PotPanel, { px, rWord, rr, tone } from "./PotPanel";
@@ -431,6 +431,12 @@ export default function PotPage() {
       (p) => {
         setPot(p);
         setScanning(false);
+        const n = p.proposals.length;
+        setSaid(
+          n
+            ? `Scanned: ${n} ${n === 1 ? "setup" : "setups"} waiting for you below.`
+            : "Scanned: no setup today. That's most days, and the method working.",
+        );
       },
       (e: unknown) => {
         setScanning(false);
@@ -580,12 +586,18 @@ export default function PotPage() {
                 <span>{pot.regime.words || "—"}</span>
               </div>
               <div>
-                <small>Last scan</small>
-                <span>{pot.lastScan ? pot.lastScan.line : "Not yet"}</span>
+                <small>{pot.lastScan ? `Last scan, ${when(pot.lastScan.at)}` : "Last scan"}</small>
+                <span>
+                  {scanning
+                    ? "trading-agent is reading the regime and every coin's daily chart. About a minute."
+                    : pot.lastScan
+                      ? pot.lastScan.line
+                      : "Not yet"}
+                </span>
               </div>
               <div>
-                <small>Next scan</small>
-                <span>{dated(pot.nextScan, true)}</span>
+                <small>Daily scan</small>
+                <span>11:15am, once trading-agent runs on its own. Until then, Scan now.</span>
               </div>
               <button
                 type="button"

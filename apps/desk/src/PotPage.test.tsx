@@ -208,7 +208,12 @@ describe("the trading pot", () => {
     render(<PotPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Scan now" }));
     await waitFor(() => expect(sent(fetch, "/pot/scan")).toHaveLength(1));
+    // The api takes changes only as JSON: a scan with nothing to say still sends {}.
+    const init = sent(fetch, "/pot/scan")[0]?.[1];
+    expect(init?.body).toBe("{}");
+    expect(init?.headers).toEqual({ "content-type": "application/json" });
     expect((await screen.findAllByText("No setup today.")).length).toBeGreaterThan(0);
+    expect(await screen.findByText(/Scanned: no setup today/)).toBeTruthy();
   });
 
   it("starts an empty pot with money put in", async () => {
