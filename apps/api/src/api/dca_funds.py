@@ -120,6 +120,13 @@ def heat(daily: list[list[Any]], now: Decimal) -> dict[str, Any]:
     }
 
 
+def _positive(value: object) -> bool:
+    try:
+        return Decimal(str(value)) > ZERO
+    except ArithmeticError:
+        return False
+
+
 def _side(value: object) -> str:
     side = SIDES.get(str(value))
     if side is None:
@@ -570,7 +577,8 @@ class Funds:
             "they ask for it, propose actions: buy (a new limit buy: coin, usdc, price), sell "
             "(a limit sell that trims a position: coin, usdc, price), change (an open order by "
             "ref: its new price and usdc) or cancel (an open order by ref). Leave unused fields "
-            "as empty strings. Only propose what was asked; a question gets an answer and no "
+            "as empty strings. List only real orders, never a coin at 0. Only propose what was "
+            "asked; a question gets an answer and no "
             "actions. Rules: one order per coin per request; at least "
             f"{MIN_ORDER} {QUOTE} each; a buy at or under the price now, a sell at or over it; "
             "never sell more than a quarter of a position; stay within the limits below; aim "
@@ -594,6 +602,8 @@ class Funds:
         dropped = 0
         seen: set[str] = set()
         for item in reply.get("actions", []):
+            if item.get("type") in ("buy", "sell") and not _positive(item.get("usdc")):
+                continue  # a coin it chose to leave out, at 0: not an action, not a broken rule
             found = self.check_action(item, facts, opened)
             key = f"{found['type']}:{found['ref'] or found['coin']}" if found else ""
             if found is None or key in seen:

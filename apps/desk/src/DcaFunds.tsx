@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 import { ApiError, analyseFunds, chatFunds, fundsOdds, placeDcaOrder } from "./api";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
+import OrderReview from "./OrderReview";
 import { limit, two } from "./dcaFormat";
 import type { FundsOrder, FundsPlan } from "./types";
 
@@ -425,14 +426,23 @@ export default function DcaFunds({
 
       <dialog ref={dialog} aria-labelledby="dcf-confirm">
         <h2 id="dcf-confirm">
-          Place {pending.length} {selling ? "limit sells" : "limit buys"} for {two(total)} {quote}?
+          Place {pending.length} {selling ? "limit sells" : "limit buys"}?
         </h2>
-        <p>
-          {pending.map((r) => `${r.coin} ${two(r.usdc)} at ${limit(r.price)}`).join("; ")}.
-          {selling
-            ? " Each sale is a taxable event; buy it back from the order list once it fills."
-            : " They go to Binance now and wait for their price."}
-        </p>
+        <OrderReview
+          quote={quote}
+          items={pending.map((r) => ({
+            coin: r.coin,
+            action: selling ? "Sell" : "Buy",
+            price: r.price,
+            usdc: r.usdc,
+            odds: r.odds.pct,
+          }))}
+          note={
+            selling
+              ? "Each sale is a taxable event. Buy it back from the order list once it fills."
+              : "They go to Binance now and wait for their price."
+          }
+        />
         <div className="dlg-btns">
           <button className="btn" type="button" onClick={() => dialog.current?.close()}>
             Not yet

@@ -272,6 +272,17 @@ describe("DCA widget", () => {
     expect(screen.getByText("Last week: 19.85 USDC bought.")).toBeTruthy();
   });
 
+  it("opens a coin's position and orders in a panel, on the Dashboard too", async () => {
+    serve(book());
+    render(<DcaWidget now={START + 86_400_000} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "ETH: open its position and orders" }),
+    );
+    const eth = screen.getByRole("table", { name: "ETH orders" });
+    expect(within(eth).getByText("DCA-ETH-26W47-1")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "Open in the DCA book" })).toBeTruthy();
+  });
+
   it("asks for a plan when there's none", async () => {
     serve(book({ plan: null }));
     render(<DcaWidget />);
@@ -302,7 +313,10 @@ describe("DCA book page", () => {
   it("asks dca-agent in words and places its checked actions after a review", async () => {
     const fetch = serve(book());
     render(<DcaBookPage />);
-    const say = await screen.findByRole("textbox", { name: "Message to dca-agent" });
+    // Folded away until asked for.
+    expect(screen.queryByRole("textbox", { name: "Message to dca-agent" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: /Ask dca-agent/ }));
+    const say = screen.getByRole("textbox", { name: "Message to dca-agent" });
     fireEvent.change(say, { target: { value: "add $20 to SOL" } });
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(await screen.findByText("SOL $20 just above Saturday's low.")).toBeTruthy();
@@ -315,6 +329,10 @@ describe("DCA book page", () => {
       price: "69.27",
       source: "named",
     });
+    // Folding it away keeps the conversation.
+    fireEvent.click(screen.getByRole("button", { name: "Fold dca-agent away" }));
+    fireEvent.click(screen.getByRole("button", { name: /Ask dca-agent/ }));
+    expect(screen.getByText("SOL $20 just above Saturday's low.")).toBeTruthy();
   });
 
   it("plans the week from the desk's odds and places after a review", async () => {

@@ -15,7 +15,9 @@ import {
   suggestDca,
 } from "./api";
 import CoinIcon from "./CoinIcon";
+import OrderReview from "./OrderReview";
 import DcaChat from "./DcaChat";
+import PositionDrawer from "./DcaPosition";
 import { Live } from "./Figures";
 import DcaFunds from "./DcaFunds";
 import DcaOpen from "./DcaOpen";
@@ -334,7 +336,6 @@ function Planner({
   };
 
   const chosen = rows?.filter((r) => r.on && !r.result) ?? [];
-  const total = chosen.reduce((s, r) => s + Number(r.spend), 0);
   const place = async (override = false) => {
     if (!rows) return;
     setBusy(true);
@@ -483,14 +484,19 @@ function Planner({
       )}
       <dialog ref={dialog} aria-labelledby="dcb-place-title">
         <h2 id="dcb-place-title">
-          Place {chosen.length} limit {chosen.length === 1 ? "buy" : "buys"} for {two(total)}{" "}
-          {book.quote}?
+          Place {chosen.length} limit {chosen.length === 1 ? "buy" : "buys"}?
         </h2>
-        <p>
-          {chosen.map((r) => `${r.coin} ${two(r.spend)} at ${limit(r.price)}`).join("; ")}. They go
-          to Binance now and wait for their price; whatever is open at {when(book.week.closeOut)}{" "}
-          can be bought at market.
-        </p>
+        <OrderReview
+          quote={book.quote}
+          items={chosen.map((r) => ({
+            coin: r.coin,
+            action: "Buy" as const,
+            price: r.price,
+            usdc: r.spend,
+            odds: r.odds?.pct ?? null,
+          }))}
+          note={`They go to Binance now and wait for their price. Anything open at ${when(book.week.closeOut)} can be bought at market.`}
+        />
         <div className="dlg-btns">
           <button className="btn" type="button" onClick={() => dialog.current?.close()}>
             Not yet
@@ -816,22 +822,26 @@ function Targets({ book }: { book: DcaBook }) {
   );
 }
 
-// Show more is remembered per browser; storage may be blocked, then it starts closed.
+// Show more and the chat are remembered per browser; storage may be blocked, then they start
+// closed.
 const MORE_KEY = "desk.dcaBook.more";
-function readMore(): boolean {
+const CHAT_KEY = "desk.dcaBook.chat";
+function readFlag(key: string): boolean {
   try {
-    return window.localStorage.getItem(MORE_KEY) === "1";
+    return window.localStorage.getItem(key) === "1";
   } catch {
     return false;
   }
 }
-function saveMore(open: boolean) {
+function saveFlag(key: string, open: boolean) {
   try {
-    window.localStorage.setItem(MORE_KEY, open ? "1" : "0");
+    window.localStorage.setItem(key, open ? "1" : "0");
   } catch {
     // not kept: it starts closed next time
   }
 }
+const readMore = () => readFlag(MORE_KEY);
+const saveMore = (open: boolean) => saveFlag(MORE_KEY, open);
 
 // ---------------------------------------------------------------- the page
 
@@ -864,6 +874,11 @@ export default function DcaBookPage() {
   // The Dashboard's coin links open that position with its orders.
   const [openCoin, setOpenCoin] = useState<string | null>(() => asked.get("coin"));
   const [more, setMore] = useState(() => readMore());
+  const [chatOpen, setChatOpen] = useState(() => chatting || readFlag(CHAT_KEY));
+  const openChat = (open: boolean) => {
+    setChatOpen(open);
+    saveFlag(CHAT_KEY, open);
+  };
 
   const load = useCallback(() => {
     getDcaBook().then(
@@ -881,10 +896,6 @@ export default function DcaBookPage() {
     }, 30_000);
     return () => window.clearInterval(tick);
   }, [load]);
-  useEffect(() => {
-    if (book && openCoin)
-      document.getElementById(`pos-${openCoin}`)?.scrollIntoView?.({ block: "center" });
-  }, [book, openCoin]);
   useEffect(() => {
     if (cancelling) cancelDialog.current?.showModal?.();
     else cancelDialog.current?.close?.();
@@ -1054,7 +1065,7 @@ export default function DcaBookPage() {
     );
 
   return (
-    <main className="wrap dcb dcb-grid">
+    <main className={`wrap dcb${chatOpen ? " has-chat" : ""}`}>
       <div className="dcb-main">
         <div className="dcb-top">
           <div>
@@ -1233,17 +1244,6 @@ export default function DcaBookPage() {
                           </button>
                         </td>
                       </tr>
-                      {opened && (
-                        <tr className="dcb-history">
-                          <td colSpan={10}>
-                            {mine.length ? (
-                              renderOrders(mine, `${pos.coin} orders`)
-                            ) : (
-                              <p className="muted">No orders for {pos.coin} yet.</p>
-                            )}
-                          </td>
-                        </tr>
-                      )}
                     </Fragment>
                   );
                 })}
@@ -1305,6 +1305,19 @@ export default function DcaBookPage() {
           </>
         )}
 
+        {openCoin && (
+          <PositionDrawer
+            key={openCoin}
+            book={book}
+            coin={openCoin}
+            onClose={() => setOpenCoin(null)}
+            onTrim={(pos) => {
+              setOpenCoin(null);
+              setSheet({ kind: "trim", position: pos });
+            }}
+            renderOrders={renderOrders}
+          />
+        )}
         {sheet && (
           <OrderSheet
             key={sheetKey}
@@ -1345,7 +1358,8 @@ export default function DcaBookPage() {
       </div>
       <DcaChat
         hasOpen={book.orders.some((o) => isOpen(o) && o.kind === "limit")}
-        focus={chatting}
+        open={chatOpen}
+        onOpen={openChat}
         onDone={load}
       />
     </main>

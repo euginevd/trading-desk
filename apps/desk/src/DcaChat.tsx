@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { agentChat, amendDcaOrder, cancelDcaOrder, placeDcaOrder } from "./api";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
+import OrderReview from "./OrderReview";
 import { limit, two } from "./dcaFormat";
 import type { DcaAction } from "./types";
 
@@ -34,11 +35,13 @@ async function run(a: Act): Promise<string> {
 
 export default function DcaChat({
   hasOpen,
-  focus,
+  open,
+  onOpen,
   onDone,
 }: {
   hasOpen: boolean;
-  focus: boolean;
+  open: boolean;
+  onOpen: (open: boolean) => void;
   onDone: () => void;
 }) {
   const [lines, setLines] = useState<Line[]>([]);
@@ -50,8 +53,8 @@ export default function DcaChat({
   const dialog = useRef<HTMLDialogElement>(null);
 
   useEffect(() => {
-    if (focus) input.current?.focus();
-  }, [focus]);
+    if (open) input.current?.focus();
+  }, [open]);
   useEffect(() => {
     list.current?.lastElementChild?.scrollIntoView?.({ block: "nearest" });
   }, [lines]);
@@ -126,131 +129,154 @@ export default function DcaChat({
     review !== null ? (lines[review]?.actions ?? []).filter((a) => a.on && !a.result) : [];
 
   return (
-    <aside className="dcc" aria-label="dca-agent">
-      <header className="dcc-head">
-        <AgentAvatar icon="dca" slug="dca-agent" size="lg" />
-        <div>
-          <b>dca-agent</b>
-          <small>The patient buyer. Ask it to add, take out, change or cancel.</small>
-        </div>
-      </header>
-
-      <ol className="dcc-lines" ref={list} aria-live="polite">
-        {lines.length === 0 && (
-          <li className="dcc-hello">
-            Tell me what to do with the book, in your own words. I'll propose the orders; nothing is
-            placed until you review it.
-          </li>
-        )}
-        {lines.map((line, at) => (
-          <li key={at} className={`is-${line.who}`}>
-            <p>{line.text}</p>
-            {line.said?.map((s) => (
-              <p key={s} className="dcb-warn">
-                {s}
-              </p>
-            ))}
-            {line.actions && line.actions.length > 0 && (
-              <div className="dcc-card">
-                {line.actions.map((a, i) => (
-                  <label
-                    key={`${a.type}-${a.ref || a.coin}`}
-                    className={a.failed ? "is-failed" : ""}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={a.on}
-                      disabled={Boolean(a.result) || busy}
-                      onChange={(e) => toggle(at, i, e.target.checked)}
-                    />
-                    <span className={`dcc-type is-${a.type}`}>{WORD[a.type]}</span>
-                    <span className="dcb-coin">
-                      <CoinIcon coin={a.coin} />
-                      {a.coin}
-                    </span>
-                    <span className="num">
-                      {a.type === "cancel"
-                        ? `${limit(a.was)}, ${two(a.usdc)}`
-                        : `${a.was ? `${limit(a.was)} → ` : ""}${limit(a.price)}, $${two(a.usdc)}`}
-                    </span>
-                    {a.odds && a.odds.pct !== null && (
-                      <span className={`num dcc-odds${a.odds.pct < 75 ? " is-low" : ""}`}>
-                        {a.odds.pct}%
-                      </span>
-                    )}
-                    <small>{a.result ?? a.reason}</small>
-                  </label>
-                ))}
-                <button
-                  type="button"
-                  className="btn btn-accent btn-small"
-                  disabled={busy || !line.actions.some((a) => a.on && !a.result)}
-                  onClick={() => setReview(at)}
-                >
-                  Review {line.actions.filter((a) => a.on && !a.result).length}
-                </button>
-              </div>
-            )}
-          </li>
-        ))}
-        {busy && review === null && <li className="is-agent dcc-wait">Thinking…</li>}
-      </ol>
-
-      <div className="dcc-chips">
-        {chips.map((c) => (
-          <button key={c} type="button" disabled={busy} onClick={() => send(c)}>
-            {c}
-          </button>
-        ))}
-      </div>
-      <form
-        className="dcc-say"
-        onSubmit={(e) => {
-          e.preventDefault();
-          send(text);
-        }}
-      >
-        <input
-          ref={input}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder="Add $100, mostly BTC…"
-          aria-label="Message to dca-agent"
-          maxLength={500}
-        />
-        <button type="submit" className="btn" disabled={!text.trim() || busy}>
-          Send
+    <>
+      {!open && (
+        <button type="button" className="dcc-launch" onClick={() => onOpen(true)}>
+          <AgentAvatar icon="dca" slug="dca-agent" />
+          <span>
+            <b>Ask dca-agent</b>
+            <small>
+              {lines.length ? "Your conversation is kept" : "Add, take out, change or cancel"}
+            </small>
+          </span>
         </button>
-      </form>
-
-      <dialog ref={dialog} aria-labelledby="dcc-confirm" onClose={() => setReview(null)}>
-        <h2 id="dcc-confirm">
-          Place {chosen.length} {chosen.length === 1 ? "action" : "actions"}?
-        </h2>
-        <p>
-          {chosen
-            .map((a) =>
-              a.type === "cancel"
-                ? `Cancel ${a.ref}`
-                : `${WORD[a.type]} ${a.coin} $${two(a.usdc)} at ${limit(a.price)}`,
-            )
-            .join("; ")}
-          . They go to Binance now; a sale is a taxable event.
-        </p>
-        <div className="dlg-btns">
-          <button className="btn" type="button" onClick={() => dialog.current?.close()}>
-            Not yet
-          </button>
+      )}
+      <aside className={`dcc${open ? " is-open" : ""}`} aria-label="dca-agent" hidden={!open}>
+        <header className="dcc-head">
+          <AgentAvatar icon="dca" slug="dca-agent" size="lg" />
+          <div>
+            <b>dca-agent</b>
+            <small>The patient buyer. Ask it to add, take out, change or cancel.</small>
+          </div>
           <button
-            className="btn btn-accent"
             type="button"
-            disabled={busy}
-            onClick={() => void place()}
+            className="dcc-fold"
+            aria-label="Fold dca-agent away"
+            onClick={() => onOpen(false)}
           >
-            Place {chosen.length}
+            ⟩
           </button>
+        </header>
+
+        <ol className="dcc-lines" ref={list} aria-live="polite">
+          {lines.length === 0 && (
+            <li className="dcc-hello">
+              Tell me what to do with the book, in your own words. I'll propose the orders; nothing
+              is placed until you review it.
+            </li>
+          )}
+          {lines.map((line, at) => (
+            <li key={at} className={`is-${line.who}`}>
+              <p>{line.text}</p>
+              {line.said?.map((s) => (
+                <p key={s} className="dcb-warn">
+                  {s}
+                </p>
+              ))}
+              {line.actions && line.actions.length > 0 && (
+                <div className="dcc-card">
+                  {line.actions.map((a, i) => (
+                    <label
+                      key={`${a.type}-${a.ref || a.coin}`}
+                      className={a.failed ? "is-failed" : ""}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={a.on}
+                        disabled={Boolean(a.result) || busy}
+                        onChange={(e) => toggle(at, i, e.target.checked)}
+                      />
+                      <span className={`dcc-type is-${a.type}`}>{WORD[a.type]}</span>
+                      <span className="dcb-coin">
+                        <CoinIcon coin={a.coin} />
+                        {a.coin}
+                      </span>
+                      <span className="num">
+                        {a.type === "cancel"
+                          ? `${limit(a.was)}, ${two(a.usdc)}`
+                          : `${a.was ? `${limit(a.was)} → ` : ""}${limit(a.price)}, $${two(a.usdc)}`}
+                      </span>
+                      {a.odds && a.odds.pct !== null && (
+                        <span className={`num dcc-odds${a.odds.pct < 75 ? " is-low" : ""}`}>
+                          {a.odds.pct}%
+                        </span>
+                      )}
+                      <small>{a.result ?? a.reason}</small>
+                    </label>
+                  ))}
+                  <button
+                    type="button"
+                    className="btn btn-accent btn-small"
+                    disabled={busy || !line.actions.some((a) => a.on && !a.result)}
+                    onClick={() => setReview(at)}
+                  >
+                    Review {line.actions.filter((a) => a.on && !a.result).length}
+                  </button>
+                </div>
+              )}
+            </li>
+          ))}
+          {busy && review === null && <li className="is-agent dcc-wait">Thinking…</li>}
+        </ol>
+
+        <div className="dcc-chips">
+          {chips.map((c) => (
+            <button key={c} type="button" disabled={busy} onClick={() => send(c)}>
+              {c}
+            </button>
+          ))}
         </div>
-      </dialog>
-    </aside>
+        <form
+          className="dcc-say"
+          onSubmit={(e) => {
+            e.preventDefault();
+            send(text);
+          }}
+        >
+          <input
+            ref={input}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Add $100, mostly BTC…"
+            aria-label="Message to dca-agent"
+            maxLength={500}
+          />
+          <button type="submit" className="btn" disabled={!text.trim() || busy}>
+            Send
+          </button>
+        </form>
+
+        <dialog ref={dialog} aria-labelledby="dcc-confirm" onClose={() => setReview(null)}>
+          <h2 id="dcc-confirm">
+            Place {chosen.length} {chosen.length === 1 ? "action" : "actions"}?
+          </h2>
+          <OrderReview
+            quote="USDC"
+            items={chosen.map((a) => ({
+              coin: a.coin,
+              action: WORD[a.type] as "Buy" | "Sell" | "Change" | "Cancel",
+              price: a.price,
+              usdc: a.usdc,
+              was: a.was,
+              odds: a.odds?.pct ?? null,
+            }))}
+            note="They go to Binance now and wait for their price. A sale is a taxable event."
+          />
+          <div className="dlg-btns">
+            <button className="btn" type="button" onClick={() => dialog.current?.close()}>
+              Not yet
+            </button>
+            <button
+              className="btn btn-accent"
+              type="button"
+              disabled={busy}
+              onClick={() => void place()}
+            >
+              Place {chosen.length}
+            </button>
+          </div>
+        </dialog>
+      </aside>
+    </>
   );
 }

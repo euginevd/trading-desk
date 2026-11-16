@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { closeOutDca, getDcaBook } from "./api";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
+import PositionDrawer from "./DcaPosition";
 import { dated, isOpen, limit, qty, signed, two } from "./dcaFormat";
 import "./myagents.css";
 import type { DcaBook, DcaOrder, DcaPosition } from "./types";
@@ -85,6 +86,7 @@ export default function DcaWidget({ now: given }: { now?: number }) {
   const [error, setError] = useState<string | null>(null);
   const [closing, setClosing] = useState(false);
   const [said, setSaid] = useState<string | null>(null);
+  const [openCoin, setOpenCoin] = useState<string | null>(null);
   const dialog = useRef<HTMLDialogElement>(null);
   const keep = useRef<HTMLButtonElement>(null);
 
@@ -236,14 +238,15 @@ export default function DcaWidget({ now: given }: { now?: number }) {
             const pct = usdc > 0 ? Math.min(100, (week.bought / usdc) * 100) : 0;
             return (
               <li key={coin} className={`${week.tone}${week.done ? " is-done" : ""}`}>
-                <a
+                <button
+                  type="button"
                   className="dcb-coin dcw-coin"
-                  href={`#/dca-book?coin=${coin}`}
                   aria-label={`${coin}: open its position and orders`}
+                  onClick={() => setOpenCoin(coin)}
                 >
                   <CoinIcon coin={coin} />
                   {coin}
-                </a>
+                </button>
                 <span className="num dcw-of">
                   <b>${whole(week.bought)}</b> of ${whole(usdc)}
                 </span>
@@ -285,6 +288,19 @@ export default function DcaWidget({ now: given }: { now?: number }) {
         </p>
       )}
 
+      {openCoin && (
+        <PositionDrawer
+          key={openCoin}
+          book={book}
+          coin={openCoin}
+          onClose={() => setOpenCoin(null)}
+          footer={
+            <a className="btn" href={`#/dca-book?coin=${openCoin}`}>
+              Open in the DCA book
+            </a>
+          }
+        />
+      )}
       <dialog ref={dialog} aria-labelledby="dcw-close-title">
         <h2 id="dcw-close-title">Close out this week now?</h2>
         <p>
