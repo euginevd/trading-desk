@@ -27,7 +27,6 @@ SECTIONS = (
     "rules",
     "holdings",
     "lessons",
-    "quotes",
     "additional_info",
 )
 TITLES = {
@@ -39,7 +38,6 @@ TITLES = {
     "rules": "Rules",
     "holdings": "Holdings",
     "lessons": "Lessons",
-    "quotes": "Quotes",
     "additional_info": "Additional info",
 }
 OWNER = "You"
@@ -138,10 +136,10 @@ LISTS: dict[str, tuple[Field, ...]] = {
         Field("year", "Year", "year", low=Decimal(1900), high=Decimal(2200)),
         Field("text", "Lesson", "text", 400),
     ),
-    "quotes": (Field("text", "Quote", "text", 200), Field("author", "By", "text", 60)),
 }
-LIST_LIMITS = {"goals": 10, "holdings": 30, "lessons": 100, "quotes": 50}
-REQUIRED = {"goals": "amount", "holdings": "name", "lessons": "text", "quotes": "text"}
+LIST_LIMITS = {"goals": 10, "holdings": 30, "lessons": 100}
+REQUIRED = {"goals": "amount", "holdings": "name", "lessons": "text"}
+MARKDOWN_LIMIT = 200_000
 MORE_TEXT_LIMIT = 10_000
 LOCKED_PATHS = {
     "goals": ("goals",),
@@ -158,6 +156,7 @@ def empty() -> dict[str, Any]:
     }
     doc |= {name: [] for name in LISTS}
     doc["additional_info"] = ""
+    doc["markdown"] = ""  # profile.md v2 word for word (decision 62); "" for a v1 document
     doc["locks"] = dict.fromkeys(LOCKS, False)
     return doc
 
@@ -274,6 +273,7 @@ def clean(doc: object) -> dict[str, Any]:
     found = {name: clean_section(name, raw.get(name, base[name])) for name in SECTIONS}
     locks = _dict(raw.get("locks"))
     found["locks"] = {name: locks.get(name) is True for name in LOCKS}
+    found["markdown"] = str(raw.get("markdown") or "")[:MARKDOWN_LIMIT]
     return found
 
 
@@ -311,13 +311,20 @@ def _row_name(section: str, row: dict[str, Any]) -> str:
         return f"{currency}{amount:,.0f}" + (f" by {row['date'][:4]}" if row["date"] else "")
     if section == "lessons":
         return f"{row['year'] or 'undated'} lesson"
-    if section == "quotes":
-        return f"quote “{str(row['text'])[:30]}”"
     return str(row["name"])
 
 
 def changes(old: dict[str, Any], new: dict[str, Any]) -> list[dict[str, str]]:
-    """Every difference, as section, label, from and to, for summaries and the diff on a card."""
+    """Every difference, as section, label, from and to, for summaries and the diff on a card.
+    A v2 document is its file: the lines that changed, since the rest is read from them."""
+    if old["markdown"] or new["markdown"]:
+        from api.profile_v2 import line_changes  # noqa: PLC0415 - it reads this module's names
+
+        return (
+            []
+            if old["markdown"] == new["markdown"]
+            else line_changes(old["markdown"], new["markdown"])
+        )
     found: list[dict[str, str]] = []
     for name in SECTIONS:
         if old[name] == new[name]:
@@ -436,10 +443,15 @@ def save(  # noqa: PLR0913 - each is a separate fact about the save
     change a locked field."""
     from api.md_files import written  # noqa: PLC0415 - the files read this module
     from api.profile_md import export  # noqa: PLC0415 - the Markdown reads this module
+    from api.profile_v2 import stamp  # noqa: PLC0415 - it reads this module's names
 
-    _, old = current(store)
+    n, old = current(store)
     new = clean(doc)
+    if new["markdown"]:  # the file's own version line follows the desk's numbering
+        new["markdown"] = stamp(new["markdown"], n + 1, now)
     found = changes(old, new)
+    if new["markdown"] and old["markdown"]:
+        found = [c for c in found if c["label"] != "Version"]
     if not found:
         raise Refused("Nothing changed.")
     if author != OWNER:
@@ -450,7 +462,7 @@ def save(  # noqa: PLR0913 - each is a separate fact about the save
     why = " ".join(str(reason or "").split())[:200]
     version = store.add_profile_version(now, author[:40], line, why, json.dumps(new))
     if write:
-        text = export(new, version, now)
+        text = new["markdown"] or export(new, version, now)
         store.profile_md.write_text(text, encoding="utf-8")
         written(store, "profile", text)
     audit.record("profile", f"Profile v{version} by {author}", line)

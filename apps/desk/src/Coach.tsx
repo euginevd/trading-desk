@@ -146,11 +146,6 @@ function Greeting({ coach }: { coach: CoachData }) {
               <a href="#/trade">Go to Trade →</a>
             </p>
           )}
-          {message.quote && (
-            <blockquote className="coach-quote">
-              “{message.quote.text}”{message.quote.author && ` — ${message.quote.author}`}
-            </blockquote>
-          )}
         </div>
       </div>
       <div className="coach-side">

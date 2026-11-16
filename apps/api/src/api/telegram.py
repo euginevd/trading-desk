@@ -176,13 +176,7 @@ def summary(coach: dict[str, Any]) -> str:
         )
     else:
         money = f"Deposits this month: {_aud(dep['monthAud'])}."
-    quote = coach["message"].get("quote")
-    tail = (
-        [f"“{quote['text']}”" + (f" — {quote['author']}" if quote["author"] else "")]
-        if quote
-        else []
-    )
-    blocks = [*lines, *(["", *points] if points else []), "", money, *tail]
+    blocks = [*lines, *(["", *points] if points else []), "", money]
     return "\n".join(blocks).strip()
 
 

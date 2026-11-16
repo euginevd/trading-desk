@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, cast
 
-from api import profile
+from api import profile, profile_md, profile_v2
 from api.audit import Audit
 from api.binance import plain
 from api.profile_live import SYDNEY
@@ -61,6 +61,25 @@ CHANGE_SHAPE: dict[str, Any] = {
         "reason": {"type": "string"},
     },
     "required": ["kind", "answer", "sections", "reason"],
+    "additionalProperties": False,
+}
+FILE_SHAPE: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "kind": {"type": "string", "enum": ["answer", "change"]},
+        "answer": {"type": "string"},
+        "edits": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {"find": {"type": "string"}, "replace": {"type": "string"}},
+                "required": ["find", "replace"],
+                "additionalProperties": False,
+            },
+        },
+        "reason": {"type": "string"},
+    },
+    "required": ["kind", "answer", "edits", "reason"],
     "additionalProperties": False,
 }
 PLANNER_SHAPE: dict[str, Any] = {
@@ -258,6 +277,18 @@ def accept(store: Store, audit: Audit, suggestion_id: str, reason: str, now: int
                 f"Your Profile changed since this was suggested (v{found['baseVersion']}, now "
                 f"v{n}). Reject it and ask again, or use Edit."
             )
+        if "markdown" in found:
+            return profile.save(
+                store,
+                audit,
+                profile_v2.parse(found["markdown"]),
+                author=found["author"],
+                now=now,
+                reason=reason or found["reason"],
+                summary_text=found["summary"],
+            )
+        if doc["markdown"]:
+            raise Refused("Your Profile is profile.md now: ask for this in the command bar.")
         return profile.save(
             store,
             audit,
@@ -303,7 +334,9 @@ def command(  # noqa: PLR0913 - each is a separate input
     ask = " ".join(str(text or "").split())[:LONGEST_ASK]
     if not ask:
         raise Refused("Type a question or a change first.")
-    n, _ = profile.current(store)
+    n, doc = profile.current(store)
+    if doc["markdown"]:
+        return _file_command(store, audit, write, ask=ask, live=live)
     reply = write(
         SYSTEM,
         "The owner typed this into their Profile's command bar. If it asks to change the "
@@ -335,6 +368,70 @@ def command(  # noqa: PLR0913 - each is a separate input
     return {"kind": "answer", "answer": answer, "question": ask, "profileVersion": n}
 
 
+def _file_command(
+    store: Store, audit: Audit, write: Write, *, ask: str, live: dict[str, Any]
+) -> dict[str, Any]:
+    """The command bar on a v2 profile (decision 62): an answer from the file, or exact edits to
+    it, checked by reading the edited file back, and queued with the diff for Accept."""
+    n, doc = profile.current(store)
+    text = doc["markdown"]
+    reply = write(
+        SYSTEM,
+        "The owner typed this into their Profile's command bar. The Profile is the Markdown "
+        "file below. If it asks to change the Profile, reply kind 'change' with edits: each "
+        "'find' an exact piece of the file, found once only and as short as is still unique "
+        "(usually one line), and 'replace' its new text in the same style. Change only what "
+        "was asked; keep every other figure, total and line as written. Leave the Version "
+        "line alone. Give the reason they gave, if any. Otherwise reply kind 'answer' with a "
+        "short answer from the Profile and the live figures, and no edits.\n"
+        f"Request: {json.dumps(ask)}\nprofile.md (version {n}):\n"
+        f"{profile_md.for_agents(store)}\nLive figures: {json.dumps(live)}",
+        FILE_SHAPE,
+    )
+    audit.record(
+        "profile", "Command bar", "Change proposed" if reply.get("kind") == "change" else "Answered"
+    )
+    if reply.get("kind") != "change":
+        answer = str(reply.get("answer", "")).strip()[:2000]
+        if not answer:
+            raise Refused("No answer came back. Try asking another way.")
+        return {"kind": "answer", "answer": answer, "question": ask, "profileVersion": n}
+    new = profile_v2.apply_edits(text, reply.get("edits"))
+    profile_v2.parse(new)  # the edited file must still read
+    return {
+        "kind": "change",
+        "suggestion": propose_file(
+            store, new, author="Command bar", reason=str(reply.get("reason", ""))
+        ),
+    }
+
+
+def propose_file(store: Store, new: str, *, author: str, reason: str) -> dict[str, Any]:
+    """Queues a new profile.md for the owner, with the diff and code's own summary."""
+    n, old = profile.current(store)
+    found = profile_v2.line_changes(old["markdown"], new)
+    if not found:
+        raise Refused("That's already how your profile reads.")
+    suggestion = {
+        "id": uuid.uuid4().hex[:12],
+        "time": _now(),
+        "author": author[:40],
+        "baseVersion": n,
+        "markdown": new,
+        "diff": profile_v2.diff(old["markdown"], new),
+        "changes": found,
+        "summary": profile.summary(found),
+        "reason": " ".join(reason.split())[:300],
+        "conflicts": [],
+        "blocked": None,
+    }
+    queued = [
+        s for s in _load(store, SUGGESTIONS_KEY) if s["author"] != author or author != "Command bar"
+    ]
+    store.set_setting(SUGGESTIONS_KEY, json.dumps((queued + [suggestion])[-SUGGESTIONS_KEPT:]))
+    return suggestion
+
+
 # The planner: allocation against the Profile.
 
 
@@ -343,7 +440,9 @@ def planner(
 ) -> dict[str, Any]:
     """The Risk Officer explains the gaps between the holdings and the Strategy and Rules,
     and may queue one change as a suggestion. Kept with the version it read."""
-    n, _ = profile.current(store)
+    n, doc = profile.current(store)
+    if doc["markdown"]:
+        raise Refused("Your Profile is profile.md now: ask for a change in the command bar.")
     reply = write(
         SYSTEM + " You are Riley, the Risk Officer: portfolio health and discipline.",
         "Compare the live holdings with the Profile's Strategy and Rules. Give a two-sentence "

@@ -6,6 +6,7 @@ leaves the last good version in force, and the page says what to fix.
 """
 
 import hashlib
+import threading
 from typing import Any
 
 from api import profile, profile_md, trading_agent
@@ -16,6 +17,8 @@ from api.trading import Refused
 HASH = {"profile": "profile_md_hash", "agent": "trade_md_hash"}
 ERROR = {"profile": "profile_md_error", "agent": "trade_md_error"}
 FROM_FILE = "Edited in the file"
+# One sync at a time: two requests reading the same edit would each save it as a version.
+_SYNC = threading.Lock()
 
 
 def _digest(text: str) -> str:
@@ -37,7 +40,7 @@ def sync_profile(store: Store, audit: Audit, now_ms: int) -> None:
     n, doc = profile.current(store)
     if not path.exists():
         if n:  # the file went missing: write the version in force back
-            text = profile_md.export(doc, n, now_ms)
+            text = doc["markdown"] or profile_md.export(doc, n, now_ms)
             path.write_text(text, encoding="utf-8")
             written(store, "profile", text)
         return
@@ -52,9 +55,19 @@ def sync_profile(store: Store, audit: Audit, now_ms: int) -> None:
         audit.record("profile", "profile.md not read", str(error))
         return
     if profile.changes(doc, found):
-        profile.save(
-            store, audit, found, author=profile.OWNER, now=now_ms, reason=FROM_FILE, write=False
-        )
+        try:  # a v2 file is written back with its version line set to the new version
+            profile.save(
+                store,
+                audit,
+                found,
+                author=profile.OWNER,
+                now=now_ms,
+                reason=FROM_FILE,
+                write=bool(found.get("markdown")),
+            )
+            return
+        except Refused:  # only the version line differs
+            pass
     written(store, "profile", text)
 
 
@@ -83,8 +96,9 @@ def sync_agent(store: Store, audit: Audit, now_ms: int) -> None:
 
 def sync(store: Store, audit: Audit, now_ms: int) -> None:
     """Both files, before a request reads either."""
-    sync_profile(store, audit, now_ms)
-    sync_agent(store, audit, now_ms)
+    with _SYNC:
+        sync_profile(store, audit, now_ms)
+        sync_agent(store, audit, now_ms)
 
 
 def file_view(store: Store, kind: str) -> dict[str, Any]:

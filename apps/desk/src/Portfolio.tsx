@@ -26,6 +26,7 @@ import type { Status } from "./ui";
 // The US-dollar figure and rate under the total: kept, but hidden at the owner's request.
 const SHOW_RATE_LINE = false;
 
+const REFRESH_MS = 60_000; // the TAO wallet reading is reused for a minute (tao.py)
 const DUST = 5; // a holding worth less than this, or nothing, is dust: never shown
 export function isDust(h: Holding): boolean {
   return h.value === null || Number(h.value) < DUST;
@@ -734,8 +735,19 @@ export default function Portfolio({
     [onStatus, onTao],
   );
 
+  // Balances change on Binance outside the desk (an app trade, a deposit), so the page reads them
+  // again every minute while it's in view, and at once when the tab comes back into view.
   useEffect(() => {
+    const quiet = () => {
+      if (document.visibilityState === "visible") settle(getPortfolio());
+    };
     settle(getPortfolio());
+    const timer = window.setInterval(quiet, REFRESH_MS);
+    document.addEventListener("visibilitychange", quiet);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", quiet);
+    };
   }, [settle]);
 
   const load = () => {

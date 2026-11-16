@@ -69,21 +69,21 @@
   padding: 8px 12px;
 }
 
-/* The top strip. */
-.pf-strip {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
+/* The four widgets (decision 62): one column, same card style, works at ~650px. */
 .pf-tile {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 14px 16px;
-  min-height: 96px;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--panel-2);
+  min-width: 0;
 }
 .pf-tile .muted {
   font-size: 12px;
+}
+.pf-tile .pf-tag {
+  align-self: flex-start;
 }
 .pf-big {
   font-size: 18px;
@@ -97,7 +97,7 @@
   color: var(--down);
 }
 .pf-skeleton {
-  min-height: 96px;
+  min-height: 140px;
   background: var(--panel-2);
 }
 .pf-meter {
@@ -194,22 +194,22 @@
   padding: 0;
 }
 .pf-versions li {
-  display: grid;
-  grid-template-columns: 70px 150px 120px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 6px 0;
+  padding: 8px 0;
   border-bottom: 1px solid var(--line);
 }
-
-@media (max-width: 760px) {
-  .pf-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .pf-versions li {
-    grid-template-columns: 1fr 1fr;
-  }
+.pf-version-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.pf-version-what {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.pf-version-actions {
+  display: flex;
+  gap: 12px;
 }
 
 /* The Profile's two tabs: My policy and Trading agent. */
@@ -217,19 +217,30 @@
   margin: 0;
 }
 .pf-tabs {
-  gap: 20px;
-  padding: 0;
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
 }
 .pf-page .pf-tabs button {
-  min-height: 0;
-  border-radius: 0;
-  padding: 10px 0;
-  background: none;
+  min-height: 32px;
+  padding: 0 16px;
   border: 0;
-  border-bottom: 2px solid transparent;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font-weight: 500;
+}
+.pf-page .pf-tabs button:hover {
+  color: var(--text);
 }
 .pf-page .pf-tabs button[aria-selected="true"] {
-  border-bottom-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 /* The trading agent tab (TODO 6). Prefixed ag-. */
@@ -316,4 +327,339 @@
 .ag-facts dd {
   margin: 0;
   font-weight: 500;
+}
+
+/* The policy tab (decision 62). */
+.pf-lead {
+  color: var(--muted);
+}
+
+/* Wide: the summary across the top, the three widgets side by side below it, all on one screen.
+   Narrow (the ~650px pane): one column. */
+.pf-board {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.pf-summary {
+  grid-column: 1 / -1;
+}
+@media (max-width: 1100px) {
+  .pf-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.pf-widget {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  min-width: 0;
+}
+.pf-widget .pf-head h2 {
+  font-size: 14px;
+}
+.pf-figure {
+  margin: 0;
+}
+.pf-huge {
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.pf-sub {
+  margin: 2px 0 0;
+  font-size: 12px;
+}
+.pf-note {
+  margin: 8px 0 0;
+  font-size: 12px;
+}
+
+/* The summary card. */
+.pf-who {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pf-who-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.pf-who-text strong {
+  font-size: 16px;
+}
+.pf-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+@media (max-width: 1100px) {
+  .pf-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.pf-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+.pf-chips .muted {
+  font-size: 12px;
+  margin-right: 2px;
+}
+.pf-chip {
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--line-2);
+  color: var(--body);
+}
+.pf-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.pf-lesson {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+/* Tracks: 0 to the goal, ticks under it, a You marker above. */
+.pf-track-wrap {
+  position: relative;
+  margin: 24px 0 22px;
+}
+.pf-track {
+  position: relative;
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--panel-2);
+}
+.pf-track > i {
+  display: block;
+  height: 100%;
+}
+.pf-track > i:first-child {
+  border-radius: 5px 0 0 5px;
+}
+.pf-track > i.ok {
+  background: var(--up);
+}
+.pf-track > i.warn {
+  background: var(--wait);
+}
+.pf-tick {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 16px;
+  margin-left: -1px;
+  background: var(--line-2);
+}
+.pf-tick.passed {
+  background: var(--up);
+}
+.pf-tick.next {
+  background: none;
+  border-left: 2px dashed var(--wait);
+}
+.pf-tick.flag {
+  background: var(--accent);
+}
+.pf-you {
+  position: absolute;
+  top: -22px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.pf-you::after {
+  content: "";
+  display: block;
+  width: 0;
+  height: 0;
+  margin: 1px auto 0;
+  border: 4px solid transparent;
+  border-top-color: var(--accent);
+}
+.pf-tick-labels {
+  position: relative;
+  height: 26px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.pf-tick-labels > span {
+  position: absolute;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  white-space: nowrap;
+  line-height: 1.2;
+}
+.pf-tick-labels > span.end {
+  transform: translateX(-100%);
+  align-items: flex-end;
+}
+.pf-tick-labels > span.next {
+  color: var(--wait);
+}
+.pf-tick-labels > span.passed {
+  color: var(--up);
+}
+.pf-tick-labels small {
+  font-size: 10px;
+  color: var(--dim);
+}
+.pf-flag {
+  color: var(--accent);
+  margin-right: 2px;
+}
+
+.pf-leg {
+  margin-top: 4px;
+}
+.pf-leg-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 12px;
+  font-size: 12px;
+}
+.pf-meter.thin {
+  height: 3px;
+}
+.pf-then {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.pf-then .pf-meter {
+  margin-top: 0;
+}
+.pf-key {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: -18px 0 10px;
+  font-size: 11px;
+}
+.pf-key-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  margin-left: 6px;
+}
+.pf-key-dot:first-child {
+  margin-left: 0;
+}
+.pf-key-dot.ok {
+  background: var(--up);
+}
+.pf-key-dot.warn {
+  background: var(--wait);
+}
+
+/* The command bar and its diff. */
+.pf-command {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pf-command-bar {
+  display: flex;
+  gap: 8px;
+}
+.pf-command-bar input {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.pf-command-bar input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+.pf-page .pf-command-bar button {
+  min-height: 36px;
+}
+.pf-answer,
+.pf-change {
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+.pf-answer p {
+  margin: 0 0 6px;
+}
+.pf-change .pf-head {
+  margin-bottom: 6px;
+}
+.pf-change-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+.pf-diff {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 6px 0;
+  border-radius: 8px;
+  background: var(--bg);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+  overflow-x: auto;
+}
+.pf-diff li {
+  padding: 1px 10px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--muted);
+}
+.pf-diff li.add {
+  background: var(--up-soft);
+  color: var(--text);
+}
+.pf-diff li.del {
+  background: var(--down-soft);
+  color: var(--text);
+}
+.pf-diff li.gap {
+  color: var(--dim);
+}
+.pf-diff-mark {
+  display: inline-block;
+  width: 14px;
+}
+.pf-diff li.add .pf-diff-mark {
+  color: var(--up);
+}
+.pf-diff li.del .pf-diff-mark {
+  color: var(--down);
 }

@@ -7,8 +7,11 @@ import type {
   AgentThread,
   Coach,
   AgentInfo,
+  CommandReply,
   ProfilePage,
+  ProfileSuggestion,
   ProfileVersion,
+  ProfileVersionDetail,
   Recap,
   RuleBreak,
   AiMode,
@@ -209,6 +212,16 @@ export const linkTelegram = () => call<TelegramSettings>("POST", "/settings/tele
 export const getProfilePage = () => call<ProfilePage>("GET", "/profile");
 export const getProfileVersions = () =>
   call<{ versions: ProfileVersion[] }>("GET", "/profile/versions");
+export const getProfileVersion = (n: number) =>
+  call<ProfileVersionDetail>("GET", `/profile/versions/${n}`);
+export const restoreProfile = (n: number) => call<ProfilePage>("POST", "/profile/restore", { n });
+// The command bar (decision 62): an answer, or a change to profile.md shown as a diff to accept.
+export const askProfile = (text: string) =>
+  call<CommandReply>("POST", "/profile/command", { text });
+export const acceptSuggestion = (id: string) =>
+  call<ProfilePage>("POST", `/profile/suggestions/${id}/accept`, {});
+export const rejectSuggestion = (id: string) =>
+  call<{ suggestions: ProfileSuggestion[] }>("POST", `/profile/suggestions/${id}/reject`, {});
 export const getRecaps = () => call<{ recaps: Recap[] }>("GET", "/recaps");
 export const writeRecap = () => call<{ recap: Recap }>("POST", "/recaps", {});
 

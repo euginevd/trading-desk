@@ -2596,13 +2596,6 @@ dialog.in-place .detail-head {
   color: var(--accent);
   text-decoration: none;
 }
-.coach-quote {
-  margin: 10px 0 0;
-  padding-left: 10px;
-  border-left: 2px solid var(--line-2);
-  color: var(--muted);
-  font-style: italic;
-}
 .coach-side {
   display: grid;
   justify-items: end;

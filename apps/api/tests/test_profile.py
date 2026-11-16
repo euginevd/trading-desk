@@ -330,12 +330,14 @@ def buy(**fields: Any) -> dict[str, Any]:
     } | fields
 
 
-def test_a_buy_over_the_monthly_cap_needs_a_second_confirm(call: Any, store: Store) -> None:
+def test_a_buy_over_the_monthly_cap_needs_a_second_confirm(
+    call: Any, store: Store, audit: Audit
+) -> None:
     call("PUT", "/limits", {"perOrder": "100000", "perDay": "100000"})
-    assert call("PUT", "/profile/rules", {"value": {"per_trade_aud": "100000"}})[0] == 200  # noqa: PLR2004
+    profile.save_section(store, audit, "rules", {"per_trade_aud": "100000"}, now=NOW)
     assert call("POST", "/orders", buy())[0] == 200  # noqa: PLR2004 - no cap set: not checked
-    status, page = call("PUT", "/profile/rules", {"value": {"monthly_deposit_cap_aud": "200"}})
-    assert (status, page["version"]) == (200, 2)
+    page = profile.save_section(store, audit, "rules", {"monthly_deposit_cap_aud": "200"}, now=NOW)
+    assert page["version"] == 2  # noqa: PLR2004
     big = buy(clientId="a1b2c3d4-0000-0000-0000-000000000002", amount="0.002")
     status, held_back = call("POST", "/orders", big)  # A$270 on top of A$135 this month
     assert status == 409  # noqa: PLR2004
@@ -366,7 +368,7 @@ def test_the_page_routes_import_export_versions_and_command(call: Any) -> None:
     assert page["profile"]["identity"]["name"] == "Sam"
     assert call("GET", "/profile/export")[1]["markdown"].startswith("# Profile")
     assert call("GET", "/profile/versions")[1]["versions"][0]["summary"] == "Imported from Markdown"
-    assert call("GET", "/profile/versions/1")[1]["profile"]["identity"]["name"] == "Sam"
+    assert "- Name: Sam" in call("GET", "/profile/versions/1")[1]["markdown"]
     assert call("GET", "/profile/versions/9")[0] == 400  # noqa: PLR2004
     assert call("POST", "/profile/restore", {"n": "x"})[0] == 400  # noqa: PLR2004
 
@@ -398,7 +400,7 @@ def test_outputs_go_out_of_date_when_the_profile_moves_on(
     status, recap = call("POST", "/recaps")
     assert (status, recap["recap"]["source"], recap["recap"]["profileVersion"]) == (200, "model", 1)
     assert call("GET", "/profile")[1]["recap"]["outOfDate"] is False
-    call("PUT", "/profile/quotes", {"value": [{"text": "Stay the course."}]})
+    profile.save_section(store, audit, "lessons", [{"text": "Stay the course."}], now=NOW + 9)
     assert call("GET", "/profile")[1]["recap"]["outOfDate"] is True
     assert call("GET", "/recaps")[1]["recaps"][0]["outOfDate"] is True
 

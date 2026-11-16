@@ -369,10 +369,12 @@ export function FileNote({
   name,
   file,
   version,
+  bar = false,
 }: {
   name: string;
   file: MarkdownFile | null;
   version: number;
+  bar?: boolean; // the Profile also changes through its command bar (decision 62)
 }) {
   return (
     <>
@@ -382,7 +384,8 @@ export function FileNote({
         </p>
       )}
       <p className="muted pf-file-note">
-        To change it, ask Claude Code to edit <code>local/{name}</code>.
+        To change it, {bar ? "use the command bar, or " : ""}ask Claude Code to edit{" "}
+        <code>local/{name}</code>.
       </p>
     </>
   );

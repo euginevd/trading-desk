@@ -9,6 +9,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
+from api import profile_v2
 from api.profile import (
     LISTS,
     LOCK_LABELS,
@@ -84,7 +85,12 @@ def _record(fields: tuple[Field, ...], data: dict[str, Any]) -> list[str]:
 
 
 def export(doc: dict[str, Any], version: int, now_ms: int, *, age_only: bool = False) -> str:
-    """The whole Profile; `age_only` gives an age in place of the date of birth, for a model."""
+    """The whole Profile; `age_only` gives an age in place of the date of birth, for a model.
+    A v2 document is its own file (decision 62)."""
+    if doc.get("markdown"):
+        if age_only:
+            return profile_v2.for_agents(doc["markdown"], datetime.now(SYDNEY).date())
+        return str(doc["markdown"])
     when = datetime.fromtimestamp(now_ms / 1000, UTC).astimezone(SYDNEY)
     lines = [
         "# Profile",
@@ -193,6 +199,8 @@ def parse(text: str) -> dict[str, Any]:
     """A document from the Markdown `export` writes; raises Refused when it isn't that shape."""
     if len(text) > MAX_IMPORT:
         raise Refused("That file is too big for a profile.")
+    if profile_v2.is_v2(text):
+        return clean(profile_v2.parse(text))
     if not text.lstrip().startswith("# Profile"):
         raise Refused("Start the file with “# Profile”, as an export does.")
     found, more = _split(text)

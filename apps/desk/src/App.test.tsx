@@ -191,6 +191,16 @@ describe("portfolio page", () => {
     window.location.hash = "#/portfolio"; // today's content, moved off the Dashboard
   });
 
+  it("reads the balances again when the tab comes back into view", async () => {
+    const fetch = serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
+    render(<App />);
+    expect((await screen.findAllByText("A$62,762")).length).toBeGreaterThan(0);
+    const reads = () => fetch.mock.calls.filter(([url]) => url.endsWith("/portfolio")).length;
+    const before = reads();
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(reads()).toBe(before + 1));
+  });
+
   it("shows Binance and the TAO wallet, the total and the value line", async () => {
     serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
     render(<App />);

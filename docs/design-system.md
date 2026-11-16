@@ -45,6 +45,7 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 13a. Rule-break banner (red, Keep to my rules first, Place anyway (logged) set apart), an Out of date tag (`wait`), and agent cards with an initials avatar, the Coordinator leading (decisions 58, 59).
 13b. The trading agent: a run as a numbered timeline (done, working, skipped, failed, each with its model and cost), a ticket edged in `accent`, and Agent and Profile versions stamped on every call (decision 60).
 13c. Reader: a Markdown file (profile.md, trade.md) opens full page, read-only, with Contents down the side and a 760px reading column; a "Label: value" line reads as a label and value, "Not set" in `dim` (decision 61).
+13d. Profile widgets: one column of cards (12px radius, thin border, the same head), each a big figure, a muted line of its parts, a track from 0 to the goal with ticks (passed `up`, next dashed `wait`, the goal flagged `accent`) and a You marker, then a "This leg" bar; the summary's four tiles sit 2×2 below 1100px. Badges pair a word with a mark: On track, Bought this week and Full in `up`; Behind, Not bought yet, short and open items in `wait`; the risk level in `down`. A proposed change shows as a line diff (removed on `down-soft`, added on `up-soft`) and saves only on Accept (decision 62).
 
 ## Not this
 

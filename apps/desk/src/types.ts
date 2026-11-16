@@ -719,7 +719,6 @@ export interface Coach {
   message: {
     lines: string[];
     coach: string;
-    quote: { text: string; author: string } | null;
     link: "trade" | null;
     source: "plain" | "model";
     outOfDate?: boolean;
@@ -747,10 +746,6 @@ export interface ProfileHolding {
 export interface ProfileLesson {
   year: string | null;
   text: string;
-}
-export interface ProfileQuote {
-  text: string;
-  author: string | null;
 }
 export interface ProfileRules {
   monthly_deposit_cap_aud: Num;
@@ -788,8 +783,8 @@ export interface ProfileDoc {
   rules: ProfileRules;
   holdings: ProfileHolding[];
   lessons: ProfileLesson[];
-  quotes: ProfileQuote[];
   additional_info: string;
+  markdown: string;
   locks: { goals: boolean; min_cash: boolean; deposit_cap: boolean };
 }
 export type ProfileSection = Exclude<keyof ProfileDoc, "locks">;
@@ -806,7 +801,9 @@ export interface ProfileSuggestion {
   time: number;
   author: string;
   baseVersion: number;
-  sections: Partial<ProfileDoc>;
+  sections?: Partial<ProfileDoc>;
+  markdown?: string;
+  diff?: DiffLine[];
   changes: ProfileChange[];
   summary: string;
   reason: string;
@@ -855,10 +852,109 @@ export interface ProfilePage {
     checks: Partial<Record<keyof ProfileRules, { status: CheckStatus; text: string }>>;
     foundations: Record<string, FoundationStatus>;
   };
+  board: ProfileBoard | null;
   suggestions: ProfileSuggestion[];
   planner: PlannerReview | null;
   recap: Recap | null;
 }
+
+// profile.md v2's four widgets (decision 62), worked out by the api. Money is whole A$ or US$.
+export interface DiffLine {
+  kind: "same" | "del" | "add" | "gap";
+  text: string;
+}
+export interface BoardTick {
+  usd?: string;
+  aud?: string;
+  year?: number;
+  state: "passed" | "next" | "";
+}
+export interface BoardSummary {
+  name: string | null;
+  age: number | null;
+  subline: string;
+  risk: string | null;
+  goalPct: Num;
+  dca: {
+    weeklyAud: Num;
+    day: string | null;
+    extraAud: Num;
+    fearGreedBelow: number | null;
+    maxMonthAud: Num;
+  };
+  split: string[];
+  splitLabel: string | null;
+  cash: { totalAud: Num; floorAud: Num; below: boolean };
+  chips: string[];
+  openItems: string[];
+  lesson: { title: string; story: string; lesson: string } | null;
+}
+export interface BoardRoad {
+  known: boolean;
+  goalUsd: string;
+  goalDate: string;
+  ticks: BoardTick[];
+  then: { usd: string; year: number } | null;
+  totalUsd?: string;
+  totalAud?: string;
+  parts?: { taoAud: string; binanceAud: string; emergencyAud: string };
+  pct?: Num;
+  onTrack?: boolean;
+  pathUsd?: Num;
+  leg?: {
+    fromUsd: string;
+    toUsd: string;
+    year: number;
+    pct: Num;
+    toGoUsd: string;
+    monthsLeft: number;
+  } | null;
+  thenPct?: Num;
+}
+export interface BoardStack {
+  known: boolean;
+  target: string;
+  weeklyAud: Num;
+  day: string | null;
+  bought: boolean | null;
+  ticks: string[];
+  held?: string;
+  pct?: Num;
+  valueAud?: Num;
+  priceAud?: Num;
+  next?: Num;
+  leg?: { from: string; to: string; pct: Num; toGo: string; weeksLeft: number | null } | null;
+  projected?: string | null;
+}
+export interface BoardCash {
+  totalAud: string;
+  floorAud: string;
+  pct: Num;
+  parkedAud: string;
+  emergencyAud: string;
+  parkedPct: Num;
+  emergencyPct: Num;
+  monthlyAud: Num;
+  shortAud: string;
+  full: boolean;
+  ticks: BoardTick[];
+  projected: string | null;
+  emergency: { targetAud: Num; pct: Num; toGoAud: Num; months: number } | null;
+}
+export interface ProfileBoard {
+  summary: BoardSummary;
+  road: BoardRoad | null;
+  stack: BoardStack | null;
+  cash: BoardCash | null;
+  fx: { audPerUsd: Num; date: string | null };
+}
+export interface ProfileVersionDetail extends ProfileVersion {
+  markdown: string;
+  diff: DiffLine[];
+}
+export type CommandReply =
+  | { kind: "answer"; answer: string; question: string; profileVersion: number }
+  | { kind: "change"; suggestion: ProfileSuggestion };
 export interface ProfileVersion {
   n: number;
   time: number;

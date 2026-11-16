@@ -32,7 +32,6 @@ const down: Coach = {
   message: {
     lines: ["Days like this are hard to watch, and they pass.", "One of your rules needs a look."],
     coach: "A$1,800 left under your cap.",
-    quote: { text: "Opportunities always come back.", author: "Me" },
     link: null,
     source: "plain",
   },
@@ -123,7 +122,6 @@ describe("the coach Dashboard", () => {
     expect(screen.getByText(/Your portfolio is down 12\.4% today/)).toBeTruthy();
     expect(screen.getByText("(−A$8,340)")).toBeTruthy();
     expect(screen.getByText(/Sharp down/)).toBeTruthy();
-    expect(screen.getByText(/Opportunities always come back/)).toBeTruthy();
     await waitFor(() => expect(screen.getByText("A hard day, and it passes.")).toBeTruthy());
     expect(writeCoach).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/Out of date/)).toBeNull();

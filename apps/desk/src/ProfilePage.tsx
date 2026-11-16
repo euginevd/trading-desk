@@ -1,24 +1,33 @@
-// The Profile (decisions 58 and 61): the owner's Investment Policy Statement and their trading
-// agent, each a Markdown file in local/ that the owner changes by asking Claude Code. The desk only
-// reads them: it shows where they stand, and opens each file in a reader.
-import { type ReactNode, useCallback, useEffect, useState } from "react";
-import { getProfileFile, getProfilePage, getProfileVersions } from "./api";
+// The Profile (decisions 58, 61 and 62): the owner's plan, profile.md, and the trading agent who
+// works inside it. The policy tab is a short motivation page: four widgets worked out from
+// profile.md and the live portfolio, the file one click away, and a command bar that changes it
+// only through a diff and Accept.
+import { useCallback, useEffect, useState } from "react";
 import AgentProfile from "./AgentProfile";
+import {
+  getProfileFile,
+  getProfilePage,
+  getProfileVersion,
+  getProfileVersions,
+  restoreProfile,
+} from "./api";
 import { dateTime } from "./format";
-import { Reader, useMarkdownFile, FileNote } from "./Markdown";
-import { audText, dayOf, dayText } from "./profileFields";
-import type { CheckStatus, ProfilePage as Page, ProfileVersion } from "./types";
+import { FileNote, Reader, useMarkdownFile } from "./Markdown";
+import Board from "./ProfileBoard";
+import CommandBar, { DiffView } from "./ProfileCommand";
+import { dayOf } from "./profileFields";
+import type { ProfilePage as Page, ProfileVersion, ProfileVersionDetail } from "./types";
 import "./profile.css";
 
 const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 type Tab = "policy" | "agent";
 const TABS: { tab: Tab; label: string }[] = [
-  { tab: "policy", label: "My policy" },
+  { tab: "policy", label: "My plan" },
   { tab: "agent", label: "Trading agent" },
 ];
 
-// Two tabs: the owner's policy, and the trading agent who works inside it (#/profile?tab=agent).
+// Two tabs: the owner's plan, and the trading agent who works inside it (#/profile?tab=agent).
 export default function ProfilePage() {
   const [tab, setTab] = useState<Tab>(() =>
     window.location.hash.includes("tab=agent") ? "agent" : "policy",
@@ -64,6 +73,11 @@ function Policy() {
     setError(null);
     fetchPage();
   };
+  const saved = (next?: Page) => {
+    if (next) setPage(next);
+    fetchPage(); // the widgets and the file follow the new version
+    doc.retry();
+  };
 
   if (error && !page) {
     return (
@@ -80,54 +94,61 @@ function Policy() {
   if (!page) {
     return (
       <div className="pf-page" aria-busy="true">
-        <div className="pf-strip">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="card pf-skeleton" />
-          ))}
-        </div>
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="card pf-skeleton" />
+        ))}
         <p className="muted">Loading your Profile…</p>
       </div>
     );
   }
 
   const stamp = page.version && page.time ? `v${page.version} · ${dayOf(page.time)}` : null;
+  const fx = page.board?.fx;
+  const rate = fx?.audPerUsd ? `US$1 = A$${Number(fx.audPerUsd).toFixed(4)}` : null;
+  const pending = [...page.suggestions].reverse().find((s) => s.markdown) ?? null;
   return (
     <>
       <div className="pf-title">
         {stamp ? (
-          <button
-            type="button"
-            className="pf-version"
-            onClick={() => setHistory(!history)}
-            aria-expanded={history}
-            aria-label={`Version history, now v${page.version}`}
-          >
+          <span className="pf-version" aria-label={`Version ${page.version}`}>
             {stamp}
-          </button>
+          </span>
         ) : (
           <span className="muted">No versions yet</span>
         )}
+        <span className="pf-lead">Your plan. Every agent follows it.</span>
         <span className="pf-spacer" />
+        <button type="button" onClick={() => setHistory(!history)} aria-expanded={history}>
+          History
+        </button>
         <button type="button" className="primary" onClick={() => doc.setOpen(true)}>
-          Show Profile
+          View profile.md
         </button>
       </div>
-      <FileNote name="profile.md" file={doc.file} version={page.version} />
-      {history && <History current={page.version} onClose={() => setHistory(false)} />}
+      <FileNote name="profile.md" file={doc.file} version={page.version} bar />
+      {history && (
+        <History current={page.version} onClose={() => setHistory(false)} onRestored={saved} />
+      )}
+      <CommandBar pending={pending} onSaved={saved} />
       {!page.live.known && (
         <p className="pf-live-off" role="alert">
-          Live figures couldn't be read, so totals and checks that need Binance or the wallet show
-          —.{" "}
+          Live figures couldn&apos;t be read, so the TAO and Binance figures show —.{" "}
           <button type="button" className="pf-link" onClick={load}>
             Try again
           </button>
         </p>
       )}
-      <Strip page={page} />
+      {page.board ? (
+        <Board board={page.board} />
+      ) : (
+        <p className="muted">
+          profile.md isn&apos;t in the numbered v2 shape yet, so there are no widgets to show.
+        </p>
+      )}
       {doc.open && (
         <Reader
           title="Profile"
-          meta={`${stamp ?? "Not saved yet"} · read-only`}
+          meta={[stamp ?? "Not saved yet", rate].filter(Boolean).join(" · ")}
           markdown={doc.file?.markdown ?? null}
           error={doc.error}
           fileName="profile.md"
@@ -139,10 +160,21 @@ function Policy() {
   );
 }
 
-// Every version of profile.md the desk has read, newest first. Read only.
-function History({ current, onClose }: { current: number; onClose: () => void }) {
+// Every version, newest first: what changed, the diff, and Restore, which saves an old version
+// as a new one (history is never rewritten).
+function History({
+  current,
+  onClose,
+  onRestored,
+}: {
+  current: number;
+  onClose: () => void;
+  onRestored: (page: Page) => void;
+}) {
   const [versions, setVersions] = useState<ProfileVersion[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [open, setOpen] = useState<ProfileVersionDetail | null>(null);
+  const [busy, setBusy] = useState(false);
   const fetchVersions = useCallback(() => {
     getProfileVersions().then(
       (r) => setVersions(r.versions),
@@ -150,10 +182,37 @@ function History({ current, onClose }: { current: number; onClose: () => void })
     );
   }, []);
   useEffect(() => fetchVersions(), [fetchVersions, current]);
+
+  const show = (n: number) => {
+    if (open?.n === n) {
+      setOpen(null);
+      return;
+    }
+    getProfileVersion(n).then(setOpen, (e: unknown) =>
+      setError(message(e, "That version couldn't be read.")),
+    );
+  };
+  const restore = (n: number) => {
+    if (!window.confirm(`Restore v${n}? It's saved as a new version; nothing is lost.`)) return;
+    setBusy(true);
+    restoreProfile(n).then(
+      (page) => {
+        setBusy(false);
+        setOpen(null);
+        onRestored(page);
+      },
+      (e: unknown) => {
+        setBusy(false);
+        setError(message(e, "That version couldn't be restored."));
+      },
+    );
+  };
+
   return (
     <aside className="pf-drawer card" aria-label="Version history">
       <div className="pf-head">
         <h2>History</h2>
+        <span className="pf-spacer" />
         <button type="button" className="pf-pencil" onClick={onClose} aria-label="Close history">
           <span aria-hidden="true">✕</span>
         </button>
@@ -163,6 +222,7 @@ function History({ current, onClose }: { current: number; onClose: () => void })
           {error}{" "}
           <button
             type="button"
+            className="pf-link"
             onClick={() => {
               setError(null);
               fetchVersions();
@@ -178,112 +238,44 @@ function History({ current, onClose }: { current: number; onClose: () => void })
         <ol className="pf-versions">
           {versions.map((v) => (
             <li key={v.n}>
-              <strong>
-                v{v.n}
-                {v.n === current && " · current"}
-              </strong>
-              <span className="muted">{dateTime(v.time)}</span>
-              <span>{v.author}</span>
-              <span>
-                {v.summary}
-                {v.reason && <span className="muted"> · “{v.reason}”</span>}
-              </span>
+              <div className="pf-version-row">
+                <strong>
+                  v{v.n}
+                  {v.n === current && " · current"}
+                </strong>
+                <span className="muted">
+                  {dateTime(v.time)} · {v.author}
+                </span>
+                <span className="pf-version-what">
+                  {v.summary}
+                  {v.reason && <span className="muted"> · {v.reason}</span>}
+                </span>
+                <span className="pf-version-actions">
+                  <button
+                    type="button"
+                    className="pf-link"
+                    onClick={() => show(v.n)}
+                    aria-expanded={open?.n === v.n}
+                  >
+                    {open?.n === v.n ? "Hide diff" : "Diff"}
+                  </button>
+                  {v.n !== current && (
+                    <button
+                      type="button"
+                      className="pf-link"
+                      onClick={() => restore(v.n)}
+                      disabled={busy}
+                    >
+                      Restore
+                    </button>
+                  )}
+                </span>
+              </div>
+              {open?.n === v.n && <DiffView lines={open.diff} label={`What changed in v${v.n}`} />}
             </li>
           ))}
         </ol>
       )}
     </aside>
-  );
-}
-
-// Status is a word and a mark, never colour alone (code-standards 26).
-const CHECK: Record<CheckStatus, { mark: string; tone: string }> = {
-  ok: { mark: "✓", tone: "ok" },
-  attention: { mark: "▲", tone: "warn" },
-  broken: { mark: "✕", tone: "bad" },
-  unset: { mark: "–", tone: "dim" },
-};
-
-function CheckTag({ status, children }: { status: CheckStatus; children: ReactNode }) {
-  return (
-    <span className={`pf-tag ${CHECK[status].tone}`}>
-      <span aria-hidden="true">{CHECK[status].mark}</span> {children}
-    </span>
-  );
-}
-
-// Where the owner stands: a placeholder for the dashboard the owner designs next.
-function Strip({ page }: { page: Page }) {
-  const s = page.live.strip;
-  const known = page.live.known;
-  const goal = known ? s.nextGoal : null;
-  return (
-    <section className="pf-strip" aria-label="Where you stand">
-      <div className="card pf-tile">
-        <span className="muted">Total now</span>
-        <span className="pf-big">{known ? audText(s.totalAud) : "—"}</span>
-        <span className="muted">
-          {known ? audText(s.totalUsd, "USD") : "Live figures unavailable"}
-        </span>
-      </div>
-      <div className="card pf-tile">
-        <span className="muted">
-          {goal
-            ? `Next goal · ${audText(goal.amount, goal.currency)}${goal.date ? ` by ${dayText(goal.date)}` : ""}`
-            : "Next goal"}
-        </span>
-        <span className="pf-big">{goal ? `${goal.pct}%` : known ? "Not set" : "—"}</span>
-        {goal && <Meter pct={Number(goal.pct)} label="Progress to the next goal" tone="ok" />}
-      </div>
-      <div className="card pf-tile">
-        <span className="muted">Cash floor</span>
-        <span className={`pf-big ${s.cash.status === "attention" ? "warn" : ""}`}>
-          {s.cash.floor ? `${audText(s.cash.now)} / ${audText(s.cash.floor)}` : "Not set"}
-        </span>
-        {s.cash.pct && (
-          <Meter
-            pct={Number(s.cash.pct)}
-            label="Cash against the floor"
-            tone={s.cash.status === "ok" ? "ok" : "warn"}
-          />
-        )}
-        {s.cash.status === "attention" && <CheckTag status="attention">Below the floor</CheckTag>}
-      </div>
-      <div className="card pf-tile">
-        <span className="muted">Bought this month</span>
-        <span className={`pf-big ${s.month.status === "broken" ? "bad" : ""}`}>
-          {s.month.cap
-            ? `${audText(s.month.spent)} / ${audText(s.month.cap)}`
-            : audText(s.month.spent)}
-        </span>
-        {s.month.pct && (
-          <Meter
-            pct={Number(s.month.pct)}
-            label="This month's buys against the cap"
-            tone={
-              s.month.status === "broken" ? "bad" : s.month.status === "attention" ? "warn" : "ok"
-            }
-          />
-        )}
-        {!s.month.cap && <span className="pf-hint">No monthly cap set</span>}
-        {s.month.status === "broken" && <CheckTag status="broken">Over the cap</CheckTag>}
-      </div>
-    </section>
-  );
-}
-
-function Meter({ pct, label, tone }: { pct: number; label: string; tone: string }) {
-  const shown = Math.max(0, Math.min(100, pct));
-  return (
-    <div
-      className={`pf-meter ${tone}`}
-      role="progressbar"
-      aria-label={label}
-      aria-valuenow={Math.round(shown)}
-      aria-valuemin={0}
-      aria-valuemax={100}
-    >
-      <i style={{ width: `${shown}%` }} />
-    </div>
   );
 }
