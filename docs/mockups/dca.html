@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DCA book mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<!-- Mockup for TODO 11 (the DCA book). Every figure here is made up (known-mistakes 7). -->
+<style>
+:root {
+  --bg: #0a0f12; --bar: #0b1215; --panel: #0f171b; --panel-2: #131d22;
+  --line: #1b272d; --line-2: #24333a; --text: #e6ecef; --muted: #8c9aa3; --dim: #5e6c74;
+  --accent: #50d2c1; --accent-ink: #04110f; --accent-soft: rgba(80,210,193,.1);
+  --up: #2ebd85; --down: #f0616d; --up-soft: rgba(46,189,133,.12); --down-soft: rgba(240,97,109,.12);
+  --wait: #e8b04b; --wait-soft: rgba(232,176,75,.12); --body: #c3cdd2;
+  --r: 10px; --ease: cubic-bezier(.2,0,0,1);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--body); }
+body { font: 13px/1.5 Inter, system-ui, sans-serif; font-feature-settings: "tnum"; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); } .dim { color: var(--dim); }
+.up { color: var(--up); } .down { color: var(--down); } .wait { color: var(--wait); } .acc { color: var(--accent); }
+button { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 7px; padding: 7px 12px; cursor: pointer; transition: border-color 120ms var(--ease); }
+button:hover { border-color: #33464f; }
+button:focus-visible, input:focus-visible, a:focus-visible, .tick:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button.ghost { background: transparent; }
+a { color: var(--accent); text-decoration: none; }
+input { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line-2); border-radius: 7px; padding: 7px 10px; width: 90px; }
+
+/* mockup chrome */
+.mk { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--bar); border-bottom: 1px solid var(--line); }
+.mk b { color: var(--text); margin-right: 10px; font-weight: 600; }
+.mk [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.mk .sp { flex: 1; }
+main { max-width: 1320px; margin: 0 auto; padding: 28px 24px 64px; }
+.screen[hidden] { display: none; }
+
+h1 { color: var(--text); font-size: 30px; font-weight: 500; letter-spacing: -.02em; line-height: 1.25; margin: 0 0 6px; max-width: 30ch; }
+h2 { color: var(--text); font-size: 15px; font-weight: 600; margin: 0 0 10px; }
+.said { font-size: 14px; color: var(--muted); margin: 0 0 22px; max-width: 70ch; }
+
+/* ---------- Dashboard widget ---------- */
+.dash-ctx { color: var(--dim); font-size: 12px; margin-bottom: 18px; }
+.dca { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 18px 0 20px; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: 32px; }
+.dca-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+.dca-head b { color: var(--text); font-size: 15px; font-weight: 600; }
+.dca-line { font-size: 18px; color: var(--text); line-height: 1.4; margin: 0 0 18px; max-width: 34ch; }
+.steps { list-style: none; margin: 0; padding: 0; position: relative; }
+.steps::before { content: ""; position: absolute; left: 5px; top: 8px; bottom: 8px; width: 1px; background: var(--line-2); }
+.steps li { position: relative; padding: 0 0 12px 24px; display: flex; gap: 12px; }
+.steps li::before { content: ""; position: absolute; left: 0; top: 4px; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--line-2); background: var(--bg); }
+.steps li.done::before { background: var(--accent); border-color: var(--accent); }
+.steps li.now::before { border-color: var(--wait); box-shadow: 0 0 0 3px var(--wait-soft); }
+.steps .when { width: 92px; flex: none; color: var(--muted); }
+.steps .what { color: var(--body); }
+.steps li.done .what { color: var(--text); }
+.ask { margin-top: 14px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; color: var(--muted); }
+.unit { position: relative; display: inline-flex; align-items: center; }
+.unit input { padding-right: 48px; width: 120px; }
+.unit span { position: absolute; right: 10px; color: var(--dim); font-size: 12px; }
+
+table { border-collapse: collapse; width: 100%; }
+th { text-align: left; font-weight: 500; font-size: 11.5px; color: var(--muted); padding: 0 12px 8px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 10px 12px 10px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td.r, th.r { text-align: right; }
+tr:last-child td { border-bottom: 0; }
+.coin { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 500; }
+.mark { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 9px; font-weight: 700; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); }
+.tag { display: inline-block; font-size: 11.5px; padding: 1px 7px; border-radius: 5px; }
+.tag.fill { background: var(--up-soft); color: var(--up); }
+.tag.open { background: var(--panel-2); color: var(--muted); }
+.tag.sell { background: var(--down-soft); color: var(--down); }
+.tag.wait { background: var(--wait-soft); color: var(--wait); }
+.foot { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; color: var(--muted); }
+
+/* ---------- DCA book ---------- */
+.book-top { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; margin-bottom: 18px; }
+.totals { display: flex; gap: 28px; }
+.totals div { display: grid; }
+.totals small { color: var(--muted); font-size: 11.5px; }
+.totals b { color: var(--text); font-size: 18px; font-weight: 500; }
+
+/* The memorable element: three years as 156 weekly ticks. */
+.years { margin: 8px 0 30px; }
+.years-bar { display: grid; grid-template-columns: repeat(156, minmax(0, 1fr)); gap: 2px; height: 34px; align-items: end; }
+.tick { min-width: 0; height: 14px; background: var(--line-2); border-radius: 1px; transform-origin: bottom; }
+.tick.done { background: var(--accent); height: 22px; }
+.tick.trimmed { background: var(--wait); height: 30px; }
+.tick.now { background: transparent; outline: 1.5px solid var(--accent); height: 26px; }
+.tick.year { margin-left: 4px; }
+.years-axis { display: flex; justify-content: space-between; color: var(--dim); font-size: 11.5px; margin-top: 6px; }
+.years-said { color: var(--muted); margin-top: 8px; min-height: 20px; }
+@media (prefers-reduced-motion: no-preference) {
+  .years-bar.go .tick.done { animation: grow 420ms var(--ease) both; animation-delay: calc(var(--i) * 18ms); }
+  @keyframes grow { from { transform: scaleY(.2); opacity: .3; } }
+  .row-new { animation: flash 900ms var(--ease); }
+  @keyframes flash { from { background: var(--accent-soft); } }
+}
+
+.trim { border: 1px solid var(--line-2); border-left: 3px solid var(--wait); border-radius: var(--r); padding: 14px 16px; margin: 0 0 28px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: center; }
+.trim p { margin: 0; }
+.trim .t1 { color: var(--text); font-size: 14px; margin-bottom: 4px; }
+.trim .figs { display: flex; gap: 20px; flex-wrap: wrap; color: var(--muted); margin-top: 6px; }
+.trim .figs b { color: var(--text); font-weight: 500; }
+.trim .acts { display: flex; gap: 8px; }
+
+.pos td:first-child { padding-left: 0; }
+.pnl-bar { display: inline-block; width: 64px; height: 4px; background: var(--line-2); border-radius: 2px; vertical-align: middle; margin-left: 8px; position: relative; }
+.pnl-bar i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.section { margin-top: 32px; }
+.section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.filters button { padding: 4px 10px; font-size: 12px; }
+.filters [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.id { color: var(--muted); font-size: 12px; }
+.scroll { overflow-x: auto; }
+.note { color: var(--dim); font-size: 12px; margin-top: 10px; }
+
+/* states */
+.states { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; }
+.state { border-top: 1px solid var(--line); padding-top: 14px; }
+.state h3 { color: var(--muted); font-size: 12px; font-weight: 500; margin: 0 0 10px; }
+.sk { height: 12px; border-radius: 4px; background: var(--panel-2); margin: 8px 0; }
+.err { color: var(--down); }
+
+@media (max-width: 900px) {
+  .dca { grid-template-columns: 1fr; gap: 20px; }
+  .book-top { grid-template-columns: 1fr; }
+  .trim { grid-template-columns: 1fr; }
+  .states { grid-template-columns: 1fr; }
+}
+@media (max-width: 720px) {
+  main { padding: 20px 16px 48px; }
+  h1 { font-size: 24px; }
+  .totals { gap: 18px; flex-wrap: wrap; }
+  .years-bar { gap: 1px; }
+  .tick.year { margin-left: 0; }
+  .hide-sm { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="mk" role="toolbar" aria-label="Mockup screens">
+  <b>DCA book mockup</b>
+  <button type="button" data-show="dash" aria-pressed="true">Dashboard widget</button>
+  <button type="button" data-show="book" aria-pressed="false">DCA book page</button>
+  <button type="button" data-show="states" aria-pressed="false">Loading, empty, error</button>
+  <span class="sp"></span>
+  <span class="dim">Made-up figures. Saturday 26 Dec 2026, week 6 of 156</span>
+</div>
+
+<main>
+<!-- ======================= DASHBOARD WIDGET ======================= -->
+<section class="screen" id="dash" aria-label="Dashboard widget">
+  <p class="dash-ctx">On the Dashboard, under the day's sentence and the week rail.</p>
+  <div class="dca">
+    <div>
+      <div class="dca-head"><b>Weekly DCA</b><span class="muted">dca-agent</span></div>
+      <p class="dca-line">This week's 600 USDC: <span class="acc">4 of 6</span> limits filled. The other two buy at market Monday 7pm.</p>
+      <ol class="steps">
+        <li class="done"><span class="when num">Fri 5pm</span><span class="what">Deposit reminder sent</span></li>
+        <li class="done"><span class="when num">Fri 6:12pm</span><span class="what">678.40 USDC landed. 600 to the DCA, 78.40 to the trading pot</span></li>
+        <li class="done"><span class="when num">Fri 6:30pm</span><span class="what">6 limits approved and placed</span></li>
+        <li class="done"><span class="when num">Sat 2:05am</span><span class="what">BTC, ETH, SOL and ZEC filled</span></li>
+        <li class="now"><span class="when num">Mon 7pm</span><span class="what">Close-out: BTC 62,742.60 and HYPE 63.87 buy at market if still open</span></li>
+      </ol>
+      <div class="ask">
+        <span>I have</span>
+        <label class="unit"><span class="sr" hidden>Amount</span><input inputmode="decimal" value="100" aria-label="Amount to place"><span>USDC</span></label>
+        <span>to place.</span>
+        <button type="button" id="askBtn">Ask where it should go</button>
+      </div>
+      <p class="muted" id="askOut" style="margin:10px 0 0" aria-live="polite"></p>
+    </div>
+    <div>
+      <table aria-label="This week's orders">
+        <thead><tr><th>Coin</th><th class="r">Limit</th><th class="r">USDC</th><th class="r hide-sm">Odds</th><th>State</th></tr></thead>
+        <tbody id="weekRows"></tbody>
+      </table>
+      <div class="foot"><span>Next Friday's reminder: 1 Jan, 5pm</span><a href="#book" data-go="book">Open the DCA book</a></div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================= DCA BOOK PAGE ======================= -->
+<section class="screen" id="book" aria-label="DCA book" hidden>
+  <div class="book-top">
+    <div>
+      <h1 id="bookSay">Five positions, week 6 of 156.</h1>
+      <p class="said" id="bookSub"></p>
+    </div>
+    <div class="totals" id="totals"></div>
+  </div>
+
+  <div class="years">
+    <div class="years-bar" id="years" role="img" aria-label="Three years of weekly buys: 5 done, 1 this week, 150 to go"></div>
+    <div class="years-axis"><span>Nov 2026</span><span>Nov 2027</span><span>Nov 2028</span><span>Nov 2029</span></div>
+    <div class="years-said" id="yearsSaid">Hover or focus a week to read it.</div>
+  </div>
+
+  <div class="trim" id="trim">
+    <div>
+      <p class="t1">SOL looks overheated: 4 of 5 signs. Trim 20% and buy it back lower?</p>
+      <p class="muted">Up 34% in 14 days, RSI 79, 2.4 ATR over its 20-day average, funding 0.06% with open interest rising. Fear &amp; Greed 61 (not over 75).</p>
+      <div class="figs">
+        <span>Sell <b class="num">1.17 SOL</b> at <b class="num">96.43</b></span>
+        <span>Buy back at <b class="num">88.61</b> (−8.1%)</span>
+        <span>Saves <b class="num up">9.15 USDC</b> against fees 0.22 and tax about 2.90</span>
+        <span>Buy-back by <b>2 Jan</b>, market at 14 days</span>
+      </div>
+    </div>
+    <div class="acts"><button type="button" class="ghost" id="trimNo">Dismiss</button><button type="button" class="primary" id="trimYes">Review trim SOL</button></div>
+  </div>
+
+  <h2>Positions</h2>
+  <div class="scroll">
+    <table class="pos" aria-label="Positions">
+      <thead><tr><th>Coin</th><th class="r">Quantity</th><th class="r">Avg cost</th><th class="r hide-sm">A$</th><th class="r">Added</th><th class="r">Value</th><th class="r">P&amp;L on added</th><th class="r hide-sm">Realised</th><th class="r hide-sm">Fees</th></tr></thead>
+      <tbody id="posRows"></tbody>
+    </table>
+  </div>
+  <p class="note">Each coin has one position for life, with its own ID (DCA-BTC and so on); every order carries it. Only orders placed from the desk count: buys or sells on Binance outside the desk, transfers to the Ledger and staking are ignored, so the book can hold less or more than your Binance balance. Average cost is the position's; tax parcels (each buy's date and cost, the 12-month discount) are kept on the Tax page. A trim keeps the average; its buy-back lowers it.</p>
+
+  <div class="section">
+    <div class="section-head">
+      <h2 style="margin:0">Every order</h2>
+      <div class="filters" id="filters" role="group" aria-label="Show">
+        <button type="button" aria-pressed="true" data-f="all">All</button>
+        <button type="button" aria-pressed="false" data-f="BTC">BTC</button>
+        <button type="button" aria-pressed="false" data-f="ETH">ETH</button>
+        <button type="button" aria-pressed="false" data-f="SOL">SOL</button>
+        <button type="button" aria-pressed="false" data-f="ZEC">ZEC</button>
+        <button type="button" aria-pressed="false" data-f="HYPE">HYPE</button>
+        <button type="button" aria-pressed="false" data-f="trim">Trims</button>
+      </div>
+    </div>
+    <div class="scroll">
+      <table aria-label="Every order">
+        <thead><tr><th>ID</th><th>Filled</th><th>Coin</th><th>Source</th><th class="r">Price</th><th class="r">Quantity</th><th class="r">USDC</th><th class="r hide-sm">Fee</th></tr></thead>
+        <tbody id="ledger"></tbody>
+      </table>
+    </div>
+    <p class="note">Orders come only from the desk: dca-agent's, or yours from Trade with "Count it in the DCA book" ticked. Nothing is typed in. Export CSV for your accountant.</p>
+  </div>
+</section>
+
+<!-- ======================= STATES ======================= -->
+<section class="screen" id="states" aria-label="States" hidden>
+  <div class="states">
+    <div class="state" aria-busy="true"><h3>Loading</h3><div class="sk" style="width:70%"></div><div class="sk" style="width:45%"></div><div class="sk"></div><div class="sk"></div><div class="sk" style="width:80%"></div></div>
+    <div class="state"><h3>Empty (today, before the first buy)</h3>
+      <p style="color:var(--text);font-size:18px;margin:0 0 8px">No buys in the book yet.</p>
+      <p class="muted" style="margin:0 0 12px">The book starts with your first DCA order. dca-agent proposes this week's on Friday once the USDC lands, or place one yourself from Trade with "Count it in the DCA book" ticked.</p>
+      <button type="button" class="primary">Place a DCA order</button></div>
+    <div class="state"><h3>Error</h3>
+      <p class="err" role="alert" style="margin:0 0 6px">Binance didn't answer, so prices are from 9:42am.</p>
+      <p class="muted" style="margin:0 0 12px">Quantities and costs are from the desk's own records and are right; value and P&amp;L use the older prices.</p>
+      <button type="button">Try again</button></div>
+  </div>
+</section>
+</main>
+
+<script>
+// ---- made-up data (never the owner's) ----
+const RATE = [1.468, 1.472, 1.475, 1.461, 1.466, 1.47];
+const BASE = { BTC: 64100, ETH: 1795, SOL: 70.6, ZEC: 880, HYPE: 66.2 };
+const DRIFT = { BTC: [0, .02, .045, .03, .06, .05], ETH: [0, .01, .05, .04, .07, .06], SOL: [0, .03, .09, .16, .3, .33], ZEC: [0, -.04, -.02, .03, .01, -.01], HYPE: [0, .05, .02, -.03, .04, .06] };
+const SPLIT = [["BTC", 150, 1], ["BTC", 150, 2], ["ETH", 75, 1], ["SOL", 75, 1], ["ZEC", 75, 1], ["HYPE", 75, 1]];
+const NOW = { BTC: 67480, ETH: 1902, SOL: 96.1, ZEC: 868, HYPE: 70.4 };
+const FRI = ["20 Nov", "27 Nov", "4 Dec", "11 Dec", "18 Dec", "25 Dec"];
+const orders = [];
+for (let w = 0; w < 5; w++) {
+  SPLIT.forEach(([c, usdc, n], k) => {
+    const p = +(BASE[c] * (1 + DRIFT[c][w]) * (n === 2 ? .975 : .985)).toFixed(2);
+    const close = (w === 2 && c === "HYPE") || (w === 4 && n === 2);
+    orders.push({ id: `DCA-${c}-W${47 + w}-${n}`, day: FRI[w].replace(/^\d+/, d => +d + (close ? 3 : 1)), coin: c, src: close ? "close-out" : "weekly", price: p, qty: usdc / p, usdc, fee: usdc * .001 });
+  });
+}
+// a named amount in week 3, and a SOL trim in week 4 with its buy-back
+orders.push({ id: "DCA-ETH-W49-A1", day: "8 Dec", coin: "ETH", src: "named amount", price: 1861.37, qty: 100 / 1861.37, usdc: 100, fee: .1 });
+orders.push({ id: "DCA-SOL-W50-T1-SELL", day: "15 Dec", coin: "SOL", src: "trim", price: 84.17, qty: -0.8, usdc: -67.34, fee: .07, link: "T1" });
+orders.push({ id: "DCA-SOL-W51-T1-BUY", day: "19 Dec", coin: "SOL", src: "buy-back", price: 77.83, qty: 0.8, usdc: 62.26, fee: .06, link: "T1" });
+// this week: 4 filled, 2 open
+const week = SPLIT.map(([c, usdc, n]) => {
+  const p = +(BASE[c] * (1 + DRIFT[c][5]) * (n === 2 ? .975 : .985)).toFixed(2);
+  const open = (c === "BTC" && n === 2) || c === "HYPE";
+  return { id: `DCA-${c}-W52-${n}`, coin: c, n, price: c === "BTC" && n === 2 ? 62742.6 : c === "HYPE" ? 63.87 : p, usdc, odds: [69, 40, 56, 60, 58, 0][SPLIT.findIndex(s => s[0] === c && s[2] === n)], open };
+});
+week.filter(o => !o.open).forEach(o => orders.push({ id: o.id, day: "26 Dec", coin: o.coin, src: "weekly", price: o.price, qty: o.usdc / o.price, usdc: o.usdc, fee: o.usdc * .001, isNew: true }));
+
+const f2 = n => n.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fq = n => (+n.toFixed(8)).toLocaleString("en-AU", { maximumFractionDigits: 8 });
+const sign = n => (n > 0 ? "+" : n < 0 ? "−" : "") + f2(Math.abs(n));
+const mark = c => `<span class="coin"><span class="mark">${c.slice(0, 3)}</span>${c}</span>`;
+
+// positions: average cost holds on a sell; a sell books realised P&L
+function positions() {
+  const pos = {};
+  for (const c of Object.keys(BASE)) pos[c] = { qty: 0, cost: 0, added: 0, realised: 0, fees: 0 };
+  for (const o of orders) {
+    const p = pos[o.coin]; p.fees += o.fee;
+    p.added += o.usdc; // net money in: a sale's USDC counts against it, its buy-back adds back
+    if (o.qty > 0) { p.qty += o.qty; p.cost += o.usdc; }
+    else { const avg = p.cost / p.qty, q = -o.qty; p.realised += (o.price - avg) * q; p.cost -= avg * q; p.qty -= q; }
+  }
+  return pos;
+}
+
+function renderWeek() {
+  document.getElementById("weekRows").innerHTML = week.map(o => `<tr>
+    <td>${mark(o.coin)}${o.coin === "BTC" ? ` <span class="dim">${o.n}</span>` : ""}</td>
+    <td class="r num">${f2(o.price)}</td><td class="r num">${f2(o.usdc)}</td>
+    <td class="r num hide-sm">${o.coin === "HYPE" ? '<span class="dim">6 of 8 wk</span>' : o.odds + "%"}</td>
+    <td>${o.open ? '<span class="tag open">Open</span>' : '<span class="tag fill">Filled</span>'}</td></tr>`).join("");
+}
+
+function renderBook() {
+  const pos = positions();
+  let added = 0, value = 0, realised = 0, fees = 0;
+  const rows = Object.entries(pos).map(([c, p]) => {
+    const v = p.qty * NOW[c], pnl = v - p.added, pct = pnl / p.added * 100;
+    added += p.added; value += v; realised += p.realised; fees += p.fees;
+    const w = Math.min(Math.abs(pct) * 2, 50);
+    return `<tr><td>${mark(c)}<div class="id">DCA-${c}, open since 20 Nov 2026</div></td><td class="r num">${fq(p.qty)}</td><td class="r num">${f2(p.cost / p.qty)}</td>
+      <td class="r num muted hide-sm">${f2(p.cost / p.qty * 1.468)}</td><td class="r num">${f2(p.added)}</td><td class="r num">${f2(v)}</td>
+      <td class="r num ${pnl >= 0 ? "up" : "down"}">${sign(pnl)} <span class="muted">(${sign(pct).replace(".00", "")}%)</span><span class="pnl-bar" aria-hidden="true"><i style="left:50%;width:${w}%;background:var(--${pnl >= 0 ? "up" : "down"});${pnl < 0 ? `transform:translateX(-100%)` : ""}"></i></span></td>
+      <td class="r num hide-sm ${p.realised > 0 ? "up" : "dim"}">${p.realised ? sign(p.realised) : "—"}</td><td class="r num hide-sm muted">${f2(p.fees)}</td></tr>`;
+  });
+  document.getElementById("posRows").innerHTML = rows.join("");
+  const pnl = value - added;
+  const onPlan = orders.filter(o => o.src === "weekly" || o.src === "close-out").reduce((s, o) => s + o.usdc, 0);
+  document.getElementById("bookSay").textContent = `Five positions, week 6 of 156. Up ${f2(pnl / added * 100)}% on what you've put in.`;
+  document.getElementById("bookSub").textContent = `${f2(added)} USDC added since 20 Nov, now worth ${f2(value)}, with ${f2(realised)} taken on one SOL trim. Weekly plan: ${f2(onPlan)} of 93,600 USDC bought.`;
+  document.getElementById("totals").innerHTML = [["Added", f2(added)], ["Value", f2(value)], ["P&L", `<span class="${pnl >= 0 ? "up" : "down"}">${sign(pnl)}</span>`], ["Fees", f2(fees)]]
+    .map(([k, v]) => `<div><small>${k}</small><b class="num">${v}</b></div>`).join("");
+}
+
+function renderLedger(f = "all") {
+  const when = o => Date.parse(`${o.day} ${/Jan/.test(o.day) ? 2027 : 2026}`);
+  const list = orders.filter(o => f === "all" || o.coin === f || (f === "trim" && o.link)).slice().sort((a, b) => when(b) - when(a));
+  document.getElementById("ledger").innerHTML = list.map(o => `<tr class="${o.isNew ? "row-new" : ""}">
+    <td class="id">${o.id}</td><td class="num">${o.day}</td><td>${mark(o.coin)}</td>
+    <td>${o.src === "trim" ? '<span class="tag sell">Trim</span>' : o.src === "buy-back" ? '<span class="tag fill">Buy-back</span>' : o.src === "close-out" ? '<span class="tag wait">Close-out</span>' : `<span class="muted">${o.src[0].toUpperCase() + o.src.slice(1)}</span>`}</td>
+    <td class="r num">${f2(o.price)}</td><td class="r num ${o.qty < 0 ? "down" : ""}">${o.qty < 0 ? "−" : ""}${fq(Math.abs(o.qty))}</td>
+    <td class="r num">${f2(Math.abs(o.usdc))}</td><td class="r num muted hide-sm">${f2(o.fee)}</td></tr>`).join("");
+}
+
+function renderYears() {
+  const el = document.getElementById("years");
+  el.innerHTML = Array.from({ length: 156 }, (_, i) => {
+    const cls = i < 5 ? (i === 3 ? "done trimmed" : "done") : i === 5 ? "now" : "";
+    return `<span class="tick ${cls}${i && i % 52 === 0 ? " year" : ""}" style="--i:${i}" tabindex="${i < 6 ? 0 : -1}" data-w="${i}"></span>`;
+  }).join("");
+  const said = document.getElementById("yearsSaid");
+  el.addEventListener("pointerover", e => tell(e.target)); el.addEventListener("focusin", e => tell(e.target));
+  function tell(t) {
+    const w = +t.dataset.w; if (Number.isNaN(w)) return;
+    said.textContent = w < 5 ? `Week ${w + 1}, ${FRI[w]}: 600 USDC in six orders${w === 3 ? ", and a SOL trim bought back 7.5% lower" : w === 2 ? ", plus 100 USDC you placed in ETH" : ""}.`
+      : w === 5 ? "Week 6, this week: 4 of 6 filled, close-out Monday 7pm." : `Week ${w + 1}: to come.`;
+  }
+  requestAnimationFrame(() => el.classList.add("go"));
+}
+
+// mockup screen switching
+function show(id) {
+  document.querySelectorAll(".screen").forEach(s => (s.hidden = s.id !== id));
+  document.querySelectorAll("[data-show]").forEach(b => b.setAttribute("aria-pressed", b.dataset.show === id));
+  if (id === "book") { const y = document.getElementById("years"); y.classList.remove("go"); void y.offsetWidth; y.classList.add("go"); }
+}
+document.querySelectorAll("[data-show]").forEach(b => b.addEventListener("click", () => show(b.dataset.show)));
+document.querySelector("[data-go]").addEventListener("click", e => { e.preventDefault(); show("book"); });
+document.getElementById("filters").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  document.querySelectorAll("#filters button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  renderLedger(b.dataset.f);
+});
+document.getElementById("askBtn").addEventListener("click", () => {
+  const n = parseFloat(document.querySelector(".ask input").value) || 0;
+  document.getElementById("askOut").innerHTML = n <= 0 ? "Enter an amount in USDC." :
+    `dca-agent: put ${f2(n * .6)} in ZEC (near its 30-day low, 9 points under target) and ${f2(n * .4)} in ETH (at its 20-day average). Skip SOL, it's stretched. <a href="#">Review 2 limits</a>`;
+});
+document.getElementById("trimNo").addEventListener("click", () => (document.getElementById("trim").hidden = true));
+document.getElementById("trimYes").addEventListener("click", e => (e.target.textContent = "Opens the confirm dialog with the tax check"));
+
+renderWeek(); renderBook(); renderLedger(); renderYears();
+</script>
+</body>
+</html>
