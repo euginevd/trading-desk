@@ -133,6 +133,8 @@ def test_a_trim_keeps_the_average_and_its_buy_back_lowers_it() -> None:
 def test_orders_fill_into_the_positions(book: DcaBook) -> None:
     placed = book.place({"coin": "BTC", "spend": "40", "price": "97000.004", "source": "weekly"})
     assert placed["ref"] == "DCA-BTC-26W45-1"
+    tagged = [o for o in demo.EXCHANGE.orders.values() if o.get("clientOrderId")]
+    assert tagged[-1]["clientOrderId"] == "DCA-BTC-26W45-1"  # findable on Binance by its ref
     assert placed["status"] == "open"
     assert placed["price"] == "97000"
     second = book.place({"coin": "BTC", "spend": "20", "kind": "market", "source": "named"})

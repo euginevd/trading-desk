@@ -455,16 +455,13 @@ class Store:
             cursor = self._db.execute(
                 "INSERT INTO dca_orders (ref, coin, side, kind, source, link, week, price, qty, "
                 "spend, client_id, status, aud_rate, created, updated) VALUES (:ref, :coin, "
-                ":side, :kind, :source, :link, :week, :price, :qty, :spend, 'pending', "
+                ":side, :kind, :source, :link, :week, :price, :qty, :spend, :ref, "
                 "'placing', :aud_rate, :created, :created)",
                 order,
             )
-            row_id = int(cursor.lastrowid or 0)
-            # Binance's own id for it, from the row's number: unique, and short enough.
-            self._db.execute(
-                "UPDATE dca_orders SET client_id = ? WHERE id = ?", (f"tdca{row_id}", row_id)
-            )
-        return row_id
+            # Binance keeps the reference as the order's client id (DCA-BTC-26W47-1), so every
+            # order can be found on Binance by it, with or without this database.
+        return int(cursor.lastrowid or 0)
 
     def dca_orders(self) -> list[dict[str, Any]]:
         rows = self._db.execute("SELECT * FROM dca_orders ORDER BY created, id")
