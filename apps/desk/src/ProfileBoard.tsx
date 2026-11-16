@@ -62,7 +62,14 @@ function standing(r: BoardRoad): string {
 }
 
 // The road: the plan as a dashed line over time, milestones on it, and you today.
+const AVG_MONTH = 30.44;
+const monthOf = (day: number) => {
+  const d = new Date(day * 86_400_000);
+  return `${MONTHS[d.getUTCMonth()] ?? ""} ${d.getUTCFullYear()}`;
+};
+
 function RoadChart({ r }: { r: BoardRoad }) {
+  const [at, setAt] = useState<number | null>(null); // the day under the pointer or keyboard
   const first = r.path[0];
   const last = r.path[r.path.length - 1];
   if (!first || !last) return null;
@@ -70,13 +77,84 @@ function RoadChart({ r }: { r: BoardRoad }) {
   const span = days(last.date) - start || 1;
   const top = Number(r.goalUsd) || 1;
   const x = (iso: string) => ((days(iso) - start) / span) * 100;
-  const y = (usd: Num | undefined) => 100 - Math.min(100, ((n(usd) ?? 0) / top) * 100);
+  const y = (usd: Num | number | undefined) => 100 - Math.min(100, ((n(usd) ?? 0) / top) * 100);
   const line = r.path.map((p) => `${x(p.date)},${y(p.usd)}`).join(" ");
   const next = r.leg ? n(r.leg.toUsd) : null;
   const you = r.known ? { left: x(r.today), top: y(r.totalUsd) } : null;
+  const end = days(last.date);
+  const today = days(r.today);
+
+  // The plan's value on any day: straight between the points, as the api's On track check.
+  const planAt = (day: number): number => {
+    const pts = r.path.map((p) => ({ d: days(p.date), v: Number(p.usd) }));
+    const head = pts[0];
+    if (!head || day <= head.d) return head?.v ?? 0;
+    for (let i = 1; i < pts.length; i += 1) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      if (a && b && day <= b.d) return a.v + ((b.v - a.v) * (day - a.d)) / (b.d - a.d || 1);
+    }
+    return pts[pts.length - 1]?.v ?? 0;
+  };
+  // Near today or a milestone, the pointer snaps to it.
+  const snaps = [
+    ...(r.known ? [{ day: today, kind: "today" as const, usd: 0 }] : []),
+    ...r.path
+      .slice(1)
+      .map((p) => ({ day: days(p.date), kind: "stop" as const, usd: Number(p.usd) })),
+  ];
+  const probe = (() => {
+    if (at === null) return null;
+    const near = snaps.find((s) => Math.abs(s.day - at) <= Math.min(span * 0.012, AVG_MONTH / 2));
+    const day = near ? near.day : at;
+    const away = Math.round((day - today) / AVG_MONTH);
+    const when = away > 0 ? `, in ${plural(away, "month")}` : "";
+    const plan = planAt(day);
+    const text =
+      near?.kind === "today"
+        ? `Today: you ${km(r.totalUsd, "US$")}, plan ${km(plan, "US$")}`
+        : near?.kind === "stop"
+          ? `${monthOf(day)}${when}: milestone ${km(near.usd, "US$")}`
+          : `${monthOf(day)}${when}: plan ${km(plan, "US$")}`;
+    const left = ((day - start) / span) * 100;
+    return { left, top: y(near?.kind === "today" ? r.totalUsd : plan), text };
+  })();
+  const move = (day: number) => setAt(Math.max(start, Math.min(end, day)));
+  const keys = (e: React.KeyboardEvent) => {
+    const from = at ?? today;
+    const step: Record<string, number> = { ArrowRight: AVG_MONTH, ArrowLeft: -AVG_MONTH };
+    if (e.key in step) move(from + (step[e.key] ?? 0));
+    else if (e.key === "Home") move(start);
+    else if (e.key === "End") move(end);
+    else if (e.key === "Escape") setAt(null);
+    else return;
+    e.preventDefault();
+  };
   return (
     <figure className="pf-chart" aria-label="Your plan over time, and where you are today">
-      <div className="pf-chart-plot">
+      <div
+        className="pf-chart-plot"
+        tabIndex={0}
+        role="slider"
+        aria-orientation="horizontal"
+        aria-label="Plan over time. Use the arrow keys to move month by month."
+        aria-valuemin={0}
+        aria-valuemax={Math.round(span / AVG_MONTH)}
+        aria-valuenow={Math.round(((at ?? today) - start) / AVG_MONTH)}
+        aria-valuetext={probe?.text ?? `Today: you ${km(r.totalUsd, "US$")}`}
+        onPointerMove={(e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          move(start + ((e.clientX - box.left) / (box.width || 1)) * span);
+        }}
+        onPointerDown={(e) => {
+          const box = e.currentTarget.getBoundingClientRect();
+          move(start + ((e.clientX - box.left) / (box.width || 1)) * span);
+        }}
+        onPointerLeave={() => setAt(null)}
+        onFocus={() => setAt(today)}
+        onBlur={() => setAt(null)}
+        onKeyDown={keys}
+      >
         <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           {[25, 50, 75].map((g) => (
             <line key={g} x1="0" x2="100" y1={g} y2={g} className="pf-grid" />
@@ -113,6 +191,22 @@ function RoadChart({ r }: { r: BoardRoad }) {
             <i aria-hidden="true" />
             <b>You</b>
           </span>
+        )}
+        {probe && (
+          <>
+            <span className="pf-guide" style={{ left: `${probe.left}%` }} aria-hidden="true" />
+            <span
+              className="pf-probe"
+              style={{ left: `${probe.left}%`, top: `${probe.top}%` }}
+              aria-hidden="true"
+            />
+            <span
+              className={`pf-readout${probe.left > 70 ? " end" : probe.left < 15 ? " start" : ""}`}
+              style={{ left: `${probe.left}%` }}
+            >
+              {probe.text}
+            </span>
+          </>
         )}
       </div>
       <div className="pf-years" aria-hidden="true">

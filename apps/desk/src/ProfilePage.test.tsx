@@ -307,6 +307,20 @@ describe("Profile", () => {
     expect(screen.getByText("Aggressive risk")).toBeTruthy();
   });
 
+  it("reads the plan month by month on the chart, by keyboard as by pointer", async () => {
+    render(<Profile />);
+    const chart = await screen.findByRole("slider", { name: /Plan over time/ });
+    fireEvent.focus(chart);
+    expect(chart.getAttribute("aria-valuetext")).toBe("Today: you US$38K, plan US$30K");
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    expect(chart.getAttribute("aria-valuetext")).toBe("Dec 2026, in 1 month: plan US$39K");
+    expect(screen.getByText("Dec 2026, in 1 month: plan US$39K")).toBeTruthy(); // the readout
+    fireEvent.keyDown(chart, { key: "End" });
+    expect(chart.getAttribute("aria-valuetext")).toBe("Dec 2030, in 49 months: milestone US$1M");
+    fireEvent.keyDown(chart, { key: "Escape" });
+    expect(screen.queryByText(/milestone US\$1M/)).toBeNull();
+  });
+
   it("reads the live figures again and rolls a figure that moved", async () => {
     render(<Profile />);
     const road = await screen.findByRole("region", { name: "Road to US$1M" });

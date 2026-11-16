@@ -373,6 +373,55 @@
   border-left: 1px solid var(--line-2);
   border-bottom: 1px solid var(--line-2);
 }
+.pf-chart-plot {
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+.pf-chart-plot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+/* What the plan expects at the point you're on: a guide, a dot on the line, a readout. */
+.pf-guide {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--line-2);
+  pointer-events: none;
+}
+.pf-probe {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 3px rgba(230, 236, 239, 0.15);
+  pointer-events: none;
+}
+.pf-readout {
+  position: absolute;
+  top: 6px;
+  transform: translateX(-50%);
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-2);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.pf-readout.end {
+  transform: translateX(calc(-100% - 8px));
+}
+.pf-readout.start {
+  transform: translateX(8px);
+}
 .pf-chart svg {
   position: absolute;
   inset: 0;
