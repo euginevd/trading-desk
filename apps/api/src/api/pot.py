@@ -973,6 +973,8 @@ class Pot:
             "regime": {"state": state, "words": words},
             "nextScan": next_scan(self._now()),
             "lastScan": self.last_scan(),
+            # The scheduler runs the 11:15am scan while it's on (api.schedule).
+            "scansOnItsOwn": self._store.setting("schedule_on", "1") == "1",
             "proposals": self.proposals(),
             "trades": trades,
             "moves": [

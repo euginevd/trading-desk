@@ -221,6 +221,16 @@ export interface MyAgentSlot {
   label: string;
 }
 
+// A job the scheduler runs for an agent (api.schedule).
+export interface AgentJob {
+  key: string;
+  agent: string;
+  label: string;
+  when: string;
+  next: number;
+  last: { at: number; status: "ok" | "failed" | "running"; line: string } | null;
+}
+
 export interface MyAgent {
   slug: string;
   file: string;
@@ -238,11 +248,13 @@ export interface MyAgent {
   version: number;
   time: number;
   running: boolean;
+  jobs?: AgentJob[];
 }
 
 export interface MyAgentsPage {
   agents: MyAgent[];
   folder: string;
+  scheduleOn?: boolean;
 }
 
 export interface RunStep {
@@ -1372,6 +1384,24 @@ export interface PotProposal {
   crowding: string;
 }
 
+// trading-agent's read of one coin for New trade (POST /pot/analyse).
+export interface PotAnalysis {
+  coin: string;
+  verdict: "take" | "wait" | "pass";
+  headline: string;
+  points: string[];
+  watch: string;
+  plan: {
+    setup: string;
+    entry: string;
+    stop: string;
+    target: string;
+    why: string;
+    wrongIf: string;
+  } | null;
+  regime: { state: string | null; words: string };
+}
+
 // A trade typed by hand, sized by the api as it's typed (POST /pot/preview).
 export interface PotPreview {
   coin: string;
@@ -1413,6 +1443,7 @@ export interface PotView {
   regime: { state: "bull" | "neutral" | "bear" | null; words: string };
   nextScan: number;
   lastScan: { at: number; line: string } | null;
+  scansOnItsOwn?: boolean;
   proposals: PotProposal[];
   trades: PotTrade[];
   moves: { ref: string; kind: "in" | "out"; usdc: string; created: number }[];

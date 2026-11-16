@@ -331,3 +331,16 @@
     font-size: 17px;
   }
 }
+
+/* The scheduler: one switch for every agent, and each agent's jobs with its last run. */
+.ma-switch {
+  margin-left: 12px;
+  vertical-align: middle;
+}
+.ma-jobs {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 4px;
+}

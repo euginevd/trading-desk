@@ -306,16 +306,27 @@ export default function App() {
           {link(SETTINGS_PAGE)}
         </nav>
         <div className="side-status">
-          <span className="pill" title={folded ? binance.word : undefined}>
+          {/* Each opens Portfolio showing what that source holds. */}
+          <a
+            className="pill"
+            href="#/portfolio?source=binance"
+            title={folded ? binance.word : undefined}
+            aria-label={`${binance.word}: what Binance holds`}
+          >
             <PillLogo coin="BNB" />
             <span className="side-word">{binance.word}</span>
             <span className={`dot ${binance.dot}`} aria-hidden="true" />
-          </span>
-          <span className="pill" title={wallet.title}>
+          </a>
+          <a
+            className="pill"
+            href="#/portfolio?source=wallet"
+            title={wallet.title}
+            aria-label={`${wallet.word}: what your TAO wallet holds. ${wallet.title}`}
+          >
             <PillLogo coin="TAO" />
             <span className="side-word">{wallet.word}</span>
             <span className={`dot ${wallet.dot}`} aria-hidden="true" />
-          </span>
+          </a>
           <button
             className="pill kill"
             type="button"

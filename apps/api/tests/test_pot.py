@@ -375,3 +375,35 @@ def test_a_trade_by_hand_previews_its_numbers_and_every_rule_it_breaks(pot: Pot)
     ]
     with pytest.raises(Refused):
         pot.preview({"coin": "DOGE"})
+
+
+def test_analyse_fills_a_trade_by_hand_and_drops_levels_it_cant_size(pot: Pot) -> None:
+    reply = {
+        "verdict": "take",
+        "headline": "SOL pulled back to its 20-day in an up trend.",
+        "points": ["Above its 50-day.", "Volume fell on the dip.", "Funding is flat."],
+        "setup": "Pullback",
+        "entry": "200",
+        "stop": "190",
+        "target": "230",
+        "why": "Held 200 twice.",
+        "wrongIf": "it closes under 190",
+        "watch": "",
+    }
+    found = PotAgent(pot, Fake(reply)).analyse({"coin": "sol"})  # type: ignore[arg-type]
+    assert found["verdict"] == "take"
+    assert found["plan"] == {
+        "setup": "Pullback",
+        "entry": "200",
+        "stop": "190",
+        "target": "230",
+        "why": "Held 200 twice.",
+        "wrongIf": "it closes under 190",
+    }
+    assert len(found["points"]) == 3
+    # Levels the desk can't size (the stop above the entry) aren't offered as a trade.
+    bad = PotAgent(pot, Fake(reply | {"verdict": "odd", "stop": "210"})).analyse({"coin": "SOL"})  # type: ignore[arg-type]
+    assert bad["plan"] is None
+    assert bad["verdict"] == "pass"
+    with pytest.raises(Refused, match="isn't one"):
+        PotAgent(pot, Fake(reply)).analyse({"coin": "DOGE"})  # type: ignore[arg-type]

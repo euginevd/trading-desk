@@ -35,7 +35,9 @@ The trading pot becomes its own book, as the DCA book is (decision 72), and trad
 
 ### 2. Later
 
-- [ ] The daily 11:15am scan, approve from Telegram, the Sunday review, a pot strip on the Dashboard
+- [x] The daily 11:15am scan and approve from Telegram (the scheduler, decision 74)
+- [x] Analyse a coin in New trade: trading-agent fills the trade by the rules
+- [ ] The Sunday review, a pot strip on the Dashboard
 
 ## Ask first
 

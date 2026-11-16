@@ -600,7 +600,11 @@ export default function PotPage() {
               </div>
               <div>
                 <small>Daily scan</small>
-                <span>11:15am, once trading-agent runs on its own. Until then, Scan now.</span>
+                <span>
+                  {pot.scansOnItsOwn
+                    ? `11:15am every day, on its own; a setup comes to Telegram too. Next ${when(pot.nextScan)}.`
+                    : "Paused in Profile, My agents. Scan now runs it by hand."}
+                </span>
               </div>
               <button
                 type="button"
@@ -659,10 +663,8 @@ export default function PotPage() {
               </div>
               {on.length === 0 ? (
                 <p className="pot-empty">
-                  <b>No trades on.</b>{" "}
-                  {pot.lastScan
-                    ? pot.lastScan.line
-                    : "Scan now, or set up a trade of your own with New trade."}
+                  <b>No trades on.</b> New trade sets one up, and trading-agent can analyse a coin
+                  and fill it in by your rules.
                 </p>
               ) : (
                 <ul className="pot-trades">

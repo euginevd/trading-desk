@@ -34,6 +34,15 @@ const SOURCES: [Source, string][] = [
   ["Binance", "Binance"],
   ["TAO wallet", "Wallet"],
 ];
+// `#/portfolio?source=binance` or `?source=wallet` opens on that source; anything else shows all.
+export function sourceFromHash(): Source {
+  const query = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+  const asked = query.get("source");
+  if (asked === "binance") return "Binance";
+  if (asked === "wallet") return "TAO wallet";
+  return "all";
+}
+
 const SOURCE_WORD: Record<Source, string> = {
   all: "all sources",
   Binance: "Binance",
@@ -764,7 +773,13 @@ export default function Portfolio({
   // Coming back to the page shows the last figures at once while fresh ones load.
   const [state, setState] = useState<State>({ kind: "loading", last: lastSeen });
   const [problem, setProblem] = useState("");
-  const [source, setSource] = useState<Source>("all");
+  const [source, setSource] = useState<Source>(sourceFromHash);
+  // The side panel's Binance and Wallet links open the page on that source.
+  useEffect(() => {
+    const follow = () => setSource(sourceFromHash());
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, []);
   const [drift, setDrift] = useState<Drift | null>(null);
 
   const settle = useCallback(

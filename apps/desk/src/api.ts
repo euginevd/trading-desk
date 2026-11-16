@@ -1,6 +1,7 @@
 import type {
   PotAction,
   PotCheck,
+  PotAnalysis,
   PotPreview,
   PotTrade,
   PotTradeRequest,
@@ -247,6 +248,7 @@ export const getTradingAgent = () => call<AgentPage>("GET", "/agent");
 export const getProfileFile = () => call<MarkdownFile>("GET", "/profile/file");
 // My agents (TODO 10): one file each in local/agents/, read only.
 export const getMyAgents = () => call<MyAgentsPage>("GET", "/my-agents");
+export const setAgentsOn = (on: boolean) => call<unknown>("PUT", "/agents/schedule", { on });
 export const getMyAgentFile = (slug: string) =>
   call<{ markdown: string; error: string | null }>(
     "GET",
@@ -330,6 +332,12 @@ export const previewPotTrade = (body: {
   stop?: string;
   target?: string;
 }) => call<PotPreview>("POST", "/pot/preview", body);
+export const analysePotCoin = (body: {
+  coin: string;
+  entry?: string;
+  stop?: string;
+  target?: string;
+}) => call<PotAnalysis>("POST", "/pot/analyse", body);
 export const placePotTrade = (body: PotTradeRequest) => call<PotTrade>("POST", "/pot/trades", body);
 export const cancelPotTrade = (ref: string) =>
   call<PotTrade>("POST", "/pot/trades/cancel", { ref });

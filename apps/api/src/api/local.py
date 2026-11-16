@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import cast
 from urllib.parse import parse_qsl, urlsplit
 
+from api import jobs
 from api.advisor import check_alerts
 from api.binance import BinanceError
 from api.dca_book import DcaBook
@@ -31,6 +32,7 @@ from api.pot import Pot
 HOST = os.environ.get("API_HOST", "127.0.0.1")
 PORT = 8000
 WATCH_SECONDS = 30
+AGENT_SECONDS = 15
 MAX_BODY = 10_000
 # The desk's own pages, and the api itself. Anything else is refused, so a web page open in
 # another tab can't reach the api (cross-site requests) or rename itself to it (DNS rebinding).
@@ -133,6 +135,18 @@ def watch(stop: threading.Event) -> None:
             print(f"watcher: {type(error).__name__}")
 
 
+def agents(stop: threading.Event) -> None:
+    """Every 15 seconds: the scheduler wakes any agent whose time has come (api.schedule), and
+    the owner's Telegram buttons are answered. Its own thread, so a minute-long agent call
+    never holds up the order sync."""
+    while not stop.wait(AGENT_SECONDS):
+        try:
+            with live_services() as services:
+                jobs.tick(services)
+        except Exception as error:  # noqa: BLE001 - the scheduler must keep running
+            print(f"scheduler: {type(error).__name__}")
+
+
 def main() -> None:
     load_env(Path(".env"))
     if os.environ.get("DEMO") == "1":
@@ -140,6 +154,8 @@ def main() -> None:
         print("Demo mode: made-up figures and a pretend exchange.")
     stop = threading.Event()
     threading.Thread(target=watch, args=(stop,), daemon=True).start()
+    if os.environ.get("DEMO") != "1":  # the demo never wakes an agent or messages anyone
+        threading.Thread(target=agents, args=(stop,), daemon=True).start()
     print(f"api on http://{HOST}:{PORT}")
     ThreadingHTTPServer((HOST, PORT), Local).serve_forever()
 

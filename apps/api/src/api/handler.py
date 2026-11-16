@@ -34,6 +34,7 @@ from api import (
     profile_routes,
     profile_v2,
     rebalance,
+    schedule,
     tax,
     telegram,
     trading_agent,
@@ -732,16 +733,30 @@ def _funds(s: Services) -> Funds:
     return Funds(DcaBook(Trading(s.binance, s.store, s.audit)), s.signals)
 
 
-def _pot_agent(s: Services, body: dict[str, Any] | None) -> dict[str, Any]:
-    """trading-agent's scan (no body) or chat, with Binance's public futures data for crowding;
-    the demo has none."""
+def _schedule_on(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    """Agents running on their own, on or off: off, nothing wakes them; the desk still works."""
+    on = body.get("on")
+    if not isinstance(on, bool):
+        raise Refused("Say on or off.")
+    schedule.set_on(s.store, on)
+    s.audit.record("agents", "Scheduler", "On" if on else "Off")
+    return schedule.view(s.store, datetime.now(SYDNEY))
+
+
+def _pot_agent(s: Services, body: dict[str, Any] | None, job: str = "chat") -> dict[str, Any]:
+    """trading-agent's scan (no body), chat or one coin's analysis, with Binance's public
+    futures data for crowding; the demo has none."""
     pot = Pot(Trading(s.binance, s.store, s.audit))
+
+    def run(agent: PotAgent) -> dict[str, Any]:
+        if body is None:
+            return agent.scan()
+        return agent.analyse(body) if job == "analyse" else agent.chat(body)
+
     if _demo():
-        agent = PotAgent(pot, s.signals)
-        return agent.scan() if body is None else agent.chat(body)
+        return run(PotAgent(pot, s.signals))
     with httpx.Client(timeout=TIMEOUT_SECONDS) as futures:
-        agent = PotAgent(pot, s.signals, futures)
-        return agent.scan() if body is None else agent.chat(body)
+        return run(PotAgent(pot, s.signals, futures))
 
 
 ServiceRoute = Callable[[Services, dict[str, str], dict[str, Any]], object]
@@ -946,7 +961,10 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ),
     ("POST", "/dca/funds/chat"): lambda s, _q, b: _funds(s).chat(b),
     ("POST", "/pot/scan"): lambda s, _q, _b: _pot_agent(s, None),
+    ("GET", "/agents/schedule"): lambda s, _q, _b: schedule.view(s.store, datetime.now(SYDNEY)),
+    ("PUT", "/agents/schedule"): lambda s, _q, b: _schedule_on(s, b),
     ("POST", "/pot/agent"): lambda s, _q, b: _pot_agent(s, b),
+    ("POST", "/pot/analyse"): lambda s, _q, b: _pot_agent(s, b, "analyse"),
     ("POST", "/dca/agent"): lambda s, _q, b: _funds(s).agent(b),
     ("GET", "/dca/funds/odds"): lambda s, q, _b: _funds(s).odds(
         str(q.get("coin", "")), q.get("price"), str(q.get("side", "add"))

@@ -283,8 +283,10 @@ def klines(symbol: str, interval: str, count: int = 120) -> list[list[Any]]:
 
 
 def taostats(request: httpx.Request) -> httpx.Response:
-    """Made-up Taostats reply: 12.4 TAO free, 85 staked and 1.5 to claim, in rao."""
-    del request
+    """Made-up Taostats reply: 12.4 TAO free, 85 staked and 1.5 to claim, in rao. Only the
+    current accounts path answers; the retired one is Gone, as on Taostats."""
+    if not request.url.path.startswith("/v1/accounts/"):
+        return httpx.Response(410, json={"message": "Gone", "status_code": 410})
     row = {
         "balance_free": "12400000000",
         "balance_staked": "85000000000",

@@ -151,6 +151,23 @@ function serve(reply: PotView) {
             : [],
       });
     }
+    if (path === "/pot/analyse")
+      return json({
+        coin: "SOL",
+        verdict: "take",
+        headline: "SOL pulled back to its 20-day in an up trend.",
+        points: ["Above its 50-day at 131.", "Volume fell on the dip."],
+        watch: "",
+        plan: {
+          setup: "Trend pullback",
+          entry: "137.5",
+          stop: "131.11",
+          target: "158.75",
+          why: "Back at its 20-day with volume drying up.",
+          wrongIf: "it closes under 131",
+        },
+        regime: { state: "neutral", words: "" },
+      });
     if (path === "/pot/agent")
       return json({ reply: "No setup today: SOL hasn't held its 20-day.", actions: [], said: [] });
     return json({ error: "Not found." }, 404);
@@ -305,6 +322,31 @@ describe("the trading pot", () => {
     });
     expect(placed.target).toBe("158.75");
     expect(placed.reason).toMatch(/^Held its 50-day twice on falling volume\. Review by /);
+  });
+
+  it("fills New trade from trading-agent's analysis, by the rules", async () => {
+    const fetch = serve(pot({ proposals: [], trades: [] }));
+    render(<PotPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "New trade" }));
+    fireEvent.click(screen.getByRole("radio", { name: "SOL" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Analyse SOL" }));
+    expect(await screen.findByText("SOL pulled back to its 20-day in an up trend.")).toBeTruthy();
+    expect(screen.getByText("Take")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Entry price" })).toHaveProperty("value", "137.5");
+    expect(screen.getByRole("textbox", { name: "Stop loss price" })).toHaveProperty(
+      "value",
+      "131.11",
+    );
+    expect(screen.getByRole("textbox", { name: "Why this trade" })).toHaveProperty(
+      "value",
+      "Back at its 20-day with volume drying up.",
+    );
+    expect(screen.getByRole("button", { name: "Trend pullback" })).toHaveProperty(
+      "ariaPressed",
+      "true",
+    );
+    expect(JSON.parse(String(sent(fetch, "/pot/analyse")[0]?.[1]?.body))).toEqual({ coin: "SOL" });
+    expect(await screen.findByText(/Every rule kept/)).toBeTruthy();
   });
 
   it("keeps trading-agent folded until asked, then talks", async () => {

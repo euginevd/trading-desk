@@ -656,3 +656,96 @@ dialog.pnt {
     flex-wrap: wrap;
   }
 }
+
+/* trading-agent's read of the coin, above the form: ask, then a verdict with its reasons. */
+.pnt-ai {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border: 1px solid rgba(80, 210, 193, 0.35);
+  border-radius: var(--r);
+  background: linear-gradient(180deg, var(--accent-soft), transparent 80%);
+}
+.pnt-ai.is-wait {
+  border-color: rgba(232, 176, 75, 0.4);
+  background: linear-gradient(180deg, var(--wait-soft), transparent 80%);
+}
+.pnt-ai.is-pass {
+  border-color: var(--line-2);
+  background: var(--panel);
+}
+.pnt-ai-ask {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pnt-ai-ask > span {
+  flex: 1;
+  color: var(--body);
+}
+.pnt-ai-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.pnt-ai-head b {
+  color: var(--text);
+  font-size: 15px;
+}
+.pnt-verdict {
+  flex: none;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.pnt-verdict.is-take {
+  background: var(--up-soft);
+  color: var(--up);
+}
+.pnt-verdict.is-wait {
+  background: var(--wait-soft);
+  color: var(--wait);
+}
+.pnt-verdict.is-pass {
+  background: var(--down-soft);
+  color: var(--down);
+}
+.pnt-ai-points {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--body);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+.pnt-ai-watch {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+}
+.pnt-ai-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+.pnt-ai-foot .link {
+  margin-left: auto;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pnt-ai-head,
+  .pnt-ai-points {
+    animation: pnt-in 260ms var(--ease);
+  }
+  @keyframes pnt-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+}
+@media (max-width: 760px) {
+  .pnt-ai-ask {
+    flex-wrap: wrap;
+  }
+}

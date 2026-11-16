@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from api import schedule
 from api.ai_signal import MODELS
 from api.store import Store
 
@@ -146,6 +147,7 @@ def listing(store: Store, now: datetime | None = None) -> dict[str, Any]:
     now = now or datetime.now(SYDNEY)
     now_ms = int(now.timestamp() * 1000)
     out: list[dict[str, Any]] = []
+    plan = schedule.view(store, now)
     for slug, path in _files(store):
         text = path.read_text(encoding="utf-8")
         found = parse(text)
@@ -169,11 +171,12 @@ def listing(store: Store, now: datetime | None = None) -> dict[str, Any]:
                 "next": next_run(found["schedule"], now),
                 "version": version,
                 "time": time,
-                # No agent runs on its own yet: the files say what each will do.
-                "running": False,
+                # Running: the scheduler is on and wakes this agent (api.schedule).
+                "running": plan["on"] and any(j["agent"] == slug for j in plan["jobs"]),
+                "jobs": [j for j in plan["jobs"] if j["agent"] == slug],
             }
         )
-    return {"agents": out, "folder": f"local/{folder(store).name}"}
+    return {"agents": out, "folder": f"local/{folder(store).name}", "scheduleOn": plan["on"]}
 
 
 def file(store: Store, slug: str) -> dict[str, Any]:

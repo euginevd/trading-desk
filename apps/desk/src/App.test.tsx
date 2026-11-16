@@ -366,6 +366,14 @@ describe("portfolio page", () => {
     fireEvent.click(within(filter).getByRole("button", { name: /^Binance/ }));
     expect(screen.getAllByText("BNB").length).toBeGreaterThan(0);
     expect(said()?.textContent).toBe("Binance holds A$3.6K, A$192 above what it cost.");
+    // The side panel's Wallet row is a link to the same page, on the wallet.
+    const status = document.querySelector(".side-status") as HTMLElement;
+    const wallet = within(status).getByRole("link", { name: /^Wallet: what your TAO wallet/ });
+    expect(wallet.getAttribute("href")).toBe("#/portfolio?source=wallet");
+    window.location.hash = "#/portfolio?source=wallet";
+    fireEvent(window, new HashChangeEvent("hashchange"));
+    await waitFor(() => expect(said()?.textContent).toBe("Your wallet holds A$59K."));
+    window.location.hash = "";
   });
 
   it("switches the whole Dashboard between AUD, USD, INR and BTC, and remembers it", async () => {

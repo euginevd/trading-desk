@@ -161,6 +161,16 @@ CREATE TABLE IF NOT EXISTS agent_versions (
 CREATE TABLE IF NOT EXISTS agent_runs (
     id INTEGER PRIMARY KEY, coin TEXT NOT NULL, started INTEGER NOT NULL, doc TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS job_runs (
+    id INTEGER PRIMARY KEY,
+    job TEXT NOT NULL,
+    slot INTEGER NOT NULL,
+    started INTEGER NOT NULL,
+    finished INTEGER,
+    status TEXT NOT NULL,
+    line TEXT NOT NULL DEFAULT '',
+    UNIQUE (job, slot)
+);
 CREATE TABLE IF NOT EXISTS pot_moves (
     id INTEGER PRIMARY KEY,
     ref TEXT NOT NULL UNIQUE,
@@ -553,6 +563,30 @@ class Store:
 
     # The trading pot (docs/plan-trade.md): money in and out, trades, and every order they
     # sent. Permanent like the DCA book: rows are added and updated, never deleted.
+
+    # The scheduler's runs (api.schedule): one row per job and slot, so a slot runs once.
+
+    def claim_job_run(self, job: str, slot: int, started: int) -> bool:
+        with self._db:
+            done = self._db.execute(
+                "INSERT OR IGNORE INTO job_runs (job, slot, started, status) "
+                "VALUES (?, ?, ?, 'running')",
+                (job, slot, started),
+            )
+        return done.rowcount == 1
+
+    def finish_job_run(self, job: str, slot: int, status: str, line: str, finished: int) -> None:
+        with self._db:
+            self._db.execute(
+                "UPDATE job_runs SET status = ?, line = ?, finished = ? WHERE job = ? AND slot = ?",
+                (status, line, finished, job, slot),
+            )
+
+    def job_runs(self, job: str, limit: int) -> list[dict[str, Any]]:
+        rows = self._db.execute(
+            "SELECT * FROM job_runs WHERE job = ? ORDER BY slot DESC LIMIT ?", (job, limit)
+        )
+        return [dict(r) for r in rows]
 
     def add_pot_move(self, kind: str, usdc: str, created: int) -> str:
         with self._db:

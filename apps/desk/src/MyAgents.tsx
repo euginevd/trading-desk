@@ -2,7 +2,7 @@
 // week rota, one row per agent with a dot for each time it wakes, so ten agents still read at a
 // glance; opening a row gives its few facts, its week in words, and the file itself.
 import { useCallback, useEffect, useState } from "react";
-import { getMyAgentFile, getMyAgents } from "./api";
+import { getMyAgentFile, getMyAgents, setAgentsOn } from "./api";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
 import { Reader } from "./Markdown";
@@ -102,6 +102,23 @@ function Detail({ agent, onRead }: { agent: MyAgent; onRead: () => void }) {
         )}
         <p className="ma-about">{agent.about || agent.purpose}</p>
         <dl className="ma-facts">
+          {(agent.jobs ?? []).length > 0 && (
+            <div>
+              <dt>Runs on its own</dt>
+              <dd>
+                <ul className="ma-jobs">
+                  {(agent.jobs ?? []).map((j) => (
+                    <li key={j.key}>
+                      <b>{j.when}</b>, {j.label}.{" "}
+                      <span className={j.last?.status === "failed" ? "error-text" : "muted"}>
+                        {j.last ? `Last ${dayOf(j.last.at)}: ${j.last.line}` : "Hasn't run yet."}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </dd>
+            </div>
+          )}
           {facts.map(([k, v]) => (
             <div key={k}>
               <dt>{k}</dt>
@@ -151,12 +168,10 @@ export default function MyAgents() {
     error: string;
   } | null>(null);
   const [now] = useState(() => weekMinute(new Date()));
+  const [switching, setSwitching] = useState(false);
   const load = useCallback(() => {
     getMyAgents().then(
-      (p) => {
-        setPage(p);
-        setOpen((o) => o ?? p.agents[0]?.slug ?? null);
-      },
+      (p) => setPage(p), // every agent starts collapsed; a click opens one
       (e: unknown) => setError(e instanceof Error ? e.message : "Your agents couldn't be read."),
     );
   }, []);
@@ -206,6 +221,20 @@ export default function MyAgents() {
     .filter((a) => a.next)
     .sort((a, b) => (a.next?.at ?? 0) - (b.next?.at ?? 0))[0];
   const running = agents.filter((a) => a.running).length;
+  const scheduled = agents.some((a) => (a.jobs ?? []).length > 0);
+  const flip = () => {
+    setSwitching(true);
+    setAgentsOn(!page.scheduleOn).then(
+      () => {
+        setSwitching(false);
+        load();
+      },
+      (e: unknown) => {
+        setSwitching(false);
+        setError(e instanceof Error ? e.message : "That didn't switch.");
+      },
+    );
+  };
   return (
     <section className="ma" aria-label="My agents">
       <p className="ma-said">
@@ -223,7 +252,22 @@ export default function MyAgents() {
             )}
           </>
         )}
+        {scheduled && (
+          <button
+            type="button"
+            className={`btn btn-small ma-switch${page.scheduleOn ? "" : " btn-accent"}`}
+            disabled={switching}
+            onClick={flip}
+          >
+            {page.scheduleOn ? "Pause all agents" : "Switch agents on"}
+          </button>
+        )}
       </p>
+      {error && (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      )}
 
       {agents.length > 0 && (
         <div className="ma-rota">
@@ -256,7 +300,9 @@ export default function MyAgents() {
                     <Track agent={a} now={now} />
                     <span className="ma-meta">
                       <span>{a.model.name.replace(/^Claude /, "")}</span>
-                      <small className="muted">{a.running ? "On" : "Not running yet"}</small>
+                      <small className="muted">
+                        {a.running ? "On" : (a.jobs ?? []).length ? "Paused" : "Not running yet"}
+                      </small>
                     </span>
                   </button>
                   {isOpen && <Detail agent={a} onRead={() => read(a.slug)} />}

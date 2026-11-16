@@ -23,6 +23,7 @@ TIME_KEY = "telegram_summary_time"
 SENT_KEY = "telegram_last_sent"
 CODE_KEY = "telegram_link_code"
 NAME_KEY = "telegram_chat_name"
+OFFSET_KEY = "telegram_update_offset"
 DEFAULT_TIME = "07:30"
 TIMEOUT_SECONDS = 15
 OK = 200
@@ -109,16 +110,82 @@ def find_chat(store: Store, client: httpx.Client) -> bool:
     return False
 
 
-def send(store: Store, client: httpx.Client, text: str) -> None:
+def send(
+    store: Store,
+    client: httpx.Client,
+    text: str,
+    buttons: list[tuple[str, str]] | None = None,
+) -> int | None:
+    """A message to the owner's chat; buttons are (label, data) pairs in one row. Returns the
+    message's id, so an answered button can edit it."""
     chat = store.setting(CHAT_KEY, "")
     if not chat and not find_chat(store, client):
         code = store.setting(CODE_KEY, "")
         raise TelegramError(f"Send {code} to your bot in Telegram first, so the desk finds you.")
-    _call(
-        client,
-        "sendMessage",
-        {"chat_id": store.setting(CHAT_KEY, ""), "text": text, "disable_web_page_preview": True},
-    )  # noqa: E501
+    payload: dict[str, Any] = {
+        "chat_id": store.setting(CHAT_KEY, ""),
+        "text": text,
+        "disable_web_page_preview": True,
+    }
+    if buttons:
+        payload["reply_markup"] = {
+            "inline_keyboard": [[{"text": t, "callback_data": d} for t, d in buttons]]
+        }
+    sent: object = _call(client, "sendMessage", payload)
+    if isinstance(sent, dict) and "message_id" in sent:
+        return int(cast(dict[str, Any], sent)["message_id"])
+    return None
+
+
+def taps(store: Store, client: httpx.Client) -> list[dict[str, Any]]:
+    """Buttons pressed since the last look, from the owner's linked chat only: anyone can
+    message a bot, so a tap from any other chat is dropped (known-mistakes 29c)."""
+    chat = store.setting(CHAT_KEY, "")
+    if not chat:
+        return []
+    offset = int(store.setting(OFFSET_KEY, "0") or 0)
+    updates: list[dict[str, Any]] = (
+        _call(
+            client,
+            "getUpdates",
+            {"offset": offset, "timeout": 0, "allowed_updates": ["callback_query"]},
+        )
+        or []
+    )
+    found: list[dict[str, Any]] = []
+    for update in updates:
+        store.set_setting(OFFSET_KEY, str(int(update.get("update_id", 0)) + 1))
+        tap = cast(dict[str, Any], update.get("callback_query") or {})
+        message = cast(dict[str, Any], tap.get("message") or {})
+        where = str(cast(dict[str, Any], message.get("chat") or {}).get("id", ""))
+        who = str(cast(dict[str, Any], tap.get("from") or {}).get("id", ""))
+        if not tap.get("id") or where != chat or who != chat:
+            continue
+        found.append(
+            {
+                "id": str(tap["id"]),
+                "data": str(tap.get("data", "")),
+                "message": message.get("message_id"),
+                "text": str(message.get("text", "")),
+            }
+        )
+    return found
+
+
+def answer(store: Store, client: httpx.Client, tap: dict[str, Any], said: str) -> None:
+    """Closes the tap's spinner and writes the outcome under the message, buttons removed."""
+    _call(client, "answerCallbackQuery", {"callback_query_id": tap["id"], "text": said[:190]})
+    if tap.get("message"):
+        _call(
+            client,
+            "editMessageText",
+            {
+                "chat_id": store.setting(CHAT_KEY, ""),
+                "message_id": tap["message"],
+                "text": "\n\n".join((tap["text"], said))[:4000],
+                "disable_web_page_preview": True,
+            },
+        )
 
 
 def due(store: Store, now: datetime) -> bool:

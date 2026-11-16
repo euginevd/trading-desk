@@ -2,11 +2,12 @@
 // it as it's typed (POST /pot/preview) and names every rule it breaks; the ladder draws the
 // stop, entry, target, +1R and the price now, so the trade is seen before the review.
 import { useEffect, useRef, useState } from "react";
-import { previewPotTrade } from "./api";
+import { analysePotCoin, previewPotTrade } from "./api";
+import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
 import { dollars, qty as qtyWord } from "./dcaFormat";
 import { px } from "./PotPanel";
-import type { PotPreview } from "./types";
+import type { PotAnalysis, PotPreview } from "./types";
 
 export type HandTrade = {
   coin: string;
@@ -21,6 +22,7 @@ export type HandTrade = {
 };
 
 const SETUPS = ["Pullback", "Breakout", "Range low", "Reclaim"] as const;
+const VERDICT = { take: "Take", wait: "Wait", pass: "Pass" } as const;
 const REVIEW_DAYS = [3, 7, 14] as const;
 const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 const ok = (v: string) => Number(v) > 0 && Number.isFinite(Number(v));
@@ -154,6 +156,11 @@ export default function PotNewTrade({
   const [seen, setSeen] = useState<PotPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [answered, setAnswered] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<PotAnalysis | null>(null);
+  const [analysing, setAnalysing] = useState(false);
+  const [analyseError, setAnalyseError] = useState<string | null>(null);
+  const setups: string[] =
+    setup && !(SETUPS as readonly string[]).includes(setup) ? [...SETUPS, setup] : [...SETUPS];
 
   useEffect(() => {
     dialog.current?.showModal?.();
@@ -166,7 +173,37 @@ export default function PotNewTrade({
     setEntry("");
     setStop("");
     setTarget("");
+    setAnalysis(null);
+    setAnalyseError(null);
     setCoin(c);
+  };
+
+  // trading-agent reads the coin against the file's rules and, for a take, fills the form.
+  const fill = (a: PotAnalysis) => {
+    if (!a.plan) return;
+    setEntry(a.plan.entry);
+    setStop(a.plan.stop);
+    setTarget(a.plan.target);
+    if (a.plan.setup) setSetup(a.plan.setup);
+    if (a.plan.why) setWhy(a.plan.why);
+    if (a.plan.wrongIf) setWrong(a.plan.wrongIf);
+  };
+  const analyse = () => {
+    setAnalysing(true);
+    setAnalyseError(null);
+    const draft = ok(entry) && ok(stop) && ok(target) ? { entry, stop, target } : {};
+    analysePotCoin({ coin, ...draft }).then(
+      (a) => {
+        setAnalysing(false);
+        if (a.coin !== coin) return;
+        setAnalysis(a);
+        if (a.verdict === "take") fill(a);
+      },
+      (err: unknown) => {
+        setAnalysing(false);
+        setAnalyseError(errorOf(err, "trading-agent couldn't be reached. Try again in a minute."));
+      },
+    );
   };
   useEffect(() => {
     let current = true;
@@ -255,6 +292,64 @@ export default function PotNewTrade({
         ))}
       </div>
 
+      <section
+        className={`pnt-ai${analysis ? ` is-${analysis.verdict}` : ""}`}
+        aria-label="trading-agent's analysis"
+      >
+        {analysis ? (
+          <>
+            <div className="pnt-ai-head">
+              <span className={`pnt-verdict is-${analysis.verdict}`}>
+                {VERDICT[analysis.verdict]}
+              </span>
+              <b>{analysis.headline}</b>
+            </div>
+            <ul className="pnt-ai-points">
+              {analysis.points.map((pt) => (
+                <li key={pt}>{pt}</li>
+              ))}
+            </ul>
+            {analysis.watch && analysis.verdict !== "take" && (
+              <p className="pnt-ai-watch">
+                <b>{analysis.verdict === "wait" ? "A take once" : "Why not"}:</b> {analysis.watch}
+              </p>
+            )}
+            <p className="pnt-ai-foot muted">
+              {analysis.verdict === "take" && analysis.plan
+                ? "Filled in below from the analysis. Change anything; the desk checks it again."
+                : analysis.plan
+                  ? "Its levels, if you want them anyway:"
+                  : "No levels the desk could size."}
+              {analysis.plan && analysis.verdict !== "take" && (
+                <button type="button" className="btn btn-small" onClick={() => fill(analysis)}>
+                  Fill in its levels
+                </button>
+              )}
+              <button type="button" className="link" disabled={analysing} onClick={analyse}>
+                {analysing ? "Reading…" : "Analyse again"}
+              </button>
+            </p>
+          </>
+        ) : (
+          <div className="pnt-ai-ask">
+            <AgentAvatar icon="research" slug="trading-agent" />
+            <span>
+              {analysing
+                ? `trading-agent is reading ${coin}'s daily chart against your rules. About a minute.`
+                : `trading-agent reads ${coin} against your rules and fills in the trade: entry, stop, target and why.`}
+            </span>
+            <button type="button" className="btn btn-accent" disabled={analysing} onClick={analyse}>
+              {analysing ? "Analysing…" : `Analyse ${coin}`}
+            </button>
+          </div>
+        )}
+        {analyseError && (
+          <p className="error-text" role="alert">
+            {analyseError}
+          </p>
+        )}
+      </section>
+
       <div className="pnt-body">
         <div className="pnt-form">
           <p className="pnt-now-line muted">
@@ -317,7 +412,7 @@ export default function PotNewTrade({
 
           <fieldset className="pnt-setup">
             <legend>Setup</legend>
-            {SETUPS.map((name) => (
+            {setups.map((name) => (
               <button
                 key={name}
                 type="button"

@@ -102,11 +102,13 @@ class PotAgent:
             return f"Shorts crowded: funding {rate}%"
         return "Clear"
 
-    def facts(self) -> dict[str, Any]:
+    def facts(self, only: str | None = None) -> dict[str, Any]:
+        """The desk's figures for the model: BTC and every coin, or BTC and `only`."""
         pot = self._pot
         coins: list[dict[str, Any]] = []
         btc_month: Decimal | None = None
-        for coin in ["BTC", *[c for c in pot.coins() if c != "BTC"]]:
+        wanted = [c for c in pot.coins() if c != "BTC" and (only is None or c == only)]
+        for coin in ["BTC", *wanted]:
             try:
                 rows = pot.binance.klines(f"{coin}{QUOTE}", "1d", DAYS)
             except BinanceError:
@@ -249,6 +251,94 @@ class PotAgent:
         self._pot.set_proposals(found)
         self._pot.set_last_scan(line)
         return self._pot.view()
+
+    ANALYSIS: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "verdict": {"type": "string", "enum": ["take", "wait", "pass"]},
+            "headline": {"type": "string"},
+            "points": {"type": "array", "items": {"type": "string"}},
+            "setup": {"type": "string"},
+            "entry": {"type": "string"},
+            "stop": {"type": "string"},
+            "target": {"type": "string"},
+            "why": {"type": "string"},
+            "wrongIf": {"type": "string"},
+            "watch": {"type": "string"},
+        },
+        "required": [
+            "verdict",
+            "headline",
+            "points",
+            "setup",
+            "entry",
+            "stop",
+            "target",
+            "why",
+            "wrongIf",
+            "watch",
+        ],
+        "additionalProperties": False,
+    }
+
+    def analyse(self, body: dict[str, Any]) -> dict[str, Any]:
+        """One coin read against the file's rules for New trade: a verdict, the reasons, and
+        the trade filled in (setup, entry, stop, target, why, wrong if), sized and checked by
+        the desk. The owner's own draft, if any, is reviewed too."""
+        coin = str(body.get("coin", "")).upper()
+        if coin not in self._pot.coins():
+            raise Refused(f"{coin or 'That coin'} isn't one trading-agent trades.")
+        facts = self.facts(only=coin)
+        draft = {k: str(body.get(k) or "") for k in ("entry", "stop", "target")}
+        mine = (
+            "\n\nTHE OWNER'S DRAFT (review it in your points; keep it if it's sound): "
+            + json.dumps(draft)
+            if all(draft.values())
+            else ""
+        )
+        prompt = (
+            f"Analyse {coin} now for a long trade by your file's method: the regime first, then "
+            f"{coin}'s trend, the levels it rests on, momentum and volume, and crowding. "
+            "Verdict: take (a setup by the rules now), wait (close: say in watch what would "
+            "make it a take), or pass (say why). Headline: one sentence of at most 20 words. "
+            "Points: three to five short sentences, each naming its figure. Always give the "
+            "trade you would place (setup, entry at or under the price now, stop, target), even "
+            "for wait or pass, so the owner sees the levels; why is at most two sentences, "
+            "wrongIf one short clause such as 'it closes a day under 61,200'."
+            + mine
+            + "\n\nDESK FIGURES:\n"
+            + json.dumps(facts, indent=1)
+        )
+        reply = self._ask(prompt, self.ANALYSIS, f"Pot: analyse {coin}")
+        if reply is None:
+            raise Refused("trading-agent couldn't be reached. Try again in a minute.")
+        verdict = str(reply.get("verdict"))
+        plan: dict[str, Any] | None = {
+            "setup": str(reply.get("setup") or "")[:60],
+            "entry": str(reply.get("entry") or ""),
+            "stop": str(reply.get("stop") or ""),
+            "target": str(reply.get("target") or ""),
+            "why": str(reply.get("why") or "")[:240],
+            "wrongIf": str(reply.get("wrongIf") or "")[:100],
+        }
+        try:
+            checked = self._pot.preview({"coin": coin, **(plan or {})})
+        except Refused:
+            checked = None
+        if checked is None or checked["trade"] is None:
+            plan = None  # levels the desk can't size are not offered as a trade
+        else:
+            trade = checked["trade"]
+            plan = (plan or {}) | {k: trade[k] for k in ("entry", "stop", "target")}
+        return {
+            "coin": coin,
+            "verdict": verdict if verdict in ("take", "wait", "pass") else "pass",
+            "headline": str(reply.get("headline") or "")[:200],
+            "points": [str(x)[:240] for x in cast(list[Any], reply.get("points") or [])][:5],
+            "watch": str(reply.get("watch") or "")[:240],
+            "plan": plan,
+            "regime": facts["regime"],
+        }
 
     ACTION: dict[str, Any] = {
         "type": "object",

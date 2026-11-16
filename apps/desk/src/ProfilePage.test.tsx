@@ -458,12 +458,15 @@ describe("Profile", () => {
 });
 
 describe("My agents tab", () => {
-  it("lists each agent on a week and opens its file", async () => {
+  it("lists each agent on a week, collapsed, and opens its file", async () => {
     render(<Profile />);
     fireEvent.click(screen.getByRole("tab", { name: "My agents" }));
     expect(await screen.findByText(/1 agent on your desk, none switched on yet\./)).toBeTruthy();
     expect(screen.getByText(/Next up: weekly-buyer, deposit day, Friday 5pm\./)).toBeTruthy();
     const row = screen.getByRole("button", { name: /^weekly-buyer/ });
+    expect(row.getAttribute("aria-expanded")).toBe("false"); // collapsed until opened
+    expect(screen.queryByRole("heading", { name: "Its week" })).toBeNull();
+    fireEvent.click(row);
     expect(row.getAttribute("aria-expanded")).toBe("true");
     expect(row.textContent).toContain("Opus 5.5");
     expect(screen.getByText("Claude Opus 5.5, high effort")).toBeTruthy();
