@@ -125,6 +125,8 @@ vi.mock("./api", () => ({
   sendAgent: (id: string, text: string) => sendAgent(id, text),
   getRecaps: () => getRecaps(),
   writeRecap: () => writeRecap(),
+  getDcaBook: () => new Promise(() => undefined), // the DCA widget has its own tests
+  closeOutDca: () => Promise.resolve({ closed: [] }),
 }));
 
 const { default: CoachPage } = await import("./Coach");

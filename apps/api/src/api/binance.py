@@ -123,6 +123,24 @@ class Binance:
         query = urlencode({"symbol": symbol, "interval": interval, "limit": str(limit)})
         return list(self._get("/api/v3/klines", query, f"candles {symbol} {interval}"))
 
+    def klines_since(self, symbol: str, interval: str, start_ms: int) -> list[list[Any]]:
+        """Every candle from start_ms to now, a thousand a call (the DCA book's fill odds)."""
+        found: list[list[Any]] = []
+        while True:
+            query = urlencode(
+                {
+                    "symbol": symbol,
+                    "interval": interval,
+                    "startTime": str(start_ms),
+                    "limit": "1000",
+                }
+            )
+            page = list(self._get("/api/v3/klines", query, f"candles {symbol} {interval}"))
+            found.extend(page)
+            if len(page) < 1000:  # noqa: PLR2004 - Binance's page size
+                return found
+            start_ms = int(page[-1][0]) + 1
+
     def deposits(self, coin: str, start_ms: int, end_ms: int) -> list[dict[str, Any]]:
         """Completed deposits of one coin in a window of at most 90 days (decision 31)."""
         params = {

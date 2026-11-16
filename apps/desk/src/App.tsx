@@ -1,3 +1,5 @@
+import DcaBookPage from "./DcaBookPage";
+import "./dca.css";
 import { useCallback, useEffect, useState } from "react";
 import { getGlobal, getPortfolio, getSentiment, getSettings, getTickers, setTrading } from "./api";
 import { percent, trend, usdShort } from "./format";
@@ -26,7 +28,8 @@ import type { MarketGlobal, Sentiment, Settings, TaoWallet, Ticker } from "./typ
 import { FearPanel } from "./WidgetDetails";
 import type { Status } from "./ui";
 
-type Page = "dashboard" | "profile" | "portfolio" | "journal" | "trade" | "bots" | "settings";
+type Page =
+  "dashboard" | "profile" | "portfolio" | "journal" | "trade" | "bots" | "settings" | "dca-book";
 const TICK_MS = 30_000;
 const CURRENCY_KEY = "desk.currency";
 function readCurrency(): Currency {
@@ -78,6 +81,7 @@ const SETTINGS_PAGE: (typeof PAGES)[number] = {
 function pageFromHash(): Page {
   const hash = window.location.hash.split("?")[0] ?? "";
   if (hash in OLD_BOT_LINKS) return "bots";
+  if (hash === "#/dca-book") return "dca-book"; // reached from the Dashboard's DCA widget
   const found = [...PAGES, BOTS_PAGE, PROFILE_PAGE, SETTINGS_PAGE].find((p) => p.hash === hash);
   return found?.page ?? "dashboard";
 }
@@ -467,6 +471,8 @@ export default function App() {
               window.location.hash = k === "all" ? "#/bots" : `#/bots?${k}`;
             }}
           />
+        ) : page === "dca-book" ? (
+          <DcaBookPage />
         ) : page === "settings" ? (
           <SettingsPage />
         ) : page === "profile" ? (

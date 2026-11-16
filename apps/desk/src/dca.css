@@ -1,0 +1,480 @@
+/* The DCA book and its Dashboard widget (TODO 11), on design-system.md's tokens; prefixed dcw-
+   (widget) and dcb- (book). The same language as the Dashboard: sentences, hairline ledgers,
+   mint for done and you, amber for now and for trims. One bold element: three years as ticks. */
+
+/* ---- the Dashboard widget ---- */
+.dcw {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 32px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.dcw-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 4px;
+}
+.dcw-head b {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dcw-line {
+  margin: 0 0 16px;
+  max-width: 36ch;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.4;
+}
+.dcw-start {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.dcw-steps {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dcw-steps::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 8px;
+  bottom: 14px;
+  width: 1px;
+  background: var(--line-2);
+}
+.dcw-steps li {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 0 0 12px 24px;
+  color: var(--body);
+}
+.dcw-steps li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--line-2);
+  background: var(--bg);
+  box-sizing: border-box;
+}
+.dcw-steps li.is-done {
+  color: var(--text);
+}
+.dcw-steps li.is-done::before {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.dcw-steps li.is-now::before {
+  border-color: var(--wait);
+}
+.dcw-when {
+  flex: none;
+  width: 92px;
+  color: var(--muted);
+}
+.dcw-said {
+  margin: 6px 0 0;
+}
+.dcw-table,
+.dcb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.dcw-table th,
+.dcb-table th {
+  padding: 0 12px 8px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+.dcw-table td,
+.dcb-table td {
+  padding: 9px 12px 9px 0;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.dcw-table tr:last-child td,
+.dcb-table tr:last-child td {
+  border-bottom: 0;
+}
+.dcw-table .r,
+.dcb-table .r {
+  text-align: right;
+}
+.dcw-none {
+  margin: 4px 0 12px;
+}
+.dcw-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+.dcw-foot a:not(.btn) {
+  color: var(--accent);
+  text-decoration: none;
+}
+.dcw-foot a.btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: var(--text);
+}
+
+/* ---- shared marks ---- */
+.dcb-coin {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 500;
+}
+.dcb-coin i {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--panel-2);
+  font-size: 8px;
+  font-style: normal;
+}
+.dcb-coin i img {
+  width: 100%;
+  height: 100%;
+}
+.dcb-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.dcb-tag.is-filled {
+  background: var(--up-soft);
+  color: var(--up);
+}
+.dcb-tag.is-cancelled {
+  color: var(--dim);
+}
+.dcb-src {
+  color: var(--muted);
+}
+.dcb-src.is-trim {
+  color: var(--down);
+}
+.dcb-src.is-buy-back {
+  color: var(--up);
+}
+.dcb-src.is-close-out {
+  color: var(--wait);
+}
+
+/* ---- the book ---- */
+.dcb {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 1180px;
+}
+.dcb-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: end;
+}
+.dcb-headline {
+  max-width: 30ch;
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.dcb-sub {
+  max-width: 72ch;
+  margin: 0;
+  font-size: 14px;
+}
+.dcb-totals {
+  display: flex;
+  gap: 28px;
+  margin: 0;
+}
+.dcb-totals dt {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.dcb-totals dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 500;
+}
+.dcb-warn {
+  margin: 4px 0;
+  color: var(--wait);
+}
+
+.dcb-years {
+  margin: 18px 0 10px;
+}
+.dcb-ticks {
+  display: grid;
+  gap: 2px;
+  align-items: end;
+  height: 34px;
+}
+.dcb-tick {
+  min-width: 0;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--line-2);
+  transform-origin: bottom;
+}
+.dcb-tick.is-bought {
+  height: 22px;
+  background: var(--accent);
+}
+.dcb-tick.is-missed {
+  height: 10px;
+  background: var(--dim);
+}
+.dcb-tick.is-trim {
+  height: 30px;
+  background: var(--wait);
+}
+.dcb-tick.is-now {
+  height: 26px;
+  background: transparent;
+  outline: 1.5px solid var(--accent);
+  outline-offset: -1.5px;
+}
+.dcb-tick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.dcb-years-said {
+  min-height: 20px;
+  margin: 8px 0 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dcb-tick.is-bought,
+  .dcb-tick.is-trim {
+    animation: dcb-grow 420ms var(--ease) both;
+    animation-delay: calc(var(--i) * 14ms);
+  }
+  @keyframes dcb-grow {
+    from {
+      transform: scaleY(0.2);
+      opacity: 0.3;
+    }
+  }
+}
+
+.dcb-section {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.dcb-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+.dcb-section-head h2,
+.dcb-planform h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dcb-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.dcb-scroll {
+  overflow-x: auto;
+}
+.dcb-id {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+td.dcb-id {
+  display: table-cell;
+}
+.dcb-note {
+  margin: 10px 0 0;
+  color: var(--dim);
+  font-size: 12px;
+  max-width: 110ch;
+}
+.dcb-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.dcb-filters button[aria-pressed] {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--body);
+  font-size: 12px;
+  cursor: pointer;
+}
+.dcb-filters button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.dcb-filters .link {
+  margin-left: 8px;
+}
+
+.dcb-plan-start {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.dcb-plan-start .muted {
+  max-width: 60ch;
+}
+.dcb-plan-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+.dcb-num,
+.dcb-table input:not([type="checkbox"]),
+.dcb-planhead input,
+.dcb-sheet-form input,
+.dcb-sheet-form select {
+  width: 120px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.dcb-num {
+  text-align: right;
+}
+
+.dcb-planform {
+  max-width: 620px;
+}
+.dcb-planform > p {
+  margin: 4px 0 14px;
+}
+.dcb-planhead {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.dcb-planhead label,
+.dcb-sheet-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-planfoot {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0 0;
+}
+
+.dcb-sheet {
+  max-width: 420px;
+}
+.dcb-sheet-form {
+  display: grid;
+  gap: 12px;
+}
+.dcb-sheet-form input,
+.dcb-sheet-form select {
+  width: 100%;
+}
+.dcb-sheet-form p {
+  margin: 0;
+}
+.dcb-seg {
+  display: inline-flex;
+  width: max-content;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.dcb-seg button {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  background: var(--panel-2);
+  color: var(--body);
+  cursor: pointer;
+}
+.dcb-seg button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.dcb-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 900px) {
+  .dcw,
+  .dcb-top {
+    grid-template-columns: 1fr;
+  }
+  .dcw {
+    gap: 18px;
+  }
+  .dcb-totals {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+}
+@media (max-width: 720px) {
+  .dcb-headline {
+    font-size: 24px;
+  }
+  .dcb-ticks {
+    gap: 1px;
+  }
+  .dcb-hide {
+    display: none;
+  }
+}

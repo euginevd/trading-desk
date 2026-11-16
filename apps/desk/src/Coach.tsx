@@ -2,6 +2,7 @@
 // going; the week rail shows where this week's buys stand; below, what to watch and the desk to
 // ask, then last week's recap in one line. Every figure comes from the api; the words are the
 // model's when it has written them, the plain ones until then.
+import DcaWidget from "./DcaWidget";
 import { useCallback, useEffect, useState } from "react";
 import {
   getAgent,
@@ -123,6 +124,7 @@ export default function Coach() {
         <>
           <Hero coach={coach} fetched={fetched} loading={loading} onRefresh={refresh} />
           {coach.week && <WeekRail week={coach.week} fg={fg} />}
+          <DcaWidget />
           <div className="dash-ledger">
             <Watch coach={coach} />
             <Desk />

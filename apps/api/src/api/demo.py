@@ -75,11 +75,7 @@ def binance(request: httpx.Request) -> httpx.Response:
             }
             for s, (p, c) in PRICES.items()
         ],
-        "/api/v3/klines": klines(
-            symbol,
-            request.url.params.get("interval", "4h"),
-            min(int(request.url.params.get("limit", "120")), 1000),
-        ),
+        "/api/v3/klines": _klines(request),
         "/api/v3/myTrades": _trades(symbol),
         "/sapi/v1/capital/deposit/hisrec": [
             {"coin": "USDC", "amount": a, "network": "BASE", "status": 1, "insertTime": t}
@@ -103,6 +99,16 @@ def binance(request: httpx.Request) -> httpx.Response:
     if path not in replies:
         return httpx.Response(404, json={"msg": "Not in the demo."})
     return httpx.Response(200, json=replies[path])
+
+
+def _klines(request: httpx.Request) -> list[list[Any]]:
+    """Candles ending now; from startTime when one is asked for, as Binance pages them."""
+    params = request.url.params
+    limit = min(int(params.get("limit", "120")), 1000)
+    rows = klines(params.get("symbol", ""), params.get("interval", "4h"), limit)
+    if "startTime" in params:
+        rows = [r for r in rows if int(r[0]) >= int(params["startTime"])]
+    return rows
 
 
 # Two made-up USDC deposits for the FY deposits card (decision 31).

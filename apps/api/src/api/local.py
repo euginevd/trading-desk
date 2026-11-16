@@ -15,6 +15,7 @@ from urllib.parse import parse_qsl, urlsplit
 
 from api.advisor import check_alerts
 from api.binance import BinanceError
+from api.dca_book import DcaBook
 from api.handler import (
     handler,
     live_bots,
@@ -114,6 +115,7 @@ def watch(stop: threading.Event) -> None:
         try:
             with live_trading() as desk:
                 desk.watch()
+                DcaBook(desk).sync()
             with live_bots() as bots:
                 bots.step()
             with live_grids() as grids:

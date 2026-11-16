@@ -45,6 +45,7 @@ from api.ai_signin import SignIn
 from api.audit import Audit
 from api.binance import Binance, BinanceError, plain
 from api.bots import Bots
+from api.dca_book import DcaBook
 from api.deposits import amount_key
 from api.deposits import report as deposit_report
 from api.grid import Grids
@@ -468,6 +469,18 @@ def _body(event: dict[str, object]) -> dict[str, Any]:
 
 
 Route = Callable[[Trading, dict[str, str], dict[str, Any]], dict[str, Any]]
+# The DCA book (TODO 11): five lifelong positions, fed only by orders placed here.
+DCA_ROUTES: dict[tuple[str, str], Route] = {
+    ("GET", "/dca"): lambda desk, _q, _b: DcaBook(desk).view(),
+    ("PUT", "/dca/plan"): lambda desk, _q, b: DcaBook(desk).set_plan(b),
+    ("GET", "/dca/suggest"): lambda desk, _q, _b: DcaBook(desk).suggest(),
+    ("GET", "/dca/odds"): lambda desk, q, _b: DcaBook(desk).odds(
+        str(q.get("coin", "")), q.get("price")
+    ),
+    ("POST", "/dca/orders"): lambda desk, _q, b: DcaBook(desk).place(b),
+    ("POST", "/dca/orders/cancel"): lambda desk, _q, b: DcaBook(desk).cancel(b.get("ref")),
+    ("POST", "/dca/close-out"): lambda desk, _q, _b: DcaBook(desk).close_out(),
+}
 ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/trade"): lambda desk, q, _: desk.terminal(coin_symbol(q.get("symbol") or "BTC")),
     ("GET", "/settings"): lambda desk, _q, _b: desk.settings(),
@@ -480,6 +493,7 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/orders/cancel"): lambda desk, _, b: desk.cancel_order(
         b.get("symbol"), b.get("orderId")
     ),
+    **DCA_ROUTES,
 }
 
 
@@ -512,7 +526,7 @@ def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
     return {"source": source, "asset": asset, "averageCost": average}
 
 
-BUYS = ("/trades", "/orders", "/orders/ladder")
+BUYS = ("/trades", "/orders", "/orders/ladder", "/dca/orders")
 PRETRADE_RULES = ("monthly_deposit_cap_aud", "per_trade_aud", "max_pct_per_coin")
 
 
@@ -520,6 +534,8 @@ def _spend_of(path: str, body: dict[str, Any]) -> Decimal | None:
     """What a buy request would spend, in the quote; None when it isn't a buy or can't be read
     (the order itself then refuses it)."""
     try:
+        if path == "/dca/orders" and body.get("side", "buy") != "buy":
+            return None
         if path == "/orders":
             if body.get("side") != "buy":
                 return None
@@ -540,7 +556,7 @@ def _pretrade(
     if spend is None or not spend.is_finite() or spend <= 0:
         return None
     _, store, audit, _ = desk.parts()
-    coin = coin_symbol(body.get("symbol", "")).removesuffix(QUOTE)
+    coin = coin_symbol(body.get("symbol") or body.get("coin", "")).removesuffix(QUOTE)
     return _rule_check(store, audit, coin, spend, body.get("override") is True, portfolio)[0]
 
 

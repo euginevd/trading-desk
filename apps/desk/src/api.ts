@@ -1,4 +1,10 @@
 import type {
+  DcaBook,
+  DcaOdds,
+  DcaOrder,
+  DcaOrderRequest,
+  DcaPlan,
+  DcaWeekPlan,
   Drift,
   JournalData,
   SellCheck,
@@ -259,3 +265,18 @@ export const addAlert = (alert: {
 }) => call<{ alerts: PriceAlert[] }>("POST", "/alerts", alert);
 export const deleteAlert = (id: number) =>
   call<{ alerts: PriceAlert[] }>("DELETE", `/alerts/${id}`, {});
+
+// The DCA book (TODO 11).
+export const getDcaBook = () => call<DcaBook>("GET", "/dca");
+export const setDcaPlan = (plan: DcaPlan) => call<DcaBook>("PUT", "/dca/plan", plan);
+export const suggestDca = () => call<DcaWeekPlan>("GET", "/dca/suggest");
+export const dcaOdds = (coin: string, price: string) =>
+  call<DcaOdds & { now: string }>(
+    "GET",
+    `/dca/odds?coin=${encodeURIComponent(coin)}&price=${encodeURIComponent(price)}`,
+  );
+export const placeDcaOrder = (order: DcaOrderRequest) =>
+  call<DcaOrder>("POST", "/dca/orders", order);
+export const cancelDcaOrder = (ref: string) =>
+  call<DcaOrder>("POST", "/dca/orders/cancel", { ref });
+export const closeOutDca = () => call<{ closed: string[] }>("POST", "/dca/close-out");

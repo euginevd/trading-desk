@@ -1126,3 +1126,108 @@ export interface TelegramSettings {
   time: string;
   lastSent: string | null;
 }
+
+// The DCA book (TODO 11): five lifelong positions fed only by orders placed from the desk.
+export type DcaSource = "weekly" | "named" | "close-out" | "trim" | "buy-back" | "desk";
+export interface DcaPlan {
+  start: string;
+  weeks: number;
+  orders: { coin: string; spend: string; odds: number }[];
+}
+export interface DcaOrder {
+  ref: string;
+  coin: string;
+  side: "buy" | "sell";
+  kind: "limit" | "market";
+  source: DcaSource;
+  link: string | null;
+  week: string;
+  price: string | null;
+  qty: string | null;
+  spend: string | null;
+  status: "placing" | "open" | "filled" | "cancelled";
+  filledQty: string;
+  filledQuote: string;
+  avgPrice: string | null;
+  fee: string;
+  created: number;
+  updated: number;
+}
+export interface DcaPosition {
+  coin: string;
+  id: string;
+  since: number | null;
+  qty: string;
+  avgCost: string | null;
+  avgCostAud: string | null;
+  added: string;
+  price: string | null;
+  value: string | null;
+  pnl: string | null;
+  pnlPct: string | null;
+  realised: string;
+  fees: string;
+}
+export interface DcaTick {
+  week: number;
+  key: string;
+  friday: string;
+  state: "bought" | "missed" | "now";
+  trim: boolean;
+  usdc: string;
+}
+export interface DcaBook {
+  quote: string;
+  rate: string;
+  plan: DcaPlan | null;
+  positions: DcaPosition[];
+  totals: {
+    added: string;
+    value: string | null;
+    pnl: string | null;
+    pnlPct: string | null;
+    realised: string;
+    fees: string;
+  };
+  progress: {
+    week: number;
+    weeks: number;
+    weekly: string;
+    onPlan: string;
+    planTotal: string;
+    ticks: DcaTick[];
+  } | null;
+  week: { key: string; start: number; closeOut: number; orders: DcaOrder[] };
+  orders: DcaOrder[];
+  priceError: string | null;
+}
+export interface DcaOdds {
+  hit: number;
+  weeks: number;
+  pct: number | null;
+  few: boolean;
+}
+export interface DcaWeekPlan {
+  week: string;
+  closeOut: number;
+  quote: string;
+  orders: {
+    coin: string;
+    spend: string;
+    price: string;
+    now: string;
+    target: number;
+    odds: DcaOdds;
+  }[];
+}
+export interface DcaOrderRequest {
+  coin: string;
+  side?: "buy" | "sell";
+  kind?: "limit" | "market";
+  price?: string;
+  spend?: string;
+  qty?: string;
+  source: DcaSource;
+  link?: string;
+  override?: boolean;
+}

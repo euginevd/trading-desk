@@ -41,6 +41,30 @@ CREATE TABLE IF NOT EXISTS signals (
     coin TEXT PRIMARY KEY, ran INTEGER NOT NULL, data TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS history (day TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS dca_orders (
+    id INTEGER PRIMARY KEY,
+    ref TEXT NOT NULL UNIQUE,
+    coin TEXT NOT NULL,
+    side TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    source TEXT NOT NULL,
+    link TEXT,
+    week TEXT NOT NULL,
+    price TEXT,
+    qty TEXT,
+    spend TEXT,
+    client_id TEXT NOT NULL UNIQUE,
+    order_id INTEGER,
+    status TEXT NOT NULL,
+    executed_qty TEXT NOT NULL DEFAULT '0',
+    executed_quote TEXT NOT NULL DEFAULT '0',
+    fee_base TEXT NOT NULL DEFAULT '0',
+    fee_quote TEXT NOT NULL DEFAULT '0',
+    fee_usd TEXT NOT NULL DEFAULT '0',
+    aud_rate TEXT,
+    created INTEGER NOT NULL,
+    updated INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS deposit_paid (amount TEXT PRIMARY KEY, aud TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS bots (
     id INTEGER PRIMARY KEY,
@@ -262,7 +286,19 @@ class Store:
             ),
             Decimal(0),
         )
-        return trades + bots + gridded
+        dca = self._db.execute(
+            "SELECT status, spend, executed_quote FROM dca_orders "
+            "WHERE side = 'buy' AND created >= ?",
+            (since_ms,),
+        )
+        booked = sum(
+            (
+                Decimal(r["executed_quote"] if r["status"] == "cancelled" else r["spend"] or "0")
+                for r in dca
+            ),
+            Decimal(0),
+        )
+        return trades + bots + gridded + booked
 
     def order_owner(self, order_id: int) -> str | None:
         """Which bot or grid placed this Binance order, by its reference, if any."""
@@ -409,6 +445,42 @@ class Store:
                 "UPDATE bot_orders SET order_id = :order_id, status = :status, "
                 "executed_qty = :executed_qty, executed_quote = :executed_quote, "
                 "fee_base = :fee_base, updated = :updated WHERE id = :id",
+                order,
+            )
+
+    # The DCA book (TODO 11): every order the desk placed into the five lifelong positions.
+
+    def add_dca_order(self, order: dict[str, Any]) -> int:
+        with self._db:
+            cursor = self._db.execute(
+                "INSERT INTO dca_orders (ref, coin, side, kind, source, link, week, price, qty, "
+                "spend, client_id, status, aud_rate, created, updated) VALUES (:ref, :coin, "
+                ":side, :kind, :source, :link, :week, :price, :qty, :spend, 'pending', "
+                "'placing', :aud_rate, :created, :created)",
+                order,
+            )
+            row_id = int(cursor.lastrowid or 0)
+            # Binance's own id for it, from the row's number: unique, and short enough.
+            self._db.execute(
+                "UPDATE dca_orders SET client_id = ? WHERE id = ?", (f"tdca{row_id}", row_id)
+            )
+        return row_id
+
+    def dca_orders(self) -> list[dict[str, Any]]:
+        rows = self._db.execute("SELECT * FROM dca_orders ORDER BY created, id")
+        return [dict(r) for r in rows]
+
+    def dca_order(self, ref: str) -> dict[str, Any] | None:
+        row = self._db.execute("SELECT * FROM dca_orders WHERE ref = ?", (ref,)).fetchone()
+        return dict(row) if row else None
+
+    def save_dca_order(self, order: dict[str, Any]) -> None:
+        with self._db:
+            self._db.execute(
+                "UPDATE dca_orders SET order_id = :order_id, status = :status, "
+                "executed_qty = :executed_qty, executed_quote = :executed_quote, "
+                "fee_base = :fee_base, fee_quote = :fee_quote, fee_usd = :fee_usd, "
+                "updated = :updated WHERE id = :id",
                 order,
             )
 
