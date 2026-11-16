@@ -283,8 +283,9 @@ export const placeDcaOrder = (order: DcaOrderRequest) =>
 export const cancelDcaOrder = (ref: string) =>
   call<DcaOrder>("POST", "/dca/orders/cancel", { ref });
 export const closeOutDca = () => call<{ closed: string[] }>("POST", "/dca/close-out");
-export const analyseFunds = (side: "add" | "remove", amount: string) =>
-  call<FundsPlan>("POST", "/dca/funds/analyse", { side, amount });
+// The desk's own plan at once; dca-agent's only when asked.
+export const analyseFunds = (side: "add" | "remove", amount: string, agent = false) =>
+  call<FundsPlan>("POST", "/dca/funds/analyse", { side, amount, agent });
 export const chatFunds = (body: {
   side: "add" | "remove";
   amount: string;

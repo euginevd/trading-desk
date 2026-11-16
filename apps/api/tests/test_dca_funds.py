@@ -83,6 +83,17 @@ def test_adding_splits_by_the_plan_without_the_agent(book: DcaBook) -> None:
         assert Decimal(o["price"]) <= Decimal(o["now"])
 
 
+def test_the_desks_plan_never_asks_the_agent(book: DcaBook) -> None:
+    class Silent:
+        def step(self, *_a: object, **_k: object) -> None:
+            raise AssertionError("dca-agent was asked")
+
+    plan = Funds(book, Silent()).analyse("add", "100", agent=False)  # type: ignore[arg-type]
+    assert plan["by"] == "desk"
+    assert plan["note"] == ""
+    assert [o["usdc"] for o in plan["orders"]] == ["50", "25", "25"]
+
+
 def test_the_desk_checks_any_plan(book: DcaBook) -> None:
     funds = Funds(book, None)
     facts = funds.facts("buy")

@@ -1,9 +1,8 @@
-// Add funds and Remove funds on the DCA book (TODO 11). Name an amount, ask dca-agent, and it
-// returns one limit order per coin: its share, its price and why, with the desk's odds of a
-// fill within 24 hours. Change any share or price by hand, or tell the agent what to change.
+// Add funds and Remove funds on the DCA book (TODO 11), laid out like the week's planner. Name an
+// amount and the desk plans it at once: one limit per coin, by your targets, priced to fill within
+// 24 hours four times in five. Tick, change any price or amount, or ask dca-agent to adjust it.
 import { useRef, useState } from "react";
 import { ApiError, analyseFunds, chatFunds, fundsOdds, placeDcaOrder } from "./api";
-import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
 import OrderReview from "./OrderReview";
 import { limit, two } from "./dcaFormat";
@@ -84,6 +83,7 @@ export default function DcaFunds({
     setRows([...p.orders, ...(p.skipped ?? []).map((s) => ({ ...s, skipped: true }))]);
     setAmount(p.amount);
   };
+  const [talking, setTalking] = useState(false);
   const analyse = () => {
     setBusy("analyse");
     setError(null);
@@ -94,7 +94,7 @@ export default function DcaFunds({
         setBusy(null);
       },
       (e: unknown) => {
-        setError(errorOf(e, "dca-agent couldn't plan that."));
+        setError(errorOf(e, "The desk couldn't plan that."));
         setBusy(null);
       },
     );
@@ -134,17 +134,16 @@ export default function DcaFunds({
   // Hand edits: a share and its USDC move together; a new price fetches its odds.
   const edit = (i: number, change: Partial<Row>) =>
     setRows((r) => r.map((x, k) => (k === i ? { ...x, ...change } : x)));
-  // A share on a left-out coin brings it back in; clearing one leaves it out.
-  const setPct = (i: number, pct: string) => {
-    const usdc = asked ? ((asked * (Number(pct) || 0)) / 100).toFixed(2) : "0";
-    edit(i, { pct, usdc, skipped: !(Number(usdc) > 0) });
+  const setUsdc = (i: number, usdc: string) => edit(i, { usdc, skipped: !(Number(usdc) > 0) });
+  // Ticking a left-out coin brings it in at the minimum; unticking leaves it out.
+  const tick = (i: number, on: boolean) => {
+    const r = rows[i];
+    if (!r) return;
+    edit(
+      i,
+      on ? { skipped: false, usdc: Number(r.usdc) > 0 ? r.usdc : String(MIN) } : { skipped: true },
+    );
   };
-  const setUsdc = (i: number, usdc: string) =>
-    edit(i, {
-      usdc,
-      pct: asked ? (((Number(usdc) || 0) * 100) / asked).toFixed(1) : "0",
-      skipped: !(Number(usdc) > 0),
-    });
   const reOdds = (i: number) => {
     const r = rows[i];
     if (!r || !(Number(r.price) > 0)) return;
@@ -237,12 +236,12 @@ export default function DcaFunds({
           </span>
         </label>
         <button type="submit" className="btn btn-accent" disabled={!(asked > 0) || busy !== null}>
-          {busy === "analyse" ? "dca-agent is reading the market…" : "Analyse with dca-agent"}
+          {busy === "analyse" ? "Planning…" : plan ? "Plan again" : "Plan it"}
         </button>
         <p className="muted dcf-hint">
           {selling
-            ? "It picks the coins likeliest to dip so you can buy back lower, with limit sells that fill within 24 hours four times in five."
-            : "It splits the amount across your coins, one limit buy each, priced to fill within 24 hours four times in five."}
+            ? "The desk takes from the hottest coins first, a quarter of a position at most, with limit sells that fill within 24 hours four times in five."
+            : "The desk splits it by your targets, one limit a coin, priced to fill within 24 hours four times in five."}
         </p>
       </form>
 
@@ -254,19 +253,15 @@ export default function DcaFunds({
 
       {plan && (
         <>
-          <div className="dcf-note">
-            <AgentAvatar icon="dca" slug="dca-agent" />
-            <p>
-              {plan.by === "desk" && <span className="dcb-warn">From the desk alone. </span>}
-              {plan.note}
-            </p>
-          </div>
-          {plan.said.length > 0 && (
-            <ul className="dcf-said">
-              {plan.said.map((s) => (
-                <li key={s}>{s}</li>
+          {(plan.note || plan.said.length > 0) && (
+            <div className="dcf-note">
+              {plan.note && <p>{plan.note}</p>}
+              {plan.said.map((x) => (
+                <p key={x} className="muted">
+                  {x}
+                </p>
               ))}
-            </ul>
+            </div>
           )}
           <div className="dcf-split" role="img" aria-label={splitWords(rows, quote)}>
             {rows
@@ -288,17 +283,28 @@ export default function DcaFunds({
             >
               <thead>
                 <tr>
+                  <th>
+                    <span className="visually-hidden">Place</span>
+                  </th>
                   <th>Coin</th>
-                  <th className="r">Share %</th>
-                  <th className="r">{quote}</th>
                   <th className="r">Limit</th>
-                  <th>Likely to fill in 24h</th>
-                  <th>Why this price</th>
+                  <th className="r">{quote}</th>
+                  <th>Fill in 24h</th>
+                  <th>Result</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={r.coin} className={r.skipped ? "is-skipped" : ""}>
+                    <td>
+                      <input
+                        type="checkbox"
+                        aria-label={`Place ${r.coin}`}
+                        checked={!r.skipped}
+                        disabled={Boolean(r.result)}
+                        onChange={(e) => tick(i, e.target.checked)}
+                      />
+                    </td>
                     <td>
                       <span className="dcb-coin">
                         <CoinIcon coin={r.coin} />
@@ -308,13 +314,13 @@ export default function DcaFunds({
                     </td>
                     <td className="r">
                       <input
-                        className="dcb-num dcf-pct"
-                        aria-label={`${r.coin} share`}
+                        className="dcb-num"
+                        aria-label={`${r.coin} limit price`}
                         inputMode="decimal"
-                        value={r.skipped ? "" : r.pct}
-                        placeholder="0"
-                        disabled={Boolean(r.result)}
-                        onChange={(e) => setPct(i, e.target.value)}
+                        value={r.price}
+                        disabled={Boolean(r.result) || r.skipped}
+                        onChange={(e) => edit(i, { price: e.target.value })}
+                        onBlur={() => reOdds(i)}
                       />
                     </td>
                     <td className="r">
@@ -328,80 +334,58 @@ export default function DcaFunds({
                         onChange={(e) => setUsdc(i, e.target.value)}
                       />
                     </td>
-                    <td className="r">
-                      <input
-                        className="dcb-num"
-                        aria-label={`${r.coin} limit price`}
-                        inputMode="decimal"
-                        value={r.price}
-                        disabled={Boolean(r.result)}
-                        onChange={(e) => edit(i, { price: e.target.value })}
-                        onBlur={() => reOdds(i)}
-                      />
-                    </td>
                     <td>
                       <Odds row={r} selling={selling} />
                     </td>
-                    <td className={`dcf-why ${r.failed ? "error-text" : ""}`}>
-                      {r.skipped && <span className="dcf-out">Left out. </span>}
-                      {!r.skipped && !r.result && Number(r.usdc) > 0 && Number(r.usdc) < MIN && (
-                        <span className="dcb-warn">
-                          Under {MIN} {quote}: raise it or clear it.{" "}
-                        </span>
-                      )}
-                      {r.result ?? r.reason}
+                    <td className={`dcf-why ${r.failed ? "error-text" : "muted"}`}>
+                      {r.result ??
+                        (r.skipped
+                          ? r.reason
+                          : Number(r.usdc) > 0 && Number(r.usdc) < MIN
+                            ? `Under ${MIN} ${quote}: raise it or untick it.`
+                            : "")}
                     </td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                <tr>
-                  <td>Total</td>
-                  <td />
-                  <td className={`r num ${Math.abs(total - asked) > 0.01 ? "wait" : ""}`}>
-                    {two(total)}
-                  </td>
-                  <td colSpan={3} className="muted">
-                    {Math.abs(total - asked) > 0.01 ? `of ${two(asked)} asked` : ""}
-                  </td>
-                </tr>
-              </tfoot>
             </table>
           </div>
           <p className="dcb-note">
-            Likely to fill: how often, over the last year, the price {selling ? "rose" : "fell"}{" "}
-            that far within a day, from any starting hour. 80% is about four days in five.
+            Total {two(total)} of {two(asked)} {quote}. Fill in 24h: how often, over the last year,
+            the price {selling ? "rose" : "fell"} that far within a day.
           </p>
 
-          <div className="dcf-chat" aria-label="Talk to dca-agent">
-            {lines.length > 0 && (
-              <ol className="dcf-lines" aria-live="polite">
-                {lines.map((l, i) => (
-                  <li key={i} className={`is-${l.who}`}>
-                    {l.text}
-                  </li>
-                ))}
-              </ol>
-            )}
-            <form
-              className="dcf-say"
-              onSubmit={(e) => {
-                e.preventDefault();
-                send();
-              }}
-            >
-              <input
-                value={message}
-                onChange={(e) => setMessage(e.target.value)}
-                placeholder="Tell dca-agent what to change: more BTC, SOL a bit deeper…"
-                aria-label="Message to dca-agent"
-                maxLength={500}
-              />
-              <button type="submit" className="btn" disabled={!message.trim() || busy !== null}>
-                {busy === "chat" ? "Thinking…" : "Send"}
-              </button>
-            </form>
-          </div>
+          {talking && (
+            <div className="dcf-chat" aria-label="Talk to dca-agent">
+              {lines.length > 0 && (
+                <ol className="dcf-lines" aria-live="polite">
+                  {lines.map((l, i) => (
+                    <li key={i} className={`is-${l.who}`}>
+                      {l.text}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              <form
+                className="dcf-say"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  send();
+                }}
+              >
+                <input
+                  value={message}
+                  onChange={(e) => setMessage(e.target.value)}
+                  placeholder="More BTC, SOL a bit deeper, skip HYPE…"
+                  aria-label="Ask dca-agent about this split"
+                  maxLength={500}
+                />
+                <button type="submit" className="btn" disabled={!message.trim() || busy !== null}>
+                  {busy === "chat" ? "Thinking…" : "Send"}
+                </button>
+              </form>
+            </div>
+          )}
 
           {held && (
             <div className="alert" role="alert">
@@ -411,14 +395,21 @@ export default function DcaFunds({
               </button>
             </div>
           )}
-          <div className="dcf-foot">
+          <div className="dcb-plan-foot">
+            {talking ? (
+              <span />
+            ) : (
+              <button type="button" className="link" onClick={() => setTalking(true)}>
+                Ask dca-agent to adjust
+              </button>
+            )}
             <button
               type="button"
               className="btn btn-accent"
               disabled={pending.length === 0 || tooSmall.length > 0 || busy !== null}
               onClick={() => dialog.current?.showModal?.()}
             >
-              Review {pending.length} {selling ? "limit sells" : "limit buys"}
+              Review {pending.length} {pending.length === 1 ? "limit" : "limits"}
             </button>
           </div>
         </>

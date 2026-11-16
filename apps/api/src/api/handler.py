@@ -914,7 +914,7 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("GET", "/agents"): lambda _s, _q, _b: agents.listing(),
     ("GET", "/my-agents"): lambda s, _q, _b: my_agents.listing(s.store),
     ("POST", "/dca/funds/analyse"): lambda s, _q, b: _funds(s).analyse(
-        b.get("side"), b.get("amount")
+        b.get("side"), b.get("amount"), b.get("agent", True) is not False
     ),
     ("POST", "/dca/funds/chat"): lambda s, _q, b: _funds(s).chat(b),
     ("POST", "/dca/agent"): lambda s, _q, b: _funds(s).agent(b),

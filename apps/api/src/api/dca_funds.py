@@ -436,10 +436,15 @@ class Funds:
             )
         return task + "\n\nDESK FIGURES:\n" + json.dumps(facts, indent=1)
 
-    def analyse(self, side_word: object, amount_raw: object) -> dict[str, Any]:
+    def analyse(self, side_word: object, amount_raw: object, agent: bool = True) -> dict[str, Any]:
+        """The split and prices: the desk's own at once, or dca-agent's when asked."""
         side, amount = _side(side_word), _amount(amount_raw)
         facts = self.facts(side)
-        reply = self._ask(self._brief(facts, amount), self.SHAPE, f"Funds: {side_word}")
+        reply = (
+            self._ask(self._brief(facts, amount), self.SHAPE, f"Funds: {side_word}")
+            if agent
+            else None
+        )
         proposed = reply["orders"] if reply else self.desk_plan(facts, amount)
         try:
             rows, said = self.settle(facts, amount, proposed)
@@ -452,6 +457,8 @@ class Funds:
             str(reply.get("note") or "")[:700]
             if reply
             else "dca-agent couldn't be reached, so this is the desk's own plan."
+            if agent
+            else ""
         )
         return {
             "side": side,

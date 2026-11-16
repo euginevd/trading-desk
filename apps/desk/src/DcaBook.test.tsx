@@ -353,27 +353,33 @@ describe("DCA book page", () => {
     });
   });
 
-  it("adds funds: dca-agent's split, a hand edit, then one limit per coin", async () => {
+  it("adds funds: the desk's split, a tick and a hand edit, then one limit per coin", async () => {
     const fetch = serve(book());
     render(<DcaBookPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Add funds" }));
     fireEvent.change(screen.getByRole("textbox", { name: "Amount in USDC" }), {
       target: { value: "100" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Analyse with dca-agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "Plan it" }));
     expect(await screen.findByText("Most to BTC, near last week's low.")).toBeTruthy();
-    expect(screen.getByText("Just above Saturday's 63.3K low.")).toBeTruthy();
-    // A coin left out still shows, with why, and stays out of the orders until given a share.
-    expect(screen.getByText("Under the 10 USDC minimum.")).toBeTruthy();
-    expect(screen.getByRole("textbox", { name: "SOL amount" })).toHaveProperty("value", "");
-    fireEvent.change(screen.getByRole("textbox", { name: "BTC share" }), {
-      target: { value: "60" },
+    expect(JSON.parse(String(sent(fetch, "/dca/funds/analyse")[0]?.[1]?.body))).toMatchObject({
+      agent: false,
     });
-    expect(screen.getByRole("textbox", { name: "BTC amount" })).toHaveProperty("value", "60.00");
-    fireEvent.change(screen.getByRole("textbox", { name: "ETH share" }), {
+    // A coin left out still shows, unticked, with why.
+    expect(screen.getByText("Under the 10 USDC minimum.")).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "Place SOL" })).toHaveProperty("checked", false);
+    expect(screen.getByRole("textbox", { name: "SOL amount" })).toHaveProperty("value", "");
+    fireEvent.change(screen.getByRole("textbox", { name: "BTC amount" }), {
+      target: { value: "60.00" },
+    });
+    fireEvent.change(screen.getByRole("textbox", { name: "ETH amount" }), {
       target: { value: "40" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Review 2 limit buys" }));
+    // dca-agent's chat opens only when asked.
+    expect(screen.queryByRole("textbox", { name: "Ask dca-agent about this split" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ask dca-agent to adjust" }));
+    expect(screen.getByRole("textbox", { name: "Ask dca-agent about this split" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Review 2 limits" }));
     fireEvent.click(screen.getByRole("button", { name: "Place 2" }));
     await waitFor(() => expect(sent(fetch, "/dca/orders")).toHaveLength(2));
     expect(JSON.parse(String(sent(fetch, "/dca/orders")[0]?.[1]?.body))).toEqual({
