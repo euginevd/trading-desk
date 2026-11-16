@@ -21,7 +21,7 @@ import {
   startAnalysis,
 } from "./api";
 import Coins from "./Coins";
-import { amount, percent, trend, usd } from "./format";
+import { amount, amountSleek, percent, trend, usd } from "./format";
 import OrderSheet, { type SheetStart } from "./OrderSheet";
 import SmartTradePanel from "./SmartTrade";
 import { AgentHero, Asks, RunHeader, TicketCard, Timeline } from "./TradeAgent";
@@ -397,7 +397,9 @@ export default function Trade({
                     <div>
                       <dt>You hold</dt>
                       <dd className="num">
-                        {pos.held ? `${amount(pos.qty)} ${shown.coin}` : "None"}
+                        {pos.held
+                          ? `${amountSleek(pos.qty, shownMarket?.price ?? null)} ${shown.coin}`
+                          : "None"}
                       </dd>
                     </div>
                     <div>

@@ -322,20 +322,18 @@ h2 {
   transform: translateX(12px);
   background: var(--accent-ink);
 }
+/* Folded, the kill switch is its icon alone: mint on a soft tint when trading is on, red when
+   off; no box and no dot. */
+.folded .side-status .pill.kill {
+  border: 0;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.folded .side-status .pill.kill[aria-pressed="false"] {
+  background: var(--down-soft);
+  color: var(--down);
+}
 .folded .side-status .switch {
-  position: absolute;
-  top: 6px;
-  right: 8px;
-  width: 8px;
-  height: 8px;
-  margin: 0;
-  background: var(--down);
-  box-shadow: 0 0 0 2px var(--bar);
-}
-.folded .side-status .switch.on {
-  background: var(--up);
-}
-.folded .side-status .switch i {
   display: none;
 }
 /* Logo or icon first, the status dot at the far end; folded, the dot sits on the icon's corner. */
@@ -356,10 +354,13 @@ h2 {
   margin-left: auto;
   flex: none;
 }
+/* Folded, a connection's dot sits small on its logo's lower right, ringed in the panel's colour. */
 .folded .side-status .pill .dot {
   position: absolute;
-  top: 7px;
-  right: 14px;
+  bottom: 9px;
+  right: calc(50% - 12px);
+  width: 7px;
+  height: 7px;
   margin: 0;
   box-shadow: 0 0 0 2px var(--bar);
 }
@@ -926,8 +927,18 @@ dialog p {
   }
   .folded .side-status .pill .dot {
     position: static;
+    width: 6px;
+    height: 6px;
     margin-left: auto;
     box-shadow: none;
+  }
+  .folded .side-status .switch {
+    display: block;
+  }
+  .folded .side-status .pill.kill {
+    border: 1px solid var(--line);
+    background: var(--panel);
+    color: var(--text);
   }
   .drawer .side-scrim {
     display: block;
