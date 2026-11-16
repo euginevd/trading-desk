@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { getGlobal, getPortfolio, getSentiment, getSettings, getTickers, setTrading } from "./api";
-import { percent, price, trend, usdShort } from "./format";
+import { percent, trend, usdShort } from "./format";
 import Coach from "./Coach";
 import Journal from "./Journal";
 import DcaBots from "./DcaBots";
@@ -102,6 +102,18 @@ function taoPill(tao: TaoWallet["status"] | null): { word: string; dot: string; 
   if (tao === "not_set")
     return { word: "No wallet", dot: "quiet", title: "Add TAO_COLDKEY to .env" };
   return { word: "Wallet", dot: "quiet", title: "Not read yet" };
+}
+
+// BTC dominance's move over 24 hours, in percentage points. CoinGecko gives today's share only, so
+// a day ago is worked out: the share times the market's growth over Bitcoin's (its price change
+// stands in for its market cap's, the supply barely moving in a day). Null without both.
+export function dominanceMove(global: MarketGlobal | null, tickers: Ticker[]): number | null {
+  const btc = tickers.find((t) => t.coin === "BTC")?.change24h;
+  if (!global?.btcShare || global.capChange === undefined || btc === null || btc === undefined)
+    return null;
+  const share = Number(global.btcShare);
+  const before = (share * (1 + Number(global.capChange) / 100)) / (1 + Number(btc) / 100);
+  return share - before;
 }
 
 // The index's mood, as the Dashboard's colours: fear red, greed green, neutral amber.
@@ -333,7 +345,7 @@ export default function App() {
               <a key={t.coin} className="tick" href="#/trade" title="Bitcoin's price">
                 <span className="tick-coin">{t.coin}</span>
                 <span>
-                  <b>{price(t.price)}</b>{" "}
+                  <b>{Math.round(Number(t.price)).toLocaleString("en-AU")}</b>{" "}
                   <span className={trend(t.change24h)}>{percent(t.change24h)}</span>
                 </span>
               </a>
@@ -344,7 +356,18 @@ export default function App() {
                 title="Bitcoin's share of the whole market. Falling: money is moving into altcoins."
               >
                 <span className="tick-coin">BTC dominance</span>
-                <b>{Number(global.btcShare).toFixed(1)}%</b>
+                <span>
+                  <b>{Number(global.btcShare).toFixed(1)}%</b>{" "}
+                  {(() => {
+                    const moved = dominanceMove(global, tickers);
+                    return moved === null ? null : (
+                      <span className={trend(String(moved))}>
+                        {moved > 0 ? "+" : moved < 0 ? "−" : ""}
+                        {Math.abs(moved).toFixed(1)} pts
+                      </span>
+                    );
+                  })()}
+                </span>
               </span>
             )}
             {global?.cap && (

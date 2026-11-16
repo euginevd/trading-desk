@@ -294,7 +294,7 @@ describe("Profile", () => {
     const building = screen.getByRole("region", { name: "Building" });
     const stack = within(building).getByRole("group", { name: "Stack to 1 BTC" });
     expect(stack.textContent).toContain("0.2 BTC of 1, worth A$18K.");
-    expect(within(stack).getByText("Not bought yet this week")).toBeTruthy();
+    expect(within(stack).queryByText(/this week/)).toBeNull(); // the Dashboard's week rail
     expect(stack.textContent).toContain(
       "Next 0.25 BTC in 15 weekly buys of A$300. 1 BTC by Jun 2031 at today's price.",
     );

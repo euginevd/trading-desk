@@ -335,15 +335,8 @@ function Stack({ b }: { b: BoardStack }) {
             </strong>
             <span className="muted">
               {" "}
-              of {btc(b.target)}, worth <Live value={b.valueAud}>{km(b.valueAud)}</Live>.{" "}
+              of {btc(b.target)}, worth <Live value={b.valueAud}>{km(b.valueAud)}</Live>.
             </span>
-            {b.bought === null ? (
-              <span className="muted">This week&apos;s buy couldn&apos;t be checked.</span>
-            ) : b.bought ? (
-              <span className="pf-done">✓ Bought this week</span>
-            ) : (
-              <span className="pf-due">Not bought yet this week</span>
-            )}
           </p>
           <Bar
             label={`BTC held against ${btc(b.target)} BTC`}

@@ -183,9 +183,6 @@ export const getAgents = () => call<{ agents: AgentInfo[] }>("GET", "/agents");
 export const getAgent = (id: string) => call<AgentThread>("GET", `/agents/${id}`);
 export const sendAgent = (id: string, text: string) =>
   call<AgentThread>("POST", `/agents/${id}`, { text });
-export const getProfile = () => call<{ name: string }>("GET", "/settings/profile");
-export const setProfile = (name: string) =>
-  call<{ name: string }>("PUT", "/settings/profile", { name });
 
 // Tax lots, drift, the Journal and Telegram (decisions 54 to 57).
 export const getTax = () => call<TaxReport>("GET", "/tax");

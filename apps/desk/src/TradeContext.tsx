@@ -247,13 +247,6 @@ export function GuardrailsCard({ run }: { run: AgentRun | null }) {
             <span>Minimum cash</span>
             <b className="num">{g.minCashAud ? aud(g.minCashAud) : "Not set"}</b>
           </div>
-          <div>
-            <span>Autonomy</span>
-            <b>
-              {run.agent.autonomy.slice(0, 1).toUpperCase()}
-              {run.agent.autonomy.slice(1)}
-            </b>
-          </div>
         </div>
       )}
     </section>

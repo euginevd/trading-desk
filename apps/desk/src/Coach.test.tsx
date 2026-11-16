@@ -239,7 +239,7 @@ describe("the Dashboard", () => {
     expect(await screen.findByText("A$4.2K")).toBeTruthy();
     expect(screen.getByText(/of your A\$6K cap\. A\$1.8K left\./)).toBeTruthy();
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("70");
-    expect(screen.getByText(/A\$22K this financial year\./)).toBeTruthy();
+    expect(screen.queryByText(/this financial year/)).toBeNull(); // the Portfolio's Money in
     expect(screen.getByText("Raised the monthly cap, and kept it lower after")).toBeTruthy();
     expect(screen.queryByText(/ over\./)).toBeNull();
   });

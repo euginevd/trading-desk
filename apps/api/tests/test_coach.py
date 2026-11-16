@@ -369,11 +369,11 @@ def call(tmp_path: Path, store: Store, audit: Audit, monkeypatch: pytest.MonkeyP
 
 
 def test_the_routes_serve_the_coach_plan_agents_and_name(call: Any) -> None:
-    assert call("PUT", "/settings/profile", {"name": "  Sam  "}) == (200, {"name": "Sam"})
+    assert call("PUT", "/settings/profile", {"name": "Sam"})[0] == 404  # noqa: PLR2004 - the Profile's
     assert call("PUT", "/profile/strategy", {"value": {}})[0] == 404  # noqa: PLR2004 - no form edits
     status, dashboard = call("GET", "/coach")
     assert status == 200  # noqa: PLR2004
-    assert dashboard["greeting"].endswith(", Sam.")
+    assert dashboard["greeting"].endswith(".")  # the Profile's name, when its file has one
     assert (dashboard["mood"], dashboard["pending"]) == ("down", True)
     assert dashboard["message"]["source"] == "plain"
     assert call.written == []  # the GET never waits on the model

@@ -392,10 +392,7 @@ function Watch({ coach }: { coach: CoachData }) {
                 <i style={{ width: `${used}%` }} />
               </div>
             )}
-            <p className="dash-note">
-              {coach.message.source === "model" && `${coach.message.coach} `}
-              {d.fyAud && Number(d.fyAud) > 0 && `${km(d.fyAud)} this financial year.`}
-            </p>
+            <p className="dash-note">{coach.message.source === "model" && coach.message.coach}</p>
           </>
         )}
         {d.lesson && (

@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import App from "./App";
+import App, { dominanceMove } from "./App";
 import { amount, amountSleek, percent, price, priceSleek, usd, usdShort, usdWhole } from "./format";
 import type { Portfolio, Settings } from "./types";
 
@@ -160,6 +160,17 @@ describe("format", () => {
   });
 });
 
+describe("top bar", () => {
+  it("works out BTC dominance's move from the market's and Bitcoin's 24h changes", () => {
+    const btc = (change24h: string) => [{ coin: "BTC", price: "98400", change24h }];
+    // 50% of a market flat on the day, Bitcoin up 2%: it was 50 / 1.02 = 49.02% a day ago.
+    expect(dominanceMove({ btcShare: "50", capChange: "0" }, btc("2"))?.toFixed(2)).toBe("0.98");
+    expect(dominanceMove({ btcShare: "50", capChange: "2" }, btc("2"))).toBe(0);
+    expect(dominanceMove({ btcShare: "50" }, btc("2"))).toBeNull();
+    expect(dominanceMove({ btcShare: "50", capChange: "1" }, [])).toBeNull();
+  });
+});
+
 describe("side panel", () => {
   it("links Dashboard, Trade and the bots, and folds to icons", async () => {
     serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
@@ -210,7 +221,7 @@ describe("portfolio page", () => {
     expect(hero.querySelector("h2")?.textContent).toBe("You hold A$63K, A$192 above what it cost.");
     // 1,500 up today; Binance 2,415.48 and the wallet 40,177.50
     expect(within(hero).getByText(/Binance A\$3\.6K, the wallet A\$59K\./)).toBeTruthy();
-    expect(within(hero).getByText(/^Up 3\.[67]% today, \+A\$2\.2K$/)).toBeTruthy();
+    expect(within(hero).queryByText(/today/)).toBeNull(); // the Dashboard says the day's move
     // 85 staked + 12.4 free + 1.5 rewards
     expect(hero.querySelector(".port-tao")?.textContent).toBe(
       "98.9 τ in the wallet, 1.5 τ of it in baskets to claim.",
@@ -219,7 +230,7 @@ describe("portfolio page", () => {
     expect(screen.queryByText(/ at 1.4738 AUD/)).toBeNull(); // the rate line is hidden
     expect(screen.queryByText("Account value")).toBeNull(); // the 30-day box is gone for now
     expect(screen.getByText(/Demo data/)).toBeTruthy();
-    expect(await screen.findByText("98,400.00")).toBeTruthy(); // the top bar's ticker
+    expect(await screen.findByText("98,400")).toBeTruthy(); // the top bar's ticker, whole dollars
     expect(screen.getByRole("button", { name: "Trading on" })).toBeTruthy();
   });
 
@@ -557,7 +568,7 @@ describe("widget details", () => {
     expect(await screen.findByText(/from Neutral a month ago/)).toBeTruthy();
     expect(screen.getByText("Last week")).toBeTruthy();
     expect(screen.getByRole("img", { name: "17, Extreme Fear" })).toBeTruthy();
-    expect(screen.getByText("$2.3T")).toBeTruthy();
+    expect(screen.getByText("$73.9B")).toBeTruthy(); // volume; the cap is in the top bar
   });
 
   it("opens an open order on its chart, says how far it is, and changes it in one step", async () => {

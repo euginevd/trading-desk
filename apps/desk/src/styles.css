@@ -1888,13 +1888,30 @@ dialog.in-place .detail-head {
   touch-action: none;
 }
 
-/* Settings (decision 50): cards with a header row and their status at the right; the AI card
-   says what's in use first, then the providers as selectable cards and the models. */
+/* Settings (decisions 50 and 65): what the desk runs on in a sentence, then hairline sections,
+   each a header row with its status at the right; the providers and models stay selectable. */
 .settings {
-  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 820px;
 }
-.settings-card {
-  padding: 16px;
+.set-headline {
+  margin: 0 0 6px;
+  font-size: 30px;
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.set-lead {
+  margin: 0;
+  color: var(--body);
+  font-size: 15px;
+  max-width: 68ch;
+}
+.set-section {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
 }
 .settings-head {
   display: flex;
@@ -1926,6 +1943,23 @@ dialog.in-place .detail-head {
   border-radius: 50%;
   background: var(--dim);
 }
+/* Built as `is-${tone}` (SettingsPage's Status). */
+.settings-status.is-up .settings-dot {
+  background: var(--up);
+}
+.settings-status.is-wait .settings-dot {
+  background: var(--wait);
+}
+.settings-status.is-down .settings-dot {
+  background: var(--down);
+}
+.settings-status.is-idle {
+  color: var(--muted);
+}
+.settings-status.is-idle .settings-dot {
+  background: none;
+  border: 1px solid var(--muted);
+}
 
 .settings-label {
   font-size: 12px;
@@ -1933,27 +1967,6 @@ dialog.in-place .detail-head {
 }
 .settings-intro {
   margin: -4px 0 4px;
-  font-size: 12px;
-}
-
-/* What's in use: the one line that answers "what am I using?" */
-.settings-inuse {
-  display: grid;
-  gap: 2px;
-  padding: 12px 14px;
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-.settings-inuse p {
-  margin: 0;
-}
-.settings-inuse-main {
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-}
-.settings-inuse-sub {
   font-size: 12px;
 }
 
@@ -2216,8 +2229,15 @@ dialog.in-place .detail-head {
   align-items: center;
   margin-top: 4px;
 }
-.settings-card + .settings-card {
-  margin-top: 12px;
+@media (max-width: 520px) {
+  .set-headline {
+    font-size: 23px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .set-headline {
+    animation: dash-rise 420ms var(--ease) both;
+  }
 }
 
 /* The Tax tab (decision 54) */

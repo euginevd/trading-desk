@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, getSentimentDetail } from "./api";
-import { percent, shortDate, trend, usdShort } from "./format";
+import { shortDate, usdShort } from "./format";
 import type { SentimentDetail } from "./types";
 
 // The top bar's Fear & Greed opens a panel with more on it (decision 42); the panel helpers here
@@ -207,18 +207,9 @@ function FearDetail() {
       {data.market && (
         <div className="dca-tiles detail-tiles">
           <div>
-            <span className="label">Total market cap</span>
-            <b className={`num ${trend(data.market.capChange)}`}>
-              {percent(data.market.capChange)}
-            </b>
-            <small className="muted">{usdShort(data.market.cap)}</small>
-          </div>
-          <div>
             <span className="label">24h volume</span>
             <b className="num">{usdShort(data.market.volume)}</b>
-            <small className="muted">
-              Bitcoin {Number(data.market.btcShare).toFixed(1)}% of the market
-            </small>
+            <small className="muted">The whole crypto market</small>
           </div>
         </div>
       )}

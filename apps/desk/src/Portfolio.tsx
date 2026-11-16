@@ -564,7 +564,6 @@ function Hero({
   const who =
     source === "all" ? "You hold" : source === "Binance" ? "Binance holds" : "Your wallet holds";
   const profit = Math.round(sum.profit);
-  const moved = sum.changePercent;
   return (
     <section className="port-hero" aria-label="What you hold">
       <h2 className="port-headline num">
@@ -584,20 +583,8 @@ function Hero({
         .
       </h2>
       <p className="port-lead num">
-        {moved === null ? (
-          "No change today yet."
-        ) : (
-          <>
-            <span className={trend(String(sum.change))}>
-              {moved >= 0 ? "Up" : "Down"} {Math.abs(moved).toFixed(1)}% today,{" "}
-              {m.short(sum.change, true)}
-            </span>
-            .
-          </>
-        )}
         {source === "all" && (
           <>
-            {" "}
             Binance {m.short(accounts.binance)}, the wallet {m.short(accounts.wallet)}.
           </>
         )}

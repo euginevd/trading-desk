@@ -10,7 +10,7 @@ import {
   watchCoin,
 } from "./api";
 import CoinIcon from "./CoinIcon";
-import { ago, percent, price, trend, usd } from "./format";
+import { ago, percent, price, trend } from "./format";
 import { actionTone } from "./TradeAgent";
 import type { AgentCall, CoinRank, Watchlist } from "./types";
 
@@ -309,11 +309,6 @@ export default function Coins({
         {ranked
           ? `Ranked for $${ranked.cost}. Start with the coins marked Run first.`
           : "Analyse all ranks which coins need a full run, for about a cent."}
-        {list && (
-          <span>
-            AI spend this month: {usd(list.aiBudget.spent)} of {usd(list.aiBudget.cap)}
-          </span>
-        )}
       </div>
     </aside>
   );

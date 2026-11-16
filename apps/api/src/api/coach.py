@@ -22,7 +22,6 @@ STABLES = ("USDC", "USDT", "FDUSD")
 DUST = Decimal(5)
 POINTS = 4
 CACHE_KEY = "coach_message"
-NAME_KEY = "owner_name"
 LABELS = {
     "sharp_up": "Sharp up",
     "up": "Up",

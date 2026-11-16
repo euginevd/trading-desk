@@ -412,10 +412,6 @@ export default function Trade({
                       </dd>
                     </div>
                     <div>
-                      <dt>Of portfolio</dt>
-                      <dd className="num">{pos.weightPct !== null ? `${pos.weightPct}%` : "–"}</dd>
-                    </div>
-                    <div>
                       <dt>Cash</dt>
                       <dd className="num">{usd(shown.cashUsd)}</dd>
                     </div>

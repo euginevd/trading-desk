@@ -883,8 +883,6 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("GET", "/settings/ai"): lambda s, _q, _b: ai_client.view(s.store, s.signals),
     ("PUT", "/settings/ai"): lambda s, _, b: ai_client.choose(s.store, s.audit, s.signals, b),
     ("PUT", "/settings/ai/key"): lambda s, _, b: _save_key(s, b),
-    ("GET", "/settings/profile"): lambda s, _q, _b: _profile(s),
-    ("PUT", "/settings/profile"): lambda s, _, b: _set_profile(s, b),
     ("GET", "/coach"): lambda s, _q, _b: _coach(s, write=False),
     ("POST", "/coach/message"): lambda s, _q, _b: _coach(s, write=True),
     ("GET", "/agents"): lambda _s, _q, _b: agents.listing(),
@@ -961,18 +959,6 @@ def _named_route(
     return None
 
 
-def _profile(s: Services) -> dict[str, str]:
-    return {"name": s.store.setting(coach.NAME_KEY, "")}
-
-
-def _set_profile(s: Services, body: dict[str, Any]) -> dict[str, str]:
-    """The owner's name for the greeting, kept only in the local database (decision 52)."""
-    name = " ".join(str(body.get("name", "")).split())[:40]
-    s.store.set_setting(coach.NAME_KEY, name)
-    s.audit.record("settings", "Your name", "Saved" if name else "Cleared")
-    return _profile(s)
-
-
 def _coach(s: Services, *, write: bool) -> dict[str, Any]:
     """The Dashboard: facts from code, and the message kept for today and this mood. GET is
     quick, with the plain wording until the model's is kept; POST has the model write it."""
@@ -987,7 +973,7 @@ def _coach(s: Services, *, write: bool) -> dict[str, Any]:
         report=report,
         plan=plan,
         now=datetime.now(SYDNEY),
-        name=plan["identity"]["name"] or s.store.setting(coach.NAME_KEY, ""),
+        name=plan["identity"]["name"] or "",  # the Profile's Name line (decision 65)
         last_plan=s.signals.last,
     )
     facts["week"] = _week(s, plan)

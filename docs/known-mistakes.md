@@ -13,7 +13,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 7. The repo is public: never copy the owner's real balances, costs, deposits, wallet addresses or emails into tests, demo data or docs. Use made-up numbers, including in mockups built from the owner's screenshots; the owner's data lives only in `local/` (SQLite, audit log) and `.env`, both git-ignored.
 8. Run `bash .lefthook/pre-push-scan.sh </dev/null` by hand: without a terminal it waits on stdin for git's pushed refs and hangs for hours.
 9. Don't write Python or TypeScript edits through a bash heredoc: backslash escapes (`\n`, `\b`, `\1`) arrive as line breaks or control characters. Use the Edit or Write tool.
-10. Before deleting CSS rules whose class no source file names, grep for classes built in template strings (`` `on-${side}` ``): a word-search prune dropped the order sheet's Buy and Sell colours.
+10. Before deleting CSS rules whose class no source file names, grep for classes built in template strings (`` `on-${side}` ``): a word-search prune dropped the order sheet's Buy and Sell colours and Settings' status dots (`is-${tone}`). Read the whole list: a `head -20` hid the second.
 
 ## CI
 

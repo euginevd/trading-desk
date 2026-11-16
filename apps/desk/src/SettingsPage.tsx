@@ -1,11 +1,11 @@
-// Settings (decisions 50 and 51): the desk's choices in one place, starting with how the AI
-// reaches Claude. Sign in or paste a key here, as in Claude Code; the api saves it to .env and
-// this page only ever shows whether each is set.
+// Settings (decisions 50, 51 and 65): how the desk connects and behaves, said in a sentence, then
+// how it answers (Claude) and the morning summary (Telegram) as hairline sections. Sign in or
+// paste a key here, as in Claude Code; the api saves it to .env and this page only ever shows
+// whether each is set. Your name lives in the Profile.
 import { type ReactNode, useEffect, useState } from "react";
 import {
   finishSignIn,
   getAiSettings,
-  getProfile,
   getTelegram,
   linkTelegram,
   saveTelegramToken,
@@ -13,7 +13,6 @@ import {
   testTelegram,
   saveAiKey,
   setAiSettings,
-  setProfile,
   startSignIn,
 } from "./api";
 import type { AiMode, AiSettings, TelegramSettings } from "./types";
@@ -70,37 +69,46 @@ function aiStatus(ai: AiSettings): { tone: Tone; word: string } {
   return { tone: "down", word: "Not set up" };
 }
 
-// The answer to "what am I using?": the provider and model, then spend or the fall back.
-function InUse({ ai }: { ai: AiSettings }) {
-  const provider = MODES[ai.mode].title;
+// What the desk runs on, in a sentence: the provider and model, this month's spend or the fall
+// back, and whether the morning summary goes out. The one place the spend is shown.
+function Said({ ai, tg }: { ai: AiSettings | null; tg: TelegramSettings | null }) {
+  if (!ai) return null;
   const model = ai.models.find((m) => m.id === ai.model);
+  const name = model ? shortName(model.name) : ai.model;
+  const on = ai.mode === "api_key" ? "your API key" : "your Claude subscription";
   let detail: string;
   if (ai.mode === "api_key") {
     detail = ai.apiKeySet
-      ? `$${Number(ai.budget.spent).toFixed(2)} of $${ai.budget.cap} spent this month`
+      ? `$${Number(ai.budget.spent).toFixed(2)} of $${ai.budget.cap} spent this month.`
       : "Paste a key below to start.";
   } else if (!ai.tokenSet) {
     detail =
       ai.fallback && ai.apiKeySet
-        ? "Not signed in, so the API key answers."
+        ? "You're not signed in, so the API key answers."
         : "Sign in below to start.";
   } else if (!ai.fallback) {
-    detail = "Fall back to the API key is off";
+    detail = "No fall back to the API key.";
   } else {
     detail = ai.apiKeySet
-      ? "Falls back to the API key if the subscription fails"
-      : "Fall back is on, but there's no API key yet";
+      ? "The API key answers if the subscription fails."
+      : "Fall back is on, but there's no API key yet.";
   }
+  const summary = !tg
+    ? ""
+    : !tg.tokenSet
+      ? "No morning summary yet."
+      : tg.chatFound
+        ? `Your summary goes to Telegram at ${tg.time}.`
+        : "Telegram is waiting for you to link your chat.";
   return (
-    <div className="settings-inuse">
-      <span className="settings-label">In use</span>
-      <p className="settings-inuse-main">
-        {provider}
-        <span className="muted"> · </span>
-        {model ? shortName(model.name) : ai.model}
+    <section className="set-hero" aria-label="What the desk runs on">
+      <h2 className="set-headline">
+        The desk answers with {name} on {on}.
+      </h2>
+      <p className="set-lead">
+        {detail} {summary}
       </p>
-      <p className="settings-inuse-sub muted">{detail}</p>
-    </div>
+    </section>
   );
 }
 
@@ -109,6 +117,7 @@ export default function SettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  const [tg, setTg] = useState<TelegramSettings | null>(null);
 
   useEffect(() => {
     getAiSettings().then(setAi, (e: unknown) => setError(message(e, "Settings couldn't be read.")));
@@ -140,16 +149,15 @@ export default function SettingsPage() {
 
   return (
     <main className="wrap settings">
-      <You />
-      <section className="card settings-card" aria-labelledby="settings-ai">
-        <CardHead id="settings-ai" title="AI">
+      <Said ai={ai} tg={tg} />
+      <section className="set-section" aria-labelledby="settings-ai">
+        <CardHead id="settings-ai" title="How the desk answers">
           {status && <Status tone={status.tone}>{status.word}</Status>}
         </CardHead>
         {!ai && !error && (
-          <div className="settings-inuse settings-loading" aria-busy="true">
-            <span className="settings-label">In use</span>
-            <p className="muted">Loading…</p>
-          </div>
+          <p className="muted settings-loading" aria-busy="true">
+            Loading…
+          </p>
         )}
         {error && (
           <div className="settings-error-row">
@@ -172,7 +180,6 @@ export default function SettingsPage() {
         )}
         {ai && (
           <>
-            <InUse ai={ai} />
             <fieldset className="settings-group">
               <legend className="settings-label">Answer with</legend>
               <div className="settings-providers">
@@ -220,13 +227,13 @@ export default function SettingsPage() {
               </div>
             </fieldset>
             <p className="settings-note muted">
-              Applies to every AI feature: plans, Analyse all and the Dashboard&apos;s signals. What
-              you enter is saved to .env and never shown again.
+              Applies to every AI feature: the coach, the desk&apos;s agents, Analyse and the
+              Profile&apos;s command bar. What you enter is saved to .env and never shown again.
             </p>
           </>
         )}
       </section>
-      <Telegram />
+      <Telegram onRead={setTg} />
     </main>
   );
 }
@@ -311,13 +318,7 @@ function ApiKey({
       saving={saving}
       onPick={onPick}
       status={
-        ai.apiKeySet ? (
-          <Status tone="up">
-            Key set · ${Number(ai.budget.spent).toFixed(2)} of ${ai.budget.cap} this month
-          </Status>
-        ) : (
-          <Status tone="idle">No key yet</Status>
-        )
+        ai.apiKeySet ? <Status tone="up">Key set</Status> : <Status tone="idle">No key yet</Status>
       }
       action={
         ai.apiKeySet && !open ? (
@@ -485,84 +486,8 @@ function Subscription({
   );
 }
 
-function You() {
-  const [name, setName] = useState("");
-  const [saved, setSaved] = useState<string | null>(null);
-  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
-  useEffect(() => {
-    getProfile().then(
-      (p) => {
-        setName(p.name);
-        setSaved(p.name);
-      },
-      () => setSaved(""),
-    );
-  }, []);
-  const save = () =>
-    setProfile(name).then(
-      (p) => {
-        setSaved(p.name);
-        setName(p.name);
-        setNote({ ok: true, text: "Saved" });
-      },
-      (e: unknown) => setNote({ ok: false, text: message(e, "Not saved.") }),
-    );
-  return (
-    <section className="card settings-card" aria-labelledby="settings-you">
-      <CardHead id="settings-you" title="You">
-        {saved === null ? (
-          <span className="settings-status muted">Loading…</span>
-        ) : saved ? (
-          <span className="settings-status muted">Greets you as {saved}</span>
-        ) : (
-          <span className="settings-status muted">No name yet</span>
-        )}
-      </CardHead>
-      <div className="settings-field">
-        <label className="settings-label" htmlFor="settings-name">
-          Name
-        </label>
-        <div>
-          <div className="settings-input">
-            <input
-              id="settings-name"
-              aria-label="Your name"
-              placeholder="Your name"
-              maxLength={40}
-              value={name}
-              onChange={(e) => {
-                setName(e.target.value);
-                setNote(null);
-              }}
-            />
-            <button
-              type="button"
-              className="settings-btn"
-              disabled={saved === null || name === saved}
-              onClick={() => void save()}
-            >
-              Save name
-            </button>
-            {note && (
-              <span
-                className={note.ok ? "muted" : "settings-error"}
-                role={note.ok ? "status" : "alert"}
-              >
-                {note.text}
-              </span>
-            )}
-          </div>
-          <p className="settings-hint muted">
-            For the Dashboard&apos;s greeting. Kept on this machine only, never in the code.
-          </p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 // Telegram's morning summary (decision 57): your own bot; its token goes to .env.
-function Telegram() {
+function Telegram({ onRead }: { onRead: (tg: TelegramSettings) => void }) {
   const [tg, setTg] = useState<TelegramSettings | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -574,17 +499,19 @@ function Telegram() {
     getTelegram().then(
       (t) => {
         setTg(t);
+        onRead(t);
         setTime(t.time);
       },
       () => setFailed(true),
     );
-  }, [attempt]);
+  }, [attempt, onRead]);
   const act = (action: () => Promise<TelegramSettings>, done: string) => {
     setBusy(true);
     setNote(null);
     action().then(
       (t) => {
         setTg(t);
+        onRead(t);
         setBusy(false);
         setNote({ ok: true, text: done });
       },
@@ -602,13 +529,13 @@ function Telegram() {
         ? { tone: "up", word: `Connected${tg.chatName ? ` to ${tg.chatName}` : ""}` }
         : { tone: "wait", word: "Bot saved: link your chat" };
   return (
-    <section className="card settings-card" aria-labelledby="settings-telegram">
-      <CardHead id="settings-telegram" title="Telegram">
+    <section className="set-section" aria-labelledby="settings-telegram">
+      <CardHead id="settings-telegram" title="Morning summary">
         {status && <Status tone={status.tone}>{status.word}</Status>}
       </CardHead>
       <p className="settings-intro muted">
-        A morning summary from your own bot, once a day, Sydney time: the coach&apos;s mood line,
-        key points and deposits left.
+        Once a day from your own Telegram bot, Sydney time: the coach&apos;s mood line, key points
+        and deposits left.
       </p>
       {!tg && !failed && (
         <p className="muted settings-loading" aria-busy="true">

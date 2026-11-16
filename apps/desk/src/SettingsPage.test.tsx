@@ -89,13 +89,10 @@ describe("Settings", () => {
         true,
       ),
     );
-    // The in-use line follows the choice.
-    expect(
-      screen.getByText(
-        (_, el) =>
-          el?.className === "settings-inuse-main" && el.textContent === "API key · Haiku 5.5",
-      ),
-    ).toBeTruthy();
+    // The sentence follows the choice.
+    expect(screen.getByRole("heading", { level: 2, name: /^The desk answers/ }).textContent).toBe(
+      "The desk answers with Haiku 5.5 on your API key.",
+    );
   });
 
   it("saves a pasted API key, then shows only that it's set", async () => {
@@ -106,9 +103,11 @@ describe("Settings", () => {
     fireEvent.change(input, { target: { value: "sk-ant-api03-made-up" } });
     fireEvent.click(screen.getByRole("button", { name: "Save key" }));
     expect(saveAiKey).toHaveBeenCalledWith("sk-ant-api03-made-up");
-    expect(await screen.findByText(/Key set · \$4\.10 of \$20 this month/)).toBeTruthy();
+    expect(await screen.findByText("Key set")).toBeTruthy();
     expect(screen.getByText("Ready")).toBeTruthy();
-    expect(screen.getByText("$4.10 of $20 spent this month")).toBeTruthy();
+    // This month's spend is said once, in the sentence at the top.
+    expect(screen.getAllByText(/\$4\.10 of \$20/)).toHaveLength(1);
+    expect(screen.getByText(/^\$4\.10 of \$20 spent this month\./)).toBeTruthy();
     expect(screen.queryByLabelText("Anthropic API key")).toBeNull();
     expect(screen.queryByDisplayValue("sk-ant-api03-made-up")).toBeNull();
   });
