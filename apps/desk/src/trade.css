@@ -338,6 +338,55 @@
   margin: 0;
 }
 
+/* How the agent got there: after the call, each finished step folds to its first line and
+   opens on a click (decision 67). */
+.tr-how {
+  margin-top: 16px;
+}
+.tr-how-head {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.tr-step-toggle {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.tr-step-toggle::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 8px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 160ms var(--ease);
+}
+.tr-step-toggle[aria-expanded="true"]::after {
+  transform: translateY(1px) rotate(-135deg);
+}
+.tr-step-toggle:hover {
+  color: var(--accent);
+}
+.tr-step.shut .tr-step-sum {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tr-step:not(.shut) ul,
+  .tr-step:not(.shut) .tr-step-note {
+    animation: dash-rise 220ms var(--ease) both;
+  }
+}
+
 /* The step timeline */
 .tr-steps {
   list-style: none;
@@ -392,7 +441,8 @@
   font-size: 13px;
   font-weight: 600;
 }
-.tr-step h3 > span:not(.visually-hidden) {
+.tr-step h3 > span:not(.visually-hidden),
+.tr-step-toggle > span:not(.visually-hidden) {
   font-weight: 400;
   color: var(--muted);
 }
@@ -741,6 +791,27 @@
 .tr-rows dd {
   margin: 0;
   font-weight: 600;
+}
+/* The levels ladder: today's price as its own row, warnings amber, the add zone mint. */
+.tr-ladder > div.now {
+  margin: 2px -8px;
+  padding: 5px 8px;
+  border-top: 0;
+  border-radius: 6px;
+  background: var(--accent-soft);
+}
+.tr-ladder > div.now + div {
+  border-top: 0;
+}
+.tr-ladder > div.now dt,
+.tr-ladder > div.now dd {
+  color: var(--accent);
+}
+.tr-ladder > div.warn dt {
+  color: var(--wait);
+}
+.tr-ladder > div.zone dd {
+  color: var(--accent);
 }
 .tr-guard > div {
   border-top: 0;

@@ -471,8 +471,12 @@ describe("trade page", () => {
     const levels = screen.getByRole("region", { name: "Levels" });
     expect(within(levels).getByText("170.00 – 176.00")).toBeTruthy();
     expect(within(levels).getByText("R1 resistance")).toBeTruthy();
+    // A ladder, highest first, with today's price as a row where it falls.
+    const ladder = Array.from(levels.querySelectorAll("dt")).map((d) => d.textContent);
+    expect(ladder.indexOf("Now")).toBeGreaterThan(ladder.indexOf("R1 resistance"));
+    expect(ladder.indexOf("Now")).toBeLessThan(ladder.indexOf("Add zone"));
     const guard = screen.getByRole("region", { name: "Your guardrails" });
-    expect(within(guard).getByText("A$860.00 of A$1,500.00")).toBeTruthy();
+    expect(within(guard).getByText("A$860 of A$1.5K")).toBeTruthy();
     expect(within(guard).getByText("12% of 20%")).toBeTruthy();
     expect(
       screen.getByRole("img", { name: /SOL price, 4 hour, with the agent's levels/ }),

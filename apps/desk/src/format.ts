@@ -29,6 +29,13 @@ export function price(value: string | null): string {
   });
 }
 
+// A price to read at a glance (decision 67): whole from 1,000 (BTC at 64,782), else as `price`.
+export function big(value: string | null): string {
+  if (value === null) return "–";
+  const n = Number(value);
+  return Math.abs(n) >= 1000 ? Math.round(n).toLocaleString("en-AU") : price(value);
+}
+
 // The Dashboard's table, kept sleek (decision 26): whole dollars.
 export function usdWhole(value: string | null, signed = false): string {
   if (value === null) return "–";

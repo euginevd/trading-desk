@@ -1,7 +1,8 @@
 // The Trade page's right column (TODO 6): a compact 4-hour chart with the agent's levels drawn on
 // it, which opens the full TradingView chart on request; the levels; and the Profile's guardrails.
 import { useEffect, useRef, useState } from "react";
-import { aud, dateTime, price } from "./format";
+import { big, dateTime, price } from "./format";
+import { km } from "./Figures";
 import TradingViewChart from "./TradingViewChart";
 import type { AgentRun, Market, PriceAlert } from "./types";
 
@@ -142,32 +143,41 @@ export function PriceCard({
   );
 }
 
-export function LevelsCard({ run }: { run: AgentRun | null }) {
+const sentence = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+// The agent's levels as a ladder, highest first, with today's price as a row where it falls:
+// above it, what the price meets on the way up; below it, on the way down.
+export function LevelsCard({ run, now }: { run: AgentRun | null; now: string | null }) {
   const zones = run?.signal?.zones;
-  const rows: { key: string; label: string; value: string; at: number }[] = [];
+  const rows: { key: string; label: string; value: string; at: number; kind?: string }[] = [];
   if (zones?.noChase)
     rows.push({
       key: "nochase",
       label: "Don't chase above",
-      value: price(zones.noChase),
+      value: big(zones.noChase),
+      kind: "warn",
       at: Number(zones.noChase),
     });
   for (const l of run?.levels ?? [])
-    rows.push({ key: l.id, label: l.source, value: price(l.price), at: Number(l.price) });
+    rows.push({ key: l.id, label: sentence(l.source), value: big(l.price), at: Number(l.price) });
   if (zones?.buy)
     rows.push({
       key: "zone",
       label: "Add zone",
-      value: `${price(zones.buy.low)} – ${price(zones.buy.high)}`,
+      value: `${big(zones.buy.low)} – ${big(zones.buy.high)}`,
       at: Number(zones.buy.high),
+      kind: "zone",
     });
   if (zones?.invalidation)
     rows.push({
       key: "inv",
       label: "Invalidation",
-      value: `${price(zones.invalidation.price)} daily close`,
+      value: `${big(zones.invalidation.price)} daily close`,
       at: Number(zones.invalidation.price),
+      kind: "warn",
     });
+  if (rows.length && now !== null)
+    rows.push({ key: "now", label: "Now", value: big(now), at: Number(now), kind: "now" });
   rows.sort((a, b) => b.at - a.at);
   return (
     <section className="tr-card" aria-label="Levels">
@@ -175,9 +185,9 @@ export function LevelsCard({ run }: { run: AgentRun | null }) {
       {rows.length === 0 ? (
         <p className="muted tr-empty">The agent&apos;s levels show here after a run.</p>
       ) : (
-        <dl className="tr-rows">
+        <dl className="tr-rows tr-ladder">
           {rows.map((r) => (
-            <div key={r.key}>
+            <div key={r.key} className={r.kind}>
               <dt>{r.label}</dt>
               <dd className="num">{r.value}</dd>
             </div>
@@ -218,7 +228,7 @@ export function GuardrailsCard({ run }: { run: AgentRun | null }) {
           <div>
             <span>Cap this month</span>
             <b className="num">
-              {g.capAud ? `${aud(g.monthSpentAud)} of ${aud(g.capAud)}` : "No cap set"}
+              {g.capAud ? `${km(g.monthSpentAud)} of ${km(g.capAud)}` : "No cap set"}
             </b>
           </div>
           {g.capAud && (
@@ -241,11 +251,11 @@ export function GuardrailsCard({ run }: { run: AgentRun | null }) {
           )}
           <div>
             <span>Per trade</span>
-            <b className="num">{g.perTradeAud ? aud(g.perTradeAud) : "Not set"}</b>
+            <b className="num">{g.perTradeAud ? km(g.perTradeAud) : "Not set"}</b>
           </div>
           <div>
             <span>Minimum cash</span>
-            <b className="num">{g.minCashAud ? aud(g.minCashAud) : "Not set"}</b>
+            <b className="num">{g.minCashAud ? km(g.minCashAud) : "Not set"}</b>
           </div>
         </div>
       )}

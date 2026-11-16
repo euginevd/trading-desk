@@ -21,10 +21,12 @@ import {
   startAnalysis,
 } from "./api";
 import Coins from "./Coins";
-import { amount, percent, price, trend, usd } from "./format";
+import { amount, percent, trend, usd } from "./format";
 import OrderSheet, { type SheetStart } from "./OrderSheet";
 import SmartTradePanel from "./SmartTrade";
 import { AgentHero, Asks, RunHeader, TicketCard, Timeline } from "./TradeAgent";
+import { km } from "./Figures";
+import { big } from "./format";
 import { AlertsCard, GuardrailsCard, LevelsCard, PriceCard } from "./TradeContext";
 import type {
   AgentCall,
@@ -373,7 +375,7 @@ export default function Trade({
               <h1>{coin}</h1>
               {shownMarket ? (
                 <>
-                  <span className="tr-price num">{price(shownMarket.price)}</span>
+                  <span className="tr-price num">{big(shownMarket.price)}</span>
                   <span className={`num ${trend(shownMarket.change24h)}`}>
                     {percent(shownMarket.change24h)} today
                   </span>
@@ -400,12 +402,14 @@ export default function Trade({
                     </div>
                     <div>
                       <dt>Value</dt>
-                      <dd className="num">{usd(pos.value)}</dd>
+                      <dd className="num" title={usd(pos.value)}>
+                        {km(pos.value, "US$")}
+                      </dd>
                     </div>
                     <div>
                       <dt>Average</dt>
                       <dd className="num">
-                        {price(pos.avgCost)}{" "}
+                        {big(pos.avgCost)}{" "}
                         {pos.pnlPct !== null && (
                           <span className={trend(pos.pnlPct)}>{percent(pos.pnlPct)}</span>
                         )}
@@ -413,7 +417,9 @@ export default function Trade({
                     </div>
                     <div>
                       <dt>Cash</dt>
-                      <dd className="num">{usd(shown.cashUsd)}</dd>
+                      <dd className="num" title={usd(shown.cashUsd)}>
+                        {km(shown.cashUsd, "US$")}
+                      </dd>
                     </div>
                   </>
                 ) : (
@@ -523,7 +529,6 @@ export default function Trade({
                     </button>
                   </div>
                 )}
-                {shown && <Timeline run={shown} working={working} />}
                 {shown && (
                   <TicketCard
                     run={shown}
@@ -535,6 +540,7 @@ export default function Trade({
                     onDismiss={() => choose("dismissed")}
                   />
                 )}
+                {shown && <Timeline run={shown} working={working} />}
                 {shown && <Asks run={shown} />}
               </>
             )}
@@ -575,7 +581,7 @@ export default function Trade({
 
       <aside className="tr-col tr-ctx" aria-label="Context">
         <PriceCard market={shownMarket} run={shown} symbol={term?.symbol ?? null} />
-        <LevelsCard run={shown} />
+        <LevelsCard run={shown} now={shownMarket?.price ?? null} />
         <GuardrailsCard run={shown} />
         <AlertsCard
           coin={coin}

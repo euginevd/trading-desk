@@ -1,8 +1,9 @@
 // The Trade page's centre (TODO 6): the trading agent, before a run, while it works through its
 // steps, and its call. Every number on the ticket comes from code; the agent chose the action and
 // wrote the words. Its buttons only fill the order sheet; nothing is placed from here.
+import { useState } from "react";
 import { initials } from "./AgentProfile";
-import { amount, aud, clock, price } from "./format";
+import { amount, aud, big, clock, price } from "./format";
 import { OutOfDate } from "./RuleMarks";
 import type { AgentPage, AgentRun, PriceAlert, RunStep } from "./types";
 
@@ -167,57 +168,99 @@ function meta(step: RunStep, state: StepState): string {
 export function Timeline({ run, working }: { run: AgentRun; working: boolean }) {
   const now =
     run.status === "running" && working ? run.steps.findIndex((s) => s.status === "pending") : -1;
+  const done = run.status !== "running";
   return (
-    <ol className="tr-steps" aria-label="Steps">
-      {run.steps.map((step, i) => {
-        const state: StepState = i === now ? "now" : step.status;
-        return (
-          <li key={step.key} className={`tr-step ${state}`}>
-            <span className="tr-dot" aria-hidden="true">
-              {state === "pending" ? i + 1 : MARK[state]}
-            </span>
-            <h3>
-              <span className="visually-hidden">{WORD[state]}: </span>
-              {step.title} <span>· {step.who}</span>
-            </h3>
-            <span className="tr-meta">{meta(step, state)}</span>
-            {state === "now" && (
-              <div className="tr-bar-run" role="progressbar" aria-label={`${step.title} running`}>
-                <i />
-              </div>
-            )}
-            {step.summary && state !== "pending" && <p>{step.summary}</p>}
-            {step.points.length > 0 && (
-              <ul>
-                {step.points.map((p) => (
-                  <li key={p}>{p}</li>
-                ))}
-              </ul>
-            )}
-            {step.events.length > 0 && (
-              <ul className="tr-events" aria-label="Coming up">
-                {step.events.map((e) => (
-                  <li key={`${e.when}-${e.what}`}>
-                    <b>{e.when}</b> {e.what}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {step.note && (
-              <p className={state === "failed" ? "tr-step-note wait" : "tr-step-note"}>
-                {step.note}
-                {state === "failed" && (
-                  <>
-                    {" "}
-                    <a href="#/settings">Open Settings</a>
-                  </>
-                )}
-              </p>
-            )}
-          </li>
-        );
-      })}
-    </ol>
+    <div className="tr-how">
+      {done && <h2 className="tr-how-head">How {run.agent.name} got there</h2>}
+      <ol className="tr-steps" aria-label="Steps">
+        {run.steps.map((step, i) => (
+          <Step
+            key={step.key}
+            step={step}
+            n={i + 1}
+            state={i === now ? "now" : step.status}
+            folds={done}
+          />
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+// A step: its title, who ran it and what it cost; once the run is done, its first line only,
+// opening to the rest on a click.
+function Step({
+  step,
+  n,
+  state,
+  folds,
+}: {
+  step: RunStep;
+  n: number;
+  state: StepState;
+  folds: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const more = step.points.length > 0 || step.events.length > 0 || Boolean(step.note);
+  const shut = folds && !open && state !== "failed" && (more || Boolean(step.summary));
+  return (
+    <li className={`tr-step ${state}${shut ? " shut" : ""}`}>
+      <span className="tr-dot" aria-hidden="true">
+        {state === "pending" ? n : MARK[state]}
+      </span>
+      <h3>
+        {folds && state !== "failed" && (more || step.summary) ? (
+          <button
+            type="button"
+            className="tr-step-toggle"
+            aria-expanded={!shut}
+            onClick={() => setOpen(!open)}
+          >
+            <span className="visually-hidden">{WORD[state]}: </span>
+            {step.title} <span>· {step.who}</span>
+          </button>
+        ) : (
+          <>
+            <span className="visually-hidden">{WORD[state]}: </span>
+            {step.title} <span>· {step.who}</span>
+          </>
+        )}
+      </h3>
+      <span className="tr-meta">{meta(step, state)}</span>
+      {state === "now" && (
+        <div className="tr-bar-run" role="progressbar" aria-label={`${step.title} running`}>
+          <i />
+        </div>
+      )}
+      {step.summary && state !== "pending" && <p className="tr-step-sum">{step.summary}</p>}
+      {!shut && step.points.length > 0 && (
+        <ul>
+          {step.points.map((p) => (
+            <li key={p}>{p}</li>
+          ))}
+        </ul>
+      )}
+      {!shut && step.events.length > 0 && (
+        <ul className="tr-events" aria-label="Coming up">
+          {step.events.map((e) => (
+            <li key={`${e.when}-${e.what}`}>
+              <b>{e.when}</b> {e.what}
+            </li>
+          ))}
+        </ul>
+      )}
+      {(!shut || !step.summary) && step.note && (
+        <p className={state === "failed" ? "tr-step-note wait" : "tr-step-note"}>
+          {step.note}
+          {state === "failed" && (
+            <>
+              {" "}
+              <a href="#/settings">Open Settings</a>
+            </>
+          )}
+        </p>
+      )}
+    </li>
   );
 }
 
@@ -244,7 +287,7 @@ function WatchFor({
         {lines.map((w) => (
           <li key={`${w.direction}-${w.price}`}>
             <span>
-              {w.direction === "above" ? "Above" : "Below"} <b className="num">{price(w.price)}</b>{" "}
+              {w.direction === "above" ? "Above" : "Below"} <b className="num">{big(w.price)}</b>{" "}
               <span className="muted">{w.note}</span>
             </span>
             {set(w) ? (

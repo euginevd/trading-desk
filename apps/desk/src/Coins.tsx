@@ -10,7 +10,7 @@ import {
   watchCoin,
 } from "./api";
 import CoinIcon from "./CoinIcon";
-import { ago, percent, price, trend } from "./format";
+import { ago, big, percent, trend } from "./format";
 import { actionTone } from "./TradeAgent";
 import type { AgentCall, CoinRank, Watchlist } from "./types";
 
@@ -266,7 +266,7 @@ export default function Coins({
                 <span className="tr-coin-name">
                   <b>{c.coin}</b>
                   <span className="num muted">
-                    {price(c.price)}{" "}
+                    {big(c.price)}{" "}
                     <span className={trend(c.change24h)}>{percent(c.change24h)}</span>
                   </span>
                   {rank && (
