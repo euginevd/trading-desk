@@ -21,6 +21,7 @@ from api import (
     ai_client,
     analyse,
     coach,
+    coach_week,
     demo,
     env_file,
     journal,
@@ -30,6 +31,7 @@ from api import (
     profile_ai,
     profile_live,
     profile_routes,
+    profile_v2,
     rebalance,
     tax,
     telegram,
@@ -988,6 +990,7 @@ def _coach(s: Services, *, write: bool) -> dict[str, Any]:
         name=plan["identity"]["name"] or s.store.setting(coach.NAME_KEY, ""),
         last_plan=s.signals.last,
     )
+    facts["week"] = _week(s, plan)
     raw = s.store.setting(coach.CACHE_KEY, "")
     kept: dict[str, Any] | None = json.loads(raw) if raw else None
     # Only the model's words are kept: the plain ones are tried again next time.
@@ -1006,6 +1009,24 @@ def _coach(s: Services, *, write: bool) -> dict[str, Any]:
         kept = {"key": coach.cache_key(facts), "message": message, "profileVersion": n}
         s.store.set_setting(coach.CACHE_KEY, json.dumps(kept))
     return facts | {"message": _dated_message(message, kept, n), "pending": False}
+
+
+def _week(s: Services, plan: dict[str, Any]) -> dict[str, Any] | None:
+    """The week rail (decision 63), from profile.md v2's weekly buy and this week's Binance buys;
+    None before the Profile is v2."""
+    if not plan["markdown"]:
+        return None
+    today = tax.today_sydney()
+    try:
+        portfolio = (s.portfolio or live_portfolio)()
+        coins = ledger.coins_seen(s.store, set(tax.held_of(portfolio)))
+        fx_transport = httpx.MockTransport(demo.fx) if _demo() else None
+        with httpx.Client(timeout=TIMEOUT_SECONDS, transport=fx_transport) as fx:
+            fills = ledger.fills(s.binance, fx, coins, coach_week.start_ms(today), today)
+        buys: list[tuple[date, Decimal]] | None = [(f.day, f.aud) for f in fills if f.buy]
+    except (BinanceError, httpx.HTTPError, LookupError, ValueError):
+        buys = None  # the rail still shows the plan; nothing is marked done or missed
+    return coach_week.week(profile_v2.values(plan["markdown"])["dca"], buys, today)
 
 
 def _dated_message(message: dict[str, Any], kept: dict[str, Any] | None, n: int) -> dict[str, Any]:

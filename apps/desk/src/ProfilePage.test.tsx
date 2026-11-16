@@ -331,7 +331,7 @@ describe("Profile", () => {
     api.getProfilePage.mockResolvedValue(higher);
     document.dispatchEvent(new Event("visibilitychange")); // as the minute's refresh does
     const moved = await within(road).findByText("US$41K");
-    expect(moved.className).toBe("pf-live up");
+    expect(moved.className).toBe("pf-live rise");
   });
 
   it("opens profile.md in the reader, with the rate the desk uses", async () => {

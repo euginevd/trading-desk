@@ -819,12 +819,12 @@
     animation: pf-fill 800ms var(--ease) 300ms both;
   }
   /* A live figure that moved rolls in from its direction, tinted for a moment. */
-  .pf-live.up {
+  .pf-live.rise {
     animation:
       pf-roll-up 420ms var(--ease) both,
       pf-tint-up 1600ms ease-out both;
   }
-  .pf-live.down {
+  .pf-live.fall {
     animation:
       pf-roll-down 420ms var(--ease) both,
       pf-tint-down 1600ms ease-out both;

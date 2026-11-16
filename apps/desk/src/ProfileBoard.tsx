@@ -3,44 +3,12 @@
 // floor). The api works out every figure from profile.md and the live portfolio; this file only
 // lays them out. Mint is you and done, amber is next or short, red is risk; each also has words.
 import { type ReactNode, useState } from "react";
+import { km, Live } from "./Figures";
 import type { BoardCash, BoardRoad, BoardStack, BoardSummary, Num, ProfileBoard } from "./types";
-
-// A live figure: when the refresh brings a new value, it rolls in from the direction it moved,
-// tinted mint (up) or red (down) for a moment. The first value just appears.
-function Live({ value, children }: { value: Num | undefined; children: ReactNode }) {
-  const now = value === null || value === undefined ? null : Number(value);
-  const [seen, setSeen] = useState({ value: now, dir: "", turn: 0 });
-  if (seen.value !== now) {
-    // Worked out while rendering, so the new value rolls in on the very frame it appears.
-    const moved = seen.value !== null && now !== null;
-    setSeen({
-      value: now,
-      dir: moved ? (now > (seen.value ?? 0) ? "up" : "down") : "",
-      turn: moved ? seen.turn + 1 : seen.turn,
-    });
-  }
-  return (
-    <span key={seen.turn} className={`pf-live${seen.dir ? ` ${seen.dir}` : ""}`}>
-      {children}
-    </span>
-  );
-}
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const n = (v: Num | number | undefined) => (v === null || v === undefined ? null : Number(v));
 
-// Rounded with K or M: US$98K, A$145K, US$1M; one decimal below 10K (A$6.2K), so a small figure
-// still moves when it changes.
-export function km(value: Num | number | undefined, currency: "A$" | "US$" | "" = "A$"): string {
-  const v = n(value);
-  if (v === null || Number.isNaN(v)) return "—";
-  const sign = v < 0 ? "−" : "";
-  const a = Math.abs(v);
-  const trim = (x: number, places: number) => String(Number(x.toFixed(places)));
-  if (a >= 999_500) return `${sign}${currency}${trim(a / 1_000_000, 2)}M`;
-  if (a >= 1_000) return `${sign}${currency}${trim(a / 1_000, a >= 9_950 ? 0 : 1)}K`;
-  return `${sign}${currency}${Math.round(a)}`;
-}
 const pct = (v: Num | undefined) => (n(v) === null ? "—" : `${Number(Number(v).toFixed(1))}%`);
 const btc = (v: Num | undefined) => (n(v) === null ? "—" : String(Number(Number(v).toFixed(4))));
 const month = (iso: string | null | undefined) => {

@@ -36,3 +36,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 60. A trading agent with a versioned profile; Analyse runs one coin step by step and proposes an order; Trade rebuilt around it. [Record](decisions/from-58.md)
 61. profile.md and trade.md are the source, changed through Claude Code; the desk renders them read-only. [Record](decisions/from-58.md)
 62. profile.md v2 is the Profile word for word; four widgets from its figures and live data; the command bar changes it through a diff and Accept; Quotes gone. [Record](decisions/from-58.md)
+63. The Dashboard as the morning check: the day in a sentence, a week rail of the plan's buys, what to watch and the desk to ask. [Record](decisions/from-58.md)

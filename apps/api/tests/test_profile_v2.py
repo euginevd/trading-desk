@@ -54,7 +54,7 @@ SAMPLE = """# Profile
 1. **A$500 every Friday evening**: bank → Binance
 2. Limit orders first
 3. Not filled by Monday: market buy
-4. Fear & Greed below 40: extra A$250 a week | **max A$750 a week, A$3K a month**
+4. Fear & Greed below 40: extra A$250, 2 days after | **max A$750 a week, A$3K a month**
 
 ### 5.3 Portfolio
 1. TAO: ~70% of crypto | no new money, not rebalanced
@@ -140,6 +140,7 @@ def test_the_file_reads_into_figures_and_the_typed_profile() -> None:
         "maxMonth": D(3000),
         "investMonthly": D(3000),
         "btcWeekly": D(300),
+        "extraAfterDays": 2,
     }
     assert v["split"] == ["BTC 60%", "ETH, SOL 20% each"]
     assert v["chips"] == [

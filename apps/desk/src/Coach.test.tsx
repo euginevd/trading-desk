@@ -1,8 +1,27 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { AgentInfo, AgentThread, Coach, Recap } from "./types";
+import type { AgentInfo, AgentThread, Coach, CoachWeek, Recap, Sentiment } from "./types";
 
 // Made-up figures only (known-mistakes 7).
+// A week in the Profile's plan: A$500 on Friday, A$250 more on Sunday when F&G is under 40.
+const week = (
+  state: "upcoming" | "due" | "done" | "missed" = "upcoming",
+  today = "2026-11-16",
+): CoachWeek => ({
+  today,
+  days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((name, i) => ({
+    date: `2026-11-${16 + i}`,
+    name,
+    kind: name === "Fri" ? "buy" : name === "Sun" ? "extra" : "",
+  })),
+  buy: { date: "2026-11-20", aud: "500", boughtAud: state === "done" ? "500" : "0", state },
+  extra: { date: "2026-11-22", aud: "250", fearGreedBelow: 40, state: "upcoming" },
+  boughtAud: state === "done" ? "500" : "0",
+  maxWeekAud: "750",
+  maxMonthAud: "3000",
+});
+const fear: Sentiment = { value: 22, label: "Extreme Fear", yesterday: 25, updated: 1 };
+
 const down: Coach = {
   greeting: "Evening, Sam.",
   mood: "sharp_down",
@@ -29,6 +48,7 @@ const down: Coach = {
     { kind: "addZone", coin: "ETH", low: "3050", high: "3180", rule: false },
   ],
   day: "2026-11-15",
+  week: week(),
   message: {
     lines: ["Days like this are hard to watch, and they pass.", "One of your rules needs a look."],
     coach: "A$1,800 left under your cap.",
@@ -67,8 +87,8 @@ const threadOf = (id: string): AgentThread => {
   return { id, name: a?.name ?? "", title: a?.title ?? "", messages: [] };
 };
 
-const recap = (week: string, headline: string, outOfDate = false): Recap => ({
-  week,
+const recap = (day: string, headline: string, outOfDate = false): Recap => ({
+  week: day,
   time: 1,
   source: "plain",
   headline,
@@ -99,6 +119,7 @@ let coach: Coach = down;
 vi.mock("./api", () => ({
   getCoach: () => getCoach(),
   writeCoach: () => writeCoach(),
+  getSentiment: () => Promise.resolve(fear),
   getAgents: () => Promise.resolve({ agents: team }),
   getAgent: (id: string) => getAgent(id),
   sendAgent: (id: string, text: string) => sendAgent(id, text),
@@ -108,6 +129,11 @@ vi.mock("./api", () => ({
 
 const { default: CoachPage } = await import("./Coach");
 
+function part<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("The fixture is missing a part.");
+  return value;
+}
+
 afterEach(() => {
   cleanup();
   coach = down;
@@ -115,19 +141,18 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe("the coach Dashboard", () => {
-  it("greets, gives the mood and figures, then the model's words when they come", async () => {
+describe("the Dashboard", () => {
+  it("says how the day is going in a sentence, then the model's words when they come", async () => {
     render(<CoachPage />);
-    expect(await screen.findByRole("heading", { name: "Evening, Sam." })).toBeTruthy();
-    expect(screen.getByText(/Your portfolio is down 12\.4% today/)).toBeTruthy();
-    expect(screen.getByText("(−A$8,340)")).toBeTruthy();
-    expect(screen.getByText(/Sharp down/)).toBeTruthy();
+    expect(await screen.findByText("Evening, Sam.")).toBeTruthy();
+    const day = screen.getByRole("heading", { level: 2, name: /^(Up|Down) / });
+    expect(day.textContent).toBe("Down 12.4% today, −A$8.3K.");
     await waitFor(() => expect(screen.getByText("A hard day, and it passes.")).toBeTruthy());
     expect(writeCoach).toHaveBeenCalledTimes(1);
     expect(screen.queryByText(/Out of date/)).toBeNull();
   });
 
-  it("refreshes the coach from its button, busy while it reads", async () => {
+  it("refreshes from its button, busy while it reads", async () => {
     coach = { ...down, pending: false };
     render(<CoachPage />);
     const button = await screen.findByRole("button", { name: "Refresh" });
@@ -135,10 +160,19 @@ describe("the coach Dashboard", () => {
     coach = { ...down, pending: false, greeting: "Evening again, Sam." };
     fireEvent.click(button);
     expect(screen.getByRole("button", { name: "Refreshing" })).toHaveProperty("disabled", true);
-    expect(await screen.findByRole("heading", { name: "Evening again, Sam." })).toBeTruthy();
+    expect(await screen.findByText("Evening again, Sam.")).toBeTruthy();
     expect(getCoach).toHaveBeenCalledTimes(2);
     expect(getRecaps).toHaveBeenCalledTimes(2);
-    expect(screen.getByRole("button", { name: "Refresh" })).toHaveProperty("disabled", false);
+  });
+
+  it("reads again when the tab comes back, and rolls a figure that moved", async () => {
+    coach = { ...down, pending: false };
+    render(<CoachPage />);
+    expect(await screen.findByText("−A$8.3K")).toBeTruthy();
+    coach = { ...down, pending: false, changeAud: "-7900", changePct: "-11.8" };
+    document.dispatchEvent(new Event("visibilitychange"));
+    const moved = await screen.findByText("−A$7.9K");
+    expect(moved.closest(".pf-live")?.className).toBe("pf-live rise");
   });
 
   it("marks the coach's message out of date once the Profile changed", async () => {
@@ -147,15 +181,67 @@ describe("the coach Dashboard", () => {
     expect(await screen.findByText(/Out of date · your Profile changed/)).toBeTruthy();
   });
 
-  it("shows the year, the month against the cap, what's left and the owner's lesson", async () => {
+  it("lays out the week with the plan's buys on their days", async () => {
     coach = { ...down, pending: false };
     render(<CoachPage />);
-    expect(await screen.findByText("A$21,500.00")).toBeTruthy();
-    expect(screen.getByText(/of A\$6,000\.00 · A\$1,800\.00 left/)).toBeTruthy();
+    const rail = await screen.findByRole("region", { name: "This week" });
+    const days = within(rail).getAllByRole("button");
+    expect(days).toHaveLength(7);
+    expect(days[0]?.getAttribute("aria-label")).toBe("Monday 16 Nov, today");
+    expect(days[4]?.getAttribute("aria-label")).toBe("Friday 20 Nov: A$500 buy");
+    // Fear & Greed is 22, under 40: the extra buy applies this week.
+    await waitFor(() =>
+      expect(days[6]?.getAttribute("aria-label")).toBe("Sunday 22 Nov: +A$250: F&G 22"),
+    );
+    expect(
+      within(rail).getByText("Today: nothing planned. Next: your A$500 buy on Friday."),
+    ).toBeTruthy();
+    fireEvent.mouseEnter(part(days[6]));
+    expect(
+      await within(rail).findByText(
+        "Sunday 22 Nov: +A$250 when Fear & Greed is under 40. Fear & Greed is 22 (extreme fear), so it applies this week.",
+      ),
+    ).toBeTruthy();
+    fireEvent.focus(part(days[4]));
+    expect(
+      await within(rail).findByText(
+        "Friday 20 Nov: your A$500 weekly buy. Limit orders from your split, likely to fill within three days.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("says when the buy is due, done or missed", async () => {
+    coach = { ...down, pending: false, week: week("due", "2026-11-20") };
+    render(<CoachPage />);
+    const rail = await screen.findByRole("region", { name: "This week" });
+    expect(within(rail).getByText("A$500 buy today")).toBeTruthy();
+    expect(within(rail).getByText(/^Today: your A\$500 weekly buy\. Limit orders/)).toBeTruthy();
+    cleanup();
+    coach = { ...down, pending: false, week: week("done", "2026-11-21") };
+    render(<CoachPage />);
+    expect(await screen.findByText("✓ A$500 bought")).toBeTruthy();
+    cleanup();
+    coach = { ...down, pending: false, week: week("missed", "2026-11-21") };
+    render(<CoachPage />);
+    expect(await screen.findByText("A$500 not bought")).toBeTruthy();
+  });
+
+  it("shows no rail before the plan is profile.md v2", async () => {
+    coach = { ...down, pending: false, week: null };
+    render(<CoachPage />);
+    expect(await screen.findByText("Evening, Sam.")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "This week" })).toBeNull();
+  });
+
+  it("shows the month's deposits against the cap and the owner's lesson", async () => {
+    coach = { ...down, pending: false };
+    render(<CoachPage />);
+    expect(await screen.findByText("A$4.2K")).toBeTruthy();
+    expect(screen.getByText(/of your A\$6K cap\. A\$1.8K left\./)).toBeTruthy();
     expect(screen.getByRole("progressbar").getAttribute("aria-valuenow")).toBe("70");
-    expect(screen.getByText(/Your lesson · 2026 —/)).toBeTruthy();
+    expect(screen.getByText(/A\$22K this financial year\./)).toBeTruthy();
     expect(screen.getByText("Raised the monthly cap, and kept it lower after")).toBeTruthy();
-    expect(screen.queryByText(/Over your monthly cap/)).toBeNull();
+    expect(screen.queryByText(/ over\./)).toBeNull();
   });
 
   it("warns in amber over the cap", async () => {
@@ -171,49 +257,31 @@ describe("the coach Dashboard", () => {
       },
     };
     render(<CoachPage />);
-    expect(await screen.findByText("Over your monthly cap by A$500.00")).toBeTruthy();
+    expect((await screen.findByText("A$500 over.")).className).toBe("dash-over");
   });
 
-  it("lists today's key points, rules marked", async () => {
+  it("lists what to watch, rules marked", async () => {
     coach = { ...down, pending: false };
     render(<CoachPage />);
-    expect(
-      await screen.findByText(/TAO is 41% of your portfolio, over your 25% cap\./),
-    ).toBeTruthy();
-    expect(screen.getByText("Rule")).toBeTruthy();
-    expect(screen.getByText(/SOL moved most of what you hold: −18\.2% today\./)).toBeTruthy();
-    expect(screen.getByText(/ETH is in its add zone/)).toBeTruthy();
+    const watch = await screen.findByRole("region", { name: "Watch today" });
+    expect(watch.textContent).toContain("TAOis 41% of your portfolio, over your 25% cap.Rule");
+    expect(watch.textContent).toContain("SOLmoved most of what you hold: −18.2% today.");
+    expect(within(watch).getByText(/is in its add zone/)).toBeTruthy();
   });
 
-  it("shows the team: Morgan leads and is open first, the four report to Morgan", async () => {
+  it("asks Morgan first, and opens Riley's thread", async () => {
     coach = { ...down, pending: false };
     render(<CoachPage />);
     const morgan = await screen.findByRole("button", { name: "Morgan, Desk Coordinator" });
     expect(morgan.getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("Reports to Morgan")).toBeTruthy();
-    for (const name of [
-      "Riley, Risk Officer",
-      "Quinn, Market Researcher",
-      "Kai, Technical Analyst",
-      "Ellis, Tax Specialist (AU)",
-    ]) {
-      expect(screen.getByRole("button", { name }).getAttribute("aria-pressed")).toBe("false");
-    }
     expect(getAgent).toHaveBeenCalledWith("desk");
-    expect(screen.getByPlaceholderText("Ask Morgan…")).toBeTruthy();
     expect(screen.getByText("Advice only. Nothing is placed from the Dashboard.")).toBeTruthy();
-  });
-
-  it("opens Riley's thread and keeps the placeholder reply", async () => {
-    coach = { ...down, pending: false };
-    render(<CoachPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Riley, Risk Officer" }));
+    fireEvent.click(screen.getByRole("button", { name: "Riley, Risk Officer" }));
     await waitFor(() => expect(getAgent).toHaveBeenCalledWith("risk"));
-    expect(screen.getByRole("heading", { name: /^Riley\s*·\s*Risk Officer$/ })).toBeTruthy();
+    expect(screen.getByText("Sizes and limits.")).toBeTruthy();
     fireEvent.change(screen.getByLabelText("Message to Riley"), {
       target: { value: "Should I add TAO?" },
     });
-    expect(screen.getByPlaceholderText("Ask Riley…")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
     expect(sendAgent).toHaveBeenCalledWith("risk", "Should I add TAO?");
     expect(await screen.findByText("Riley will answer here soon.")).toBeTruthy();
@@ -229,7 +297,7 @@ describe("the coach Dashboard", () => {
     expect(screen.getByText(/Week to 15 Nov 2026/)).toBeTruthy();
   });
 
-  it("shows the newest recap, marks it out of date, and lists the past ones", async () => {
+  it("shows last week in a line, opens it, and lists the earlier weeks", async () => {
     coach = { ...down, pending: false };
     recaps = [
       recap("2026-11-15", "Held steady through the dip.", true),
@@ -238,9 +306,10 @@ describe("the coach Dashboard", () => {
     render(<CoachPage />);
     expect(await screen.findByText("Held steady through the dip.")).toBeTruthy();
     expect(screen.getByText(/Out of date · your Profile changed/)).toBeTruthy();
-    fireEvent.click(screen.getByText("Past recaps (1)"));
+    fireEvent.click(screen.getByRole("button", { name: "Read the recap" }));
+    expect(screen.getByText("Up 2% on the week.")).toBeTruthy();
+    fireEvent.click(screen.getByText("Earlier weeks (1)"));
     expect(screen.getByText("A week of buys at your levels.")).toBeTruthy();
-    expect(screen.getByText("· 8 Nov 2026")).toBeTruthy();
   });
 
   it("offers a retry when the recaps can't be read", async () => {

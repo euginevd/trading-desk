@@ -694,6 +694,17 @@ export type KeyPoint =
   | { kind: "mover"; coin: string; pct: string; rule: false }
   | { kind: "addZone"; coin: string; low: string; high: string; rule: false }
   | { kind: "nearInvalidation"; coin: string; pct: string; price: string; rule: false };
+// The Dashboard's week rail (decision 63): Monday to Sunday with the plan's buys on their days.
+export type BuyState = "upcoming" | "due" | "done" | "missed" | "unknown";
+export interface CoachWeek {
+  today: string;
+  days: { date: string; name: string; kind: "" | "buy" | "extra" }[];
+  buy: { date: string; aud: string; boughtAud: string | null; state: BuyState } | null;
+  extra: { date: string; aud: string; fearGreedBelow: number | null; state: BuyState } | null;
+  boughtAud: string | null;
+  maxWeekAud: string | null;
+  maxMonthAud: string | null;
+}
 export interface Coach {
   greeting: string;
   mood: Mood;
@@ -716,6 +727,7 @@ export interface Coach {
   };
   keyPoints: KeyPoint[];
   day: string;
+  week?: CoachWeek | null; // decision 63: null before profile.md is v2
   message: {
     lines: string[];
     coach: string;

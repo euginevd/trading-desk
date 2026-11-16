@@ -299,6 +299,9 @@ def _dca(found: dict[str, list[str]]) -> dict[str, Any]:
         "maxMonth": _last(extra_line) if extra_line and "month" in extra_line.lower() else None,
         "investMonthly": _after(monthly, r"up to"),
         "btcWeekly": _first(f"A${btc.group(1)}") if btc else None,
+        "extraAfterDays": int(after.group(1))
+        if (after := re.search(r"(\d+)\s+days?\s+after", extra_line or "", re.IGNORECASE))
+        else None,
     }
 
 
