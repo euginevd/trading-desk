@@ -54,15 +54,11 @@ def candles(lows: list[float], closes: list[float], start: int = 0) -> list[list
     ]
 
 
-def test_each_style_has_its_regime_and_risk() -> None:
-    scalp, position = screener.STYLES["scalp"], screener.STYLES["position"]
-    assert screener.gate(scalp, "bull") == (True, 1.0, "")
-    assert screener.risk_factor(scalp, "neutral") == 0.125  # 0.25% at half risk
-    assert screener.gate(position, "neutral")[0] is False
-    assert all(not screener.gate(s, "bear")[0] for s in screener.STYLES.values())
+def test_every_style_trades_at_one_percent_except_in_a_bear() -> None:
     view = screener.styles_view(("neutral", "mixed"))
     assert [s["key"] for s in view["styles"]] == ["scalp", "day", "swing", "position"]
-    assert view["styles"][3]["allowed"] is False
+    assert all(s["allowed"] and s["riskPct"] == "1" for s in view["styles"])
+    assert all(not screener.gate(s, "bear")[0] for s in screener.STYLES.values())
 
 
 def test_the_target_clears_fees_at_the_style_reward() -> None:
@@ -146,7 +142,8 @@ def test_judge_sizes_each_pick_at_the_style_risk(pot: Pot, monkeypatch: pytest.M
     assert [p["coin"] for p in found["picks"]] == ["SOL"]  # off the shortlist: dropped
     sol = found["picks"][0]
     assert sol["problem"] is None
-    assert Decimal(sol["risk"]) <= Decimal("5.01")  # day risks half of the 10 USDC cap
+    # 1% (10 USDC) would size past 25% of the pot on this tight stop: the position cap holds it
+    assert Decimal("6.5") <= Decimal(sol["risk"]) <= Decimal("10.01")
     assert fake.asked[0]["model"] == "claude-sonnet-5-5"
     assert fake.asked[0]["searches"] == 2
     placed = pot.place(
@@ -162,11 +159,13 @@ def test_an_expired_proposal_is_refused(pot: Pot) -> None:
         pot.place(body | {"expires": int(NOW * 1000) - 1})
 
 
-def test_a_position_trade_needs_a_bull_regime(pot: Pot) -> None:
-    pot._regime = ("neutral", "mixed")  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+def test_no_style_opens_a_long_in_a_bear(pot: Pot) -> None:
     body = {"coin": "SOL", "entry": "205", "stop": "190", "target": "260", "style": "position"}
-    with pytest.raises(Refused, match="Bull regime"):
-        pot.check_rules(pot.size(body))
+    pot._regime = ("neutral", "mixed")  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    assert Decimal(pot.size(body)["risk"]) <= Decimal("10.01")
+    pot._regime = ("bear", "under")  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(Refused, match="Bear regime"):
+        pot.size(body)
 
 
 def test_only_plain_tickers_and_no_stablecoins_join_the_universe() -> None:

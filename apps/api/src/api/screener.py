@@ -22,6 +22,7 @@ from api.market import QUOTE
 SYDNEY = ZoneInfo("Australia/Sydney")
 CG_URL = "https://api.coingecko.com/api/v3/coins/markets"
 UNIVERSE_KEY = "pot_universe"
+RISK_PCT = "1"  # every style: 1% of the pot a trade, within its cap (owner, 17 Nov 2026)
 # Binance takes only these in a list of symbols: a ticker in another script (some Binance
 # listings have one) would refuse the whole request.
 PLAIN = re.compile(r"[A-Z0-9]{1,20}")
@@ -53,7 +54,6 @@ class Style:
     setup_n: int
     bias_tf: str
     bias_n: int
-    risk_pct: float  # of the account at full risk (the pot's own riskPct); the cap still applies
     min_rr: float
     volume_floor: float
     top: int
@@ -67,56 +67,47 @@ class Style:
 STYLES: dict[str, Style] = {
     "scalp": Style(
         "scalp", "Scalp", "5 to 60 minutes · 5-minute candles · 1-hour trend",
-        "5 to 60 minutes", "5m", 300, "1h", 60, 0.25, 1.5, 300e6, 30, 90, 120, 5, 1,
+        "5 to 60 minutes", "5m", 300, "1h", 60, 1.5, 300e6, 30, 90, 120, 5, 1,
         "claude-haiku-5-5",
     ),
     "day": Style(
         "day", "Day trade", "1 to 12 hours · 15-minute candles · 4-hour trend",
-        "1 to 12 hours", "15m", 200, "4h", 60, 0.5, 2.0, 100e6, 50, 90, 3600, 6, 2,
+        "1 to 12 hours", "15m", 200, "4h", 60, 2.0, 100e6, 50, 90, 3600, 6, 2,
         "claude-sonnet-5-5",
     ),
     "swing": Style(
         "swing", "Swing", "2 days to 3 weeks · daily candles · BTC regime and key levels",
-        "2 days to 3 weeks", "1d", 400, "1d", 0, 1.0, 2.0, 50e6, 100, 365, 2 * 86400, 8, 3,
+        "2 days to 3 weeks", "1d", 400, "1d", 0, 2.0, 50e6, 100, 365, 2 * 86400, 8, 3,
         "claude-opus-5-5",
     ),
     "position": Style(
         "position", "Position", "3 weeks to 6 months · weekly candles · weekly trend",
-        "3 weeks to 6 months", "1d", 400, "1w", 120, 1.0, 3.0, 50e6, 30, 730, 7 * 86400, 5, 3,
+        "3 weeks to 6 months", "1d", 400, "1w", 120, 3.0, 50e6, 30, 730, 7 * 86400, 5, 3,
         "claude-opus-5-5",
     ),
 }  # fmt: skip
 
 
-def gate(style: Style, regime: str | None) -> tuple[bool, float, str]:
-    """Whether the BTC regime allows the style, its risk factor there, and why not."""
+def gate(_style: Style, regime: str | None) -> tuple[bool, str]:
+    """Whether the BTC regime allows a new trade, and why not: every style trades in Bull and
+    Neutral at the pot's same 1% (owner, 17 Nov 2026); none opens a long in Bear."""
     if regime == "bear":
-        return False, 0.0, "BTC is in a Bear regime: no new longs in any style."
-    if regime == "neutral":
-        if style.key == "position":
-            return False, 0.0, "Position trades need a Bull regime."
-        if style.key in ("scalp", "day"):
-            return True, 0.5, "Neutral regime: half risk."
-        return True, 1.0, "Neutral regime: best setups only."
-    return True, 1.0, ""
-
-
-def risk_factor(style: Style, regime: str | None) -> float:
-    return style.risk_pct * gate(style, regime)[1]
+        return False, "BTC is in a Bear regime: no new longs in any style."
+    return True, ""
 
 
 def styles_view(regime: tuple[str | None, str]) -> dict[str, Any]:
     state, words = regime
     rows: list[dict[str, Any]] = []
     for s in STYLES.values():
-        allowed, factor, why = gate(s, state)
+        allowed, why = gate(s, state)
         rows.append(
             {
                 "key": s.key,
                 "name": s.name,
                 "line": s.line,
                 "hold": s.hold,
-                "riskPct": f"{s.risk_pct * (factor or 1):g}",
+                "riskPct": RISK_PCT,
                 "minRr": f"{s.min_rr:g}",
                 "expirySeconds": s.expiry_s,
                 "allowed": allowed,
@@ -730,15 +721,11 @@ def _swings(style: Style, liquid: list[dict[str, Any]], btc_daily: Rows) -> list
 
 def _positions(
     style: Style, liquid: list[dict[str, Any]], binance: Binance, now_ms: int
-) -> list[dict[str, Any]] | None:
-    """Position trades; None when BTC's weekly trend rules them out."""
+) -> list[dict[str, Any]]:
+    """Position trades: each coin's own weekly trend decides, not BTC's."""
     symbols = [f"{c['coin']}{QUOTE}" for c in liquid if c["coin"] != "BTC"]
     weekly = binance.klines_many([*symbols, f"BTC{QUOTE}"], "1w", style.bias_n)
-    btc_w = closes_of(closed(weekly.get(f"BTC{QUOTE}", []), now_ms))
-    s40 = sma(btc_w, 40)
-    if not s40 or btc_w[-1] <= s40:
-        return None
-    btc_q = change(btc_w, 13)
+    btc_q = change(closes_of(closed(weekly.get(f"BTC{QUOTE}", []), now_ms)), 13)
     picks: list[dict[str, Any]] = []
     for c in liquid:
         rows = closed(weekly.get(f"{c['coin']}{QUOTE}", []), now_ms)
@@ -762,14 +749,14 @@ def screen(  # noqa: PLR0913 - the screen's parts, each needed
     style = STYLES.get(style_key)
     if style is None:
         raise ValueError("Pick scalp, day, swing or position.")
-    allowed, factor, note = gate(style, regime[0])
+    allowed, note = gate(style, regime[0])
     out: dict[str, Any] = {
         "style": style.key,
         "name": style.name,
         "regime": {"state": regime[0], "words": regime[1]},
         "allowed": allowed,
         "note": note,
-        "riskPct": f"{style.risk_pct * (factor or 1):g}",
+        "riskPct": RISK_PCT,
         "warnings": timing(style, now_ms),
         "counts": {"listed": 0, "onBinance": 0, "liquid": 0, "setups": 0},
         "quote": QUOTE,
@@ -795,15 +782,11 @@ def screen(  # noqa: PLR0913 - the screen's parts, each needed
     no_rows: Rows = []
     btc_daily: Rows = next((c["daily"] for c in uni["coins"] if c["coin"] == "BTC"), no_rows)
     if style.key == "swing":
-        found: list[dict[str, Any]] | None = _swings(style, liquid, btc_daily)
+        found = _swings(style, liquid, btc_daily)
     elif style.key == "position":
         found = _positions(style, liquid, binance, now_ms)
     else:
         found = _intraday(style, liquid, binance, now_ms)
-    if found is None:
-        out["allowed"] = False
-        out["note"] = "BTC's weekly close is under its 40-week average: no position trades."
-        return out
     found.sort(key=lambda f: -f["score"])
     out["counts"]["setups"] = len(found)
     out["shortlist"] = found[: style.shortlist]

@@ -270,9 +270,8 @@ class Pot:
         if equity <= ZERO:
             raise Refused("Put money in the pot first.")
         allowed = self.allowed(equity)
-        if style is not None:  # each style risks its own share (trading-styles.md, section 2)
+        if style is not None:  # every style risks the same 1%; none opens a long in Bear
             self._regime_rule({"style": style.key})
-            allowed *= Decimal(str(screener.risk_factor(style, self.regime()[0])))
         if config["mode"] == "test":
             qty = rules.amount(Decimal(config["fixed"]) / entry)
             if qty * entry < Decimal(config["fixed"]):
@@ -500,7 +499,7 @@ class Pot:
             raise Refused("BTC is in a Bear regime: no new longs until it turns.")
         style = screener.STYLES.get(str(sized.get("style") or ""))
         if style is not None:
-            allowed, _, why = screener.gate(style, state)
+            allowed, why = screener.gate(style, state)
             if not allowed:
                 raise Refused(why)
 
