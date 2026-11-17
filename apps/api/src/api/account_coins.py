@@ -12,6 +12,8 @@ from api.binance import Binance, BinanceError, plain
 from api.market import QUOTE
 from api.pot import Pot
 from api.pot_agent import DAYS, coin_facts
+from api.watchlist import ACCOUNT_LIST as LIST
+from api.watchlist import ACCOUNT_MAX
 
 SKIP = ("USDC", "USDT", "FDUSD", "BUSD", "DAI", "TUSD", "BNB")  # money, and the fee token
 DUST = Decimal(5)  # in the quote: less is left out
@@ -19,8 +21,7 @@ NEAR_20 = Decimal("0.02")  # within 2% of the 20-day: a pullback to it
 AT_HIGH = Decimal("0.995")
 AT_LOW = Decimal("1.01")
 SPARK = 30
-LIST = "Trading account"  # the watchlist this page reads, among the Trade page's lists
-MAX = 10
+MAX = 10  # held coins it starts with; the owner may add up to ACCOUNT_MAX
 
 
 def _d(value: object) -> Decimal | None:
@@ -135,4 +136,4 @@ def snapshot(pot: Pot) -> dict[str, Any]:
                 "inTrade": coin in live,
             }
         )
-    return {"quote": QUOTE, "list": list_id, "max": MAX, "coins": coins}
+    return {"quote": QUOTE, "list": list_id, "max": ACCOUNT_MAX, "coins": coins}

@@ -1,18 +1,18 @@
 // The Bots page (decision 68): every bot in one place, after the exchanges' own bot pages. What
 // the bots run and have made in a sentence; Running, Stopped and Coins; chips by type with their
 // counts; each bot a block of its figures with its status and actions. A bot's own page and the
-// setups stay with its type's code, which this page asks to open them. Rebalancing is coming.
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { getDrift } from "./api";
+// setups stay with its type's code, which this page asks to open them. It shows one type at a
+// time, as the Bots page's Opportunities (DCA) or Grid bots tab (BotsHome.tsx).
+import { type ReactNode, useCallback, useRef, useState } from "react";
 import { CreateMenu, useWatchCoins, type BotAsk, type BotHandle } from "./BotKit";
 import CoinIcon from "./CoinIcon";
 import DcaBots from "./DcaBots";
 import { big } from "./format";
 import GridBots from "./GridBots";
-import type { DcaBot, DcaBots as Dca, Drift, GridBot, GridBots as Grids } from "./types";
+import type { DcaBot, DcaBots as Dca, GridBot, GridBots as Grids } from "./types";
 import "./bots.css";
 
-export type BotKind = "all" | "dca" | "grid" | "rebalance";
+export type BotKind = "all" | "dca" | "grid";
 type Tab = "running" | "stopped" | "coins";
 
 const n = (v: string | number | null | undefined) =>
@@ -178,13 +178,8 @@ export function toRows(dca: Dca | null, grids: Grids | null): Row[] {
   ];
 }
 
-export default function BotsPage({
-  kind,
-  onKind,
-}: {
-  kind: BotKind;
-  onKind: (k: BotKind) => void;
-}) {
+export default function BotsPage({ only, note }: { only: "dca" | "grid"; note?: ReactNode }) {
+  const kind: BotKind = only;
   const [dca, setDca] = useState<Dca | null>(null);
   const [grids, setGrids] = useState<Grids | null>(null);
   const [focus, setFocus] = useState<{ dca: boolean; grid: boolean }>({ dca: false, grid: false });
@@ -201,7 +196,7 @@ export default function BotsPage({
     (type === "dca" ? dcaHandle : gridHandle).current?.act(what);
 
   const quote = dca?.quote ?? grids?.quote ?? "USDC";
-  const rows = toRows(dca, grids);
+  const rows = toRows(dca, grids).filter((r) => r.kind === only);
   // Opens on Running when a bot runs, else on Stopped, until a tab is picked.
   const tab: Tab = picked ?? (rows.some((r) => r.running) ? "running" : "stopped");
   const loaded = dca !== null || grids !== null;
@@ -245,56 +240,30 @@ export default function BotsPage({
               </button>
             ))}
             <span className="spacer" />
-            <CreateMenu
-              coins={coins}
-              label="New DCA bot"
-              onPick={(coin) => ask("dca", { kind: "new", coin })}
-            />
-            <CreateMenu
-              coins={coins}
-              label="New grid bot"
-              onPick={(coin) => ask("grid", { kind: "new", coin })}
-            />
+            {only === "dca" ? (
+              <CreateMenu
+                coins={coins}
+                label="New DCA bot"
+                onPick={(coin) => ask("dca", { kind: "new", coin })}
+              />
+            ) : (
+              <CreateMenu
+                coins={coins}
+                label="New grid bot"
+                onPick={(coin) => ask("grid", { kind: "new", coin })}
+              />
+            )}
           </div>
-          <div className="bots-chips" role="group" aria-label="Show bots">
-            {(
-              [
-                ["all", "All"],
-                ["dca", "DCA"],
-                ["grid", "Grid"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={kind === key}
-                onClick={() => onKind(key)}
-              >
-                {label}{" "}
-                <span className="num">
-                  {byKind(key).filter(tab === "coins" ? () => true : inTab).length}
-                </span>
-              </button>
-            ))}
-            <button
-              type="button"
-              aria-pressed={kind === "rebalance"}
-              onClick={() => onKind("rebalance")}
-            >
-              Rebalancing <span className="bots-soon">Coming soon</span>
-            </button>
-          </div>
-
-          {kind === "rebalance" ? (
-            <Rebalancing />
-          ) : tab === "coins" ? (
+          {note}
+          {tab === "coins" ? (
             <Coins dca={dca} grids={grids} kind={kind} quote={quote} />
           ) : !loaded ? (
             <div className="skeleton" style={{ height: 180 }} />
           ) : shown.length === 0 ? (
             <p className="bots-empty muted">
               {tab === "running" ? "No bots running." : "No stopped bots."}{" "}
-              {rows.length === 0 && "Start one with New DCA bot or New grid bot."}
+              {rows.length === 0 &&
+                (only === "dca" ? "Start one with New DCA bot." : "Start one with New grid bot.")}
             </p>
           ) : (
             <ul className="bots-list">
@@ -453,43 +422,5 @@ function Coins({
         </li>
       ))}
     </ul>
-  );
-}
-
-// The rebalancing bot isn't built yet (TODO 9); this says what it will do, from today's drift.
-function Rebalancing() {
-  const [drift, setDrift] = useState<Drift | null>(null);
-  useEffect(() => {
-    getDrift().then(setDrift, () => setDrift(null));
-  }, []);
-  const under = (drift?.rows ?? [])
-    .filter((r) => r.outside && r.side === "buy")
-    .sort(
-      (a, b) => Number(a.nowPct) - Number(a.targetPct) - (Number(b.nowPct) - Number(b.targetPct)),
-    );
-  return (
-    <section className="bots-soon-panel" aria-label="Rebalancing bot">
-      <h2>Rebalancing bot, coming soon</h2>
-      <p>
-        It will keep your coins at your Profile&apos;s targets: when one drifts past your band, it
-        buys what&apos;s under target with new money, so nothing is sold and no tax is triggered.
-      </p>
-      {under.length > 0 && (
-        <p className="muted">
-          Today it would put your next deposit into{" "}
-          {under
-            .slice(0, 3)
-            .map(
-              (r) => `${r.coin} (${Math.round(Number(r.targetPct) - Number(r.nowPct))} pts under)`,
-            )
-            .join(", then ")}
-          .
-        </p>
-      )}
-      <p className="muted">
-        Until then, the Portfolio&apos;s <a href="#/portfolio">Against your targets</a> works out
-        each order for you to place.
-      </p>
-    </section>
   );
 }

@@ -1,11 +1,10 @@
-import DcaBookPage from "./DcaBookPage";
 import "./dca.css";
 import { useCallback, useEffect, useState } from "react";
 import { getGlobal, getPortfolio, getSentiment, getSettings, getTickers, setTrading } from "./api";
 import { percent, trend, usdShort } from "./format";
 import Coach from "./Coach";
 import Journal from "./Journal";
-import BotsPage, { type BotKind } from "./BotsPage";
+import BotsHome, { type BotsTab } from "./BotsHome";
 import SettingsPage from "./SettingsPage";
 import {
   CollapseIcon,
@@ -67,13 +66,18 @@ const BOTS_PAGE: (typeof PAGES)[number] = {
   name: "Bots",
   Icon: DcaIcon,
 };
-const OLD_BOT_LINKS: Record<string, BotKind> = { "#/dca": "dca", "#/grid": "grid" };
+const OLD_BOT_LINKS: Record<string, BotsTab> = { "#/dca": "opportunities", "#/grid": "grid" };
 
-function botKindFromHash(): BotKind {
+// The Bots page's tab: Accumulation (the DCA book) unless the link asks for the others.
+function botsTabFromHash(): BotsTab {
   const [path, query] = window.location.hash.split("?");
   return (
     OLD_BOT_LINKS[path ?? ""] ??
-    (query === "dca" || query === "grid" || query === "rebalance" ? query : "all")
+    (path === "#/bots" && query === "dca"
+      ? "opportunities"
+      : path === "#/bots" && query === "grid"
+        ? "grid"
+        : "accumulate")
   );
 }
 const PROFILE_PAGE: (typeof PAGES)[number] = {
@@ -183,7 +187,7 @@ function PillLogo({ coin }: { coin: string }) {
 
 export default function App() {
   const [page, setPage] = useState<Page>(pageFromHash);
-  const [botKind, setBotKind] = useState<BotKind>(botKindFromHash);
+  const [botsTab, setBotsTab] = useState<BotsTab>(botsTabFromHash);
   const [status, setStatus] = useState<Status>("fetching");
   const [tao, setTao] = useState<TaoWallet["status"] | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -210,7 +214,7 @@ export default function App() {
   useEffect(() => {
     const follow = () => {
       setPage(pageFromHash());
-      setBotKind(botKindFromHash());
+      setBotsTab(botsTabFromHash());
       setDrawer(false);
     };
     window.addEventListener("hashchange", follow);
@@ -278,7 +282,9 @@ export default function App() {
     <a
       key={target}
       href={hash}
-      aria-current={page === target ? "page" : undefined}
+      aria-current={
+        page === target || (target === "bots" && page === "dca-book") ? "page" : undefined
+      }
       title={folded ? name : undefined}
     >
       <Icon />
@@ -485,15 +491,8 @@ export default function App() {
         </header>
         {page === "trade" ? (
           <PotPage />
-        ) : page === "bots" ? (
-          <BotsPage
-            kind={botKind}
-            onKind={(k) => {
-              window.location.hash = k === "all" ? "#/bots" : `#/bots?${k}`;
-            }}
-          />
-        ) : page === "dca-book" ? (
-          <DcaBookPage />
+        ) : page === "bots" || page === "dca-book" ? (
+          <BotsHome tab={botsTab} />
         ) : page === "risk" ? (
           <RiskPage />
         ) : page === "settings" ? (

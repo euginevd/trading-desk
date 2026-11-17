@@ -190,18 +190,18 @@ describe("side panel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Collapse side panel" }));
     expect(screen.getByRole("button", { name: "Expand side panel" })).toBeTruthy();
     expect(window.localStorage.getItem("desk.side.folded")).toBe("1");
-    // The old Grid Bot link opens Bots, filtered to grids.
+    // The old Grid Bot link opens Bots on its Grid bots tab; no rebalancing for now.
     window.location.hash = "#/grid";
     fireEvent(window, new HashChangeEvent("hashchange"));
     expect(await screen.findByRole("heading", { level: 1, name: "Bots" })).toBeTruthy();
-    const show = screen.getByRole("group", { name: "Show bots" });
-    expect(within(show).getByRole("button", { name: /^Grid/ }).getAttribute("aria-pressed")).toBe(
-      "true",
+    const tabs = screen.getByRole("navigation", { name: "Bots" });
+    expect(within(tabs).getByRole("link", { name: "Grid bots" }).getAttribute("aria-current")).toBe(
+      "page",
     );
-    expect(within(show).getByRole("button", { name: /^DCA/ }).getAttribute("aria-pressed")).toBe(
-      "false",
+    expect(within(tabs).getByRole("link", { name: "Accumulation" }).getAttribute("href")).toBe(
+      "#/dca-book",
     );
-    expect(within(show).getByRole("button", { name: /^Rebalancing Coming soon/ })).toBeTruthy();
+    expect(screen.queryByText(/Rebalancing/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Expand side panel" }));
   });
 });

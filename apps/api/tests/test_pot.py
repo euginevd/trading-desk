@@ -513,3 +513,13 @@ def test_the_watchlist_starts_from_what_is_held_then_follows_the_owner(pot: Pot)
     link = next(c for c in after["coins"] if c["coin"] == "LINK")
     assert Decimal(link["value"]) == 0
     assert after["list"] == first["list"]
+
+
+def test_the_account_watchlist_holds_more_than_the_trade_pages_ten(pot: Pot) -> None:
+    from api import account_coins  # noqa: PLC0415
+    from api.watchlist import ACCOUNT_MAX, MAX_COINS, _cap  # noqa: PLC0415
+
+    found = account_coins.snapshot(pot)
+    assert found["max"] == ACCOUNT_MAX > MAX_COINS
+    assert _cap({"name": account_coins.LIST}) == ACCOUNT_MAX
+    assert _cap({"name": "Portfolio"}) == MAX_COINS

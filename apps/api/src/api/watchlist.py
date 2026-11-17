@@ -12,6 +12,9 @@ from api.portfolio import pair
 from api.store import Store
 
 MAX_COINS = 10
+# The Trading account's watchlist (account_coins.py) may hold more: its cards read no AI signal.
+ACCOUNT_LIST = "Trading account"
+ACCOUNT_MAX = 30
 MAX_LISTS = 20
 FIRST_LIST = "Portfolio"
 STARTERS = ("BTC", "ETH", "SOL", "TAO")
@@ -19,6 +22,10 @@ STARTERS = ("BTC", "ETH", "SOL", "TAO")
 
 def _now() -> int:
     return int(time.time() * 1000)
+
+
+def _cap(chosen: dict[str, Any]) -> int:
+    return ACCOUNT_MAX if chosen["name"] == ACCOUNT_LIST else MAX_COINS
 
 
 class Watchlist:
@@ -79,7 +86,7 @@ class Watchlist:
             "lists": self._store.lists(),
             "list": {"id": chosen["id"], "name": chosen["name"]},
             "coins": rows,
-            "max": MAX_COINS,
+            "max": _cap(chosen),
             "aiBudget": self._signals.budget(),
         }
 
@@ -90,8 +97,9 @@ class Watchlist:
         coins = self._store.list_coins(chosen["id"])
         if name in coins:
             raise MarketError(f"{name} is already on {chosen['name']}.")
-        if len(coins) >= MAX_COINS:
-            raise MarketError(f"{chosen['name']} is full at {MAX_COINS}. Remove a coin first.")
+        cap = _cap(chosen)
+        if len(coins) >= cap:
+            raise MarketError(f"{chosen['name']} is full at {cap}. Remove a coin first.")
         if symbol not in self._binance.symbols():
             raise MarketError(f"Binance has no {pair(symbol)} pair.")
         self._store.watch_coin(chosen["id"], name, _now())

@@ -255,3 +255,32 @@
     animation-delay: calc(var(--i, 0) * 60ms);
   }
 }
+
+/* The Bots page's tabs: Accumulation, Opportunities, Grid bots. */
+.botsh-tabs {
+  display: flex;
+  gap: 4px;
+  padding-top: 18px;
+  padding-bottom: 0;
+  border-bottom: 1px solid var(--line);
+}
+.botsh-tabs a {
+  padding: 10px 16px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 500;
+  text-decoration: none;
+}
+.botsh-tabs a:hover {
+  color: var(--text);
+}
+.botsh-tabs a[aria-current="page"] {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+.botsh-budget {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--wait);
+  color: var(--body);
+}
