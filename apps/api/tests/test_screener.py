@@ -167,3 +167,15 @@ def test_a_position_trade_needs_a_bull_regime(pot: Pot) -> None:
     body = {"coin": "SOL", "entry": "205", "stop": "190", "target": "260", "style": "position"}
     with pytest.raises(Refused, match="Bull regime"):
         pot.check_rules(pot.size(body))
+
+
+def test_only_plain_tickers_and_no_stablecoins_join_the_universe() -> None:
+    rows = [
+        {"symbol": "sol", "name": "Solana", "current_price": 140, "market_cap_rank": 7},
+        {"symbol": "\u5e01\u5b89\u4eba\u751f", "name": "Meme", "current_price": 0.1},
+        {"symbol": "usdt", "name": "Tether", "current_price": 1},
+        {"symbol": "steth", "name": "Lido Staked Ether", "current_price": 3000},
+    ]
+    http = httpx.Client(transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=rows)))
+    found = screener._top100(http)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    assert found == [{"coin": "SOL", "name": "Solana", "rank": 7}]

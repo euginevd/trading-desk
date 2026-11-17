@@ -5,6 +5,7 @@ it proposes. Prices are floats here, for speed; the desk sizes in Decimal from t
 
 import json
 import math
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -21,6 +22,9 @@ from api.market import QUOTE
 SYDNEY = ZoneInfo("Australia/Sydney")
 CG_URL = "https://api.coingecko.com/api/v3/coins/markets"
 UNIVERSE_KEY = "pot_universe"
+# Binance takes only these in a list of symbols: a ticker in another script (some Binance
+# listings have one) would refuse the whole request.
+PLAIN = re.compile(r"[A-Z0-9]{1,20}")
 TOP = 100
 FEE = 0.001  # Binance spot, each side
 SLIP = 0.0005
@@ -237,7 +241,7 @@ def _top100(http: httpx.Client | None) -> list[dict[str, Any]] | None:
         coin = str(r.get("symbol") or "").upper()
         name = str(r.get("name") or "")
         price = float(r.get("current_price") or 0)
-        if not coin or coin in STABLES or coin in WRAPPED:
+        if not PLAIN.fullmatch(coin) or coin in STABLES or coin in WRAPPED:
             continue
         if any(w in name.lower() for w in WRAPPED_WORDS):
             continue
@@ -266,7 +270,7 @@ def universe(
         listed = [{"coin": c, "name": c, "rank": n + 1} for n, c in enumerate(fallback)]
         source = "trading-agent's coins (CoinGecko didn't answer)"
     symbols = binance.symbols()
-    coins = [c for c in listed if f"{c['coin']}{QUOTE}" in symbols]
+    coins = [c for c in listed if PLAIN.fullmatch(c["coin"]) and f"{c['coin']}{QUOTE}" in symbols]
     pairs = [
         f"{c['coin']}{q}" for c in coins for q in {QUOTE, "USDT"} if f"{c['coin']}{q}" in symbols
     ]
