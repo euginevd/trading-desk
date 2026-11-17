@@ -22,7 +22,7 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 | `line` / `line-2` | `#172228` / `#213038` | Dividers and card borders / input and button borders |
 | `text` | `#E9EFF1` | Figures, headings, primary text |
 | `muted` | `#8B99A2` | Labels and secondary text |
-| `dim` | `#5F6D75` | Placeholders, axes and notes; never essential text |
+| `dim` | `#808E97` | Placeholders, axes and notes; never essential text |
 | `sheen` | A top-edge highlight | Raised controls and cards |
 | `field` … `edge` | Washes | The field, frame, panels and their edges |
 | `*-hover` | Washes | Hovers that keep a button's own fill |
@@ -30,7 +30,7 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 | `up` / `down` | `#2EBD85` / `#F0616D` | Gains and buys / losses and sells, each with a 12% tint for tags |
 | `wait` | `#E8B04B` | The Wait verdict and caution states, with a 12% tint |
 
-5. Type: Inter for figures, labels and controls, tabular figures on every number; Newsreader for `h1` and each page's sentence, sized to Inter's x-height. Sizes: 11px axes and coin initials only, 12 labels, 14 body (13 on Trading account and Bots, 15 on reading screens), 16 headings, 24 figures, 34 sentences.
+5. Type: Inter for figures, labels and controls, tabular figures on every number; Newsreader for `h1` and each page's sentence, sized to Inter's x-height. Sizes: 11px axes (coin initials smaller, to fit their mark), 12 labels, 14 body (13 on Trading account and Bots, 15 on reading screens), 16 headings, 24 figures, 34 sentences.
 6. Space: 4px base. Cards pad 14 to 16px; table cells 11px by 16px; gaps between cards 10px.
 7. Radius: 999px pills, 10 to 12px buttons and inputs, 18px panels, 22px the rail, 28px the frame.
 8. Depth: `sheen` on raised things, a soft lift under panels.

@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 from api.audit import Audit
 from api.binance import Binance
-from api.handler import cost_from_ms, handler
+from api.handler import MissingKey, cost_from_ms, handler
 from api.local import load_env
 from api.service import TradeCache, aud_rate, fetch, usd_rates
 
@@ -160,7 +160,7 @@ def test_portfolio_route_returns_the_data() -> None:
 
 def test_portfolio_route_asks_for_the_key_when_missing() -> None:
     def missing() -> dict[str, Any]:
-        raise LookupError
+        raise MissingKey
 
     reply = handler({"rawPath": "/portfolio"}, None, portfolio=missing)
     assert reply["statusCode"] == 503

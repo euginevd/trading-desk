@@ -11,7 +11,7 @@
   --text: #e9eff1;
   --body: #c2ccd1;
   --muted: #8b99a2;
-  --dim: #5f6d75;
+  --dim: #808e97;
   --accent: #50d2c1;
   --accent-ink: #04110f;
   --accent-soft: rgba(80, 210, 193, 0.1);
@@ -193,8 +193,8 @@ h2 {
 }
 .side {
   position: sticky;
-  top: 28px;
-  height: calc(100vh - 56px);
+  top: 14px;
+  height: calc(100vh - 28px);
   display: flex;
   flex-direction: column;
   background: var(--layer-1);
@@ -210,7 +210,7 @@ h2 {
 }
 .side-fold {
   position: absolute;
-  top: 44px;
+  top: 20px;
   right: -12px;
   width: 24px;
   height: 24px;
@@ -821,7 +821,8 @@ td.r {
   align-items: center;
   justify-content: center;
   font-style: normal;
-  font-size: 11px;
+  font-size: 9px; /* coin initials: the one text allowed under 11px, to fit the mark */
+  letter-spacing: -0.02em;
   font-weight: 600;
   color: var(--muted);
   overflow: hidden;
@@ -1018,6 +1019,9 @@ dialog p {
   .top {
     top: 0;
     border-radius: 0;
+  }
+  .drawer .top {
+    z-index: 4; /* under the drawer's scrim, so the header can't be used while it's open */
   }
   .side {
     position: fixed;
@@ -2726,4 +2730,23 @@ button.jtag {
 }
 .port-tabs {
   border-bottom: 0;
+}
+
+/* The band above the frame (decision 77): what scrolls past the top bar hides under the field. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: 14px;
+  background: var(--field);
+  z-index: 5;
+}
+@media (max-width: 760px) {
+  body::before {
+    display: none;
+  }
+}
+.botsh-tabs.wrap {
+  overflow-x: auto;
+  scrollbar-width: none;
 }

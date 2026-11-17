@@ -77,6 +77,10 @@ BotsFactory = Callable[[], AbstractContextManager["Bots"]]
 GridsFactory = Callable[[], AbstractContextManager["Grids"]]
 
 
+class MissingKey(LookupError):
+    """The Binance key or secret isn't in the environment; the only error that asks for them."""
+
+
 @dataclass
 class Services:
     """What the watchlist, market and signal routes need, opened per request."""
@@ -173,7 +177,7 @@ def _binance() -> Generator[Binance]:
     key = os.environ.get("BINANCE_API_KEY", "")
     secret = os.environ.get("BINANCE_API_SECRET", "")
     if not key or not secret:
-        raise LookupError
+        raise MissingKey
     base = os.environ.get("BINANCE_BASE_URL", BINANCE_URL)
     with httpx.Client(base_url=base, timeout=TIMEOUT_SECONDS) as client:
         yield Binance(client, (key, secret), _audit())
@@ -1283,9 +1287,10 @@ def _failure(error: Exception) -> tuple[int, dict[str, str]]:
         return 400, {"error": str(error)}
     if isinstance(error, SignalError):
         return 503, {"error": str(error)}
-    if isinstance(error, (KeyError, IndexError)):  # LookupErrors too, but not a missing key
-        return 502, {"error": "A reply was missing something the desk needs. Try again."}
-    return 503, {"error": "Add BINANCE_API_KEY and BINANCE_API_SECRET to .env."}
+    if isinstance(error, MissingKey):
+        return 503, {"error": "Add BINANCE_API_KEY and BINANCE_API_SECRET to .env."}
+    # Any other lookup: a bot, grid or trade that isn't there, or a reply missing a field.
+    return 404, {"error": "The desk couldn't find what it needed. Refresh and try again."}
 
 
 def _open_route(method: str, path: str) -> dict[str, object] | None:
