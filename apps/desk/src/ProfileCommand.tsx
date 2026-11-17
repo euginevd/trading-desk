@@ -2,9 +2,8 @@
 // of profile.md and is saved, as a new version, only on Accept.
 import { type FormEvent, useState } from "react";
 import { acceptSuggestion, askProfile, rejectSuggestion } from "./api";
+import { errorOf } from "./format";
 import type { DiffLine, ProfilePage, ProfileSuggestion } from "./types";
-
-const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 export function DiffView({ lines, label }: { lines: DiffLine[]; label: string }) {
   return (
@@ -55,7 +54,7 @@ export default function CommandBar({
       },
       (err: unknown) => {
         setBusy(false);
-        setError(message(err, "That couldn't be answered. Try again."));
+        setError(errorOf(err, "That couldn't be answered. Try again."));
       },
     );
   };
@@ -75,7 +74,7 @@ export default function CommandBar({
       },
       (err: unknown) => {
         setBusy(false);
-        setError(message(err, "The change couldn't be saved."));
+        setError(errorOf(err, "The change couldn't be saved."));
       },
     );
   };
@@ -90,7 +89,7 @@ export default function CommandBar({
       },
       (err: unknown) => {
         setBusy(false);
-        setError(message(err, "The change couldn't be discarded."));
+        setError(errorOf(err, "The change couldn't be discarded."));
       },
     );
   };

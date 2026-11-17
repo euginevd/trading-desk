@@ -100,6 +100,10 @@ def test_the_sentence_and_alerts_only_when_worse(tmp_path: Path) -> None:
         over = risk.deposit_limits({"monthAud": "7500", "capAud": "7000"})
         assert risk.sentence(kept) == "Every rule kept."
         assert risk.sentence(near) == "Every rule kept; 1 near a limit: deposits this month."
+        names = [{**near[0], "name": "Largest coin on Binance"}, {**near[0], "name": "TAO's share"}]
+        assert risk.sentence(names) == (
+            "Every rule kept; 2 near a limit: largest coin on Binance, TAO's share."
+        )
         assert risk.sentence(over) == "1 broken: deposits this month."
         assert risk.changes(store, kept) == []
         assert [r["state"] for r in risk.changes(store, near)] == ["near"]

@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 from api.audit import Audit
 from api.binance import Binance
-from api.handler import cost_from_ms, handler
+from api.handler import MissingKey, cost_from_ms, handler
 from api.local import load_env
 from api.service import TradeCache, aud_rate, fetch, usd_rates
 
@@ -160,7 +160,7 @@ def test_portfolio_route_returns_the_data() -> None:
 
 def test_portfolio_route_asks_for_the_key_when_missing() -> None:
     def missing() -> dict[str, Any]:
-        raise LookupError
+        raise MissingKey
 
     reply = handler({"rawPath": "/portfolio"}, None, portfolio=missing)
     assert reply["statusCode"] == 503
@@ -257,3 +257,23 @@ def test_average_cost_starts_at_the_owners_date(monkeypatch: Any) -> None:
     assert cost_from_ms() == 1_751_292_000_000
     monkeypatch.setenv("DESK_COST_FROM", "not a date")
     assert cost_from_ms() == 1_782_828_000_000
+
+
+def test_a_negative_or_huge_body_size_is_refused_without_waiting() -> None:
+    # A negative Content-Length once read to the end of the stream, holding a thread forever.
+    import socket  # noqa: PLC0415
+    import threading  # noqa: PLC0415
+    from http.server import ThreadingHTTPServer  # noqa: PLC0415
+
+    from api.local import Local  # noqa: PLC0415
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Local)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        for size in ("-1", "999999999"):
+            head = f"POST /health HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {size}\r\n\r\n"
+            with socket.create_connection(("127.0.0.1", server.server_port), timeout=5) as s:
+                s.sendall(head.encode())
+                assert s.recv(64).split(b" ")[1] == b"403"
+    finally:
+        server.shutdown()

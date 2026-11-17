@@ -70,13 +70,6 @@ export const DcaIcon = () => (
   </svg>
 );
 
-export const GridIcon = () => (
-  <svg {...base}>
-    <path d="M3 8h18M3 16h18" strokeDasharray="2 3" />
-    <path d="M3 19l5-7 4 4 4-9 5 6" />
-  </svg>
-);
-
 // Two chevrons pointing left; the folded panel turns them to point right.
 export const CollapseIcon = () => (
   <svg {...base} width={14} height={14} strokeWidth={2.2}>
@@ -109,5 +102,70 @@ export const ResetIcon = () => (
   <svg {...base} width={14} height={14} strokeWidth={2}>
     <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
     <path d="M3 3v5h5" />
+  </svg>
+);
+
+// Pill icons (design-system 13k): 16px, beside a tab's or filter's word, never instead of it.
+const pill = { ...base, width: 16, height: 16 };
+
+export const LayersIcon = () => (
+  <svg {...pill}>
+    <path d="M12 4l8 4-8 4-8-4z" />
+    <path d="M4 12l8 4 8-4M4 16l8 4 8-4" />
+  </svg>
+);
+
+export const ExchangeIcon = () => (
+  <svg {...pill}>
+    <rect x="3.5" y="6" width="17" height="12" rx="3" />
+    <path d="M3.5 10h17" />
+  </svg>
+);
+
+export const PillWalletIcon = () => (
+  <svg {...pill}>
+    <path d="M5 7.5h12.5a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h10" />
+    <circle cx="16" cy="13.3" r="1" />
+  </svg>
+);
+
+export const CoinsIcon = () => (
+  <svg {...pill}>
+    <ellipse cx="9" cy="7" rx="5" ry="2.5" />
+    <path d="M4 7v4c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5V7" />
+    <path d="M10 15.5c.6 1.2 2.6 2 5 2 2.8 0 5-1.1 5-2.5V11c0-1.3-1.9-2.4-4.5-2.5" />
+  </svg>
+);
+
+export const ClockIcon = () => (
+  <svg {...pill}>
+    <circle cx="12" cy="12" r="8" />
+    <path d="M12 8v4l2.5 2" />
+  </svg>
+);
+
+export const ListIcon = () => (
+  <svg {...pill}>
+    <path d="M9 7h10M9 12h10M9 17h10M5 7h.01M5 12h.01M5 17h.01" />
+  </svg>
+);
+
+export const ReceiptIcon = () => (
+  <svg {...pill}>
+    <path d="M6 3.5h12v17l-2.5-1.5-2 1.5-1.5-1.5-1.5 1.5-2-1.5L6 20.5z" />
+    <path d="M9 8h6M9 11.5h6M9 15h3" />
+  </svg>
+);
+
+export const BoltIcon = () => (
+  <svg {...pill}>
+    <path d="M13 3.5L5.5 13H12l-1 7.5 7.5-9.5H12z" />
+  </svg>
+);
+
+export const GridLinesIcon = () => (
+  <svg {...pill}>
+    <path d="M4 8h16M4 12h16M4 16h16" strokeDasharray="2 2.5" />
+    <path d="M4 19l5-6 4 3 7-9" />
   </svg>
 );

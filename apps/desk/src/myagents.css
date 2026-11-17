@@ -363,7 +363,7 @@
   display: grid;
   gap: 2px;
   min-width: 0;
-  font-size: 13.5px;
+  font-size: 14px;
 }
 .ma-next b {
   color: var(--text);

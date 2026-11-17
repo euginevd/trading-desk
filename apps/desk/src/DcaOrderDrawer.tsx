@@ -19,6 +19,8 @@ import {
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
 import { amendDcaOrder, fundsOdds, getMarket } from "./api";
+import { errorOf } from "./format";
+import { token } from "./BotKit";
 import CoinIcon from "./CoinIcon";
 import {
   SOURCE,
@@ -32,8 +34,6 @@ import {
   when,
 } from "./dcaFormat";
 import type { DcaBook, DcaOrder, Interval, Market } from "./types";
-
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 // What's left to spend on a buy: its amount less anything already filled.
 export const left = (o: DcaOrder) => Math.max(0, Number(o.spend ?? 0) - Number(o.filledQuote || 0));
@@ -50,11 +50,6 @@ export const away = (at: number, now: number) =>
 export const pct = (v: number | null) => (v === null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`);
 // A price typed or dragged: 2 places from 1 up, 6 under.
 const tidy = (n: number) => (n >= 1 ? n.toFixed(2) : n.toFixed(6));
-
-function token(name: string, fallback: string): string {
-  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return v || fallback;
-}
 
 interface Line {
   price: number;

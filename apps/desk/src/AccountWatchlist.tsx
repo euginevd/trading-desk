@@ -4,12 +4,12 @@
 // trading-agent's (one model call per ask), then New trade on it.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { analysePotCoin, getAccountCoins, getMarket, unwatchCoin, watchCoin } from "./api";
+import { errorOf } from "./format";
 import { type Average, BotChart, type Level } from "./BotKit";
 import CoinIcon from "./CoinIcon";
-import { dollars, limit } from "./dcaFormat";
+import { day, dollars, limit } from "./dcaFormat";
 import type { AccountCoin, Interval, Market, PotAnalysis } from "./types";
 
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 const OPEN_KEY = "desk.account.watchlist";
 const signed = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
 const toneOf = (v: number) => (v > 0 ? "up" : v < 0 ? "down" : "");
@@ -272,16 +272,10 @@ const averagesOf = (tf: Interval): Average[] => {
     { n: 50, title: `50${unit}`, color: ["--wait", "#e8b04b"] },
   ];
 };
-const shortDay = (ms: number) =>
-  new Date(ms).toLocaleDateString("en-AU", {
-    day: "numeric",
-    month: "short",
-    timeZone: "Australia/Sydney",
-  });
 function caption(tf: Interval, candles: Market["candles"]): string {
   const first = candles[0]?.t ?? 0;
   const last = candles.at(-1)?.t ?? 0;
-  return `${candles.length} ${TF_NAME[tf]} candles, each ${TF_UNIT[tf]}: ${shortDay(first)} to ${shortDay(last)}. Lines: 20 and 50 averages, support and resistance from the daily and weekly swings. Bars along the foot: volume.`;
+  return `${candles.length} ${TF_NAME[tf]} candles, each ${TF_UNIT[tf]}: ${day(first)} to ${day(last)}. Lines: 20 and 50 averages, support and resistance from the daily and weekly swings. Bars along the foot: volume.`;
 }
 
 const VERDICT: Record<PotAnalysis["verdict"], string> = {

@@ -17,8 +17,6 @@ const PATHS: Record<string, string> = {
     "M12 3.5l2.2 5.3 5.3 2.2-5.3 2.2-2.2 5.3-2.2-5.3-5.3-2.2 5.3-2.2zM18.5 17.5l.8 2 .7-2 2-.7-2-.8-.7-2-.8 2-2 .8z",
 };
 
-export const AGENT_ICONS = Object.keys(PATHS);
-
 export default function AgentAvatar({
   icon,
   slug,

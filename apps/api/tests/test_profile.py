@@ -558,3 +558,17 @@ def test_a_new_bot_never_inherits_a_deleted_ones_confirmation(store: Store, audi
     second = store.add_bot("DCA-1", "BTCUSDT", "{}", NOW + 1)
     assert second == first  # SQLite reuses the id
     assert bots.rule_hold(D(5000), second) is not None  # but not the confirmation
+
+
+def test_a_trading_account_trade_gets_the_same_check(call: Any, store: Store, audit: Audit) -> None:
+    # Decision 78: the owner's own trades in the Trading account are buys like any other.
+    call("PUT", "/limits", {"perOrder": "100000", "perDay": "100000"})
+    assert call("POST", "/pot/put-in", {"usdc": "100"})[0] == 200  # noqa: PLR2004
+    profile.save_section(store, audit, "rules", {"per_trade_aud": "1"}, now=NOW)
+    sol = {"coin": "SOL", "entry": "200", "stop": "190", "target": "230", "setup": "Pullback"}
+    status, held_back = call("POST", "/pot/trades", sol)
+    assert status == 409  # noqa: PLR2004
+    assert held_back["ruleBreaks"][0]["rule"] == "per_trade_aud"
+    status, placed = call("POST", "/pot/trades", sol | {"override": True})
+    assert status == 200, placed  # noqa: PLR2004
+    assert profile_ai.overrides(store)[0]["rules"] == ["per_trade_aud"]

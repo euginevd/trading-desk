@@ -15,6 +15,7 @@ import {
   setAiSettings,
   startSignIn,
 } from "./api";
+import { errorOf } from "./format";
 import type { AiMode, AiSettings, TelegramSettings } from "./types";
 
 const MODES: Record<AiMode, { name: string; title: string; sub: string }> = {
@@ -34,8 +35,6 @@ const MODEL_NOTES: [string, string][] = [
 ];
 const modelNote = (name: string) => MODEL_NOTES.find(([family]) => name.includes(family))?.[1];
 const shortName = (name: string) => name.replace("Claude ", "");
-
-const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 type Tone = "up" | "wait" | "down" | "idle";
 
@@ -120,7 +119,7 @@ export default function SettingsPage() {
   const [tg, setTg] = useState<TelegramSettings | null>(null);
 
   useEffect(() => {
-    getAiSettings().then(setAi, (e: unknown) => setError(message(e, "Settings couldn't be read.")));
+    getAiSettings().then(setAi, (e: unknown) => setError(errorOf(e, "Settings couldn't be read.")));
   }, [attempt]);
 
   // Every change goes through here: one at a time, with the reply as the new state.
@@ -134,7 +133,7 @@ export default function SettingsPage() {
         return true;
       },
       (e: unknown) => {
-        setError(message(e, failed));
+        setError(errorOf(e, failed));
         setSaving(false);
         return false;
       },
@@ -395,7 +394,7 @@ function Subscription({
         window.open(reply.url, "_blank", "noopener,noreferrer");
       },
       (e: unknown) => {
-        onError(message(e, "The sign-in didn't start."));
+        onError(errorOf(e, "The sign-in didn't start."));
         setStarting(false);
       },
     );
@@ -517,7 +516,7 @@ function Telegram({ onRead }: { onRead: (tg: TelegramSettings) => void }) {
       },
       (e: unknown) => {
         setBusy(false);
-        setNote({ ok: false, text: message(e, "That didn't work.") });
+        setNote({ ok: false, text: errorOf(e, "That didn't work.") });
       },
     );
   };

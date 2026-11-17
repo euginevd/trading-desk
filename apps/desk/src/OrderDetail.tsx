@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, cancelOrder, editOrder, getMarket } from "./api";
+import { cancelOrder, editOrder, getMarket } from "./api";
+import { message } from "./DcaBots";
 import { BotChart, type Level } from "./BotKit";
 import ConfirmCancel from "./ConfirmCancel";
 import CoinIcon from "./CoinIcon";
@@ -51,10 +52,6 @@ function entryLevels(market: Market): Lv[] {
 }
 
 const two = new Intl.NumberFormat("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function message(e: unknown): string {
-  return e instanceof ApiError ? e.message : "Something went wrong. Try again.";
-}
 
 export default function OrderDetail({
   order,

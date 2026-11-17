@@ -1,28 +1,51 @@
-/* design-system.md tokens (decision 15): dark only, after the owner's mockup. */
+/* design-system.md tokens (decision 15, refreshed in decision 76): dark only. Ink-blue surfaces
+   that step up in light, one teal accent, and a serif for the sentences the desk says. */
 :root {
-  --bg: #0a0f12;
-  --bar: #0b1215;
-  --panel: #0f171b;
-  --panel-2: #131d22;
-  --line: #1b272d;
-  --line-2: #24333a;
-  --text: #e6ecef;
-  --muted: #8c9aa3;
-  --dim: #5e6c74;
+  --bg: #070b0d;
+  --bar: #090e11;
+  --panel: #0d1418;
+  --panel-2: #121b20;
+  --line: #172228;
+  --line-2: #213038;
+  --hover-line: #2f434c;
+  --text: #e9eff1;
+  --body: #c2ccd1;
+  --muted: #8b99a2;
+  --dim: #808e97;
   --accent: #50d2c1;
   --accent-ink: #04110f;
   --accent-soft: rgba(80, 210, 193, 0.1);
+  --accent-line: rgba(80, 210, 193, 0.35);
   --up: #2ebd85;
   --down: #f0616d;
   --up-soft: rgba(46, 189, 133, 0.12);
   --down-soft: rgba(240, 97, 109, 0.12);
+  --down-line: rgba(240, 97, 109, 0.4);
   --wait: #e8b04b;
   --wait-soft: rgba(232, 176, 75, 0.12);
-  --body: #c3cdd2;
   --buy-ink: #03140d;
   --sell-ink: #1a0507;
   --on-price: #ffffff;
-  --hover-line: #33464f;
+  /* A raised control catches a hairline of light on its top edge; the only depth besides dialogs. */
+  --sheen: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  --sheen-strong: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  /* The console (decision 77): the desk floats in a frame over a deep field; panels are layers of
+     light over the frame rather than boxes, with edges, not lines, around them. */
+  --field: #05080a;
+  --frame: #0a1013;
+  --layer-1: rgba(255, 255, 255, 0.035);
+  --layer-2: rgba(255, 255, 255, 0.06);
+  --layer-3: rgba(255, 255, 255, 0.09);
+  --edge: rgba(255, 255, 255, 0.07);
+  --edge-2: rgba(255, 255, 255, 0.12);
+  --lift: 0 24px 48px -28px rgba(0, 0, 0, 0.85);
+  --r-frame: 28px;
+  --r-panel: 18px;
+  /* Hover fills: a secondary button, the primary one, a table row, the current page's edge. */
+  --btn-hover: inset 0 0 0 100vmax rgba(255, 255, 255, 0.035);
+  --accent-hover: #66ddcd;
+  --row-hover: rgba(255, 255, 255, 0.018);
+  --accent-edge: rgba(80, 210, 193, 0.12);
   /* Allocation bar, largest holding first */
   --alloc-1: #50d2c1;
   --alloc-2: #3b8f86;
@@ -30,9 +53,12 @@
   --alloc-4: #7a93a0;
   --alloc-5: #4b6470;
   --alloc-6: #2a3a42;
-  --r: 10px;
+  --r: 14px;
   --ease: cubic-bezier(0.2, 0, 0, 1);
+  --font-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Newsreader Variable", Georgia, "Times New Roman", serif;
   color-scheme: dark;
+  scrollbar-color: var(--line-2) transparent;
 }
 
 * {
@@ -42,24 +68,36 @@
 html,
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    radial-gradient(90% 60% at 50% -10%, rgba(80, 210, 193, 0.06), transparent 60%),
+    radial-gradient(60% 50% at 100% 100%, rgba(78, 168, 255, 0.035), transparent 60%), var(--field);
+  background-attachment: fixed;
   color: var(--text);
-  font:
-    13px/1.45 Inter,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
+  font: 14px/1.5 var(--font-ui);
   font-feature-settings:
     "tnum" 1,
     "cv11" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent-line);
+  color: var(--text);
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 2px;
 }
 
 :focus-visible {
@@ -69,13 +107,33 @@ select {
 
 h1 {
   font-size: 30px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
   margin: 0;
 }
 
+/* The desk speaks in sentences (design-system 13d to 13h); they and page titles are set in the
+   display serif, sized up to Inter's x-height, with lining figures that sit in proportion. */
+h1,
+.dash-headline,
+.port-headline,
+.bots-headline,
+.jr-headline,
+.dcb-headline,
+.pf-headline,
+.set-headline,
+.dcw-line,
+.sentence {
+  font-family: var(--font-display);
+  font-weight: 460;
+  font-optical-sizing: auto;
+  font-size-adjust: 0.52;
+  font-feature-settings: normal;
+  font-variant-numeric: lining-nums proportional-nums;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+}
+
 h2 {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
   margin: 0;
 }
@@ -118,7 +176,17 @@ h2 {
 .app {
   display: grid;
   grid-template-columns: 232px minmax(0, 1fr);
-  min-height: 100vh;
+  gap: 14px;
+  min-height: calc(100vh - 28px);
+  margin: 14px;
+  padding: 14px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-frame);
+  background: linear-gradient(180deg, #0d1418 0%, var(--frame) 320px);
+  box-shadow:
+    var(--sheen),
+    0 60px 120px -40px rgba(0, 0, 0, 0.9),
+    0 0 0 10px rgba(255, 255, 255, 0.012);
   transition: grid-template-columns 160ms var(--ease);
 }
 .app.folded {
@@ -126,12 +194,14 @@ h2 {
 }
 .side {
   position: sticky;
-  top: 0;
-  height: 100vh;
+  top: 14px;
+  height: calc(100vh - 28px);
   display: flex;
   flex-direction: column;
-  background: var(--bar);
-  border-right: 1px solid var(--line);
+  background: var(--layer-1);
+  border: 1px solid var(--edge);
+  border-radius: 22px;
+  box-shadow: var(--sheen);
   overflow: visible;
   z-index: 6;
 }
@@ -141,7 +211,7 @@ h2 {
 }
 .side-fold {
   position: absolute;
-  top: 44px;
+  top: 20px;
   right: -12px;
   width: 24px;
   height: 24px;
@@ -172,6 +242,7 @@ h2 {
   position: relative;
 }
 .side-nav a[aria-current="page"]::before {
+  display: none;
   content: "";
   position: absolute;
   left: -10px;
@@ -185,9 +256,8 @@ h2 {
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 56px;
-  padding: 0 12px 0 19px;
-  border-bottom: 1px solid var(--line);
+  height: 64px;
+  padding: 0 12px 0 16px;
 }
 .brand {
   flex: 1;
@@ -196,8 +266,10 @@ h2 {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 600;
-  font-size: 15px;
+  font-family: var(--font-display);
+  font-weight: 520;
+  font-size: 18px;
+  font-size-adjust: 0.52;
   letter-spacing: -0.01em;
   color: var(--text);
   text-decoration: none;
@@ -205,11 +277,11 @@ h2 {
 .icon-btn {
   display: inline-grid;
   place-items: center;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   flex: none;
   border: 0;
-  border-radius: 8px;
+  border-radius: 999px;
   background: none;
   color: var(--muted);
   cursor: pointer;
@@ -229,22 +301,29 @@ h2 {
   align-items: center;
   gap: 12px;
   height: 40px;
-  padding: 0 11px;
-  border-radius: 8px;
+  padding: 0 12px;
+  border-radius: 12px;
   color: var(--muted);
   text-decoration: none;
   font-weight: 500;
   white-space: nowrap;
+  transition:
+    background-color 120ms var(--ease),
+    color 120ms var(--ease);
 }
 .side-nav a svg {
   flex: none;
 }
 .side-nav a:hover {
-  background: var(--panel-2);
+  background: var(--layer-1);
   color: var(--text);
 }
 .side-nav a[aria-current="page"] {
-  background: var(--accent-soft);
+  background: var(--layer-3);
+  color: var(--text);
+  box-shadow: var(--sheen);
+}
+.side-nav a[aria-current="page"] svg {
   color: var(--accent);
 }
 .side-rule {
@@ -252,23 +331,15 @@ h2 {
   margin: 10px 2px;
   background: var(--line);
 }
-.side-label {
-  padding: 2px 11px 6px;
-  font-size: 12px;
-  color: var(--dim);
-}
 .side-status {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 12px 10px 16px;
-  border-top: 1px solid var(--line);
+  gap: 2px;
+  padding: 10px 10px 12px;
+  border-top: 1px solid var(--edge);
 }
 /* Connections as quiet rows (no boxes); the kill switch reads as a switch. */
-.side-status {
-  gap: 2px;
-}
 .side-status .pill {
   position: relative;
   width: 100%;
@@ -276,7 +347,7 @@ h2 {
   gap: 12px;
   height: 34px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 13px;
 }
 .side-status button.pill:hover,
@@ -293,31 +364,34 @@ h2 {
 }
 .side-status .pill.kill {
   margin-top: 6px;
-  height: 40px;
+  height: 44px;
+  border-radius: 14px;
   color: var(--text);
-  background: var(--panel);
-  border: 1px solid var(--line);
+  background: var(--layer-2);
+  border: 1px solid var(--edge);
+  box-shadow: var(--sheen);
+  font-weight: 500;
 }
 .side-status .pill.kill[aria-pressed="false"] {
-  border-color: rgba(240, 97, 109, 0.4);
+  border-color: var(--down-line);
   background: var(--down-soft);
 }
 .switch {
   position: relative;
   flex: none;
-  width: 28px;
-  height: 16px;
+  width: 34px;
+  height: 20px;
   margin-left: auto;
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--line-2);
   transition: background 160ms var(--ease);
 }
 .switch i {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
   background: var(--muted);
   transition:
@@ -328,7 +402,7 @@ h2 {
   background: var(--accent);
 }
 .switch.on i {
-  transform: translateX(12px);
+  transform: translateX(14px);
   background: var(--accent-ink);
 }
 /* Folded, the kill switch is its icon alone: mint on a soft tint when trading is on, red when
@@ -377,8 +451,7 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.folded .side-word,
-.folded .side-label {
+.folded .side-word {
   display: none;
 }
 .folded .side-head {
@@ -406,12 +479,14 @@ h2 {
   display: flex;
   align-items: center;
   gap: 16px;
-  height: 56px;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--line);
-  background: var(--bar);
+  height: 60px;
+  padding: 0 10px 0 18px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--frame) 88%, transparent);
+  backdrop-filter: blur(14px);
   position: sticky;
-  top: 0;
+  top: 14px;
   z-index: 5;
 }
 .menu-btn {
@@ -423,15 +498,15 @@ h2 {
   flex-wrap: wrap;
   flex: 0 1 auto;
   min-width: 0;
-  height: 34px;
-  column-gap: 22px;
+  height: 40px;
+  column-gap: 28px;
   overflow: hidden;
   font-size: 12px;
 }
 .tickers b {
   font-weight: 600;
   color: var(--text);
-  font-size: 13px;
+  font-size: 14px;
 }
 .tick {
   display: grid;
@@ -464,9 +539,8 @@ button.tick:hover b {
   color: var(--up);
 }
 .tick-coin {
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  color: var(--dim);
+  font-size: 12px;
+  color: var(--muted);
 }
 .head-total {
   display: flex;
@@ -474,7 +548,7 @@ button.tick:hover b {
   align-items: center;
   gap: 10px;
   padding: 4px 10px;
-  border-radius: 8px;
+  border-radius: 10px;
   color: var(--muted);
   text-decoration: none;
 }
@@ -487,21 +561,21 @@ button.tick:hover b {
 }
 .head-total b {
   color: var(--text);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
 }
 .head-total small {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 32px;
-  padding: 0 12px;
-  border: 1px solid var(--line-2);
-  border-radius: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--edge-2);
+  border-radius: 999px;
   color: var(--muted);
   font-size: 12px;
   background: none;
@@ -532,17 +606,23 @@ button.pill:hover {
 
 /* Buttons and fields */
 .btn {
-  height: 36px;
-  padding: 0 14px;
-  border-radius: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 12px;
   border: 1px solid var(--line-2);
   background: var(--panel-2);
+  box-shadow: var(--sheen);
   cursor: pointer;
   font-weight: 500;
-  transition: transform 120ms var(--ease);
+  transition:
+    transform 120ms var(--ease),
+    border-color 120ms var(--ease),
+    background-color 120ms var(--ease);
 }
-.btn:hover {
+/* A hover lightens whatever fill a button has, so coloured buttons keep their ink. */
+.btn:hover:not(:disabled) {
   border-color: var(--hover-line);
+  box-shadow: var(--sheen), var(--btn-hover);
 }
 .btn:active {
   transform: scale(0.98);
@@ -554,13 +634,23 @@ button.pill:hover {
 .btn-accent {
   background: var(--accent);
   border-color: var(--accent);
+  box-shadow: var(--sheen-strong);
   color: var(--accent-ink);
   font-weight: 600;
 }
+.btn-accent:hover:not(:disabled) {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
 .btn-small {
-  height: 28px;
-  padding: 0 10px;
-  font-size: 12px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+/* A link dressed as a secondary button keeps the button's ink, not the link accent. */
+a.btn:where(:not(.btn-accent)) {
+  color: var(--text);
 }
 .link {
   background: none;
@@ -578,13 +668,14 @@ button.pill:hover {
 .wrap {
   max-width: 1320px;
   margin: 0 auto;
-  padding: 28px 24px 48px;
+  padding: 20px 10px 40px;
 }
 .card {
   min-width: 0;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: var(--r);
+  background: var(--layer-1);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-panel);
+  box-shadow: var(--sheen), var(--lift);
 }
 .head-row {
   display: flex;
@@ -600,7 +691,7 @@ button.pill:hover {
   padding: 12px 14px;
   border: 1px solid var(--down);
   background: var(--down-soft);
-  border-radius: 8px;
+  border-radius: 10px;
   margin-bottom: 14px;
 }
 .alert.notice {
@@ -670,6 +761,12 @@ button.pill:hover {
   cursor: pointer;
   border-bottom: 2px solid transparent;
   white-space: nowrap;
+  transition:
+    color 120ms var(--ease),
+    border-color 200ms var(--ease);
+}
+.tabs button:hover {
+  color: var(--text);
 }
 .tabs button[aria-selected="true"] {
   color: var(--text);
@@ -693,6 +790,11 @@ th {
 td {
   padding: 11px 16px;
   border-top: 1px solid var(--line);
+  transition: background-color 120ms var(--ease);
+}
+/* Kept at the lowest weight so a row's own fill (a tax lot, a picked trade) wins. */
+tbody tr:where(:hover) > td {
+  background: var(--row-hover);
 }
 th.r,
 td.r {
@@ -720,7 +822,8 @@ td.r {
   align-items: center;
   justify-content: center;
   font-style: normal;
-  font-size: 9px;
+  font-size: 9px; /* coin initials: the one text allowed under 11px, to fit the mark */
+  letter-spacing: -0.02em;
   font-weight: 600;
   color: var(--muted);
   overflow: hidden;
@@ -729,7 +832,7 @@ td.r {
   display: inline-block;
   padding: 2px 8px;
   border-radius: 5px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -784,7 +887,7 @@ td.r {
   margin-right: 10px;
   padding: 2px;
   border: 1px solid var(--line-2);
-  border-radius: 6px;
+  border-radius: 10px;
 }
 
 .seg {
@@ -792,14 +895,14 @@ td.r {
   grid-template-columns: 1fr 1fr;
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 3px;
   gap: 3px;
 }
 .seg button {
   height: 34px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 10px;
   background: none;
   color: var(--muted);
   cursor: pointer;
@@ -829,7 +932,7 @@ td.r {
   align-items: center;
   height: 40px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel);
   padding: 0 10px;
 }
@@ -853,7 +956,7 @@ td.r {
   height: 28px;
   border: 1px solid var(--line);
   background: none;
-  border-radius: 6px;
+  border-radius: 10px;
   color: var(--muted);
   cursor: pointer;
   font-size: 12px;
@@ -906,11 +1009,29 @@ dialog p {
   .app,
   .app.folded {
     grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .top {
+    top: 0;
+    border-radius: 0;
+  }
+  .drawer .top {
+    z-index: 4; /* under the drawer's scrim, so the header can't be used while it's open */
   }
   .side {
     position: fixed;
+    top: 0;
     left: 0;
+    height: 100vh;
     width: 260px;
+    border-radius: 0 22px 22px 0;
+    background: var(--frame);
     transform: translateX(-100%);
     transition: transform 160ms var(--ease);
   }
@@ -920,8 +1041,7 @@ dialog p {
   .side-fold {
     display: none;
   }
-  .folded .side-word,
-  .folded .side-label {
+  .folded .side-word {
     display: revert;
   }
   .folded .side-head {
@@ -1011,8 +1131,7 @@ dialog p {
   margin: 0 0 12px;
   overflow-x: auto;
 }
-.source-filter button,
-.views-small button {
+.source-filter button {
   height: 30px;
   padding: 0 14px;
   border: 0;
@@ -1023,12 +1142,10 @@ dialog p {
   white-space: nowrap;
   cursor: pointer;
 }
-.source-filter button:hover,
-.views-small button:hover {
+.source-filter button:hover {
   color: var(--text);
 }
-.source-filter button[aria-pressed="true"],
-.views-small button[aria-pressed="true"] {
+.source-filter button[aria-pressed="true"] {
   background: var(--accent-soft);
   color: var(--accent);
 }
@@ -1070,21 +1187,10 @@ td.partial {
   border-radius: 4px;
   background: var(--panel-2);
   color: var(--dim);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 500;
 }
 
-/* The Dashboard's filter row: the source on the left, the currency on the right. */
-.dash-bar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 12px;
-}
-.dash-bar .source-filter {
-  margin: 0;
-}
 .source-filter button:disabled {
   opacity: 0.4;
   cursor: default;
@@ -1123,7 +1229,7 @@ td.partial {
   border: 0;
   background: none;
   color: var(--dim);
-  font-size: 10px;
+  font-size: 11px;
   cursor: pointer;
 }
 .dep-bars button:disabled {
@@ -1167,7 +1273,7 @@ th[aria-sort="descending"] .sort-btn {
 td .sub {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dim);
 }
 td.up .sub,
@@ -1195,7 +1301,7 @@ td.down .sub {
 
 .widget .legend {
   gap: 4px 10px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .widget .dep-bars {
   height: 48px;
@@ -1313,7 +1419,7 @@ tfoot td {
   width: 100%;
   height: 30px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--panel-2);
   color: var(--dim);
   cursor: pointer;
@@ -1332,7 +1438,7 @@ tfoot td {
   gap: 0 10px;
 }
 .dca-hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--dim);
   margin-top: 5px;
 }
@@ -1353,7 +1459,7 @@ tfoot td {
   margin: 14px 0 0;
   padding: 10px 12px;
   border: 1px dashed var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   color: var(--body);
 }
 .dca-now {
@@ -1374,7 +1480,7 @@ tfoot td {
 }
 .dca-tiles > div {
   background: var(--panel-2);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 9px 10px;
   min-width: 0;
 }
@@ -1387,7 +1493,7 @@ tfoot td {
   white-space: nowrap;
 }
 .dca-tiles small {
-  font-size: 11px;
+  font-size: 12px;
 }
 .dca-problems {
   margin: 0 0 10px;
@@ -1448,7 +1554,7 @@ tfoot td {
   width: 100%;
   padding: 8px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 10px;
   background: none;
   color: var(--text);
   cursor: pointer;
@@ -1476,7 +1582,7 @@ tfoot td {
 .bot-chart {
   width: 100%;
   margin: 10px 0;
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
 }
 .bot-empty {
@@ -1528,7 +1634,7 @@ tfoot td {
   border-radius: 4px;
   background: var(--panel-2);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
@@ -1615,7 +1721,7 @@ tfoot td {
 }
 .dca-reason {
   margin-top: 5px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--accent);
 }
 .wizard-title {
@@ -1709,7 +1815,7 @@ tfoot td {
   margin-top: 16px;
 }
 .st-note {
-  font-size: 11px;
+  font-size: 12px;
 }
 .st-detail {
   margin-top: 10px;
@@ -1728,7 +1834,7 @@ tfoot td {
   height: 30px;
   padding: 0 10px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel);
   color: var(--text);
   font-size: 12px;
@@ -1737,7 +1843,7 @@ tfoot td {
 }
 .currency-btn span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 .currency-list {
   right: 0;
@@ -1869,7 +1975,7 @@ dialog.detail-panel.in-place::backdrop {
   height: auto;
   padding: 1px 8px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   border-color: transparent;
   background: var(--panel-2);
 }
@@ -1919,9 +2025,7 @@ dialog.in-place .detail-head {
 .set-headline {
   margin: 0 0 6px;
   font-size: 30px;
-  font-weight: 500;
   line-height: 1.2;
-  letter-spacing: -0.02em;
 }
 .set-lead {
   margin: 0;
@@ -2065,7 +2169,7 @@ dialog.in-place .detail-head {
   border-radius: 5px;
   background: var(--accent-soft);
   color: var(--accent);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -2097,7 +2201,7 @@ dialog.in-place .detail-head {
   gap: 10px;
   padding: 10px 12px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   transition: border-color 120ms var(--ease);
 }
@@ -2156,7 +2260,7 @@ dialog.in-place .detail-head {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--line-2);
-  border-radius: 6px;
+  border-radius: 10px;
 }
 .settings-input input.settings-time {
   flex: 0 0 120px;
@@ -2171,7 +2275,7 @@ dialog.in-place .detail-head {
   background: var(--panel-2);
   color: var(--text);
   border: 1px solid var(--line-2);
-  border-radius: 6px;
+  border-radius: 10px;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -2225,11 +2329,10 @@ dialog.in-place .detail-head {
   }
 }
 
-.coach-ask button,
 .plan-save button {
   height: 32px;
   padding: 0 12px;
-  border-radius: 6px;
+  border-radius: 10px;
   border: 1px solid var(--line-2);
   background: var(--panel-2);
   color: var(--text);
@@ -2272,7 +2375,7 @@ dialog.in-place .detail-head {
 }
 .tax-tile {
   background: var(--panel-2);
-  border-radius: 8px;
+  border-radius: 10px;
   padding: 12px;
 }
 .tax-tile .big {
@@ -2285,7 +2388,7 @@ dialog.in-place .detail-head {
   padding: 1px 8px;
   margin: 0 4px 2px 0;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   background: var(--panel-2);
   color: var(--muted);
@@ -2331,7 +2434,7 @@ dialog.in-place .detail-head {
 .tax-warn {
   margin: 10px 0;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: 10px;
   border: 1px solid rgba(232, 176, 75, 0.3);
   background: var(--wait-soft);
   color: var(--text);
@@ -2345,47 +2448,13 @@ dialog.in-place .detail-head {
   display: grid;
   gap: 12px;
 }
-.journal-top {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.journal-score {
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 20px;
-  align-items: center;
-  padding: 16px;
-}
-.journal-score h2,
 .journal-lists h2 {
   margin: 0 0 6px;
   font-size: 13px;
   font-weight: 600;
 }
-.journal-score p,
 .journal-lists p {
   margin: 4px 0;
-}
-.journal-ring {
-  width: 140px;
-  height: 140px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-}
-.journal-ring > div {
-  width: 110px;
-  height: 110px;
-  border-radius: 50%;
-  background: var(--panel);
-  display: grid;
-  place-content: center;
-  text-align: center;
-}
-.journal-ring b {
-  font-size: 28px;
-  font-weight: 500;
 }
 .journal-lists {
   padding: 16px;
@@ -2399,21 +2468,14 @@ dialog.in-place .detail-head {
   background: var(--bg);
   color: var(--text);
   border: 1px solid var(--line-2);
-  border-radius: 6px;
-}
-.journal-table {
-  padding: 0 0 12px;
-}
-.journal-note {
-  margin: 10px 16px 0;
-  font-size: 12px;
+  border-radius: 10px;
 }
 .jtag {
   display: inline-block;
   padding: 1px 7px;
   margin: 0 4px 3px 0;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   border: 1px solid transparent;
   background: var(--panel-2);
   color: var(--muted);
@@ -2437,12 +2499,8 @@ button.jtag {
   max-width: 320px;
 }
 @media (max-width: 900px) {
-  .tax-tiles,
-  .journal-top {
+  .tax-tiles {
     grid-template-columns: 1fr 1fr;
-  }
-  .journal-score {
-    grid-template-columns: 1fr;
   }
 }
 .tax-lot td {
@@ -2457,7 +2515,7 @@ button.jtag {
   margin: 10px 0 0;
   padding: 10px 12px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 .settings-link p {
   margin: 0;
@@ -2502,4 +2560,260 @@ button.jtag {
 }
 .rule-break-btns .btn-danger {
   margin-left: auto;
+}
+
+/* One moment of motion: a page's sentence settles in as the page opens (design-system 9). */
+@keyframes desk-settle {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.dash-headline,
+.port-headline,
+.bots-headline,
+.jr-headline,
+.dcb-headline,
+.pf-headline,
+.set-headline,
+.sentence {
+  animation: desk-settle 360ms var(--ease) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background: var(--line-2) padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--hover-line) padding-box;
+}
+
+/* Text by screen (decision 77): trading screens stay dense, reading screens get room. */
+.pot,
+.bots,
+.dca-page,
+.page-dense {
+  font-size: 13px;
+}
+.pf-page,
+.jr,
+.rk,
+.settings,
+.md,
+.page-reading {
+  font-size: 15px;
+}
+.jr table,
+.rk table,
+.settings table,
+.page-reading table {
+  font-size: 14px;
+}
+
+/* Pills (decision 77): every tab row is a row of pills, each with its icon beside the word. */
+.tabs,
+.bots-tabs,
+.botsh-tabs.wrap,
+.acc-tabs {
+  gap: 6px;
+  border-bottom: 0;
+}
+.tabs {
+  margin-bottom: 10px;
+  padding: 0;
+}
+.tabs button,
+.bots-tabs [role="tab"],
+.botsh-tabs a,
+.acc-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  transition:
+    color 120ms var(--ease),
+    background-color 120ms var(--ease),
+    border-color 120ms var(--ease);
+}
+.botsh-tabs a:first-child {
+  margin-left: 0;
+}
+.tabs button:hover,
+.bots-tabs [role="tab"]:hover,
+.botsh-tabs a:hover,
+.acc-tabs button:hover {
+  background: var(--layer-1);
+  color: var(--text);
+}
+.tabs button[aria-selected="true"],
+.bots-tabs [role="tab"][aria-selected="true"],
+.botsh-tabs a[aria-current="page"],
+.acc-tabs button.is-on {
+  border-color: var(--edge-2);
+  background: var(--layer-3);
+  color: var(--text);
+  box-shadow: var(--sheen);
+}
+.tabs button[aria-selected="true"] svg,
+.botsh-tabs a[aria-current="page"] svg {
+  color: var(--accent);
+}
+
+/* Segmented filters (decision 77): one rounded track, the chosen one filled in the accent. */
+.views,
+.pf-tabs {
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--edge);
+  border-radius: 999px;
+  background: var(--layer-1);
+}
+.source-filter button,
+.pf-page .pf-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  min-height: 0;
+  padding: 0 14px;
+  border-radius: 999px;
+}
+.source-filter button[aria-pressed="true"],
+.pf-page .pf-tabs button[aria-selected="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  box-shadow: none;
+  font-weight: 600;
+}
+
+/* Panels (decision 77): the sections a page is made of float as layers, not hairline bands. */
+.port-strip,
+.port-ledger,
+.port-pair > section,
+.dcb-section,
+.jr-strip,
+.jr-ledger,
+.jr-lists,
+.set-section,
+.dcw,
+.panel {
+  padding: 18px 20px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-panel);
+  background: var(--layer-1);
+  box-shadow: var(--sheen), var(--lift);
+}
+.port-pair {
+  gap: 16px;
+  padding-top: 0;
+  border-top: 0;
+}
+.port-ledger {
+  padding-top: 14px;
+}
+.port-tabs {
+  border-bottom: 0;
+}
+
+/* The band above the frame (decision 77): what scrolls past the top bar hides under the field. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0 0 auto;
+  height: 14px;
+  background: var(--field);
+  z-index: 5;
+}
+@media (max-width: 760px) {
+  body::before {
+    display: none;
+  }
+}
+.botsh-tabs.wrap {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+/* Ambient drift (decision 78): two soft glows move behind the frame over a minute, never behind a
+   figure. The only thing that moves on its own; it stops entirely under reduced motion. */
+body {
+  background: transparent;
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(32% 32% at 28% 22%, rgba(80, 210, 193, 0.1), transparent 70%),
+    radial-gradient(38% 38% at 76% 78%, rgba(78, 168, 255, 0.07), transparent 70%);
+  animation: desk-drift 60s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes desk-drift {
+  from {
+    transform: translate3d(-4%, -3%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(4%, 3%, 0) scale(1.06);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    animation: none !important;
+  }
+}
+
+/* For a new page (design-system/new-page.md): the sentence's size, a panel's heading row. */
+.sentence {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.12;
+  max-width: 30ch;
+}
+.sentence + .lede {
+  margin: 8px 0 0;
+  color: var(--body);
+  max-width: 70ch;
+}
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 14px;
+}
+.page-stack {
+  display: grid;
+  gap: 18px;
+}
+@media (max-width: 640px) {
+  .sentence {
+    font-size: 27px;
+  }
 }

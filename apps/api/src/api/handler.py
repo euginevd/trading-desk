@@ -77,6 +77,10 @@ BotsFactory = Callable[[], AbstractContextManager["Bots"]]
 GridsFactory = Callable[[], AbstractContextManager["Grids"]]
 
 
+class MissingKey(LookupError):
+    """The Binance key or secret isn't in the environment; the only error that asks for them."""
+
+
 @dataclass
 class Services:
     """What the watchlist, market and signal routes need, opened per request."""
@@ -173,7 +177,7 @@ def _binance() -> Generator[Binance]:
     key = os.environ.get("BINANCE_API_KEY", "")
     secret = os.environ.get("BINANCE_API_SECRET", "")
     if not key or not secret:
-        raise LookupError
+        raise MissingKey
     base = os.environ.get("BINANCE_BASE_URL", BINANCE_URL)
     with httpx.Client(base_url=base, timeout=TIMEOUT_SECONDS) as client:
         yield Binance(client, (key, secret), _audit())
@@ -550,7 +554,9 @@ def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
     return {"source": source, "asset": asset, "averageCost": average}
 
 
-BUYS = ("/trades", "/orders", "/orders/ladder", "/dca/orders")
+# The Trading account's trades are the owner's own buys too (decision 78); the DCA close-out is
+# not, as it finishes a week the owner already approved.
+BUYS = ("/trades", "/orders", "/orders/ladder", "/dca/orders", "/pot/trades")
 PRETRADE_RULES = ("monthly_deposit_cap_aud", "per_trade_aud", "max_pct_per_coin")
 
 
@@ -576,6 +582,12 @@ def _pretrade(
     owner confirms past it, and that override is logged. A 409 names each rule broken."""
     if path not in BUYS:
         return None
+    if path == "/pot/trades":  # sized by the account's own rules first; a refusal there stands
+        sized = Pot(desk).size(body)
+        _, store, audit, _ = desk.parts()
+        override = body.get("override") is True
+        spend = Decimal(str(sized["spend"]))
+        return _rule_check(store, audit, str(sized["coin"]), spend, override, portfolio)[0]
     spend = _spend_of(path, body)
     if spend is None or not spend.is_finite() or spend <= 0:
         return None
@@ -1283,7 +1295,10 @@ def _failure(error: Exception) -> tuple[int, dict[str, str]]:
         return 400, {"error": str(error)}
     if isinstance(error, SignalError):
         return 503, {"error": str(error)}
-    return 503, {"error": "Add BINANCE_API_KEY and BINANCE_API_SECRET to .env."}
+    if isinstance(error, MissingKey):
+        return 503, {"error": "Add BINANCE_API_KEY and BINANCE_API_SECRET to .env."}
+    # Any other lookup: a bot, grid or trade that isn't there, or a reply missing a field.
+    return 404, {"error": "The desk couldn't find what it needed. Refresh and try again."}
 
 
 def _open_route(method: str, path: str) -> dict[str, object] | None:

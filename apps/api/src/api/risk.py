@@ -348,9 +348,14 @@ def portfolio_limits(portfolio: dict[str, Any]) -> list[dict[str, Any]]:
     return rows
 
 
+def _mid_sentence(name: str) -> str:
+    """A row's name inside a sentence: its first word lowercased, unless it's a name like TAO."""
+    return name[:1].lower() + name[1:] if name[1:2].islower() else name
+
+
 def sentence(rows: list[dict[str, Any]]) -> str:
-    broken = [r["name"].lower() for r in rows if r["state"] == "broken"]
-    near = [r["name"].lower() for r in rows if r["state"] == "near"]
+    broken = [_mid_sentence(r["name"]) for r in rows if r["state"] == "broken"]
+    near = [_mid_sentence(r["name"]) for r in rows if r["state"] == "near"]
     if broken:
         return f"{len(broken)} broken: {', '.join(broken)}."
     if near:

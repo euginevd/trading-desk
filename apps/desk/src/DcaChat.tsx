@@ -3,6 +3,7 @@
 // the desk has already checked; nothing reaches Binance until the owner reviews and places it.
 import { useEffect, useRef, useState } from "react";
 import { agentChat, amendDcaOrder, cancelDcaOrder, placeDcaOrder } from "./api";
+import { errorOf } from "./format";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
 import OrderReview from "./OrderReview";
@@ -18,7 +19,6 @@ const WORD: Record<DcaAction["type"], string> = {
   change: "Change",
   cancel: "Cancel",
 };
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 async function run(a: Act): Promise<string> {
   if (a.type === "cancel") return (await cancelDcaOrder(a.ref)).ref + " cancelled";

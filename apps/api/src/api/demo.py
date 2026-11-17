@@ -46,6 +46,7 @@ def _trades(symbol: str) -> list[dict[str, Any]]:
         {
             "symbol": symbol,
             "id": n,
+            "orderId": sum(map(ord, symbol)) * 100 + n,  # made up, unique per coin and buy
             "time": NOW_MS - days * DAY_MS,
             "price": price,
             "qty": qty,
@@ -220,9 +221,10 @@ class Exchange:
         p = dict(request.url.params)
         path, method = request.url.path, request.method
         if path == "/api/v3/myTrades":
-            order = self.orders[int(p["orderId"])]
+            order = self.orders.get(int(p["orderId"]))  # a demo trade's id has no order here
             fills = [{"commission": "0", "commissionAsset": "USDT"}]
-            return httpx.Response(200, json=fills if order["status"] == "FILLED" else [])
+            filled = order is not None and order["status"] == "FILLED"
+            return httpx.Response(200, json=fills if filled else [])
         if path.startswith("/api/v3/orderList"):
             return self._list(path, method, p)
         if method == "POST":

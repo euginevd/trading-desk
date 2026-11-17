@@ -16,6 +16,9 @@ terraform.rc
 node_modules/
 dist/
 local/
+# A database written outside local/ by mistake
+*.sqlite
+*.sqlite-*
 __pycache__/
 .pytest_cache/
 .ruff_cache/

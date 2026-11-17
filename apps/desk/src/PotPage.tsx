@@ -3,7 +3,16 @@
 // Scan now, what trading-agent proposes, the trades in tabs (positions, orders, history,
 // stats, the ledger) and, at the foot, the watchlist (AccountWatchlist.tsx).
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { checkPot, dismissPotProposal, getPot, placePotTrade, putInPot, scanPot } from "./api";
+import {
+  ApiError,
+  checkPot,
+  dismissPotProposal,
+  getPot,
+  placePotTrade,
+  putInPot,
+  scanPot,
+} from "./api";
+import { errorOf } from "./format";
 import AgentAvatar from "./AgentIcons";
 import AccountWatchlist from "./AccountWatchlist";
 import CoinIcon from "./CoinIcon";
@@ -12,12 +21,12 @@ import { Live } from "./Figures";
 import PotChat, { usePotChat } from "./PotChat";
 import PotNewTrade from "./PotNewTrade";
 import PotPanel, { px, rWord, rr, tone } from "./PotPanel";
-import type { PotAction, PotCheck, PotProposal, PotTrade, PotView } from "./types";
+import { RuleBreakBanner } from "./RuleMarks";
+import type { PotAction, PotCheck, PotProposal, PotTrade, PotView, RuleBreak } from "./types";
 import "./pot.css";
 
 // Dollars without empty cents: $1, $0.81, $10.
 const cash = (v: string | number) => dollars(v).replace(/\.00$/, "");
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 const REGIME = { bull: "Bull", neutral: "Neutral", bear: "Bear" } as const;
 const TAB_KEY = "desk.account.tab";
 const TABS = [
@@ -367,6 +376,9 @@ export default function PotPage() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [placing, setPlacing] = useState(false);
   const [placeError, setPlaceError] = useState<string | null>(null);
+  // The Profile rules a trade breaks, for the trade under review only (decision 78).
+  const [ruleHold, setRuleHold] = useState<{ of: Pending; breaks: RuleBreak[] } | null>(null);
+  const breaks = ruleHold && ruleHold.of === pending ? ruleHold.breaks : null;
   const [tab, setTab] = useState<Tab>(readTab);
   const [chatOpen, setChatOpen] = useState(() => readFlag(CHAT_KEY));
   const [checked, setChecked] = useState<PotCheck | null>(null);
@@ -477,7 +489,7 @@ export default function PotPage() {
     dismissPotProposal(id).then(setPot, (e: unknown) =>
       setSaid(errorOf(e, "That proposal couldn't be dismissed.")),
     );
-  const place = () => {
+  const place = (override = false) => {
     if (!pending) return;
     setPlacing(true);
     setPlaceError(null);
@@ -489,6 +501,7 @@ export default function PotPage() {
       setup: pending.setup,
       reason: pending.reason,
       ...(pending.proposal ? { proposal: pending.proposal } : {}),
+      ...(override ? { override: true } : {}),
     }).then(
       (t) => {
         setPlacing(false);
@@ -500,6 +513,10 @@ export default function PotPage() {
       },
       (e: unknown) => {
         setPlacing(false);
+        if (e instanceof ApiError && e.ruleBreaks.length > 0) {
+          setRuleHold({ of: pending, breaks: e.ruleBreaks });
+          return;
+        }
         setPlaceError(errorOf(e, "The trade wasn't placed."));
       },
     );
@@ -960,14 +977,28 @@ export default function PotPage() {
                 {placeError}
               </p>
             )}
-            <div className="dlg-btns">
-              <button className="btn" type="button" onClick={() => review.current?.close()}>
-                Not yet
-              </button>
-              <button className="btn btn-accent" type="button" disabled={placing} onClick={place}>
-                {placing ? "Placing…" : "Place the trade"}
-              </button>
-            </div>
+            {breaks ? (
+              <RuleBreakBanner
+                breaks={breaks}
+                sending={placing}
+                onKeep={() => review.current?.close()}
+                onOverride={() => place(true)}
+              />
+            ) : (
+              <div className="dlg-btns">
+                <button className="btn" type="button" onClick={() => review.current?.close()}>
+                  Not yet
+                </button>
+                <button
+                  className="btn btn-accent"
+                  type="button"
+                  disabled={placing}
+                  onClick={() => place()}
+                >
+                  {placing ? "Placing…" : "Place the trade"}
+                </button>
+              </div>
+            )}
           </>
         )}
       </dialog>

@@ -28,10 +28,7 @@
 .dash-headline {
   margin: 6px 0 4px;
   font-size: 34px;
-  font-weight: 500;
   line-height: 1.15;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
 }
 .dash-headline .up {
   color: var(--up);
@@ -49,33 +46,7 @@
 }
 
 /* The week rail: seven days on a line, the part already lived filled in. */
-.dash-week {
-  border-top: 1px solid var(--line);
-  padding-top: 16px;
-}
-.dash-rail {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-}
-.dash-rail-line,
-.dash-rail-past {
-  position: absolute;
-  top: 31px;
-  left: calc(100% / 14);
-  height: 2px;
-  border-radius: 1px;
-}
-.dash-rail-line {
-  right: calc(100% / 14);
-  background: var(--line-2);
-}
-.dash-rail-past {
-  width: calc(var(--today) * 100% / 7);
-  min-width: 0;
-  background: var(--accent);
-  opacity: 0.55;
-}
+
 .dash-day {
   position: relative;
   display: flex;
@@ -99,128 +70,12 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
-.dash-day-name {
-  font-size: 12px;
-}
-.dash-dot {
-  position: relative;
-  z-index: 1;
-  width: 10px;
-  height: 10px;
-  margin: 3px 0;
-  border-radius: 50%;
-  background: var(--bg);
-  border: 2px solid var(--line-2);
-}
-.dash-day.past .dash-dot {
-  border-color: var(--accent);
-  background: var(--accent);
-  opacity: 0.55;
-}
-.dash-day-date {
-  color: var(--text);
-  font-size: 15px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-.dash-day-label {
-  font-size: 12px;
-  text-align: center;
-  line-height: 1.3;
-  color: var(--body);
-}
 /* Today: the mint ring. */
-.dash-day.today .dash-day-name {
-  color: var(--accent);
-  font-weight: 600;
-}
-.dash-day.today .dash-dot {
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  border: 0;
-  background: var(--accent);
-  opacity: 1;
-  box-shadow: 0 0 0 5px var(--accent-soft);
-}
+
 /* The plan's buys: a ring on their day, filled once bought, amber when due or missed. */
-.dash-day.buy .dash-dot,
-.dash-day.extra .dash-dot {
-  width: 14px;
-  height: 14px;
-  margin: 1px 0;
-  border-color: var(--text);
-  opacity: 1;
-}
-.dash-day.done .dash-dot {
-  border-color: var(--accent);
-  background: var(--accent);
-}
-.dash-day.done .dash-day-label {
-  color: var(--accent);
-}
-.dash-day.due .dash-dot,
-.dash-day.missed .dash-dot {
-  border-color: var(--wait);
-}
-.dash-day.extra.on .dash-day-label {
-  color: var(--wait);
-  font-weight: 500;
-}
-.dash-day.due .dash-day-label,
-.dash-day.missed .dash-day-label {
-  color: var(--wait);
-  font-weight: 500;
-}
-.dash-readout {
-  margin: 10px 0 0;
-  min-height: 1.5em;
-  color: var(--text);
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
-}
 
 /* What to watch, and the desk to ask: two hairline columns. */
-.dash-ledger {
-  display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
-  gap: 0 48px;
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
-}
-.dash-ledger.is-single {
-  grid-template-columns: minmax(0, 760px);
-}
-.dash-col h2,
-.dash-recap h2 {
-  margin: 0 0 6px;
-  font-size: 15px;
-  font-weight: 600;
-}
-.dash-empty {
-  margin: 6px 0 12px;
-}
-.dash-points {
-  list-style: none;
-  margin: 0 0 6px;
-  padding: 0;
-}
-.dash-points li {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: baseline;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
-  font-variant-numeric: tabular-nums;
-}
-.dash-points strong {
-  font-weight: 600;
-}
-.dash-rule {
-  color: var(--wait);
-  font-size: 12px;
-}
+
 .dash-deposits {
   padding-top: 10px;
 }
@@ -229,41 +84,6 @@
   font-size: 13px;
   font-weight: 400;
   color: var(--muted);
-}
-.dash-dep-line {
-  margin: 0 0 8px;
-  font-variant-numeric: tabular-nums;
-}
-.dash-dep-line strong {
-  font-size: 18px;
-  font-weight: 600;
-}
-.dash-over {
-  color: var(--wait);
-}
-.dash-bar {
-  height: 6px;
-  border-radius: 3px;
-  background: var(--panel-2);
-  overflow: hidden;
-}
-.dash-bar i {
-  display: block;
-  height: 100%;
-  background: var(--accent);
-  transition: width 700ms var(--ease);
-}
-.dash-bar.over i {
-  background: var(--wait);
-}
-.dash-note {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-.dash-lesson {
-  margin: 10px 0 0;
-  font-size: 13px;
 }
 .dash-link {
   padding: 0;
@@ -281,117 +101,11 @@
 }
 
 /* Ask the desk. */
-.dash-team {
-  display: flex;
-  gap: 6px;
-  margin: 2px 0 8px;
-}
-.dash-ava {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid var(--line-2);
-  background: var(--panel-2);
-  color: var(--muted);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.dash-ava.lead {
-  margin-right: 6px;
-}
-.dash-ava[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.dash-ava:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.dash-who {
-  margin: 0 0 8px;
-  font-size: 13px;
-}
-.dash-thread {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-height: 64px;
-  max-height: 220px;
-  overflow-y: auto;
-  margin-bottom: 8px;
-}
-.dash-thread p {
-  margin: 0;
-}
-.dash-bubble {
-  max-width: 88%;
-  padding: 7px 10px;
-  border-radius: 10px;
-  background: var(--panel-2);
-  font-size: 13px;
-}
-.dash-bubble.user {
-  align-self: flex-end;
-  background: var(--accent-soft);
-}
-.dash-ask {
-  display: flex;
-  gap: 8px;
-}
-.dash-ask input {
-  flex: 1;
-  min-width: 0;
-  min-height: 36px;
-  padding: 0 12px;
-  border-radius: 10px;
-  border: 1px solid var(--line-2);
-  background: var(--panel);
-  color: var(--text);
-  font: inherit;
-}
-.dash-ask input:focus {
-  outline: 2px solid var(--accent);
-  outline-offset: -1px;
-}
 
 /* Last week, in one line. */
-.dash-recap {
-  border-top: 1px solid var(--line);
-  padding-top: 12px;
-}
-.dash-recap-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 14px;
-}
-.dash-recap-line h2 {
-  margin: 0;
-}
-.dash-spacer {
-  flex: 1;
-}
-.dash-recap-body {
-  margin-top: 8px;
-  font-size: 14px;
-}
-.dash-recap-body p {
-  margin: 0 0 6px;
-}
-.dash-recap-body ul {
-  margin: 0 0 8px;
-  padding-left: 18px;
-}
 
 /* Narrow (~650px pane): one column. Phones: the rail keeps its seven days, labels shorten. */
 @media (max-width: 900px) {
-  .dash-ledger {
-    grid-template-columns: minmax(0, 1fr);
-    row-gap: 22px;
-  }
   .dash-headline {
     font-size: 27px;
   }
@@ -400,45 +114,13 @@
   .dash-headline {
     font-size: 23px;
   }
-  .dash-day-label {
-    font-size: 10px;
-  }
-  .dash-points li {
-    grid-template-columns: 52px minmax(0, 1fr);
-  }
-  .dash-rule {
-    grid-column: 2;
-  }
 }
 
 /* Motion: the week arrives day by day and today's ring lands; then motion only answers change
    (a figure that moved rolls; the readout follows the day you're on). Off under reduced motion. */
 @media (prefers-reduced-motion: no-preference) {
-  .dash-headline {
-    animation: dash-rise 420ms var(--ease) both;
-  }
   .dash-day {
     animation: dash-rise 360ms var(--ease) both;
-  }
-  .dash-rail-past {
-    animation: dash-grow 700ms var(--ease) 300ms both;
-  }
-  .dash-day.today .dash-dot {
-    animation: dash-land 520ms cubic-bezier(0.34, 1.56, 0.64, 1) 650ms both;
-  }
-  .dash-readout {
-    animation: dash-fade 200ms ease-out both;
-  }
-  .dash-points li {
-    animation: dash-fade 300ms ease-out both;
-  }
-  .dash-bar i {
-    animation: dash-grow 800ms var(--ease) 400ms both;
-  }
-  .dash-who,
-  .dash-recap-body,
-  .dash-bubble {
-    animation: dash-rise 240ms var(--ease) both;
   }
 }
 @keyframes dash-rise {

@@ -7,6 +7,7 @@
 // new one under a new reference, linked to it; the book keeps both (dca_orders is append-only).
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { amendDcaOrder, cancelDcaOrder, fundsOdds } from "./api";
+import { errorOf } from "./format";
 import CoinIcon from "./CoinIcon";
 import DcaOrderDrawer, { away, left, pct, qtyOf } from "./DcaOrderDrawer";
 import {
@@ -21,8 +22,6 @@ import {
   when,
 } from "./dcaFormat";
 import type { DcaBook, DcaOrder } from "./types";
-
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 type State = "open" | "filled" | "cancelled" | "all";
 type Week = "this" | "last4" | "all";

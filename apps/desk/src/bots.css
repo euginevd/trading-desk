@@ -9,10 +9,7 @@
 .bots-headline {
   margin: 0 0 6px;
   font-size: 32px;
-  font-weight: 500;
   line-height: 1.18;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
 }
 .bots-lead {
   margin: 0;
@@ -58,43 +55,6 @@
   background: var(--accent-soft);
 }
 
-/* Type chips with their counts. */
-.bots-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.bots-chips button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  border: 0;
-  border-radius: 8px;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  cursor: pointer;
-}
-.bots-chips button:hover {
-  color: var(--text);
-}
-.bots-chips button[aria-pressed="true"] {
-  background: var(--panel-2);
-  color: var(--text);
-}
-.bots-chips .num {
-  color: var(--dim);
-}
-.bots-soon {
-  padding: 1px 6px;
-  border-radius: 6px;
-  background: var(--wait-soft);
-  color: var(--wait);
-  font-size: 11px;
-}
-
 /* A bot: its pair and status, when it started, its total, its figures in three columns, its
    actions. */
 .bots-list {
@@ -117,10 +77,10 @@
 }
 .bot-type {
   padding: 1px 7px;
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--panel-2);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .bot-ref {
   font-size: 12px;
@@ -215,23 +175,6 @@
   margin: 12px 0;
 }
 
-/* Rebalancing, coming soon. */
-.bots-soon-panel {
-  max-width: 68ch;
-  padding: 4px 0;
-}
-.bots-soon-panel h2 {
-  margin: 0 0 8px;
-  font-size: 17px;
-  font-weight: 600;
-}
-.bots-soon-panel a {
-  color: var(--accent);
-}
-.bots-soon-panel p {
-  margin: 0 0 8px;
-}
-
 @media (max-width: 520px) {
   .bots-headline {
     font-size: 23px;
@@ -247,9 +190,6 @@
   }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .bots-headline {
-    animation: dash-rise 420ms var(--ease) both;
-  }
   .bot-block {
     animation: dash-rise 320ms var(--ease) both;
     animation-delay: calc(var(--i, 0) * 60ms);

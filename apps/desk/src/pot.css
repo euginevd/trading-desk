@@ -22,7 +22,7 @@
 .pot-regime small {
   display: block;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .pot-regime span {
   color: var(--body);
@@ -90,7 +90,7 @@
 }
 .pot-facts dt {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .pot-facts dd {
   margin: 0;
@@ -120,7 +120,7 @@
   padding: 12px 10px;
   border: 0;
   border-bottom: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
   background: none;
   color: inherit;
   font: inherit;
@@ -161,7 +161,7 @@
   position: absolute;
   top: 0;
   color: var(--muted);
-  font-size: 10.5px;
+  font-size: 11px;
   white-space: nowrap;
   text-align: center;
   transform: translateX(-50%);
@@ -211,7 +211,7 @@
   display: inline-block;
   padding: 1px 7px;
   border-radius: 5px;
-  font-size: 11.5px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .pot-tag.is-wait {
@@ -240,9 +240,7 @@
 }
 
 /* Show more: the numbers, every trade and the ledger. */
-.pot-more {
-  margin-top: 16px;
-}
+
 .pot-stats {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
@@ -252,23 +250,17 @@
 .pot-stats div {
   padding: 10px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 .pot-stats dt {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .pot-stats dd {
   margin: 0;
   color: var(--text);
   font-size: 16px;
   font-weight: 600;
-}
-.pot-cols {
-  display: grid;
-  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
-  gap: 32px;
-  margin-top: 12px;
 }
 .pot-tools {
   display: flex;
@@ -348,8 +340,7 @@ dialog:has(.pot-rv) {
   .pot-regime .btn {
     grid-column: 1 / -1;
   }
-  .pot-proposal,
-  .pot-cols {
+  .pot-proposal {
     grid-template-columns: 1fr;
   }
   .pot-act {
@@ -373,9 +364,7 @@ dialog:has(.pot-rv) {
 
 /* New trade: a trade by hand in a panel from the right. The form on the left, the trade
    standing up on the right (target at the top, stop at the bottom), its numbers and rules. */
-.dcb-section-head .pot-new {
-  margin-left: auto;
-}
+
 .pot-rv-why {
   margin: 10px 0 0;
   color: var(--body);
@@ -442,7 +431,7 @@ dialog.pnt {
 .pnt-field {
   display: grid;
   gap: 4px;
-  font-size: 12.5px;
+  font-size: 13px;
   color: var(--muted);
 }
 .pnt-field input,
@@ -451,7 +440,7 @@ dialog.pnt {
   padding: 9px 11px;
   border: 1px solid var(--line-2);
   border-left-width: 3px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bg);
   color: var(--text);
   font: inherit;
@@ -485,10 +474,10 @@ dialog.pnt {
 .pnt-setup legend {
   margin-bottom: 6px;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .pnt-days {
-  font-size: 12.5px;
+  font-size: 13px;
 }
 
 /* The ladder: zones between the lines, a label on each. */
@@ -529,7 +518,7 @@ dialog.pnt {
   gap: 6px;
   padding: 0 12px;
   border-top: 1px solid var(--line-2);
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1;
   transform: translateY(-1px);
   white-space: nowrap;
@@ -586,7 +575,7 @@ dialog.pnt {
 }
 .pnt-figures dt {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .pnt-figures dd {
   margin: 2px 0 0;
@@ -599,7 +588,7 @@ dialog.pnt {
 }
 .pnt-figures .is-big dd small {
   display: block;
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 400;
 }
 .pnt-figures dd.up {
@@ -612,7 +601,7 @@ dialog.pnt {
   margin-top: 14px;
   padding: 10px 12px;
   border: 1px solid rgba(46, 189, 133, 0.35);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--up-soft);
   font-size: 13px;
 }
@@ -714,12 +703,12 @@ dialog.pnt {
   margin: 10px 0 0;
   padding-left: 18px;
   color: var(--body);
-  font-size: 13.5px;
+  font-size: 14px;
   line-height: 1.5;
 }
 .pnt-ai-watch {
   margin: 8px 0 0;
-  font-size: 13.5px;
+  font-size: 14px;
 }
 .pnt-ai-foot {
   display: flex;
@@ -856,11 +845,6 @@ button.acc-coin:focus-visible {
   background: rgba(232, 176, 75, 0.14);
   color: var(--wait);
 }
-.acc-flags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
 .acc-tabs {
   display: flex;
   gap: 4px;
@@ -978,7 +962,7 @@ button.acc-coin:focus-visible {
   height: 30px;
   padding: 0 10px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel);
   color: var(--text);
   font: inherit;
@@ -1100,7 +1084,7 @@ dialog.acc-drawer .dcb-drawer-figures b {
   margin-left: 8px;
   padding: 1px 7px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 .pnt-mark.is-agent {
@@ -1129,7 +1113,7 @@ dialog.acc-drawer .dcb-drawer-figures b {
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--line-2);
-  border-radius: 6px;
+  border-radius: 10px;
   background: none;
   color: var(--muted);
   font: inherit;
@@ -1138,7 +1122,7 @@ dialog.acc-drawer .dcb-drawer-figures b {
 }
 .acc-tf button small {
   color: var(--accent);
-  font-size: 10.5px;
+  font-size: 11px;
 }
 .acc-tf button[aria-pressed="true"] {
   border-color: var(--accent);
@@ -1146,7 +1130,7 @@ dialog.acc-drawer .dcb-drawer-figures b {
 }
 .acc-tf .muted {
   margin-left: 8px;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .acc-tf-note {
   margin: 6px 0 0;

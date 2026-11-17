@@ -1,4 +1,4 @@
-// Locale rules from design-system 25: Australian English, money to 2 places, coins up to 8.
+// Locale rules from design-system 18: Australian English, money to 2 places, coins up to 8.
 const TZ = "Australia/Sydney";
 
 const money = new Intl.NumberFormat("en-AU", {
@@ -86,16 +86,6 @@ export function aud(value: string | null): string {
   return value === null ? "–" : `A$${money.format(Number(value))}`;
 }
 
-// Whole Australian dollars, signed: the PnL card.
-export function audWhole(n: number): string {
-  const r = Math.round(n);
-  return `${sign(r, true)}A$${Math.abs(r).toLocaleString("en-AU")}`;
-}
-
-export function audSigned(n: number): string {
-  return `${sign(n, true)}A$${money.format(Math.abs(n))}`;
-}
-
 export function amount(value: string | null): string {
   return value === null ? "–" : coin.format(Number(value));
 }
@@ -145,11 +135,6 @@ export function fetchedAt(iso: string): string {
   return `${time}, ${day(d)}`;
 }
 
-// A calendar day with its year, as 15 Nov 2026 (design-system 18).
-export function longDate(isoDay: string): string {
-  return day(new Date(`${isoDay}T12:00:00Z`));
-}
-
 export function shortDate(isoDay: string): string {
   return new Date(`${isoDay}T12:00:00Z`).toLocaleDateString("en-AU", {
     day: "numeric",
@@ -176,3 +161,7 @@ export function ago(ms: number, now: number): string {
   const hours = Math.round(minutes / 60);
   return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
 }
+
+/** An error's own words, or the fallback when it has none. */
+export const errorOf = (e: unknown, fallback: string) =>
+  e instanceof Error ? e.message : fallback;

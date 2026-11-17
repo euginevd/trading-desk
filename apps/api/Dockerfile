@@ -12,8 +12,9 @@ RUN uv sync --locked --no-dev --no-editable
 
 # Run: the matching slim Python, patched, without pip (known-mistakes 12), as a non-root user.
 FROM python:3.13-slim-trixie@sha256:e48f59cdba69a3cbd9ed2cf0f348d90d45a8d350d98134cf1070bc106ee9ed90
+# Only the uninstall may fail (pip may be absent); a failed upgrade must fail the build.
 RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
-    && python -m pip uninstall -y pip setuptools wheel || true
+    && (python -m pip uninstall -y pip setuptools wheel || true)
 RUN useradd --uid 10001 --no-create-home desk && mkdir -p /app/local && chown desk /app/local
 WORKDIR /app
 COPY --from=build /app/.venv /app/.venv

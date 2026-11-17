@@ -3,6 +3,7 @@
 // weekly review. The figures are the desk's own; the model only writes the review.
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { getRiskBoard, writeRiskReview } from "./api";
+import { errorOf } from "./format";
 import AgentAvatar from "./AgentIcons";
 import { when } from "./dcaFormat";
 import type { RiskBoard, RiskLimit } from "./types";
@@ -10,7 +11,6 @@ import "./risk.css";
 
 const AREAS = ["Trading pot", "DCA book", "Deposits", "Portfolio"] as const;
 const STATE = { kept: "Kept", near: "Near", broken: "Broken" } as const;
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 // The gauge: the figure as a fill, the warning band and the limit as ticks.
 function Gauge({ row }: { row: RiskLimit }) {

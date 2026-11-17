@@ -3,6 +3,7 @@
 // 24 hours four times in five. Tick, change any price or amount, or ask dca-agent to adjust it.
 import { useRef, useState } from "react";
 import { ApiError, analyseFunds, chatFunds, fundsOdds, placeDcaOrder } from "./api";
+import { errorOf } from "./format";
 import CoinIcon from "./CoinIcon";
 import OrderReview from "./OrderReview";
 import { limit, two } from "./dcaFormat";
@@ -13,7 +14,6 @@ type Row = FundsOrder & { result?: string; failed?: boolean; skipped?: boolean }
 const MIN = 10; // the agent's rule: 10 USDC a coin at least
 type Line = { who: "you" | "agent"; text: string };
 
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 // The odds as a person reads them: how likely, how far from now, and a plain sentence on hover.
 // windows are 24-hour stretches starting every 4 hours, so six make a day of history.
 function Odds({ row, selling }: { row: Row; selling: boolean }) {

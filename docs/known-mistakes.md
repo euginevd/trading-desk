@@ -17,11 +17,12 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 11. Before naming a new CSS class, grep the stylesheets for it: a new `tr-call` took the coin list's existing styles.
 12. Docker Compose v5 on Windows refuses its bake build ("--allow=fs.read"): `docker build -f apps/<app>/Dockerfile -t trading-desk-<app> .`, then `docker compose up -d --no-build`.
 13. A saved Profile version keeps its typed fields: after a parser change, profile.md needs a real edit or new version.
+13a. A cloud session's git config can name Claude as author (rule 29): commit with `git -c user.name=… -c user.email=…` from the last human commit, and check `git log -1 --format=%an` before pushing.
 
 ## CI
 
-7. A boolean `workflow_dispatch` input is empty on a push: test the event, as in `github.event_name != 'workflow_dispatch' || inputs.deploy`.
-8. The AWS CLI on GitHub's runners reads `file:///dev/stdin` as empty: pass a request through a private temporary file, then delete it.
+8a. A boolean `workflow_dispatch` input is empty on a push: test the event, as in `github.event_name != 'workflow_dispatch' || inputs.deploy`.
+8b. The AWS CLI on GitHub's runners reads `file:///dev/stdin` as empty: pass a request through a private temporary file, then delete it.
 
 ## AWS and Aurora DSQL
 
@@ -47,10 +48,11 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 ## Python and Postgres
 
-26. Services creating the same tables at start race on Postgres's catalog: retry setup on `UniqueViolation`, `DuplicateTable` and `DuplicateObject`.
+26a. Services creating the same tables at start race on Postgres's catalog: retry setup on `UniqueViolation`, `DuplicateTable` and `DuplicateObject`.
 27. Semgrep blocks `urllib` and `http.client` calls to a variable URL, even with the scheme checked: use `httpx`.
-27b. A second reader of a rate-limited source tripped Taostats' 429 and showed the wallet empty: keep and fall back to the last good reading (`tao.py`).
 27a. Appending to a log file per line lost lines under threads on Windows: keep one shared handle under the lock (`audit.py`, `test_audit.py`).
+27b. A second reader of a rate-limited source tripped Taostats' 429 and showed the wallet empty: keep and fall back to the last good reading (`tao.py`).
+27c. `KeyError` is a `LookupError`: signal missing config with its own class (`MissingKey`).
 
 ## Pull requests
 

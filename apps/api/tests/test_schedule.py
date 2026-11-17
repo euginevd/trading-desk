@@ -6,7 +6,7 @@ from typing import Any, cast
 
 import httpx
 import pytest
-from api import demo, jobs, schedule, telegram
+from api import demo, jobs, profile, schedule, telegram
 from api.audit import Audit
 from api.binance import Binance
 from api.handler import Services
@@ -230,3 +230,22 @@ def test_the_switch_routes_reach_the_scheduler(services: Services) -> None:
         "risk-review",
     ]
     assert call("PUT", {"on": "yes"})["status"] == 400
+
+
+def test_a_button_holds_a_setup_that_breaks_a_profile_rule(services: Services) -> None:
+    # Decision 78: a tap can't confirm past a broken rule; that's the desk's logged override.
+    pot = Pot(Trading(services.binance, services.store, services.audit))
+    pot.put_in({"usdc": "100"})
+    setup = {"id": "p3", "coin": "SOL", "setup": "Pullback", "reason": "", "entry": "200"}
+    pot.set_proposals([setup | {"stop": "190", "target": "230"}])
+    pot._regime = ("neutral", "")  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    profile.save_section(services.store, services.audit, "rules", {"per_trade_aud": "1"}, now=0)
+    held = Services(
+        services.binance,
+        services.store,
+        services.signals,
+        services.audit,
+        portfolio=lambda: {"total": {"value": "1000"}, "holdings": []},
+    )
+    said = jobs.act(held, {"kind": "pot-place", "arg": "p3"}, TUESDAY_NOON)
+    assert said.startswith("Not placed: it breaks a Profile rule.")
