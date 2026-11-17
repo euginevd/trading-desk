@@ -11,7 +11,8 @@ from api import demo
 from api.audit import Audit
 from api.binance import Binance, BinanceError
 from api.handler import handler
-from api.pot import Pot, ref_week, regime_of, trade_result
+from api.market import QUOTE
+from api.pot import ZERO, Pot, ref_week, regime_of, trade_result
 from api.pot_agent import PotAgent, atr
 from api.store import Store
 from api.trading import Refused, Trading
@@ -420,3 +421,18 @@ def test_a_dollar_cap_keeps_each_trade_under_it(pot: Pot) -> None:
     assert pot.config()["maxRisk"] == "10"
     pot.set_config({"mode": "risk", "fixed": "10", "riskPct": "1"})
     assert pot.allowed(pot.equity()) == Decimal(11)  # no cap: the percentage alone
+
+
+def test_other_buys_leave_the_pots_usdc_alone(pot: Pot, desk: Trading) -> None:
+    """The soft ring-fence: one Binance wallet, so the DCA book and hand orders may spend only
+    the free USDC less the pot's cash."""
+    free = next(
+        (Decimal(b["free"]) for b in desk.parts()[0].balances() if b["asset"] == QUOTE), ZERO
+    )
+    room = max(free - pot.cash(), ZERO)
+    pot.guard(room)  # up to the pot's line: fine
+    with pytest.raises(Refused, match=f"trading pot's {QUOTE}"):
+        pot.guard(room + 1, "the DCA book")
+    # A waiting pot entry is locked on Binance already: only the pot's free cash is kept back.
+    pot.place(SOL)
+    assert pot.cash() == Decimal(90)

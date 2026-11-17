@@ -438,6 +438,10 @@ class DcaBook:
         quantity). Recorded before it is sent, under an id Binance won't take twice."""
         coin, side, kind, source, link = self._kind(body)
         price, qty, spend = self._sized(body, coin, side, kind)
+        if side == "buy" and spend is not None:
+            from api.pot import Pot  # noqa: PLC0415 - the pot reads the DCA book's prices
+
+            Pot(self._desk).guard(Decimal(spend), "the DCA book")
         now = self._now()
         week, _ = week_of(now)
         row = {

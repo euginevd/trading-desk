@@ -578,7 +578,10 @@ def _pretrade(
     if spend is None or not spend.is_finite() or spend <= 0:
         return None
     _, store, audit, _ = desk.parts()
-    coin = coin_symbol(body.get("symbol") or body.get("coin", "")).removesuffix(QUOTE)
+    symbol = coin_symbol(body.get("symbol") or body.get("coin", ""))
+    if path != "/dca/orders" and symbol.endswith(QUOTE):  # the DCA book guards its own buys
+        Pot(desk).guard(spend)
+    coin = symbol.removesuffix(QUOTE)
     return _rule_check(store, audit, coin, spend, body.get("override") is True, portfolio)[0]
 
 

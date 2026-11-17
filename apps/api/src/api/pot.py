@@ -413,6 +413,24 @@ class Pot:
             held += filled if r["status"] == "open" else Decimal(r["spend"])
         return self.equity() - held
 
+    def guard(self, spend: Decimal, what: str = "this order") -> None:
+        """The pot's soft ring-fence (owner, 18 Nov 2026): Binance has one wallet, so a buy
+        from outside the pot (the DCA book, a hand order) may use the free USDC less what the
+        pot holds. A pot entry waiting on Binance is already locked there, so only the pot's
+        free cash is kept back."""
+        held = self.cash()
+        if held <= ZERO or spend <= ZERO:
+            return
+        free = next(
+            (Decimal(b["free"]) for b in self._binance.balances() if b["asset"] == QUOTE), ZERO
+        )
+        room = max(free - held, ZERO)
+        if spend > room:
+            raise Refused(
+                f"That would use the trading pot's {QUOTE}: {free:,.2f} is free on Binance and "
+                f"{held:,.2f} of it is the pot's, so {room:,.2f} is free for {what}."
+            )
+
     def check_rules(self, sized: dict[str, Any]) -> None:
         """The pot's limits on a new trade, on top of its sizing."""
         put_in, equity = self._put_in(), self.equity()
