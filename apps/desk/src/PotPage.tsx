@@ -9,6 +9,7 @@ import {
   dismissPotProposal,
   getPot,
   placePotTrade,
+  previewPotTrade,
   putInPot,
   scanPot,
 } from "./api";
@@ -29,6 +30,7 @@ import type {
   PotProposal,
   PotStyleKey,
   PotTrade,
+  PotPreview,
   PotView,
   RuleBreak,
 } from "./types";
@@ -389,6 +391,10 @@ export default function PotPage() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [placing, setPlacing] = useState(false);
   const [placeError, setPlaceError] = useState<string | null>(null);
+  // Market now instead of the limit: the desk's sizing at the price now, and its problems.
+  const [atMarket, setAtMarket] = useState<
+    "loading" | { now: string; trade: PotPreview["trade"]; problems: string[] } | null
+  >(null);
   // The Profile rules a trade breaks, for the trade under review only (decision 78).
   const [ruleHold, setRuleHold] = useState<{ of: Pending; breaks: RuleBreak[] } | null>(null);
   const breaks = ruleHold && ruleHold.of === pending ? ruleHold.breaks : null;
@@ -517,6 +523,7 @@ export default function PotPage() {
       reason: pending.reason,
       ...(pending.proposal ? { proposal: pending.proposal } : {}),
       ...(pending.style ? { style: pending.style, expires: pending.expires } : {}),
+      ...(market ? { market: true, entry: market.now } : {}),
       ...(override ? { override: true } : {}),
     }).then(
       (t) => {
@@ -559,9 +566,40 @@ export default function PotPage() {
     a.click();
     URL.revokeObjectURL(a.href);
   };
-  const reward = pending
-    ? (Number(pending.target) - Number(pending.entry)) * Number(pending.qty)
-    : 0;
+  const market = atMarket && atMarket !== "loading" ? atMarket : null;
+  const shown =
+    pending && market?.trade
+      ? {
+          ...pending,
+          entry: market.trade.entry,
+          qty: market.trade.qty,
+          spend: market.trade.spend,
+          risk: market.trade.risk,
+        }
+      : pending;
+  const reward = shown ? (Number(shown.target) - Number(shown.entry)) * Number(shown.qty) : 0;
+  const marketBlocked =
+    atMarket === "loading" || (market !== null && (!market.trade || market.problems.length > 0));
+  const chooseMarket = (on: boolean) => {
+    setPlaceError(null);
+    if (!on || !pending) {
+      setAtMarket(null);
+      return;
+    }
+    setAtMarket("loading");
+    const { coin, stop, target, style } = pending;
+    previewPotTrade({ coin })
+      .then((seen) =>
+        previewPotTrade({ coin, entry: seen.now ?? "", stop, target, ...(style ? { style } : {}) }),
+      )
+      .then(
+        (seen) => setAtMarket({ now: seen.now ?? "", trade: seen.trade, problems: seen.problems }),
+        (e: unknown) => {
+          setAtMarket(null);
+          setPlaceError(errorOf(e, "The price now couldn't be read."));
+        },
+      );
+  };
 
   return (
     <main className={`wrap dcb pot${chatOpen ? " has-chat" : ""}`}>
@@ -969,9 +1007,10 @@ export default function PotPage() {
         onClose={() => {
           setPending(null);
           setPlaceError(null);
+          setAtMarket(null);
         }}
       >
-        {pending && (
+        {pending && shown && (
           <>
             <h2 id="pot-review-title">Place the {pending.coin} trade?</h2>
             {pending.style && (
@@ -988,18 +1027,50 @@ export default function PotPage() {
                 reason is below; you can still place it.
               </p>
             )}
+            <div className="pot-rv-how" role="radiogroup" aria-label="How to enter">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={atMarket === null}
+                className={`pnt-chip${atMarket === null ? " is-on" : ""}`}
+                onClick={() => chooseMarket(false)}
+              >
+                Limit at {px(pending.entry)}
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={atMarket !== null}
+                className={`pnt-chip${atMarket !== null ? " is-on" : ""}`}
+                onClick={() => chooseMarket(true)}
+              >
+                {atMarket === "loading"
+                  ? "Market now…"
+                  : market
+                    ? `Market now, about ${px(market.now)}`
+                    : "Market now"}
+              </button>
+            </div>
+            {market && market.problems.length > 0 && (
+              <ul className="error-text pot-rv-problems" role="alert">
+                {market.problems.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            )}
             <ul className="pot-rv" aria-label="The trade's orders">
               <li>
                 <span className="pot-tag is-live">Entry</span>
                 <span>
-                  <b>{pending.coin}</b> limit buy {px(pending.entry)}
+                  <b>{pending.coin}</b> {market ? "market buy, about" : "limit buy"}{" "}
+                  {px(shown.entry)}
                 </span>
-                <span className="num">{dollars(pending.spend)}</span>
+                <span className="num">{dollars(shown.spend)}</span>
               </li>
               <li>
                 <span className="pot-tag is-lost">Stop</span>
-                <span>sell all at {px(pending.stop)}</span>
-                <span className="num down">{dollars(-Number(pending.risk))}</span>
+                <span>sell all at {px(shown.stop)}</span>
+                <span className="num down">{dollars(-Number(shown.risk))}</span>
               </li>
               <li>
                 <span className="pot-tag is-won">Target</span>
@@ -1013,7 +1084,7 @@ export default function PotPage() {
               </p>
             )}
             <p className="muted">
-              Reward to risk {rr(pending)} : 1. The entry goes to Binance now, tagged as the trade's
+              Reward to risk {rr(shown)} : 1. The entry goes to Binance now, tagged as the trade's
               reference. Once it fills, the desk places the stop and target there as one OCO order,
               so they hold even if the desk is off.
             </p>
@@ -1037,7 +1108,7 @@ export default function PotPage() {
                 <button
                   className="btn btn-accent"
                   type="button"
-                  disabled={placing}
+                  disabled={placing || marketBlocked}
                   onClick={() => place()}
                 >
                   {placing

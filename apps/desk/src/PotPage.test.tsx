@@ -31,6 +31,14 @@ const trade = (t: Partial<PotTrade>): PotTrade => ({
   filled: NOW - 1_800_000,
   closed: null,
   note: null,
+  style: null,
+  notes: [
+    {
+      kind: "desk",
+      text: "Filled 0.0738 at 135.47 (+0.00% from the planned 135.47).",
+      created: NOW - 1_800_000,
+    },
+  ],
   orders: [
     {
       ref: "TRD-SOL-26W47-1-E",
@@ -170,6 +178,13 @@ function serve(reply: PotView, breaksRule = false, setups = true) {
       );
     }
     if (path === "/pot/trades/stop") return json(trade({ stop: "135.5" }));
+    if (path === "/pot/trades/reduce") return json(trade({ qty: "0.0369" }));
+    if (path === "/pot/trades/note")
+      return json(
+        trade({
+          notes: [{ kind: "you", text: "Held the 20-day twice.", created: NOW }],
+        }),
+      );
     if (path === "/pot/preview") {
       const body = JSON.parse(String(init?.body)) as Record<string, string>;
       const base = { coin: body.coin, ref: "TRD-SOL-26W47-2", now: "138.02", tick: "0.01" };
@@ -405,6 +420,30 @@ describe("the trading pot", () => {
     expect(JSON.parse(String(sent(fetch, "/pot/trades/stop")[0]?.[1]?.body))).toEqual({
       ref: "TRD-SOL-26W47-1",
       stop: "135.5",
+    });
+  });
+
+  it("logs a trade's events, keeps your note, and reduces it after a confirm", async () => {
+    const fetch = serve(pot());
+    render(<PotPage />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" }),
+    );
+    expect(screen.getByText(/Filled 0.0738 at 135.47/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add at market" })).toBeTruthy();
+    fireEvent.change(screen.getByRole("textbox", { name: "TRD-SOL-26W47-1 note" }), {
+      target: { value: "Held the 20-day twice." },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add note" }));
+    expect(await screen.findByText("Held the 20-day twice.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Sell 50%" }));
+    expect(sent(fetch, "/pot/trades/reduce")).toHaveLength(0); // asks first
+    const confirm = screen.getAllByRole("button", { name: "Sell 50%" });
+    fireEvent.click(confirm[confirm.length - 1] as HTMLElement);
+    await waitFor(() => expect(sent(fetch, "/pot/trades/reduce")).toHaveLength(1));
+    expect(JSON.parse(String(sent(fetch, "/pot/trades/reduce")[0]?.[1]?.body))).toEqual({
+      ref: "TRD-SOL-26W47-1",
+      pct: "50",
     });
   });
 

@@ -1479,3 +1479,110 @@ dialog.ntf {
     font-size: 12px;
   }
 }
+
+/* The trade panel's actions, its log and your notes (PotPanel.tsx), and the review's choice of
+   a limit or market entry. */
+
+.pot-rv-how {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+.pot-rv-problems {
+  margin: 0 0 10px;
+  padding-left: 18px;
+  font-size: 13px;
+}
+.pnl-thesis {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-left: 2px solid var(--accent-line);
+  border-radius: 0 10px 10px 0;
+  background: var(--layer-1);
+  color: var(--text);
+  font-size: 14px;
+}
+.pnl-thesis small,
+.pnl-label {
+  margin-right: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.pnl-manage {
+  display: grid;
+  gap: 10px;
+  margin: 16px 0 4px;
+  padding: 14px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-panel);
+  background: var(--layer-1);
+}
+.pnl-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+}
+.pnl-row label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pnl-row label span {
+  min-width: 48px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.pnl-row .dcb-num {
+  width: 120px;
+}
+.pnl-row small {
+  font-size: 12px;
+}
+.pnl-log {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+.pnl-log li {
+  display: grid;
+  gap: 2px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line-2);
+  font-size: 13px;
+}
+.pnl-log li.is-you {
+  border-left-color: var(--accent);
+}
+.pnl-log small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.pnl-note {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.pnl-note input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--field);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.pnl-note input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pnl-log li:last-child {
+    animation: ntf-in 260ms var(--ease);
+  }
+}

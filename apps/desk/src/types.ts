@@ -1330,7 +1330,7 @@ export interface DcaAction {
 // The trading pot (docs/plan-trade.md): its own book, run by trading-agent.
 export interface PotOrder {
   ref: string;
-  role: "entry" | "exit" | "close";
+  role: "entry" | "exit" | "close" | "add";
   kind: "limit" | "oco" | "market";
   price: string | null;
   stop: string | null;
@@ -1364,6 +1364,9 @@ export interface PotTrade {
   filled: number | null;
   closed: number | null;
   note: string | null;
+  style: PotStyleKey | null;
+  // The trade's log: the desk's own events with their numbers, the thesis, and yours.
+  notes: { kind: "desk" | "thesis" | "you"; text: string; created: number }[];
   orders: PotOrder[];
 }
 
@@ -1587,6 +1590,7 @@ export interface PotTradeRequest {
   proposal?: string;
   override?: boolean; // past a broken Profile rule, logged (decision 78)
   style?: PotStyleKey; // its rules: local/agents/trading-agent.md
+  market?: boolean; // buy now at market instead of a limit at the entry
   expires?: number; // a style's proposal is refused after this (ms)
 }
 

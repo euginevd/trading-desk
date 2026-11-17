@@ -505,6 +505,11 @@ POT_ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/pot/trades/cancel"): lambda desk, _q, b: Pot(desk).cancel(b.get("ref")),
     ("POST", "/pot/trades/stop"): lambda desk, _q, b: Pot(desk).move_stop(b),
     ("POST", "/pot/trades/close"): lambda desk, _q, b: Pot(desk).close(b.get("ref")),
+    ("POST", "/pot/trades/enter-now"): lambda desk, _q, b: Pot(desk).enter_now(b.get("ref")),
+    ("POST", "/pot/trades/add"): lambda desk, _q, b: Pot(desk).add(b),
+    ("POST", "/pot/trades/reduce"): lambda desk, _q, b: Pot(desk).reduce(b),
+    ("POST", "/pot/trades/target"): lambda desk, _q, b: Pot(desk).move_target(b),
+    ("POST", "/pot/trades/note"): lambda desk, _q, b: Pot(desk).note(b),
     ("POST", "/pot/proposals/dismiss"): lambda desk, _q, b: Pot(desk).dismiss(b),
     ("GET", "/pot/check"): lambda desk, _q, _b: Pot(desk).check(),
     ("GET", "/pot/coins"): lambda desk, _q, _b: account_coins.snapshot(Pot(desk)),
@@ -557,7 +562,7 @@ def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
 
 # The Trading account's trades are the owner's own buys too (decision 78); the DCA close-out is
 # not, as it finishes a week the owner already approved.
-BUYS = ("/trades", "/orders", "/orders/ladder", "/dca/orders", "/pot/trades")
+BUYS = ("/trades", "/orders", "/orders/ladder", "/dca/orders", "/pot/trades", "/pot/trades/add")
 PRETRADE_RULES = ("monthly_deposit_cap_aud", "per_trade_aud", "max_pct_per_coin")
 
 
@@ -589,6 +594,8 @@ def _pretrade(
         override = body.get("override") is True
         spend = Decimal(str(sized["spend"]))
         return _rule_check(store, audit, str(sized["coin"]), spend, override, portfolio)[0]
+    if path == "/pot/trades/add":
+        return _pretrade_add(desk, body, portfolio)
     spend = _spend_of(path, body)
     if spend is None or not spend.is_finite() or spend <= 0:
         return None
@@ -598,6 +605,22 @@ def _pretrade(
         Pot(desk).guard(spend)
     coin = symbol.removesuffix(QUOTE)
     return _rule_check(store, audit, coin, spend, body.get("override") is True, portfolio)[0]
+
+
+def _pretrade_add(
+    desk: Trading, body: dict[str, Any], portfolio: Portfolio
+) -> dict[str, object] | None:
+    """Adding to a Trading account trade: the account's own money, so no ring-fence warning."""
+    _, store, audit, _ = desk.parts()
+    trade = store.pot_trade(str(body.get("ref") or ""))
+    try:
+        spend = Decimal(str(body.get("usdc")))
+    except (InvalidOperation, ValueError):
+        return None
+    if trade is None or not spend.is_finite() or spend <= 0:
+        return None
+    override = body.get("override") is True
+    return _rule_check(store, audit, str(trade["coin"]), spend, override, portfolio)[0]
 
 
 def _rule_check(  # noqa: PLR0913, PLR0917 - each is a separate fact about the buy

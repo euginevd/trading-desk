@@ -37,6 +37,7 @@ Every page follows [design-system.md](design-system.md) 18 to 22. Features 1 to 
 | 94 | Risk page leads with the four big risks: money on Binance (A$10K), 2026 coins on the Ledger (70%+), TAO's share with a glide path and what-if, and the Ledger backup checks (TODO 23, owner, 17 Nov 2026; decision 79) | Building: phase 1 done, Ledger addresses next | |
 | 95 | New trade by style: pick scalp, day, swing or position; the desk's screener reads the 100 most-traded USDC coins on Binance by that style's rules (no AI; CoinGecko's top 250 only to keep tokenized stocks and fiat out), trading-agent checks the shortlist's confluence and catalysts online, and each pick shows its grade, entry, take profit, stop, reward to risk and size, then Okay, review and Approve places it (TODO 24, owner, 17 Nov 2026; decision 80) | Built: on test | |
 | 96 | trading-agent.md is the one record of the strategy: shared rules, then each style's Built and Not built yet; trading-agent follows it, the desk keeps every version in local/agents/history/, and the daily scan runs swing (position on Mondays) through the screener (owner, 17 Nov 2026; decision 81) | Done | |
+| 97 | Managing a Trading account trade: enter at market or by limit, enter a waiting limit now, add (only in profit, within 1%), reduce 25 to 75%, move the stop or target, and a log of every event with its numbers beside your own notes (owner, 17 Nov 2026) | Done | |
 
 ## `api`
 

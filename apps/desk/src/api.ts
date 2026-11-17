@@ -349,6 +349,7 @@ export const previewPotTrade = (body: {
   entry?: string;
   stop?: string;
   target?: string;
+  style?: PotStyleKey;
 }) => call<PotPreview>("POST", "/pot/preview", body);
 export const analysePotCoin = (body: {
   coin: string;
@@ -362,6 +363,16 @@ export const cancelPotTrade = (ref: string) =>
 export const movePotStop = (ref: string, stop: string) =>
   call<PotTrade>("POST", "/pot/trades/stop", { ref, stop });
 export const closePotTrade = (ref: string) => call<PotTrade>("POST", "/pot/trades/close", { ref });
+export const enterPotTradeNow = (ref: string) =>
+  call<PotTrade>("POST", "/pot/trades/enter-now", { ref });
+export const addToPotTrade = (ref: string, usdc: string, override = false) =>
+  call<PotTrade>("POST", "/pot/trades/add", { ref, usdc, ...(override ? { override } : {}) });
+export const reducePotTrade = (ref: string, pct: number) =>
+  call<PotTrade>("POST", "/pot/trades/reduce", { ref, pct: String(pct) });
+export const movePotTarget = (ref: string, target: string) =>
+  call<PotTrade>("POST", "/pot/trades/target", { ref, target });
+export const notePotTrade = (ref: string, text: string) =>
+  call<PotTrade>("POST", "/pot/trades/note", { ref, text });
 export const scanPot = () => call<PotView>("POST", "/pot/scan");
 export const getPotStyles = () => call<PotStyles>("GET", "/pot/styles");
 export const screenPot = (style: PotStyleKey) => call<PotScreen>("POST", "/pot/screen", { style });

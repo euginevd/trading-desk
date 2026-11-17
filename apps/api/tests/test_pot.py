@@ -556,3 +556,78 @@ def test_the_account_watchlist_holds_more_than_the_trade_pages_ten(pot: Pot) -> 
     assert found["max"] == ACCOUNT_MAX > MAX_COINS
     assert cap({"name": ACCOUNT_LIST}) == ACCOUNT_MAX
     assert cap({"name": "Portfolio"}) == MAX_COINS
+
+
+def test_a_market_entry_is_sized_at_the_price_now_and_logged(pot: Pot) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    placed = pot.place(SOL | {"target": "260", "market": True})
+    assert placed["status"] == "open"  # the demo fills a market buy at once
+    assert placed["entry"] == "212.4"  # SOL is 212.40 in the demo
+    notes = [n["text"] for n in placed["notes"]]
+    assert notes[0].startswith("Placed: market buy, about")
+    assert notes[1].startswith("Filled ")
+    with pytest.raises(Refused, match="the rules need 2"):
+        pot.place(SOL | {"coin": "ETH", "entry": "3300", "stop": "3200", "target": "3400"})
+
+
+def test_enter_now_swaps_a_waiting_limit_for_a_market_buy(pot: Pot) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    waiting = pot.place(SOL | {"target": "230"})
+    with pytest.raises(Refused, match="Reward to risk"):  # 212.40 against a 190 stop: under 2R
+        pot.enter_now(waiting["ref"])
+    assert pot.view()["trades"][0]["status"] == "waiting"  # refused: nothing touched
+    pot.move_target({"ref": waiting["ref"], "target": "260"})
+    entered = pot.enter_now(waiting["ref"])
+    assert entered["status"] == "open"
+    assert entered["entry"] == "212.4"
+    assert any(n["text"].startswith("Enter now at market") for n in entered["notes"])
+    assert by_tag(f"{waiting['ref']}-E")["status"] == "CANCELED"
+
+
+def test_adding_only_in_profit_and_within_the_risk(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    trade = opened(pot)
+    added = pot.add({"ref": trade["ref"], "usdc": "10"})
+    assert Decimal(added["qty"]) > Decimal(trade["qty"])
+    exits = [o for o in added["orders"] if o["role"] == "exit"]
+    assert exits[-1]["qty"] == added["qty"]  # the stop and target cover the whole position
+    assert any(n["text"].startswith("Added ") for n in added["notes"])
+    with pytest.raises(Refused, match="over the"):
+        pot.add({"ref": trade["ref"], "usdc": "15"})
+    monkeypatch.setitem(demo.PRICES, "SOLUSDT", ("195.00", "0"))
+    with pytest.raises(Refused, match="No averaging down"):
+        pot.add({"ref": trade["ref"], "usdc": "5"})
+
+
+def test_reducing_sells_part_and_keeps_the_rest_protected(pot: Pot) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    trade = opened(pot)
+    pot.add({"ref": trade["ref"], "usdc": "10"})
+    reduced = pot.reduce({"ref": trade["ref"], "pct": "50"})
+    assert reduced["status"] == "open"
+    held = Decimal(reduced["qty"]) - Decimal(
+        str(pot.store.pot_trade(trade["ref"])["exit_qty"])  # type: ignore[index]
+    )
+    live = [o for o in reduced["orders"] if o["role"] == "exit" and o["status"] == "open"]
+    assert Decimal(live[-1]["qty"]) == held
+    assert any(n["text"].startswith("Sold ") for n in reduced["notes"])
+    with pytest.raises(Refused, match="close it at market"):
+        pot.reduce({"ref": trade["ref"], "pct": "100"})
+
+
+def test_a_target_moves_and_you_can_add_a_note(pot: Pot) -> None:
+    trade = opened(pot)
+    moved = pot.move_target({"ref": trade["ref"], "target": "250"})
+    assert moved["target"] == "250"
+    with pytest.raises(Refused, match="above the price"):
+        pot.move_target({"ref": trade["ref"], "target": "205"})
+    noted = pot.note({"ref": trade["ref"], "text": "  Held the 20-day   twice. "})
+    assert noted["notes"][-1] == {
+        "kind": "you",
+        "text": "Held the 20-day twice.",
+        "created": noted["notes"][-1]["created"],
+    }
+    with pytest.raises(Refused, match="Type the note"):
+        pot.note({"ref": trade["ref"], "text": " "})
