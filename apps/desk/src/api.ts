@@ -359,4 +359,4 @@ export const potAgent = (message: string, history: { who: string; text: string }
   });
 export const checkPot = () => call<PotCheck>("GET", "/pot/check");
 export const getAccountCoins = () =>
-  call<{ quote: string; coins: AccountCoin[] }>("GET", "/pot/coins");
+  call<{ quote: string; list: number; max: number; coins: AccountCoin[] }>("GET", "/pot/coins");

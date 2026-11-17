@@ -834,19 +834,26 @@ button.acc-coin:focus-visible {
 .acc-spark.down polyline {
   stroke: var(--down);
 }
-.acc-trend {
-  color: var(--body);
-  font-size: 13px;
+.acc-coin-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
-.acc-setup {
-  font-size: 13px;
-  font-weight: 600;
+.acc-act {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--line);
   color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
 }
-.acc-setup.is-watch {
+.acc-act.is-watch {
+  background: var(--up-soft, rgba(46, 189, 133, 0.14));
   color: var(--up);
 }
-.acc-setup.is-wait {
+.acc-act.is-wait {
+  background: rgba(232, 176, 75, 0.14);
   color: var(--wait);
 }
 .acc-flags {
@@ -901,5 +908,153 @@ button.acc-coin:focus-visible {
   }
   .acc-ledger {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The watchlist: folds to its head; Edit shows the coins as chips. */
+.acc-fold {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.acc-fold h2::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 0 3px 10px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s var(--ease);
+}
+.acc-fold[aria-expanded="true"] h2::after {
+  transform: rotate(45deg);
+}
+.acc-edit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+.acc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font-size: 13px;
+}
+.acc-chip button {
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--muted);
+  font-size: 15px;
+  cursor: pointer;
+}
+.acc-chip button:hover {
+  background: var(--down-soft);
+  color: var(--down);
+}
+.acc-add {
+  display: inline-flex;
+  gap: 6px;
+}
+.acc-add input {
+  width: 170px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.acc-add .btn {
+  height: 30px;
+}
+dialog.acc-drawer .dcb-drawer-figures {
+  flex-wrap: wrap;
+  gap: 16px 36px;
+}
+dialog.acc-drawer .dcb-drawer-figures b {
+  font-size: 22px;
+}
+.acc-read {
+  display: grid;
+  gap: 2px;
+  margin: 16px 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--line-2);
+}
+.acc-read.is-watch {
+  border-left-color: var(--up);
+}
+.acc-read.is-wait {
+  border-left-color: var(--wait);
+}
+.acc-agent {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r);
+}
+.acc-agent-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 8px;
+  font-weight: 600;
+}
+.acc-agent ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+.acc-agent li {
+  margin: 3px 0;
+}
+.acc-verdict {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--line);
+  font-size: 12px;
+}
+.acc-verdict.is-take {
+  background: rgba(46, 189, 133, 0.14);
+  color: var(--up);
+}
+.acc-verdict.is-wait {
+  background: rgba(232, 176, 75, 0.14);
+  color: var(--wait);
+}
+.acc-verdict.is-pass {
+  background: var(--down-soft);
+  color: var(--down);
+}
+.acc-plan {
+  margin: 0;
+  color: var(--body);
+}
+.acc-ask-note {
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .acc-fold h2::after {
+    transition: none;
   }
 }

@@ -1,8 +1,10 @@
-"""The Trading account's coin snapshot: each coin held on Binance (no stablecoins, no BNB, no
-dust), its price, day and 30 days, and one line on its trend and setup, worked out here from
-the daily candles trading-agent's scan reads. No model: the line is the desk's own reading,
-and Analyse in New trade is where trading-agent judges it."""
+"""The Trading account's watchlist: a list of up to 10 coins, started from the coins held on
+Binance (no stablecoins, no BNB, no dust) and edited by the owner. Each coin's price, day and 30
+days, what's held, and one line on its trend and setup, worked out here from the daily candles
+trading-agent's scan reads. No model: the line is the desk's own reading, and Ask
+trading-agent (POST /pot/analyse) is where the model judges it."""
 
+import time
 from decimal import Decimal
 from typing import Any
 
@@ -17,6 +19,8 @@ NEAR_20 = Decimal("0.02")  # within 2% of the 20-day: a pullback to it
 AT_HIGH = Decimal("0.995")
 AT_LOW = Decimal("1.01")
 SPARK = 30
+LIST = "Trading account"  # the watchlist this page reads, among the Trade page's lists
+MAX = 10
 
 
 def _d(value: object) -> Decimal | None:
@@ -55,16 +59,47 @@ def insight(facts: dict[str, Any]) -> dict[str, str]:
     return {"trend": trend, "setup": setup, "status": status}
 
 
-def snapshot(pot: Pot) -> dict[str, Any]:
-    binance: Binance = pot.binance
+def _held(binance: Binance) -> dict[str, Decimal]:
     held: dict[str, Decimal] = {}
     for b in binance.balances():
         asset = str(b["asset"])
         amount = Decimal(str(b["free"])) + Decimal(str(b["locked"]))
         if asset not in SKIP and amount > 0:
             held[asset] = held.get(asset, Decimal(0)) + amount
+    return held
+
+
+def watchlist(pot: Pot) -> tuple[int, list[str]]:
+    """The account's list and its coins. The first read makes it from the coins held on
+    Binance worth more than dust, largest first."""
+    store = pot.store
+    found = next((x for x in store.lists() if x["name"] == LIST), None)
+    if found is not None:
+        return int(found["id"]), list(store.list_coins(found["id"]))
+    binance: Binance = pot.binance
+    held = _held(binance)
+    known: set[str] = binance.symbols()
+    pairs = [f"{c}{QUOTE}" for c in held if f"{c}{QUOTE}" in known]
+    tickers = binance.tickers(pairs) if pairs else {}
+    worth = {
+        c: held[c] * Decimal(str(tickers[f"{c}{QUOTE}"]["lastPrice"]))
+        for c in held
+        if f"{c}{QUOTE}" in tickers
+    }
+    coins = sorted((c for c in worth if worth[c] >= DUST), key=lambda c: -worth[c])[:MAX]
+    now = int(time.time() * 1000)
+    list_id = store.create_list(LIST, now)
+    for n, coin in enumerate(coins):
+        store.watch_coin(list_id, coin, now - len(coins) + n)
+    return list_id, coins
+
+
+def snapshot(pot: Pot) -> dict[str, Any]:
+    binance: Binance = pot.binance
+    list_id, watched = watchlist(pot)
+    held = _held(binance)
     # Binance refuses the whole request over one unknown pair, so ask only for listed ones.
-    pairs = [f"{c}{QUOTE}" for c in held]
+    pairs = [f"{c}{QUOTE}" for c in watched]
     known: set[str] = binance.symbols() if pairs else set()
     listed = binance.tickers([p for p in pairs if p in known]) if pairs else {}
     tradable = set(pot.coins())
@@ -73,14 +108,12 @@ def snapshot(pot: Pot) -> dict[str, Any]:
         t["coin"] for t in pot.view()["trades"] if t["status"] in ("placing", "waiting", "open")
     }
     coins: list[dict[str, Any]] = []
-    for coin, amount in held.items():
+    for coin in watched:
         row = listed.get(f"{coin}{QUOTE}")
         if row is None:
             continue  # no pair with the quote: not one the desk can price or trade
         price = Decimal(str(row["lastPrice"]))
-        value = amount * price
-        if value < DUST:
-            continue
+        amount = held.get(coin, Decimal(0))
         candles: list[list[Any]]
         try:
             candles = binance.klines(f"{coin}{QUOTE}", "1d", DAYS)
@@ -92,7 +125,7 @@ def snapshot(pot: Pot) -> dict[str, Any]:
                 "coin": coin,
                 "amount": plain(amount),
                 "price": plain(price),
-                "value": plain(value.quantize(Decimal("0.01"))),
+                "value": plain((amount * price).quantize(Decimal("0.01"))),
                 "change24hPct": str(row.get("priceChangePercent", "0")),
                 "change30dPct": facts["change30dPct"] if facts else None,
                 "spark": [str(r[4]) for r in candles[-SPARK:]],
@@ -102,5 +135,4 @@ def snapshot(pot: Pot) -> dict[str, Any]:
                 "inTrade": coin in live,
             }
         )
-    coins.sort(key=lambda c: Decimal(c["value"]), reverse=True)
-    return {"quote": QUOTE, "coins": coins}
+    return {"quote": QUOTE, "list": list_id, "max": MAX, "coins": coins}

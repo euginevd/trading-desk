@@ -117,6 +117,8 @@ function serve(reply: PotView) {
     if (path === "/pot/coins")
       return json({
         quote: "USDC",
+        list: 7,
+        max: 10,
         coins: [
           {
             coin: "SOL",
@@ -241,10 +243,9 @@ describe("the trading pot", () => {
       "is $10 short of the account's available $90",
     );
     expect(screen.getByText("Neutral")).toBeTruthy();
-    // The coin snapshot: a tradable coin opens New trade on it; one it doesn't trade can't.
+    // The watchlist, at the foot: one word on what to do, and a panel per coin.
     const card = await screen.findByRole("button", { name: /^SOL: Back at its 20-day/ });
     expect(card.textContent).toContain("In a trade");
-    expect(screen.queryByRole("button", { name: /^TAO/ })).toBeNull();
     // Tabs: Positions first, the open trade in it; Orders holds none.
     const tabs = screen.getByRole("tablist", { name: "Trades" });
     expect(
@@ -260,7 +261,15 @@ describe("the trading pot", () => {
     expect(screen.getByRole("table", { name: "The account's ledger" }).textContent).toContain(
       "POT-IN-1",
     );
+    // A coin trading-agent doesn't trade opens read-only: no Ask, no New trade.
+    fireEvent.click(screen.getByRole("button", { name: /^TAO/ }));
+    const tao = screen.getByRole("dialog", { name: "TAO" });
+    expect(within(tao).queryByRole("button", { name: "Ask trading-agent" })).toBeNull();
+    fireEvent.click(within(tao).getByRole("button", { name: "Close" }));
     fireEvent.click(card);
+    const sol = screen.getByRole("dialog", { name: "SOL" });
+    expect(within(sol).getByRole("button", { name: "Ask trading-agent" })).toBeTruthy();
+    fireEvent.click(within(sol).getByRole("button", { name: "New trade on SOL" }));
     expect(await screen.findByRole("heading", { name: "New trade" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "SOL" }).getAttribute("aria-checked")).toBe("true");
   });

@@ -1,25 +1,25 @@
 // The Trade page: the trading account, run by trading-agent (docs/plan-trade.md). Money first
 // (available, in trades, value, this month) and the risk rules in a line; then the market and
-// Scan now, what trading-agent proposes, a snapshot of each coin held on Binance with its
-// trend and setup, and the trades in tabs: positions, orders, history, stats and the ledger.
+// Scan now, what trading-agent proposes, the trades in tabs (positions, orders, history,
+// stats, the ledger) and, at the foot, the watchlist (AccountWatchlist.tsx).
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import {
   checkPot,
   dismissPotProposal,
-  getAccountCoins,
   getPot,
   placePotTrade,
   putInPot,
   scanPot,
 } from "./api";
 import AgentAvatar from "./AgentIcons";
+import AccountWatchlist from "./AccountWatchlist";
 import CoinIcon from "./CoinIcon";
 import { dated, day, dollars, qty, when } from "./dcaFormat";
 import { Live } from "./Figures";
 import PotChat, { usePotChat } from "./PotChat";
 import PotNewTrade from "./PotNewTrade";
 import PotPanel, { px, rWord, rr, tone } from "./PotPanel";
-import type { AccountCoin, PotAction, PotCheck, PotProposal, PotTrade, PotView } from "./types";
+import type { PotAction, PotCheck, PotProposal, PotTrade, PotView } from "./types";
 import "./pot.css";
 
 // Dollars without empty cents: $1, $0.81, $10.
@@ -365,85 +365,6 @@ function Checked({ found }: { found: PotCheck }) {
   );
 }
 
-// One coin held on Binance: price and day, 30 days as a line, the desk's read of its trend and
-// setup, and whether trading-agent is watching it or a trade is on. Tap opens New trade.
-function Spark({ closes }: { closes: string[] }) {
-  if (closes.length < 2) return null;
-  const v = closes.map(Number);
-  const lo = Math.min(...v);
-  const hi = Math.max(...v);
-  const pts = v
-    .map(
-      (c, i) =>
-        `${(i / (v.length - 1)) * 100},${hi === lo ? 15 : 28 - ((c - lo) / (hi - lo)) * 26}`,
-    )
-    .join(" ");
-  const up = (v.at(-1) ?? 0) >= (v[0] ?? 0);
-  return (
-    <svg
-      className={`acc-spark ${up ? "up" : "down"}`}
-      viewBox="0 0 100 30"
-      preserveAspectRatio="none"
-      aria-hidden="true"
-    >
-      <polyline points={pts} fill="none" vectorEffect="non-scaling-stroke" />
-    </svg>
-  );
-}
-
-function CoinCard({ coin, onTrade }: { coin: AccountCoin; onTrade: () => void }) {
-  const day = Number(coin.change24hPct);
-  const status = coin.insight?.status ?? "none";
-  const body = (
-    <>
-      <span className="acc-coin-head">
-        <span className="dcb-coin">
-          <CoinIcon coin={coin.coin} />
-          {coin.coin}
-        </span>
-        <span className="num">{px(coin.price)}</span>
-        <small className={`num ${tone(day)}`}>
-          {day > 0 ? "+" : ""}
-          {day.toFixed(1)}%
-        </small>
-      </span>
-      <Spark closes={coin.spark} />
-      <small className="muted num">
-        {dollars(coin.value)} held
-        {coin.change30dPct !== null
-          ? `, ${Number(coin.change30dPct) > 0 ? "+" : ""}${coin.change30dPct}% in 30 days`
-          : ""}
-      </small>
-      {coin.insight && (
-        <>
-          <span className="acc-trend">{coin.insight.trend}</span>
-          <span className={`acc-setup is-${status}`}>{coin.insight.setup}</span>
-        </>
-      )}
-      {(coin.inTrade || coin.watching) && (
-        <span className="acc-flags">
-          {coin.inTrade && <span className="pot-tag is-live">In a trade</span>}
-          {coin.watching && <span className="pot-tag is-wait">trading-agent proposes</span>}
-        </span>
-      )}
-    </>
-  );
-  return coin.tradable ? (
-    <button
-      type="button"
-      className={`acc-coin is-${status}`}
-      onClick={onTrade}
-      aria-label={`${coin.coin}: ${coin.insight?.setup ?? ""} Open New trade`}
-    >
-      {body}
-    </button>
-  ) : (
-    <div className={`acc-coin is-${status} is-off`} title="Not one of trading-agent's coins">
-      {body}
-    </div>
-  );
-}
-
 export default function PotPage() {
   const [pot, setPot] = useState<PotView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -459,8 +380,8 @@ export default function PotPage() {
   const [checking, setChecking] = useState(false);
   // null: closed; "": New trade on its first coin; a coin: opened from that coin's card.
   const [building, setBuilding] = useState<string | null>(null);
-  const [coins, setCoins] = useState<AccountCoin[] | null>(null);
-  const [coinsError, setCoinsError] = useState<string | null>(null);
+  // Bumped after a scan, so the watchlist reads its coins again.
+  const [coinsVersion, setCoinsVersion] = useState(0);
   const review = useRef<HTMLDialogElement>(null);
   const chat = usePotChat();
 
@@ -474,17 +395,6 @@ export default function PotPage() {
     );
   }, []);
   useEffect(() => load(), [load]);
-  // The coin snapshot reads daily candles, so it loads once and on each new scan, not every 30s.
-  const loadCoins = useCallback(() => {
-    getAccountCoins().then(
-      (c) => {
-        setCoins(c.coins);
-        setCoinsError(null);
-      },
-      (e: unknown) => setCoinsError(errorOf(e, "Your coins couldn't be read.")),
-    );
-  }, []);
-  useEffect(() => loadCoins(), [loadCoins]);
   useEffect(() => {
     const tick = window.setInterval(() => {
       if (document.visibilityState === "visible") load();
@@ -556,7 +466,7 @@ export default function PotPage() {
       (p) => {
         setPot(p);
         setScanning(false);
-        loadCoins();
+        setCoinsVersion((v) => v + 1);
         const n = p.proposals.length;
         setSaid(
           n
@@ -769,30 +679,6 @@ export default function PotPage() {
               </section>
             )}
 
-            <section className="dcb-section" aria-labelledby="acc-coins-title">
-              <div className="dcb-section-head">
-                <h2 id="acc-coins-title">Your coins on Binance</h2>
-                <span className="muted">
-                  {coins === null
-                    ? "Reading…"
-                    : "Each coin's trend and setup from its daily chart. Tap one to trade it."}
-                </span>
-              </div>
-              {coinsError && <p className="muted">{coinsError}</p>}
-              {coins !== null && coins.length === 0 && (
-                <p className="muted">
-                  No coins over $5 on Binance, leaving out stablecoins and BNB.
-                </p>
-              )}
-              {coins && coins.length > 0 && (
-                <div className="acc-coins">
-                  {coins.map((c) => (
-                    <CoinCard key={c.coin} coin={c} onTrade={() => setBuilding(c.coin)} />
-                  ))}
-                </div>
-              )}
-            </section>
-
             <section className="dcb-section acc-tabs-wrap" aria-label="Trades">
               <div className="acc-tabs" role="tablist" aria-label="Trades">
                 {TABS.map(([key, label]) => {
@@ -993,6 +879,8 @@ export default function PotPage() {
                 )}
               </div>
             </section>
+
+            <AccountWatchlist version={coinsVersion} onTrade={(coin) => setBuilding(coin)} />
           </>
         )}
       </div>

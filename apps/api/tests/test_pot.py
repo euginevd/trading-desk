@@ -495,3 +495,21 @@ def test_a_coin_without_a_pair_is_left_out_not_fatal(
     coins = [c["coin"] for c in account_coins.snapshot(pot)["coins"]]
     assert "LDBTC" not in coins
     assert "BTC" in coins
+
+
+def test_the_watchlist_starts_from_what_is_held_then_follows_the_owner(pot: Pot) -> None:
+    from api import account_coins  # noqa: PLC0415
+
+    first = account_coins.snapshot(pot)
+    held = [c["coin"] for c in first["coins"]]
+    assert held
+    assert len(held) <= account_coins.MAX
+    # The owner drops one coin and adds one not held: the list, not the wallet, decides.
+    pot.store.unwatch_coin(first["list"], held[0])
+    pot.store.watch_coin(first["list"], "LINK", 1)
+    after = account_coins.snapshot(pot)
+    coins = [c["coin"] for c in after["coins"]]
+    assert held[0] not in coins
+    link = next(c for c in after["coins"] if c["coin"] == "LINK")
+    assert Decimal(link["value"]) == 0
+    assert after["list"] == first["list"]
