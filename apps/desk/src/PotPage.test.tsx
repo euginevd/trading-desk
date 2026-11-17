@@ -114,6 +114,42 @@ function serve(reply: PotView) {
     const json = (body: unknown, status = 200) =>
       Promise.resolve(new Response(JSON.stringify(body), { status }));
     if (path === "/pot") return json(reply);
+    if (path === "/pot/coins")
+      return json({
+        quote: "USDC",
+        coins: [
+          {
+            coin: "SOL",
+            amount: "2",
+            price: "138.02",
+            value: "276.04",
+            change24hPct: "1.8",
+            change30dPct: "-4.2",
+            spark: ["130", "134", "138.02"],
+            insight: {
+              trend: "Up trend: above its 50- and 200-day.",
+              setup: "Back at its 20-day: worth an Analyse.",
+              status: "watch",
+            },
+            tradable: true,
+            watching: false,
+            inTrade: true,
+          },
+          {
+            coin: "TAO",
+            amount: "1",
+            price: "300",
+            value: "300",
+            change24hPct: "-0.5",
+            change30dPct: null,
+            spark: [],
+            insight: null,
+            tradable: false,
+            watching: false,
+            inTrade: false,
+          },
+        ],
+      });
     if (path === "/pot/scan")
       return json({ ...reply, lastScan: { at: NOW, line: "No setup today." } });
     if (path === "/pot/put-in") return json(pot());
@@ -192,19 +228,41 @@ afterEach(() => {
 });
 
 describe("the trading pot", () => {
-  it("leads with the money, the market and what's on", async () => {
-    serve(pot());
+  it("leads with the account's money, then coins and trades in tabs", async () => {
+    serve(pot({ allowedRisk: "1.01", backing: { free: "80", held: "90", short: "10" } }));
     render(<PotPage />);
-    const head = await screen.findByRole("heading", { level: 1 });
-    expect(head.textContent).toBe(
-      "Pot $101, up $1.36 from trading. 1 trade on, 1 waiting for you.",
+    expect((await screen.findByRole("heading", { level: 1 })).textContent).toBe("Trading account");
+    expect(screen.getByText("1 setup is waiting for you.")).toBeTruthy();
+    const money = document.querySelector(".dcb-totals") as HTMLElement;
+    expect(within(money).getByText("Available")).toBeTruthy();
+    expect(within(money).getByText("In trades")).toBeTruthy();
+    // Free USDC short of what the account holds: warned, never blocked.
+    expect(screen.getByRole("alert").textContent).toContain(
+      "is $10 short of the account's available $90",
     );
-    expect(screen.getByText(/Test phase: \$10 a trade, at most \$1 at risk\./)).toBeTruthy();
     expect(screen.getByText("Neutral")).toBeTruthy();
+    // The coin snapshot: a tradable coin opens New trade on it; one it doesn't trade can't.
+    const card = await screen.findByRole("button", { name: /^SOL: Back at its 20-day/ });
+    expect(card.textContent).toContain("In a trade");
+    expect(screen.queryByRole("button", { name: /^TAO/ })).toBeNull();
+    // Tabs: Positions first, the open trade in it; Orders holds none.
+    const tabs = screen.getByRole("tablist", { name: "Trades" });
+    expect(
+      within(tabs)
+        .getByRole("tab", { name: /Positions/ })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
     expect(
       screen.getByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" }),
     ).toBeTruthy();
     expect(screen.getByText("+0.6R")).toBeTruthy();
+    fireEvent.click(within(tabs).getByRole("tab", { name: "Ledger" }));
+    expect(screen.getByRole("table", { name: "The account's ledger" }).textContent).toContain(
+      "POT-IN-1",
+    );
+    fireEvent.click(card);
+    expect(await screen.findByRole("heading", { name: "New trade" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "SOL" }).getAttribute("aria-checked")).toBe("true");
   });
 
   it("places a proposal after its review", async () => {
@@ -267,7 +325,9 @@ describe("the trading pot", () => {
       pot({ putIn: "0", value: "0", result: "0", moves: [], trades: [], proposals: [] }),
     );
     render(<PotPage />);
-    expect(await screen.findByText("The trading pot is empty.")).toBeTruthy();
+    expect(
+      await screen.findByText("Put money in to start; it's kept apart from the DCA book."),
+    ).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "Amount to put in, USDC" }), {
       target: { value: "100" },
     });

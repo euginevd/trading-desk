@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from api import (
+    account_coins,
     agents,
     ai_client,
     analyse,
@@ -501,6 +502,7 @@ POT_ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/pot/trades/close"): lambda desk, _q, b: Pot(desk).close(b.get("ref")),
     ("POST", "/pot/proposals/dismiss"): lambda desk, _q, b: Pot(desk).dismiss(b),
     ("GET", "/pot/check"): lambda desk, _q, _b: Pot(desk).check(),
+    ("GET", "/pot/coins"): lambda desk, _q, _b: account_coins.snapshot(Pot(desk)),
 }
 ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/trade"): lambda desk, q, _: desk.terminal(coin_symbol(q.get("symbol") or "BTC")),

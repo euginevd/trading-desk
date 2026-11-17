@@ -1,9 +1,17 @@
-// The Trade page: the trading pot as its own book, run by trading-agent (docs/plan-trade.md).
-// It reads money first (put in, trading result, open risk, the month's loss limit), then the
-// market and Scan now, what trading-agent proposes, the trades on as a stop–entry–target line,
-// and, under Show more, every trade, the numbers, the pot's ledger and Check against Binance.
+// The Trade page: the trading account, run by trading-agent (docs/plan-trade.md). Money first
+// (available, in trades, value, this month) and the risk rules in a line; then the market and
+// Scan now, what trading-agent proposes, a snapshot of each coin held on Binance with its
+// trend and setup, and the trades in tabs: positions, orders, history, stats and the ledger.
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { checkPot, dismissPotProposal, getPot, placePotTrade, putInPot, scanPot } from "./api";
+import {
+  checkPot,
+  dismissPotProposal,
+  getAccountCoins,
+  getPot,
+  placePotTrade,
+  putInPot,
+  scanPot,
+} from "./api";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
 import { dated, day, dollars, qty, when } from "./dcaFormat";
@@ -11,14 +19,30 @@ import { Live } from "./Figures";
 import PotChat, { usePotChat } from "./PotChat";
 import PotNewTrade from "./PotNewTrade";
 import PotPanel, { px, rWord, rr, tone } from "./PotPanel";
-import type { PotAction, PotCheck, PotProposal, PotTrade, PotView } from "./types";
+import type { AccountCoin, PotAction, PotCheck, PotProposal, PotTrade, PotView } from "./types";
 import "./pot.css";
 
 // Dollars without empty cents: $1, $0.81, $10.
 const cash = (v: string | number) => dollars(v).replace(/\.00$/, "");
 const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 const REGIME = { bull: "Bull", neutral: "Neutral", bear: "Bear" } as const;
-const MORE_KEY = "desk.pot.more";
+const TAB_KEY = "desk.account.tab";
+const TABS = [
+  ["positions", "Positions"],
+  ["orders", "Orders"],
+  ["history", "History"],
+  ["stats", "Stats"],
+  ["ledger", "Ledger"],
+] as const;
+type Tab = (typeof TABS)[number][0];
+function readTab(): Tab {
+  try {
+    const kept = window.localStorage.getItem(TAB_KEY);
+    return TABS.find(([k]) => k === kept)?.[0] ?? "positions";
+  } catch {
+    return "positions";
+  }
+}
 const CHAT_KEY = "desk.pot.chat";
 function readFlag(key: string): boolean {
   try {
@@ -341,6 +365,85 @@ function Checked({ found }: { found: PotCheck }) {
   );
 }
 
+// One coin held on Binance: price and day, 30 days as a line, the desk's read of its trend and
+// setup, and whether trading-agent is watching it or a trade is on. Tap opens New trade.
+function Spark({ closes }: { closes: string[] }) {
+  if (closes.length < 2) return null;
+  const v = closes.map(Number);
+  const lo = Math.min(...v);
+  const hi = Math.max(...v);
+  const pts = v
+    .map(
+      (c, i) =>
+        `${(i / (v.length - 1)) * 100},${hi === lo ? 15 : 28 - ((c - lo) / (hi - lo)) * 26}`,
+    )
+    .join(" ");
+  const up = (v.at(-1) ?? 0) >= (v[0] ?? 0);
+  return (
+    <svg
+      className={`acc-spark ${up ? "up" : "down"}`}
+      viewBox="0 0 100 30"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <polyline points={pts} fill="none" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
+
+function CoinCard({ coin, onTrade }: { coin: AccountCoin; onTrade: () => void }) {
+  const day = Number(coin.change24hPct);
+  const status = coin.insight?.status ?? "none";
+  const body = (
+    <>
+      <span className="acc-coin-head">
+        <span className="dcb-coin">
+          <CoinIcon coin={coin.coin} />
+          {coin.coin}
+        </span>
+        <span className="num">{px(coin.price)}</span>
+        <small className={`num ${tone(day)}`}>
+          {day > 0 ? "+" : ""}
+          {day.toFixed(1)}%
+        </small>
+      </span>
+      <Spark closes={coin.spark} />
+      <small className="muted num">
+        {dollars(coin.value)} held
+        {coin.change30dPct !== null
+          ? `, ${Number(coin.change30dPct) > 0 ? "+" : ""}${coin.change30dPct}% in 30 days`
+          : ""}
+      </small>
+      {coin.insight && (
+        <>
+          <span className="acc-trend">{coin.insight.trend}</span>
+          <span className={`acc-setup is-${status}`}>{coin.insight.setup}</span>
+        </>
+      )}
+      {(coin.inTrade || coin.watching) && (
+        <span className="acc-flags">
+          {coin.inTrade && <span className="pot-tag is-live">In a trade</span>}
+          {coin.watching && <span className="pot-tag is-wait">trading-agent proposes</span>}
+        </span>
+      )}
+    </>
+  );
+  return coin.tradable ? (
+    <button
+      type="button"
+      className={`acc-coin is-${status}`}
+      onClick={onTrade}
+      aria-label={`${coin.coin}: ${coin.insight?.setup ?? ""} Open New trade`}
+    >
+      {body}
+    </button>
+  ) : (
+    <div className={`acc-coin is-${status} is-off`} title="Not one of trading-agent's coins">
+      {body}
+    </div>
+  );
+}
+
 export default function PotPage() {
   const [pot, setPot] = useState<PotView | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -350,11 +453,14 @@ export default function PotPage() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [placing, setPlacing] = useState(false);
   const [placeError, setPlaceError] = useState<string | null>(null);
-  const [more, setMore] = useState(() => readFlag(MORE_KEY));
+  const [tab, setTab] = useState<Tab>(readTab);
   const [chatOpen, setChatOpen] = useState(() => readFlag(CHAT_KEY));
   const [checked, setChecked] = useState<PotCheck | null>(null);
   const [checking, setChecking] = useState(false);
-  const [building, setBuilding] = useState(false);
+  // null: closed; "": New trade on its first coin; a coin: opened from that coin's card.
+  const [building, setBuilding] = useState<string | null>(null);
+  const [coins, setCoins] = useState<AccountCoin[] | null>(null);
+  const [coinsError, setCoinsError] = useState<string | null>(null);
   const review = useRef<HTMLDialogElement>(null);
   const chat = usePotChat();
 
@@ -364,10 +470,21 @@ export default function PotPage() {
         setPot(p);
         setError(null);
       },
-      (e: unknown) => setError(errorOf(e, "The pot couldn't be read.")),
+      (e: unknown) => setError(errorOf(e, "The trading account couldn't be read.")),
     );
   }, []);
   useEffect(() => load(), [load]);
+  // The coin snapshot reads daily candles, so it loads once and on each new scan, not every 30s.
+  const loadCoins = useCallback(() => {
+    getAccountCoins().then(
+      (c) => {
+        setCoins(c.coins);
+        setCoinsError(null);
+      },
+      (e: unknown) => setCoinsError(errorOf(e, "Your coins couldn't be read.")),
+    );
+  }, []);
+  useEffect(() => loadCoins(), [loadCoins]);
   useEffect(() => {
     const tick = window.setInterval(() => {
       if (document.visibilityState === "visible") load();
@@ -382,16 +499,19 @@ export default function PotPage() {
     setChatOpen(on);
     saveFlag(CHAT_KEY, on);
   };
-  const toggleMore = () =>
-    setMore((m) => {
-      saveFlag(MORE_KEY, !m);
-      return !m;
-    });
+  const pickTab = (key: Tab) => {
+    setTab(key);
+    try {
+      window.localStorage.setItem(TAB_KEY, key);
+    } catch {
+      // not kept: Positions next time
+    }
+  };
 
   if (error && !pot) {
     return (
       <main className="wrap dcb pot">
-        <h1>Trade</h1>
+        <h1>Trading account</h1>
         <div className="alert" role="alert">
           <span>{error}</span>
           <button type="button" className="btn btn-small" onClick={load}>
@@ -404,7 +524,7 @@ export default function PotPage() {
   if (!pot) {
     return (
       <main className="wrap dcb pot" aria-busy="true">
-        <p className="muted">Reading the pot…</p>
+        <p className="muted">Reading the trading account…</p>
       </main>
     );
   }
@@ -421,8 +541,11 @@ export default function PotPage() {
   );
   const monthR = thisMonth.reduce((s, t) => s + Number(t.r ?? 0), 0);
   const monthUsd = thisMonth.reduce((s, t) => s + Number(t.result ?? 0), 0);
-  const first = pot.moves.find((m) => m.kind === "in");
-  const test = pot.config.mode === "test";
+  const held = on.filter((t) => t.status === "open");
+  const waiting = on.filter((t) => t.status !== "open");
+  const inTrades = Math.max(0, Number(pot.value) - Number(pot.cash));
+  const openLimit = (Number(pot.value) * 3) / 100;
+  const short = Number(pot.backing?.short ?? 0);
   const used = Math.max(0, -Number(pot.monthResult));
   const openTrade = pot.trades.find((t) => t.ref === openRef) ?? null;
 
@@ -433,6 +556,7 @@ export default function PotPage() {
       (p) => {
         setPot(p);
         setScanning(false);
+        loadCoins();
         const n = p.proposals.length;
         setSaid(
           n
@@ -467,7 +591,7 @@ export default function PotPage() {
         setPlacing(false);
         review.current?.close?.();
         setPending(null);
-        setBuilding(false);
+        setBuilding(null);
         setSaid(`${t.ref} placed: the entry waits on Binance at ${px(t.entry)}.`);
         load();
       },
@@ -507,60 +631,63 @@ export default function PotPage() {
       <div className="dcb-main">
         <div className="dcb-top">
           <div>
-            <h1 className="dcb-headline">
-              {putIn > 0 ? (
-                <>
-                  Pot <Live value={pot.value}>{dollars(pot.value)}</Live>
-                  {result !== 0
-                    ? `, ${result > 0 ? "up" : "down"} ${dollars(Math.abs(result))} from trading.`
-                    : "."}{" "}
-                  {on.length === 0
-                    ? "No trades on"
-                    : `${on.length} ${on.length === 1 ? "trade" : "trades"} on`}
-                  {pot.proposals.length > 0
-                    ? `, ${pot.proposals.length} waiting for you.`
-                    : on.length === 0
-                      ? ": trading-agent waits for its setup."
-                      : "."}
-                </>
-              ) : (
-                "The trading pot is empty."
-              )}
-            </h1>
-            <p className="muted dcb-sub">
-              {first
-                ? `${dollars(pot.putIn)} put in since ${day(first.created)}. `
-                : "Put money in to start; it's kept apart from the DCA book. "}
-              {test
-                ? `Test phase: ${cash(pot.config.fixed)} a trade, at most ${putIn > 0 ? cash((putIn * Number(pot.config.riskPct)) / 100) : `${pot.config.riskPct}% of the pot`} at risk.`
-                : `${pot.config.riskPct}% risk a trade${pot.config.maxRisk ? `, at most ${cash(pot.config.maxRisk)}` : ""}, sized from the stop.`}
+            <h1 className="dcb-headline acc-title">Trading account</h1>
+            <p className="acc-said">
+              {putIn <= 0
+                ? "Put money in to start; it's kept apart from the DCA book."
+                : pot.proposals.length > 0
+                  ? `${pot.proposals.length} ${pot.proposals.length === 1 ? "setup is" : "setups are"} waiting for you.`
+                  : on.length === 0
+                    ? "No trades on: trading-agent waits for its setup."
+                    : `${on.length} ${on.length === 1 ? "trade" : "trades"} on${result !== 0 ? `, ${result > 0 ? "up" : "down"} ${dollars(Math.abs(result))} from trading` : ""}.`}
             </p>
           </div>
           {putIn > 0 && (
             <dl className="dcb-totals">
               <div>
-                <dt>Put in</dt>
-                <dd className="num">{dollars(pot.putIn)}</dd>
-              </div>
-              <div>
-                <dt>Trading result</dt>
-                <dd className={`num dcb-pnl ${result > 0 ? "is-up" : result < 0 ? "is-down" : ""}`}>
-                  <Live value={pot.result}>{dollars(pot.result, true)}</Live>
+                <dt>Available</dt>
+                <dd className="num">
+                  <Live value={pot.cash}>{dollars(pot.cash)}</Live>
                 </dd>
               </div>
               <div>
-                <dt>Open risk</dt>
-                <dd className="num">{dollars(pot.openRisk)}</dd>
+                <dt>In trades</dt>
+                <dd className="num">{dollars(inTrades)}</dd>
               </div>
               <div>
-                <dt>Month's loss limit</dt>
+                <dt>Value</dt>
                 <dd className="num">
-                  {dollars(used)} <span className="pot-of">of {dollars(pot.monthLimit)}</span>
+                  <Live value={pot.value}>{dollars(pot.value)}</Live>
+                </dd>
+              </div>
+              <div>
+                <dt>This month</dt>
+                <dd
+                  className={`num dcb-pnl ${monthUsd > 0 ? "is-up" : monthUsd < 0 ? "is-down" : ""}`}
+                >
+                  {dollars(monthUsd, true)} <span className="pot-of">{rWord(String(monthR))}</span>
                 </dd>
               </div>
             </dl>
           )}
         </div>
+
+        {putIn > 0 && (
+          <p className="acc-risk muted num">
+            Risk a trade <b>{dollars(pot.allowedRisk ?? "0")}</b> ({pot.config.riskPct}%
+            {pot.config.maxRisk ? `, at most ${cash(pot.config.maxRisk)}` : ""}), sized from the
+            stop. Open risk <b>{dollars(pot.openRisk)}</b> of {dollars(openLimit)}. Month's loss{" "}
+            <b>{dollars(used)}</b> of {dollars(pot.monthLimit)}.
+          </p>
+        )}
+
+        {short > 0 && (
+          <p className="dcb-warn" role="alert">
+            Free {pot.quote} on Binance is {dollars(short)} short of the account's available{" "}
+            {dollars(pot.backing?.held ?? "0")}. The DCA book and hand orders spend the same{" "}
+            {pot.quote}, so they can dip into it; each time is logged. Top up to cover it.
+          </p>
+        )}
 
         {pot.priceError && (
           <p className="dcb-warn" role="alert">
@@ -573,15 +700,15 @@ export default function PotPage() {
           <section className="dcb-section" aria-label="Put money in">
             <PutIn label="Put money in" onDone={setPot} />
             <p className="muted">
-              It comes from the USDC on Binance, kept as the pot's own ledger. Trades never spend
-              more than the pot holds, and never touch the DCA book.
+              It comes from the USDC on Binance, kept as the account's own ledger. Trades never
+              spend more than the account holds.
             </p>
           </section>
         ) : (
           <>
-            <div className="pot-regime" aria-label="The market today">
+            <div className="pot-regime acc-market" aria-label="The market today">
               <div className={`pot-state is-${pot.regime.state ?? "none"}`}>
-                <small>Regime</small>
+                <small>Market</small>
                 <b>{pot.regime.state ? REGIME[pot.regime.state] : "Unknown"}</b>
               </div>
               <div>
@@ -589,31 +716,26 @@ export default function PotPage() {
                 <span>{pot.regime.words || "—"}</span>
               </div>
               <div>
-                <small>{pot.lastScan ? `Last scan, ${when(pot.lastScan.at)}` : "Last scan"}</small>
+                <small>
+                  {pot.lastScan ? `Last scan, ${when(pot.lastScan.at)}` : "Last scan"}
+                  {pot.scansOnItsOwn ? `. Next ${when(pot.nextScan)}` : ". Paused"}
+                </small>
                 <span>
                   {scanning
-                    ? "trading-agent is reading the regime and every coin's daily chart. About a minute."
+                    ? "trading-agent is reading the market and every coin's daily chart. About a minute."
                     : pot.lastScan
                       ? pot.lastScan.line
                       : "Not yet"}
                 </span>
               </div>
-              <div>
-                <small>Daily scan</small>
-                <span>
-                  {pot.scansOnItsOwn
-                    ? `11:15am every day, on its own; a setup comes to Telegram too. Next ${when(pot.nextScan)}.`
-                    : "Paused in Profile, My agents. Scan now runs it by hand."}
-                </span>
+              <div className="acc-acts">
+                <button type="button" className="btn" disabled={scanning} onClick={scan}>
+                  {scanning ? "Scanning…" : "Scan now"}
+                </button>
+                <button type="button" className="btn btn-accent" onClick={() => setBuilding("")}>
+                  New trade
+                </button>
               </div>
-              <button
-                type="button"
-                className={`btn${on.length === 0 && pot.proposals.length === 0 ? " btn-accent" : ""}`}
-                disabled={scanning}
-                onClick={scan}
-              >
-                {scanning ? "Scanning…" : "Scan now"}
-              </button>
             </div>
 
             {said && (
@@ -647,175 +769,213 @@ export default function PotPage() {
               </section>
             )}
 
-            <section className="dcb-section" aria-labelledby="pot-on-title">
+            <section className="dcb-section" aria-labelledby="acc-coins-title">
               <div className="dcb-section-head">
-                <h2 id="pot-on-title">Open trades</h2>
+                <h2 id="acc-coins-title">Your coins on Binance</h2>
                 <span className="muted">
-                  {on.length ? `${on.length} on, ${dollars(pot.openRisk)} at risk` : ""}
+                  {coins === null
+                    ? "Reading…"
+                    : "Each coin's trend and setup from its daily chart. Tap one to trade it."}
                 </span>
-                <button
-                  type="button"
-                  className="btn btn-small pot-new"
-                  onClick={() => setBuilding(true)}
-                >
-                  New trade
-                </button>
               </div>
-              {on.length === 0 ? (
-                <p className="pot-empty">
-                  <b>No trades on.</b> New trade sets one up, and trading-agent can analyse a coin
-                  and fill it in by your rules.
+              {coinsError && <p className="muted">{coinsError}</p>}
+              {coins !== null && coins.length === 0 && (
+                <p className="muted">
+                  No coins over $5 on Binance, leaving out stablecoins and BNB.
                 </p>
-              ) : (
-                <ul className="pot-trades">
-                  {on.map((t) => (
-                    <TradeRow key={t.ref} trade={t} onOpen={() => setOpenRef(t.ref)} />
+              )}
+              {coins && coins.length > 0 && (
+                <div className="acc-coins">
+                  {coins.map((c) => (
+                    <CoinCard key={c.coin} coin={c} onTrade={() => setBuilding(c.coin)} />
                   ))}
-                </ul>
+                </div>
               )}
             </section>
 
-            <section className="dcb-section" aria-labelledby="pot-closed-title">
-              <div className="dcb-section-head">
-                <h2 id="pot-closed-title">Closed this month</h2>
-                <span className="muted num">
-                  {thisMonth.length
-                    ? `${thisMonth.length} ${thisMonth.length === 1 ? "trade" : "trades"}, ${rWord(String(monthR))}, ${dollars(monthUsd, true)}`
-                    : "None yet"}
-                </span>
+            <section className="dcb-section acc-tabs-wrap" aria-label="Trades">
+              <div className="acc-tabs" role="tablist" aria-label="Trades">
+                {TABS.map(([key, label]) => {
+                  const n =
+                    key === "positions" ? held.length : key === "orders" ? waiting.length : null;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      role="tab"
+                      id={`acc-tab-${key}`}
+                      aria-selected={tab === key}
+                      aria-controls="acc-panel"
+                      className={tab === key ? "is-on" : ""}
+                      onClick={() => pickTab(key)}
+                    >
+                      {label}
+                      {n ? <span className="acc-n">{n}</span> : null}
+                    </button>
+                  );
+                })}
               </div>
-              <button type="button" className="dcb-more" aria-expanded={more} onClick={toggleMore}>
-                {more
-                  ? "Show less"
-                  : "Show more: every trade, the numbers, the pot's ledger, Check against Binance"}
-              </button>
-              {more && (
-                <div className="pot-more">
-                  <dl className="pot-stats">
-                    <div>
-                      <dt>Trades</dt>
-                      <dd className="num">{pot.stats.trades}</dd>
-                    </div>
-                    <div>
-                      <dt>Win rate</dt>
-                      <dd className="num">
-                        {pot.stats.winRate === null ? "—" : `${pot.stats.winRate}%`}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Average win</dt>
-                      <dd className="num">{rWord(pot.stats.avgWinR)}</dd>
-                    </div>
-                    <div>
-                      <dt>Average loss</dt>
-                      <dd className="num">{rWord(pot.stats.avgLossR)}</dd>
-                    </div>
-                    <div>
-                      <dt>Expectancy</dt>
-                      <dd className="num">{rWord(pot.stats.expectancyR)}</dd>
-                    </div>
-                    <div>
-                      <dt>Deepest drawdown</dt>
-                      <dd className="num">{pot.stats.drawdownPct}%</dd>
-                    </div>
-                  </dl>
-                  <p className="muted">
-                    The method is judged after {pot.stats.judgeAfter} trades:{" "}
-                    {Math.min(pot.stats.trades, pot.stats.judgeAfter)} of {pot.stats.judgeAfter} so
-                    far.
-                  </p>
-                  <div className="pot-cols">
-                    <div>
-                      <h3 className="dcb-drawer-sub">Every trade</h3>
-                      {done.length === 0 ? (
-                        <p className="muted">No closed trades yet.</p>
-                      ) : (
-                        <div className="dcb-scroll">
-                          <table className="dcb-table" aria-label="Every trade">
-                            <thead>
-                              <tr>
-                                <th>Trade</th>
-                                <th>Setup</th>
-                                <th className="r">Entry</th>
-                                <th className="r">Exit</th>
-                                <th className="r">Result</th>
-                                <th className="r">Fees</th>
-                                <th>Rules</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {done.map((t) => (
-                                <tr key={t.ref}>
-                                  <td>
-                                    <button
-                                      type="button"
-                                      className="link"
-                                      onClick={() => setOpenRef(t.ref)}
-                                    >
-                                      {t.coin}
-                                    </button>{" "}
-                                    <span className="dcb-id">{t.ref}</span>
-                                  </td>
-                                  <td>{t.status === "cancelled" ? "Cancelled" : t.setup}</td>
-                                  <td className="r num">{px(t.fillPrice ?? t.entry)}</td>
-                                  <td className="r num">{px(t.exitPrice)}</td>
-                                  <td className={`r num ${tone(Number(t.result ?? 0))}`}>
-                                    {t.status === "closed"
-                                      ? `${rWord(t.r)}, ${dollars(t.result, true)}`
-                                      : "—"}
-                                  </td>
-                                  <td className="r num muted">{dollars(t.fees)}</td>
-                                  <td>
-                                    <span
-                                      className={`pot-tag ${t.rulesKept ? "is-won" : "is-lost"}`}
-                                    >
-                                      {t.rulesKept ? "Kept" : "Broken"}
-                                    </span>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </div>
-                    <div>
-                      <h3 className="dcb-drawer-sub">The pot's ledger</h3>
-                      <table className="dcb-table" aria-label="The pot's ledger">
-                        <thead>
-                          <tr>
-                            <th>Ref</th>
-                            <th>What</th>
-                            <th className="r">USDC</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {pot.moves.map((m) => (
-                            <tr key={m.ref}>
-                              <td className="dcb-id">{m.ref}</td>
-                              <td>
-                                {m.kind === "in" ? "Put in" : "Taken out"}, {day(m.created)}
-                              </td>
-                              <td className="r num">
-                                {m.kind === "in" ? "+" : "−"}
-                                {px(m.usdc)}
-                              </td>
+              <div id="acc-panel" role="tabpanel" aria-labelledby={`acc-tab-${tab}`}>
+                {tab === "positions" &&
+                  (held.length === 0 ? (
+                    <p className="pot-empty">
+                      <b>No positions.</b> New trade sets one up; trading-agent can analyse a coin
+                      and fill it in by your rules.
+                    </p>
+                  ) : (
+                    <ul className="pot-trades">
+                      {held.map((t) => (
+                        <TradeRow key={t.ref} trade={t} onOpen={() => setOpenRef(t.ref)} />
+                      ))}
+                    </ul>
+                  ))}
+                {tab === "orders" &&
+                  (waiting.length === 0 ? (
+                    <p className="pot-empty">
+                      <b>No entries waiting.</b> A placed trade waits here until its limit fills.
+                    </p>
+                  ) : (
+                    <ul className="pot-trades">
+                      {waiting.map((t) => (
+                        <TradeRow key={t.ref} trade={t} onOpen={() => setOpenRef(t.ref)} />
+                      ))}
+                    </ul>
+                  ))}
+                {tab === "history" &&
+                  (done.length === 0 ? (
+                    <p className="pot-empty">
+                      <b>No closed trades yet.</b> Each one lands here with its result in dollars
+                      and R.
+                    </p>
+                  ) : (
+                    <>
+                      <div className="dcb-scroll">
+                        <table className="dcb-table" aria-label="Every trade">
+                          <thead>
+                            <tr>
+                              <th>Trade</th>
+                              <th>Setup</th>
+                              <th className="r">Entry</th>
+                              <th className="r">Exit</th>
+                              <th className="r">Result</th>
+                              <th className="r">Fees</th>
+                              <th>Rules</th>
                             </tr>
-                          ))}
-                          {done
-                            .filter((t) => t.status === "closed")
-                            .map((t) => (
+                          </thead>
+                          <tbody>
+                            {done.map((t) => (
                               <tr key={t.ref}>
-                                <td className="dcb-id">{t.ref}</td>
-                                <td>Closed, after fees</td>
+                                <td>
+                                  <button
+                                    type="button"
+                                    className="link"
+                                    onClick={() => setOpenRef(t.ref)}
+                                  >
+                                    {t.coin}
+                                  </button>{" "}
+                                  <span className="dcb-id">{t.ref}</span>
+                                </td>
+                                <td>{t.status === "cancelled" ? "Cancelled" : t.setup}</td>
+                                <td className="r num">{px(t.fillPrice ?? t.entry)}</td>
+                                <td className="r num">{px(t.exitPrice)}</td>
                                 <td className={`r num ${tone(Number(t.result ?? 0))}`}>
-                                  {Number(t.result ?? 0) >= 0 ? "+" : "−"}
-                                  {px(Math.abs(Number(t.result ?? 0)))}
+                                  {t.status === "closed"
+                                    ? `${rWord(t.r)}, ${dollars(t.result, true)}`
+                                    : "—"}
+                                </td>
+                                <td className="r num muted">{dollars(t.fees)}</td>
+                                <td>
+                                  <span className={`pot-tag ${t.rulesKept ? "is-won" : "is-lost"}`}>
+                                    {t.rulesKept ? "Kept" : "Broken"}
+                                  </span>
                                 </td>
                               </tr>
                             ))}
-                        </tbody>
-                      </table>
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="pot-tools">
+                        <button type="button" className="link" onClick={exportCsv}>
+                          Export CSV
+                        </button>
+                      </p>
+                    </>
+                  ))}
+                {tab === "stats" && (
+                  <>
+                    <dl className="pot-stats">
+                      <div>
+                        <dt>Trades</dt>
+                        <dd className="num">{pot.stats.trades}</dd>
+                      </div>
+                      <div>
+                        <dt>Win rate</dt>
+                        <dd className="num">
+                          {pot.stats.winRate === null ? "—" : `${pot.stats.winRate}%`}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Average win</dt>
+                        <dd className="num">{rWord(pot.stats.avgWinR)}</dd>
+                      </div>
+                      <div>
+                        <dt>Average loss</dt>
+                        <dd className="num">{rWord(pot.stats.avgLossR)}</dd>
+                      </div>
+                      <div>
+                        <dt>Expectancy</dt>
+                        <dd className="num">{rWord(pot.stats.expectancyR)}</dd>
+                      </div>
+                      <div>
+                        <dt>Deepest drawdown</dt>
+                        <dd className="num">{pot.stats.drawdownPct}%</dd>
+                      </div>
+                    </dl>
+                    <p className="muted">
+                      The method is judged after {pot.stats.judgeAfter} trades:{" "}
+                      {Math.min(pot.stats.trades, pot.stats.judgeAfter)} of {pot.stats.judgeAfter}{" "}
+                      so far.
+                    </p>
+                  </>
+                )}
+                {tab === "ledger" && (
+                  <div className="acc-ledger">
+                    <table className="dcb-table" aria-label="The account's ledger">
+                      <thead>
+                        <tr>
+                          <th>Ref</th>
+                          <th>What</th>
+                          <th className="r">USDC</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pot.moves.map((m) => (
+                          <tr key={m.ref}>
+                            <td className="dcb-id">{m.ref}</td>
+                            <td>
+                              {m.kind === "in" ? "Put in" : "Taken out"}, {day(m.created)}
+                            </td>
+                            <td className="r num">
+                              {m.kind === "in" ? "+" : "−"}
+                              {px(m.usdc)}
+                            </td>
+                          </tr>
+                        ))}
+                        {done
+                          .filter((t) => t.status === "closed")
+                          .map((t) => (
+                            <tr key={t.ref}>
+                              <td className="dcb-id">{t.ref}</td>
+                              <td>Closed, after fees</td>
+                              <td className={`r num ${tone(Number(t.result ?? 0))}`}>
+                                {Number(t.result ?? 0) >= 0 ? "+" : "−"}
+                                {px(Math.abs(Number(t.result ?? 0)))}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                    <div>
                       <PutIn label="Put in more" onDone={setPot} />
                       <p className="pot-tools">
                         <button
@@ -826,15 +986,12 @@ export default function PotPage() {
                         >
                           {checking ? "Checking…" : "Check against Binance"}
                         </button>
-                        <button type="button" className="link" onClick={exportCsv}>
-                          Export CSV
-                        </button>
                       </p>
                       {checked && <Checked found={checked} />}
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </section>
           </>
         )}
@@ -853,10 +1010,11 @@ export default function PotPage() {
         />
       )}
 
-      {building && (
+      {building !== null && (
         <PotNewTrade
           coins={pot.coins}
-          onClose={() => setBuilding(false)}
+          initialCoin={building || undefined}
+          onClose={() => setBuilding(null)}
           onReview={(t) => {
             setPlaceError(null);
             setPending(t);

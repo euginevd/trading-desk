@@ -112,7 +112,29 @@ def pot_limits(pot: dict[str, Any]) -> list[dict[str, Any]]:
     month = max(-_d(pot.get("monthResult")) / put_in * HUNDRED, ZERO)
     down = max((put_in - value) / put_in * HUNDRED, ZERO) if value > ZERO else ZERO
     alts = sum(1 for t in live if t.get("coin") != "BTC")
-    return [
+    backing = cast(dict[str, Any], pot.get("backing") or {})
+    short = _d(backing.get("short"))
+    covered = (
+        [
+            _row(
+                "pot-backing",
+                area,
+                "Available money on Binance",
+                short,
+                Decimal("0.01"),
+                None,
+                figure="Covered" if short <= ZERO else f"{short:,.2f} {pot.get('quote', '')} short",
+                of="the account's available balance, free on Binance",
+                rule="5.4",
+                owner="you: top up, or keep other buys off it",
+                words="One wallet: the DCA book and hand orders spend the same USDC. A buy that "
+                "dips into the account's money is let through and logged.",
+            )
+        ]
+        if backing
+        else []
+    )
+    return covered + [
         _row(
             "pot-trade-risk",
             area,

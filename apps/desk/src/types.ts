@@ -1384,6 +1384,21 @@ export interface PotProposal {
   crowding: string;
 }
 
+// The Trading account's coin snapshot (GET /pot/coins): each coin held on Binance.
+export interface AccountCoin {
+  coin: string;
+  amount: string;
+  price: string;
+  value: string;
+  change24hPct: string;
+  change30dPct: string | null;
+  spark: string[];
+  insight: { trend: string; setup: string; status: "watch" | "wait" | "none" } | null;
+  tradable: boolean;
+  watching: boolean;
+  inTrade: boolean;
+}
+
 // risk-agent's board (GET /risk-board): every limit from the desk's figures.
 export interface RiskLimit {
   key: string;
@@ -1463,6 +1478,8 @@ export interface PotView {
   quote: string;
   config: { mode: "test" | "risk"; fixed: string; riskPct: string; maxRisk?: string };
   allowedRisk?: string;
+  // Free USDC on Binance against the account's available money (one wallet).
+  backing?: { free: string; held: string; short: string } | null;
   putIn: string;
   value: string;
   result: string;

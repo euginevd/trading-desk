@@ -430,9 +430,56 @@ def test_other_buys_leave_the_pots_usdc_alone(pot: Pot, desk: Trading) -> None:
         (Decimal(b["free"]) for b in desk.parts()[0].balances() if b["asset"] == QUOTE), ZERO
     )
     room = max(free - pot.cash(), ZERO)
-    pot.guard(room)  # up to the pot's line: fine
-    with pytest.raises(Refused, match=f"trading pot's {QUOTE}"):
-        pot.guard(room + 1, "the DCA book")
+    assert pot.guard(room) is None  # up to the account's line: fine
+    said = pot.guard(room + 1, "the DCA book")  # warns, never blocks
+    assert said is not None
+    assert said.startswith(f"The DCA book uses 1.00 of the trading account's {QUOTE}")
+    backing = pot.view()["backing"]
+    assert backing["held"] == "100.00"
+    assert backing["short"] == str(max(Decimal(100) - free, ZERO).quantize(Decimal("0.01")))
     # A waiting pot entry is locked on Binance already: only the pot's free cash is kept back.
     pot.place(SOL)
     assert pot.cash() == Decimal(90)
+
+
+def test_the_coin_snapshot_leaves_out_money_bnb_and_dust(pot: Pot) -> None:
+    from api import account_coins  # noqa: PLC0415
+
+    found = account_coins.snapshot(pot)
+    coins = [c["coin"] for c in found["coins"]]
+    assert "BNB" not in coins
+    assert QUOTE not in coins
+    assert coins == sorted(
+        coins, key=lambda c: -float(next(x["value"] for x in found["coins"] if x["coin"] == c))
+    )
+    btc = next(c for c in found["coins"] if c["coin"] == "BTC")
+    assert btc["tradable"] is True
+    assert len(btc["spark"]) == 30
+    assert btc["insight"]["status"] in ("watch", "wait", "none")
+
+
+def test_each_coin_reads_as_a_trend_and_a_setup() -> None:
+    from api.account_coins import insight  # noqa: PLC0415
+
+    def facts(*v: str) -> dict[str, Any]:
+        price, s20, s50, s200, high, low = v
+        return {
+            "price": price,
+            "sma20": s20,
+            "sma50": s50,
+            "sma200": s200,
+            "range21d": {"high": high, "low": low},
+        }
+
+    pullback = insight(facts("101", "100", "95", "90", "110", "92"))
+    assert pullback == {
+        "trend": "Up trend: above its 50- and 200-day.",
+        "setup": "Back at its 20-day: worth an Analyse.",
+        "status": "watch",
+    }
+    assert insight(facts("109.8", "104", "100", "95", "110", "95"))["status"] == "watch"  # high
+    falling = insight(facts("80", "85", "90", "95", "100", "79.5"))
+    assert falling["trend"] == "Down trend: under its 50- and 200-day."
+    assert falling["status"] == "wait"  # at its 21-day low
+    assert insight(facts("85", "86", "90", "95", "100", "70"))["setup"].startswith("No long setup")
+    assert insight(facts("50", "50", "", "", "55", "45"))["trend"].startswith("Too new")

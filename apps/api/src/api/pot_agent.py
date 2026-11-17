@@ -120,7 +120,7 @@ class PotAgent:
                 btc_month = Decimal(found["change30dPct"])
             found["crowding"] = self._crowding(coin)
             coins.append(found)
-        view = pot.view()
+        view = pot.book_view()  # no balance read for the model
         state, words = pot.regime()
         live = [
             {k: t[k] for k in ("ref", "coin", "status", "entry", "stop", "target", "now", "r")}

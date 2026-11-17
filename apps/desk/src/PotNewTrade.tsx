@@ -137,15 +137,19 @@ function TradeLadder({
 
 export default function PotNewTrade({
   coins,
+  initialCoin,
   onClose,
   onReview,
 }: {
   coins: string[];
+  initialCoin?: string;
   onClose: () => void;
   onReview: (trade: HandTrade) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const [coin, setCoin] = useState(coins[0] ?? "BTC");
+  const [coin, setCoin] = useState(
+    initialCoin && coins.includes(initialCoin) ? initialCoin : (coins[0] ?? "BTC"),
+  );
   const [entry, setEntry] = useState("");
   const [stop, setStop] = useState("");
   const [target, setTarget] = useState("");

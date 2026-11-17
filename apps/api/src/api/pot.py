@@ -413,23 +413,39 @@ class Pot:
             held += filled if r["status"] == "open" else Decimal(r["spend"])
         return self.equity() - held
 
-    def guard(self, spend: Decimal, what: str = "this order") -> None:
-        """The pot's soft ring-fence (owner, 18 Nov 2026): Binance has one wallet, so a buy
-        from outside the pot (the DCA book, a hand order) may use the free USDC less what the
-        pot holds. A pot entry waiting on Binance is already locked there, so only the pot's
-        free cash is kept back."""
-        held = self.cash()
-        if held <= ZERO or spend <= ZERO:
-            return
-        free = next(
+    def free_quote(self) -> Decimal:
+        return next(
             (Decimal(b["free"]) for b in self._binance.balances() if b["asset"] == QUOTE), ZERO
         )
+
+    def backing(self) -> dict[str, str]:
+        """How much of the account's available money is free on Binance: one wallet, so the
+        DCA book and hand orders spend from the same USDC."""
+        held, free = max(self.cash(), ZERO), self.free_quote()
+        return {"free": _cents(free), "held": _cents(held), "short": _cents(max(held - free, ZERO))}
+
+    def guard(self, spend: Decimal, what: str = "this order") -> str | None:
+        """The account's soft ring-fence (owner, 18 Nov 2026): a buy from outside it (the DCA
+        book, a hand order) should leave the account's available USDC free on Binance. It
+        warns, never blocks: the words go to the audit log and back to the caller. A waiting
+        entry is locked on Binance already, so only the account's free cash is kept back."""
+        held = self.cash()
+        if held <= ZERO or spend <= ZERO:
+            return None
+        try:
+            free = self.free_quote()
+        except BinanceError:
+            return None  # the order itself will meet the same outage
         room = max(free - held, ZERO)
-        if spend > room:
-            raise Refused(
-                f"That would use the trading pot's {QUOTE}: {free:,.2f} is free on Binance and "
-                f"{held:,.2f} of it is the pot's, so {room:,.2f} is free for {what}."
-            )
+        if spend <= room:
+            return None
+        said = (
+            f"{what[:1].upper()}{what[1:]} uses {spend - room:,.2f} of the trading account's "
+            f"{QUOTE}: "
+            f"{free:,.2f} is free on Binance and {held:,.2f} of it is the account's."
+        )
+        self._audit.record("pot", "Ring-fence", said)
+        return said
 
     def check_rules(self, sized: dict[str, Any]) -> None:
         """The pot's limits on a new trade, on top of its sizing."""
@@ -974,6 +990,14 @@ class Pot:
         }
 
     def view(self) -> dict[str, Any]:
+        found = self.book_view()
+        try:
+            found["backing"] = self.backing()
+        except BinanceError:
+            found["backing"] = None
+        return found
+
+    def book_view(self) -> dict[str, Any]:
         rows = self._store.pot_trades()
         live = [r["coin"] for r in rows if r["status"] in LIVE]
         error = None

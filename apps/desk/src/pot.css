@@ -749,3 +749,157 @@ dialog.pnt {
     flex-wrap: wrap;
   }
 }
+
+/* The Trading account: money first, the risk rules in a line, each coin held as a card, and
+   the trades in tabs. Prefixed acc-. */
+.acc-title {
+  margin-bottom: 4px;
+}
+.acc-said {
+  margin: 0;
+  color: var(--body);
+  font-size: 17px;
+}
+.acc-risk {
+  margin: 6px 0 12px;
+  font-size: 13px;
+}
+.acc-risk b {
+  color: var(--text);
+  font-weight: 600;
+}
+.acc-market {
+  grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.8fr) auto;
+}
+.acc-acts {
+  display: flex;
+  gap: 8px;
+}
+.acc-coins {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.acc-coin {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-2);
+  border-radius: var(--r);
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+button.acc-coin {
+  cursor: pointer;
+}
+button.acc-coin:hover {
+  border-color: var(--hover-line);
+}
+button.acc-coin:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.acc-coin.is-watch {
+  border-left-color: var(--up);
+}
+.acc-coin.is-wait {
+  border-left-color: var(--wait);
+}
+.acc-coin.is-off {
+  opacity: 0.75;
+}
+.acc-coin-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.acc-coin-head .dcb-coin {
+  margin-right: auto;
+  font-weight: 600;
+}
+.acc-spark {
+  width: 100%;
+  height: 30px;
+}
+.acc-spark polyline {
+  stroke-width: 1.6;
+}
+.acc-spark.up polyline {
+  stroke: var(--up);
+}
+.acc-spark.down polyline {
+  stroke: var(--down);
+}
+.acc-trend {
+  color: var(--body);
+  font-size: 13px;
+}
+.acc-setup {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.acc-setup.is-watch {
+  color: var(--up);
+}
+.acc-setup.is-wait {
+  color: var(--wait);
+}
+.acc-flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.acc-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+}
+.acc-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+.acc-tabs button.is-on {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+.acc-tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.acc-n {
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 12px;
+}
+.acc-ledger {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .acc-market {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .acc-ledger {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
