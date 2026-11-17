@@ -120,7 +120,8 @@ h1,
 .dcb-headline,
 .pf-headline,
 .set-headline,
-.dcw-line {
+.dcw-line,
+.sentence {
   font-family: var(--font-display);
   font-weight: 460;
   font-optical-sizing: auto;
@@ -2574,7 +2575,8 @@ button.jtag {
 .jr-headline,
 .dcb-headline,
 .pf-headline,
-.set-headline {
+.set-headline,
+.sentence {
   animation: desk-settle 360ms var(--ease) both;
 }
 @media (prefers-reduced-motion: reduce) {
@@ -2602,19 +2604,22 @@ button.jtag {
 /* Text by screen (decision 77): trading screens stay dense, reading screens get room. */
 .pot,
 .bots,
-.dca-page {
+.dca-page,
+.page-dense {
   font-size: 13px;
 }
 .pf-page,
 .jr,
 .rk,
 .settings,
-.md {
+.md,
+.page-reading {
   font-size: 15px;
 }
 .jr table,
 .rk table,
-.settings table {
+.settings table,
+.page-reading table {
   font-size: 14px;
 }
 
@@ -2713,7 +2718,8 @@ button.jtag {
 .jr-ledger,
 .jr-lists,
 .set-section,
-.dcw {
+.dcw,
+.panel {
   padding: 18px 20px;
   border: 1px solid var(--edge);
   border-radius: var(--r-panel);
@@ -2779,5 +2785,35 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
   body::after {
     animation: none !important;
+  }
+}
+
+/* For a new page (design-system/new-page.md): the sentence's size, a panel's heading row. */
+.sentence {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.12;
+  max-width: 30ch;
+}
+.sentence + .lede {
+  margin: 8px 0 0;
+  color: var(--body);
+  max-width: 70ch;
+}
+.panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+  margin-bottom: 14px;
+}
+.page-stack {
+  display: grid;
+  gap: 18px;
+}
+@media (max-width: 640px) {
+  .sentence {
+    font-size: 27px;
   }
 }

@@ -43,7 +43,7 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 
 ## Components
 
-11. Button (secondary `panel-2`, primary `accent`, buy `up`, sell `down`), Input with a unit, segmented Buy/Sell, Tabs, Table, Tag, Pill, Card, Dialog, Toast and Skeleton. Anything new is built from these and added here once settled.
+11. Button (secondary `panel-2`, primary `accent`, buy `up`, sell `down`), Input with a unit, segmented Buy/Sell, Tabs, Table, Tag, Pill, Card, Dialog, Toast and Skeleton. A new page follows [new-page.md](design-system/new-page.md).
 12. One primary button per view: Analyse on Trade, Create on a bot page.
 13. Coin mark: the coin's logo, 24px (decision 25), else its letters. The desk's mark: Ledger (decision 78).
 13a. Rule-break banner (red, Place anyway (logged) set apart), an Out of date tag (`wait`), agents' icons as avatars (decisions 58, 70).
