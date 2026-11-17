@@ -1586,3 +1586,34 @@ dialog.ntf {
     animation: ntf-in 260ms var(--ease);
   }
 }
+
+/* An empty scan's near misses: the coins closest to a setup and what's missing. */
+.ntf-misses {
+  margin: 12px 0 16px;
+}
+.ntf-misses small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.ntf-misses ul {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.ntf-misses li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--layer-1);
+  font-size: 13px;
+}
+.ntf-misses li b {
+  color: var(--text);
+}
+.ntf-misses li span {
+  color: var(--body);
+}

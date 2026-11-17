@@ -1628,6 +1628,9 @@ export interface PotScreen {
   warnings: string[];
   counts: PotScreenCounts;
   shortlist: { coin: string; setup: string; score: number }[];
+  // On an empty scan: the coins closest to a setup and what's missing, and any block on all.
+  misses: { coin: string; why: string }[];
+  block: string;
   expires: number;
   quote?: string;
   source?: string;

@@ -241,7 +241,12 @@ class PotAgent:
         said: list[str] = []
         for key in ("swing", "position") if monday else ("swing",):
             seen = self.judge({"style": key})
-            said.append(f"{seen['name']}: {seen['line']}")
+            misses = cast(list[dict[str, str]], seen.get("misses") or [])
+            closest = "; ".join(f"{m['coin']} {m['why']}" for m in misses)
+            said.append(
+                f"{seen['name']}: {seen['line']}"
+                + (f" Closest: {closest}." if closest and not seen["picks"] else "")
+            )
             for n, pick in enumerate(seen["picks"]):
                 if pick["problem"] or pick["verdict"] != "take":
                     continue
@@ -495,7 +500,8 @@ class PotAgent:
             raise Refused("Pick scalp, day, swing or position.")
         pot = self._pot
         seen = screener.last_screen(key, pot.now_ms()) or self.screen(body)
-        out = {k: seen[k] for k in ("style", "name", "regime", "warnings", "counts", "allowed")}
+        keys = ("style", "name", "regime", "warnings", "counts", "allowed", "misses", "block")
+        out = {k: seen.get(k) for k in keys}
         out |= {"note": seen["note"], "riskPct": seen["riskPct"], "picks": [], "line": ""}
         out["expires"] = pot.now_ms() + style.expiry_s * 1000
         if not seen["allowed"] or not seen["shortlist"]:

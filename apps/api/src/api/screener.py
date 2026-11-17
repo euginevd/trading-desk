@@ -23,6 +23,7 @@ from api.market import QUOTE
 SYDNEY = ZoneInfo("Australia/Sydney")
 CG_URL = "https://api.coingecko.com/api/v3/coins/markets"
 UNIVERSE_KEY = "pot_universe"
+RETRY_MS = 10 * 60_000
 # Each style's section heading in local/agents/trading-agent.md, the one file of the rules.
 HEADING = {"scalp": "Scalp", "day": "Day trade", "swing": "Swing", "position": "Position"}
 RISK_PCT = "1"  # every style: 1% of the pot a trade, within its cap (owner, 17 Nov 2026)
@@ -270,12 +271,15 @@ def universe(
     Binance, ranked by that pair's 24-hour volume, each with 400 daily candles; built once a
     day and kept in memory. The list is also saved, so the desk can size a trade in any."""
     day = datetime.fromtimestamp(now_ms / 1000, UTC).strftime("%Y-%m-%d")
-    if _UNIVERSE.get("day") == day and _UNIVERSE.get("quote") == QUOTE:
+    if _UNIVERSE.get("quote") == QUOTE and (
+        _UNIVERSE.get("day") == day or now_ms < _UNIVERSE.get("until", 0)
+    ):
         return _UNIVERSE
     crypto = _crypto(http)
     source = f"The {TOP} most-traded {QUOTE} coins on Binance"
+    fallback_list = [{"coin": c, "name": c, "capRank": 999} for c in fallback]
     if crypto is None:
-        crypto = [{"coin": c, "name": c, "capRank": 999} for c in fallback]
+        crypto = fallback_list
         source = "trading-agent's coins (CoinGecko didn't answer)"
     symbols = binance.symbols()
     named: dict[str, dict[str, Any]] = {
@@ -301,6 +305,8 @@ def universe(
     store.set_setting(UNIVERSE_KEY, json.dumps({"day": day, "coins": [c["coin"] for c in coins]}))
     _UNIVERSE.clear()
     _UNIVERSE.update({"day": day, "quote": QUOTE, "source": source, "listed": len(named)})
+    if crypto is fallback_list:  # CoinGecko didn't answer: kept 10 minutes, then tried again
+        _UNIVERSE.update({"day": "", "until": now_ms + RETRY_MS})
     _UNIVERSE["coins"] = coins
     return _UNIVERSE
 
@@ -686,9 +692,33 @@ def _position(
     return _candidate(coin, found, stop=stop, style=style, score=score, facts=facts)
 
 
-def _intraday(
-    style: Style, liquid: list[dict[str, Any]], binance: Binance, now_ms: int
-) -> list[dict[str, Any]]:
+Miss = tuple[float, str, str]  # how far from a setup (smaller is closer), the coin, and why
+Found = tuple[list[dict[str, Any]], list[Miss], str]  # picks, near misses, a block on them all
+
+
+def _under(coin: str, price: float, avg: float, name: str) -> Miss:
+    gap = (avg / price - 1) * 100
+    return (gap, coin, f"{_by(gap)} under its {name}")
+
+
+def _by(gap: float) -> str:
+    return "just" if gap < 0.05 else f"{gap:.1f}%"  # noqa: PLR2004 - under a twentieth of 1%
+
+
+def _intraday_miss(coin: str, rows: Rows, bias: Rows, style: Style) -> Miss:
+    """Why a liquid coin has no scalp or day trade: its trend, its volume, or no setup."""
+    hc = closes_of(bias)
+    e = ema(hc, 50)
+    frame = "1-hour" if style.key == "scalp" else "4-hour"
+    if e and hc[-1] <= e:
+        return _under(coin, hc[-1], e, f"{frame} 50 EMA")
+    ratio = float(rows[-1][7]) / (avg_volume(rows) or 1)
+    if style.key == "scalp" and ratio < 1.5:  # noqa: PLR2004
+        return ((1.5 - ratio) * 10, coin, f"quiet: volume {ratio:.1f}x its average, 1.5x needed")
+    return (5.0, coin, "trend and volume pass; no setup on the last candle")
+
+
+def _intraday(style: Style, liquid: list[dict[str, Any]], binance: Binance, now_ms: int) -> Found:
     """Scalp and day trade: fresh candles for the liquid coins, then each one's setups."""
     symbols = [f"{c['coin']}{QUOTE}" for c in liquid]
     if f"BTC{QUOTE}" not in symbols:
@@ -702,39 +732,102 @@ def _intraday(
     btc_bias = closes_of(closed(bias_rows.get(f"BTC{QUOTE}", []), now_ms))
     btc_e = ema(btc_bias, 50)
     btc_ok = bool(btc_e and btc_bias[-1] > btc_e)
+    block = ""
+    if btc_e and not btc_ok:
+        frame = "1-hour" if style.key == "scalp" else "4-hour"
+        gap = (btc_e / btc_bias[-1] - 1) * 100
+        block = (
+            f"BTC's {frame} close is {_by(gap)} under its 50 EMA: no "
+            f"{style.name.lower()}s until it's back above."
+        )
     widest = Decimal("0.0003") if style.key == "scalp" else Decimal("0.0005")
     find = _scalp if style.key == "scalp" else _day
     picks: list[dict[str, Any]] = []
+    misses: list[Miss] = []
     for c in liquid:
         sym = f"{c['coin']}{QUOTE}"
         bid, ask = books.get(sym, (Decimal(0), Decimal(0)))
         if bid > 0 and (ask - bid) / bid > widest:
+            spread = float((ask - bid) / bid * 100)
+            misses.append((spread * 10, c["coin"], f"spread {spread:.3f}%, too wide"))
             continue
         rows = closed(setup_rows.get(sym, []), now_ms)
         bias = closed(bias_rows.get(sym, []), now_ms)
-        if rows and bias and (pick := find(c["coin"], rows, bias, btc_ok, style)):
+        if not rows or not bias:
+            continue
+        if pick := find(c["coin"], rows, bias, btc_ok, style):
             picks.append(pick)
-    return picks
+        else:
+            misses.append(_intraday_miss(c["coin"], rows, bias, style))
+    return picks, misses, block
 
 
-def _swings(style: Style, liquid: list[dict[str, Any]], btc_daily: Rows) -> list[dict[str, Any]]:
+def _swing_miss(coin: str, rows: Rows, btc_month: float | None) -> Miss:
+    """Why a liquid coin has no swing: its trend, its strength, or how far it is from a level."""
+    closes = closes_of(rows)
+    price, s50 = closes[-1], sma(closes, 50)
+    if s50 and price <= s50:
+        return _under(coin, price, s50, "50-day")
+    month = change(closes, 30)
+    if coin != "BTC" and month is not None and btc_month is not None and month <= btc_month:
+        lag = btc_month - month
+        return (lag, coin, f"behind BTC by {lag:.1f} points over 30 days")
+    a = atr(rows)
+    below = [z for z in levels(rows, a) if z["price"] < price] if a else []
+    if not below:
+        return (99.0, coin, "no setup, and no level under the price")
+    z = below[-1]
+    gap = (price / z["price"] - 1) * 100
+    names = ", ".join(z["names"][:2])
+    return (gap, coin, f"no setup: {gap:.1f}% above its nearest level, {fmt(z['price'])} ({names})")
+
+
+def _swings(style: Style, liquid: list[dict[str, Any]], btc_daily: Rows) -> Found:
     btc_month = change(closes_of(btc_daily), 30) if btc_daily else None
-    return [p for c in liquid if (p := _swing(c["coin"], c["daily"], btc_month, style))]
+    picks: list[dict[str, Any]] = []
+    misses: list[Miss] = []
+    for c in liquid:
+        if pick := _swing(c["coin"], c["daily"], btc_month, style):
+            picks.append(pick)
+        elif len(c["daily"]) > 50:  # noqa: PLR2004
+            misses.append(_swing_miss(c["coin"], c["daily"], btc_month))
+    return picks, misses, ""
 
 
-def _positions(
-    style: Style, liquid: list[dict[str, Any]], binance: Binance, now_ms: int
-) -> list[dict[str, Any]]:
+def _position_miss(coin: str, weekly: Rows, btc_q: float | None) -> Miss:
+    wc = closes_of(weekly)
+    price, s10, s40 = wc[-1], sma(wc, 10), sma(wc, 40)
+    if len(weekly) < 104:  # noqa: PLR2004
+        return (99.0, coin, f"only {len(weekly)} weeks of history, 104 needed")
+    if s40 and price <= s40:
+        return _under(coin, price, s40, "40-week")
+    if s10 and s40 and s10 <= s40:
+        gap = (s40 / s10 - 1) * 100
+        return (gap, coin, f"its 10-week is {gap:.1f}% under its 40-week")
+    quarter = change(wc, 13)
+    if coin != "BTC" and quarter is not None and btc_q is not None and quarter <= btc_q:
+        lag = btc_q - quarter
+        return (lag, coin, f"behind BTC by {lag:.1f} points over 13 weeks")
+    gap = (price / s10 - 1) * 100 if s10 else 99.0
+    return (abs(gap), coin, f"no setup: {gap:+.1f}% from its 10-week")
+
+
+def _positions(style: Style, liquid: list[dict[str, Any]], binance: Binance, now_ms: int) -> Found:
     """Position trades: each coin's own weekly trend decides, not BTC's."""
     symbols = [f"{c['coin']}{QUOTE}" for c in liquid if c["coin"] != "BTC"]
     weekly = binance.klines_many([*symbols, f"BTC{QUOTE}"], "1w", style.bias_n)
     btc_q = change(closes_of(closed(weekly.get(f"BTC{QUOTE}", []), now_ms)), 13)
     picks: list[dict[str, Any]] = []
+    misses: list[Miss] = []
     for c in liquid:
         rows = closed(weekly.get(f"{c['coin']}{QUOTE}", []), now_ms)
-        if rows and (pick := _position(c["coin"], c["daily"], rows, btc_q, style)):
+        if len(rows) < 41:  # noqa: PLR2004 - too short to say anything
+            continue
+        if pick := _position(c["coin"], c["daily"], rows, btc_q, style):
             picks.append(pick)
-    return picks
+        else:
+            misses.append(_position_miss(c["coin"], rows, btc_q))
+    return picks, misses, ""
 
 
 def screen(  # noqa: PLR0913 - the screen's parts, each needed
@@ -764,6 +857,8 @@ def screen(  # noqa: PLR0913 - the screen's parts, each needed
         "counts": {"listed": 0, "onBinance": 0, "liquid": 0, "setups": 0},
         "quote": QUOTE,
         "shortlist": [],
+        "misses": [],
+        "block": "",
         "at": now_ms,
         "expires": now_ms + style.expiry_s * 1000,
     }
@@ -785,11 +880,13 @@ def screen(  # noqa: PLR0913 - the screen's parts, each needed
     no_rows: Rows = []
     btc_daily: Rows = next((c["daily"] for c in uni["coins"] if c["coin"] == "BTC"), no_rows)
     if style.key == "swing":
-        found = _swings(style, liquid, btc_daily)
+        found, misses, block = _swings(style, liquid, btc_daily)
     elif style.key == "position":
-        found = _positions(style, liquid, binance, now_ms)
+        found, misses, block = _positions(style, liquid, binance, now_ms)
     else:
-        found = _intraday(style, liquid, binance, now_ms)
+        found, misses, block = _intraday(style, liquid, binance, now_ms)
+    out["block"] = block
+    out["misses"] = [{"coin": c, "why": why} for _, c, why in sorted(misses)[:3]]
     found.sort(key=lambda f: -f["score"])
     out["counts"]["setups"] = len(found)
     out["shortlist"] = found[: style.shortlist]

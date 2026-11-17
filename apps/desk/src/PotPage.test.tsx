@@ -262,6 +262,10 @@ function serve(reply: PotView, breaksRule = false, setups = true) {
         warnings: [],
         counts: { listed: 100, onBinance: 82, liquid: 31, setups: setups ? 3 : 0 },
         shortlist: setups ? [{ coin: "SOL", setup: "Asia sweep", score: 7 }] : [],
+        misses: setups ? [] : [{ coin: "ETH", why: "7.5% under its 4-hour 50 EMA" }],
+        block: setups
+          ? ""
+          : "BTC's 4-hour close is 7.6% under its 50 EMA: no day trades until it's back above.",
         expires: Date.now() + 3_600_000,
       });
     if (path === "/pot/judge")
@@ -553,6 +557,8 @@ describe("the trading pot", () => {
     expect(
       await screen.findByText(/No day trade setups right now: 31 coins passed the rules/),
     ).toBeTruthy();
+    expect(screen.getByText("7.5% under its 4-hour 50 EMA")).toBeTruthy();
+    expect(screen.getByText(/no day trades until it's back above/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Scan again" })).toBeTruthy();
     expect(sent(fetch, "/pot/judge")).toHaveLength(0);
   });

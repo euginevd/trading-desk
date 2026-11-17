@@ -334,6 +334,23 @@ export default function NewTradeFlow({
                 {screen.note ? ` ${screen.note}` : ""}
               </p>
             )}
+            {screen?.allowed && screen.shortlist.length === 0 && screen.block && (
+              <p className="ntf-warn">{screen.block}</p>
+            )}
+            {screen?.allowed && screen.shortlist.length === 0 && screen.misses.length > 0 && (
+              <div className="ntf-misses">
+                <small>Closest to a setup</small>
+                <ul>
+                  {screen.misses.map((m) => (
+                    <li key={m.coin}>
+                      <CoinIcon coin={m.coin} />
+                      <b>{m.coin}</b>
+                      <span>{m.why}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {(error || (screen && (!screen.allowed || screen.shortlist.length === 0))) && (
               <div className="dlg-btns">
                 <button type="button" className="btn" onClick={back}>

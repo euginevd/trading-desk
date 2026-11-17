@@ -89,6 +89,11 @@ def test_every_style_screens_without_error(pot: Pot) -> None:
         seen = agent.screen({"style": key})
         assert seen["style"] == key
         assert seen["counts"]["onBinance"] >= 1  # the demo's BTC, ETH and SOL pairs
+        assert len(seen["misses"]) <= 3
+        assert all(m["coin"] and m["why"] for m in seen["misses"])
+    # CoinGecko isn't reachable in the demo: the fallback list is kept 10 minutes, not all day.
+    assert screener._UNIVERSE["day"] == ""  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    assert screener._UNIVERSE["until"] > NOW * 1000  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
     with pytest.raises(Refused, match="Pick scalp"):
         agent.screen({"style": "yolo"})
 
@@ -178,6 +183,14 @@ def test_only_plain_tickers_and_no_stablecoins_join_the_universe() -> None:
     http = httpx.Client(transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=rows)))
     found = screener._crypto(http)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
     assert found == [{"coin": "SOL", "name": "Solana", "capRank": 7}]
+
+
+def test_a_near_miss_says_how_far_and_why() -> None:
+    falling = candles([100 - i * 0.5 - 1 for i in range(120)], [100 - i * 0.5 for i in range(120)])
+    gap, coin, why = screener._swing_miss("SOL", falling, -5.0)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    assert coin == "SOL"
+    assert why.endswith("under its 50-day")
+    assert gap > 0
 
 
 def test_card_text_is_clipped_at_a_word_never_mid_word() -> None:
