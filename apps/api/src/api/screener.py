@@ -223,13 +223,15 @@ _UNIVERSE: dict[str, Any] = {}
 _SCREENS: dict[str, dict[str, Any]] = {}
 
 
-def _top100(http: httpx.Client | None) -> list[dict[str, Any]] | None:
+def _crypto(http: httpx.Client | None) -> list[dict[str, Any]] | None:
+    """CoinGecko's top 250 by market cap, less stablecoins and wrapped or staked tokens: what
+    counts as a crypto coin, so tokenized stocks and fiat on Binance stay out."""
     if http is None:
         return None
     try:
         response = http.get(
             CG_URL,
-            params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": TOP, "page": 1},
+            params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 1},
         )
         if response.status_code != 200:  # noqa: PLR2004
             return None
@@ -247,7 +249,19 @@ def _top100(http: httpx.Client | None) -> list[dict[str, Any]] | None:
             continue
         if "USD" in coin and 0.97 <= price <= 1.03:  # noqa: PLR2004 - a stablecoin by its price
             continue
-        found.append({"coin": coin, "name": name, "rank": int(r.get("market_cap_rank") or 999)})
+        found.append({"coin": coin, "name": name, "capRank": int(r.get("market_cap_rank") or 999)})
+    return found
+
+
+def _volumes(binance: Binance, coins: list[str], symbols: set[str]) -> dict[str, list[float]]:
+    """Each coin's 24-hour volume on Binance: [its pair in the quote, the quote and USDT]."""
+    pairs = [f"{c}{q}" for c in coins for q in {QUOTE, "USDT"} if f"{c}{q}" in symbols]
+    rows = binance.tickers(pairs)
+    found: dict[str, list[float]] = {}
+    for c in coins:
+        own = float(rows.get(f"{c}{QUOTE}", {}).get("quoteVolume") or 0)
+        usdt = float(rows.get(f"{c}USDT", {}).get("quoteVolume") or 0) if QUOTE != "USDT" else 0
+        found[c] = [own, own + usdt]
     return found
 
 
@@ -258,37 +272,41 @@ def universe(
     fallback: list[str],
     now_ms: int,
 ) -> dict[str, Any]:
-    """Today's coins (by UTC day), with their 24-hour volume on Binance and 400 daily candles;
-    built once a day and kept in memory. The coin list is also saved, so the desk can size a
-    trade in any of them."""
+    """Today's coins (by UTC day): the 100 most-traded crypto coins against the desk's quote on
+    Binance, ranked by that pair's 24-hour volume, each with 400 daily candles; built once a
+    day and kept in memory. The list is also saved, so the desk can size a trade in any."""
     day = datetime.fromtimestamp(now_ms / 1000, UTC).strftime("%Y-%m-%d")
     if _UNIVERSE.get("day") == day and _UNIVERSE.get("quote") == QUOTE:
         return _UNIVERSE
-    listed: list[dict[str, Any]] | None = _top100(http)
-    source = "CoinGecko top 100"
-    if listed is None:
-        listed = [{"coin": c, "name": c, "rank": n + 1} for n, c in enumerate(fallback)]
+    crypto = _crypto(http)
+    source = f"The {TOP} most-traded {QUOTE} coins on Binance"
+    if crypto is None:
+        crypto = [{"coin": c, "name": c, "capRank": 999} for c in fallback]
         source = "trading-agent's coins (CoinGecko didn't answer)"
     symbols = binance.symbols()
-    coins = [c for c in listed if PLAIN.fullmatch(c["coin"]) and f"{c['coin']}{QUOTE}" in symbols]
-    pairs = [
-        f"{c['coin']}{q}" for c in coins for q in {QUOTE, "USDT"} if f"{c['coin']}{q}" in symbols
-    ]
-    volume: dict[str, float] = {}
-    for symbol, row in binance.tickers(pairs).items():
-        for c in coins:
-            if symbol in (f"{c['coin']}{QUOTE}", f"{c['coin']}USDT"):
-                volume[c["coin"]] = volume.get(c["coin"], 0.0) + float(row.get("quoteVolume") or 0)
-    daily = binance.klines_many([f"{c['coin']}{QUOTE}" for c in coins], "1d", 400)
-    for c in coins:
-        c["volume"] = volume.get(c["coin"], 0.0)
-        rows = daily.get(f"{c['coin']}{QUOTE}", [])
-        c["days"] = len(rows)
-        c["daily"] = closed(rows, now_ms)
-    coins = [c for c in coins if c["daily"]]
+    named: dict[str, dict[str, Any]] = {
+        str(c["coin"]): c for c in crypto if f"{c['coin']}{QUOTE}" in symbols
+    }
+    volume = _volumes(binance, list(named), symbols)
+    ranked = sorted(named, key=lambda c: -volume[c][0])[:TOP]
+    daily = binance.klines_many([f"{c}{QUOTE}" for c in ranked], "1d", 400)
+    coins: list[dict[str, Any]] = []
+    for n, c in enumerate(ranked):
+        rows = daily.get(f"{c}{QUOTE}", [])
+        if rows:
+            coins.append(
+                named[c]
+                | {
+                    "rank": n + 1,
+                    "quoteVolume": volume[c][0],
+                    "volume": volume[c][1],
+                    "days": len(rows),
+                    "daily": closed(rows, now_ms),
+                }
+            )
     store.set_setting(UNIVERSE_KEY, json.dumps({"day": day, "coins": [c["coin"] for c in coins]}))
     _UNIVERSE.clear()
-    _UNIVERSE.update({"day": day, "quote": QUOTE, "source": source, "listed": len(listed)})
+    _UNIVERSE.update({"day": day, "quote": QUOTE, "source": source, "listed": len(named)})
     _UNIVERSE["coins"] = coins
     return _UNIVERSE
 
@@ -754,6 +772,7 @@ def screen(  # noqa: PLR0913 - the screen's parts, each needed
         "riskPct": f"{style.risk_pct * (factor or 1):g}",
         "warnings": timing(style, now_ms),
         "counts": {"listed": 0, "onBinance": 0, "liquid": 0, "setups": 0},
+        "quote": QUOTE,
         "shortlist": [],
         "at": now_ms,
         "expires": now_ms + style.expiry_s * 1000,

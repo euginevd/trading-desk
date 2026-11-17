@@ -1,5 +1,5 @@
 // New trade by style (local/guides/trading-styles.md): pick a style, the desk's screener reads
-// the top 100 coins on Binance (no AI), trading-agent checks the shortlist's confluence and
+// the 100 most-traded USDC coins on Binance (no AI), trading-agent checks the shortlist's confluence and
 // catalysts, and each pick shows its grade, entry, target, stop and reward to risk, sized by
 // the desk. Okay opens the review, where Approve places the order on Binance.
 import { useEffect, useRef, useState } from "react";
@@ -85,8 +85,8 @@ function ScanLines({ screen, judging }: { screen: PotScreen | null; judging: boo
   const lines: [string, boolean][] = [
     [
       c
-        ? `${c.onBinance} of the top ${c.listed} are on Binance`
-        : "Reading the top 100 coins on Binance…",
+        ? `The ${c.onBinance} most-traded ${screen?.quote ?? "USDC"} coins on Binance`
+        : "Reading the most-traded coins on Binance…",
       !!c,
     ],
   ];
@@ -286,8 +286,8 @@ export default function NewTradeFlow({
         {step === "style" && (
           <section aria-label="Pick a style">
             <p className="muted">
-              Pick how long you mean to hold. The desk scans the top 100 coins on Binance by that
-              style's rules, then trading-agent checks the best few.
+              Pick how long you mean to hold. The desk scans the 100 most-traded USDC coins on
+              Binance by that style's rules, then trading-agent checks the best few.
             </p>
             {styles ? (
               <div className="ntf-styles">

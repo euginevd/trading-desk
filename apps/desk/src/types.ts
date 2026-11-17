@@ -1625,6 +1625,7 @@ export interface PotScreen {
   counts: PotScreenCounts;
   shortlist: { coin: string; setup: string; score: number }[];
   expires: number;
+  quote?: string;
   source?: string;
 }
 export interface PotPick {

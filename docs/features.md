@@ -35,7 +35,7 @@ Every page follows [design-system.md](design-system.md) 18 to 22. Features 1 to 
 | 92 | Bots page in three tabs: Accumulation (the DCA book), Opportunities and Grid bots; rebalancing dropped for now, TODO 9 (owner, 17 Nov 2026) | Done | |
 | 93 | The teal floating console: rounded frame, layered panels, pill tabs with icons, icon row actions, one type scale with nothing under 12px to read; reading screens larger, trading screens dense (TODO 14, owner, 17 Nov 2026; decision 77) | Done | |
 | 94 | Risk page leads with the four big risks: money on Binance (A$10K), 2026 coins on the Ledger (70%+), TAO's share with a glide path and what-if, and the Ledger backup checks (TODO 23, owner, 17 Nov 2026; decision 79) | Building: phase 1 done, Ledger addresses next | |
-| 95 | New trade by style: pick scalp, day, swing or position; the desk's screener reads the top 100 coins on Binance by that style's rules (no AI), trading-agent checks the shortlist's confluence and catalysts online, and each pick shows its grade, entry, take profit, stop, reward to risk and size, then Okay, review and Approve places it (TODO 24, owner, 17 Nov 2026; decision 80) | Built: on test | |
+| 95 | New trade by style: pick scalp, day, swing or position; the desk's screener reads the 100 most-traded USDC coins on Binance by that style's rules (no AI; CoinGecko's top 250 only to keep tokenized stocks and fiat out), trading-agent checks the shortlist's confluence and catalysts online, and each pick shows its grade, entry, take profit, stop, reward to risk and size, then Okay, review and Approve places it (TODO 24, owner, 17 Nov 2026; decision 80) | Built: on test | |
 
 ## `api`
 

@@ -177,5 +177,5 @@ def test_only_plain_tickers_and_no_stablecoins_join_the_universe() -> None:
         {"symbol": "steth", "name": "Lido Staked Ether", "current_price": 3000},
     ]
     http = httpx.Client(transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=rows)))
-    found = screener._top100(http)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-    assert found == [{"coin": "SOL", "name": "Solana", "rank": 7}]
+    found = screener._crypto(http)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    assert found == [{"coin": "SOL", "name": "Solana", "capRank": 7}]
