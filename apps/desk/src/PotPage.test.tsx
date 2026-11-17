@@ -406,7 +406,7 @@ describe("the trading pot", () => {
       "value",
       "131.11",
     );
-    expect(screen.getByRole("textbox", { name: "Why this trade" })).toHaveProperty(
+    expect(screen.getByRole("textbox", { name: /^Why this trade/ })).toHaveProperty(
       "value",
       "Back at its 20-day with volume drying up.",
     );
@@ -416,6 +416,15 @@ describe("the trading pot", () => {
     );
     expect(JSON.parse(String(sent(fetch, "/pot/analyse")[0]?.[1]?.body))).toEqual({ coin: "SOL" });
     expect(await screen.findByText(/Every rule kept/)).toBeTruthy();
+    // Each field says it's trading-agent's until the owner overrides it.
+    expect(screen.getAllByText("trading-agent").length).toBeGreaterThanOrEqual(4);
+    fireEvent.change(screen.getByRole("textbox", { name: "Stop loss price" }), {
+      target: { value: "130" },
+    });
+    expect(screen.getByText("changed by you")).toBeTruthy();
+    const agree = await screen.findByRole("button", { name: "Agree: review the orders" });
+    await waitFor(() => expect(agree).toHaveProperty("disabled", false));
+    expect(screen.getByRole("button", { name: "Don't take it" })).toBeTruthy();
   });
 
   it("keeps trading-agent folded until asked, then talks", async () => {

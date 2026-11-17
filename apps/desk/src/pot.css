@@ -678,7 +678,7 @@ dialog.pnt {
   align-items: center;
   gap: 12px;
 }
-.pnt-ai-ask > span {
+.pnt-ai-ask > .pnt-ai-say {
   flex: 1;
   color: var(--body);
 }
@@ -1056,5 +1056,63 @@ dialog.acc-drawer .dcb-drawer-figures b {
 @media (prefers-reduced-motion: reduce) {
   .acc-fold h2::after {
     transition: none;
+  }
+}
+
+/* trading-agent's trade, set in the form: what it recommends, then Agree or Don't take it; each
+   field says whether it's the agent's or changed by you. */
+.pnt-rec {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px 16px;
+  margin: 12px 0 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.pnt-rec dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.pnt-rec dd {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-weight: 600;
+}
+.pnt-rec dd small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.pnt-rec dd.up {
+  color: var(--up);
+}
+.pnt-rec dd.down {
+  color: var(--down);
+}
+.pnt-agree {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.pnt-mark {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+}
+.pnt-mark.is-agent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.pnt-mark.is-you {
+  background: var(--wait-soft);
+  color: var(--wait);
+}
+@media (max-width: 760px) {
+  .pnt-rec {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }

@@ -163,6 +163,8 @@ export default function PotNewTrade({
   const [analysis, setAnalysis] = useState<PotAnalysis | null>(null);
   const [analysing, setAnalysing] = useState(false);
   const [analyseError, setAnalyseError] = useState<string | null>(null);
+  // What trading-agent filled in, to mark each field as its or changed by you.
+  const [filled, setFilled] = useState<PotAnalysis["plan"]>(null);
   const setups: string[] =
     setup && !(SETUPS as readonly string[]).includes(setup) ? [...SETUPS, setup] : [...SETUPS];
 
@@ -179,12 +181,15 @@ export default function PotNewTrade({
     setTarget("");
     setAnalysis(null);
     setAnalyseError(null);
+    setFilled(null);
     setCoin(c);
   };
 
-  // trading-agent reads the coin against the file's rules and, for a take, fills the form.
+  // trading-agent reads the coin against the file's rules and fills in the whole trade, whatever
+  // its verdict: the owner agrees, overrides a field, or doesn't take it.
   const fill = (a: PotAnalysis) => {
     if (!a.plan) return;
+    setFilled(a.plan);
     setEntry(a.plan.entry);
     setStop(a.plan.stop);
     setTarget(a.plan.target);
@@ -201,7 +206,7 @@ export default function PotNewTrade({
         setAnalysing(false);
         if (a.coin !== coin) return;
         setAnalysis(a);
-        if (a.verdict === "take") fill(a);
+        fill(a);
       },
       (err: unknown) => {
         setAnalysing(false);
@@ -261,6 +266,30 @@ export default function PotNewTrade({
   const rrNum = sized ? Number(sized.rr) : null;
   const ready = sized !== null && problems.length === 0 && !reading && why.trim().length >= 10;
 
+  const review = () => {
+    if (!sized) return;
+    onReview({
+      coin,
+      setup,
+      reason: noteOf(why, wrong, days),
+      entry: sized.entry,
+      stop: sized.stop,
+      target: sized.target,
+      qty: sized.qty,
+      spend: sized.spend,
+      risk: sized.risk,
+    });
+  };
+  // A field's mark: trading-agent's value, or changed from it.
+  const mark = (mine: string, its: string | undefined) =>
+    filled && its ? (
+      Number(mine) === Number(its) || mine.trim() === its.trim() ? (
+        <span className="pnt-mark is-agent">trading-agent</span>
+      ) : (
+        <span className="pnt-mark is-you">changed by you</span>
+      )
+    ) : null;
+
   const stopAt = (pct: number) => setStop(toTick(e * (1 - pct / 100), seen?.tick ?? null));
   const targetAt = (r: number) => setTarget(toTick(e + (e - s) * r, seen?.tick ?? null));
 
@@ -318,29 +347,89 @@ export default function PotNewTrade({
                 <b>{analysis.verdict === "wait" ? "A take once" : "Why not"}:</b> {analysis.watch}
               </p>
             )}
-            <p className="pnt-ai-foot muted">
-              {analysis.verdict === "take" && analysis.plan
-                ? "Filled in below from the analysis. Change anything; the desk checks it again."
-                : analysis.plan
-                  ? "Its levels, if you want them anyway:"
+            {analysis.plan && (
+              <dl className="pnt-rec" aria-label="trading-agent's trade">
+                <div>
+                  <dt>Entry</dt>
+                  <dd className="num">{px(analysis.plan.entry)}</dd>
+                </div>
+                <div>
+                  <dt>Stop</dt>
+                  <dd className="num down">
+                    {px(analysis.plan.stop)}
+                    {sized && <small> −{sized.stopPct}%</small>}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Target</dt>
+                  <dd className="num up">
+                    {px(analysis.plan.target)}
+                    {sized && <small> +{sized.targetPct}%</small>}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Amount</dt>
+                  <dd className="num">
+                    {sized ? (
+                      <>
+                        {dollars(sized.spend)}{" "}
+                        <small>
+                          {qtyWord(sized.qty)} {coin}
+                        </small>
+                      </>
+                    ) : (
+                      "…"
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>At risk</dt>
+                  <dd className="num">{sized ? dollars(sized.risk) : "…"}</dd>
+                </div>
+                <div>
+                  <dt>Reward : risk</dt>
+                  <dd className="num">{sized ? `${sized.rr} : 1` : "…"}</dd>
+                </div>
+              </dl>
+            )}
+            <p className="pnt-ai-foot">
+              <span className="muted">
+                {analysis.plan
+                  ? "Set below from the analysis, sized by your 1% rule. Change any field; the desk checks it again."
                   : "No levels the desk could size."}
-              {analysis.plan && analysis.verdict !== "take" && (
-                <button type="button" className="btn btn-small" onClick={() => fill(analysis)}>
-                  Fill in its levels
-                </button>
-              )}
+              </span>
               <button type="button" className="link" disabled={analysing} onClick={analyse}>
                 {analysing ? "Reading…" : "Analyse again"}
               </button>
             </p>
+            {analysis.plan && (
+              <div className="pnt-agree">
+                <button type="button" className="btn" onClick={() => dialog.current?.close()}>
+                  Don't take it
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${analysis.verdict === "take" ? "btn-accent" : ""}`}
+                  disabled={!ready}
+                  onClick={review}
+                >
+                  {analysis.verdict === "take"
+                    ? "Agree: review the orders"
+                    : "Take it anyway: review"}
+                </button>
+                {!ready && sized && problems.length > 0 && (
+                  <span className="error-text">The desk found a rule broken: see below.</span>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <div className="pnt-ai-ask">
             <AgentAvatar icon="research" slug="trading-agent" />
-            <span>
+            <span className="pnt-ai-say">
               {analysing
                 ? `trading-agent is reading ${coin}'s daily chart against your rules. About a minute.`
-                : `trading-agent reads ${coin} against your rules and fills in the trade: entry, stop, target and why.`}
+                : `trading-agent reads ${coin} against your rules and sets the whole trade: entry, stop, target, amount and why. You agree or change it.`}
             </span>
             <button type="button" className="btn btn-accent" disabled={analysing} onClick={analyse}>
               {analysing ? "Analysing…" : `Analyse ${coin}`}
@@ -361,7 +450,7 @@ export default function PotNewTrade({
             goes at or under it.
           </p>
           <label className="pnt-field">
-            <span>Entry, limit buy</span>
+            <span>Entry, limit buy{mark(entry, filled?.entry)}</span>
             <input
               inputMode="decimal"
               value={entry}
@@ -370,7 +459,7 @@ export default function PotNewTrade({
             />
           </label>
           <label className="pnt-field is-stop">
-            <span>Stop loss</span>
+            <span>Stop loss{mark(stop, filled?.stop)}</span>
             <input
               inputMode="decimal"
               value={stop}
@@ -392,7 +481,7 @@ export default function PotNewTrade({
             ))}
           </div>
           <label className="pnt-field is-target">
-            <span>Take profit</span>
+            <span>Take profit{mark(target, filled?.target)}</span>
             <input
               inputMode="decimal"
               value={target}
@@ -415,7 +504,7 @@ export default function PotNewTrade({
           </div>
 
           <fieldset className="pnt-setup">
-            <legend>Setup</legend>
+            <legend>Setup{mark(setup, filled?.setup)}</legend>
             {setups.map((name) => (
               <button
                 key={name}
@@ -429,7 +518,7 @@ export default function PotNewTrade({
             ))}
           </fieldset>
           <label className="pnt-field is-text">
-            <span>Why this trade</span>
+            <span>Why this trade{mark(why, filled?.why)}</span>
             <textarea
               rows={2}
               maxLength={240}
@@ -569,25 +658,7 @@ export default function PotNewTrade({
         <button type="button" className="btn" onClick={() => dialog.current?.close()}>
           Not now
         </button>
-        <button
-          type="button"
-          className="btn btn-accent"
-          disabled={!ready}
-          onClick={() => {
-            if (!sized) return;
-            onReview({
-              coin,
-              setup,
-              reason: noteOf(why, wrong, days),
-              entry: sized.entry,
-              stop: sized.stop,
-              target: sized.target,
-              qty: sized.qty,
-              spend: sized.spend,
-              risk: sized.risk,
-            });
-          }}
-        >
+        <button type="button" className="btn btn-accent" disabled={!ready} onClick={review}>
           Review
         </button>
       </footer>
