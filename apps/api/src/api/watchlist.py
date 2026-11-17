@@ -24,7 +24,7 @@ def _now() -> int:
     return int(time.time() * 1000)
 
 
-def _cap(chosen: dict[str, Any]) -> int:
+def cap(chosen: dict[str, Any]) -> int:
     return ACCOUNT_MAX if chosen["name"] == ACCOUNT_LIST else MAX_COINS
 
 
@@ -86,7 +86,7 @@ class Watchlist:
             "lists": self._store.lists(),
             "list": {"id": chosen["id"], "name": chosen["name"]},
             "coins": rows,
-            "max": _cap(chosen),
+            "max": cap(chosen),
             "aiBudget": self._signals.budget(),
         }
 
@@ -97,9 +97,9 @@ class Watchlist:
         coins = self._store.list_coins(chosen["id"])
         if name in coins:
             raise MarketError(f"{name} is already on {chosen['name']}.")
-        cap = _cap(chosen)
-        if len(coins) >= cap:
-            raise MarketError(f"{chosen['name']} is full at {cap}. Remove a coin first.")
+        most = cap(chosen)
+        if len(coins) >= most:
+            raise MarketError(f"{chosen['name']} is full at {most}. Remove a coin first.")
         if symbol not in self._binance.symbols():
             raise MarketError(f"Binance has no {pair(symbol)} pair.")
         self._store.watch_coin(chosen["id"], name, _now())

@@ -4,11 +4,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from api import risk
+from api import my_agents, risk
 from api.store import Store
 
 # Made-up figures only (known-mistakes 7).
-SYDNEY = risk.my_agents.SYDNEY
+SYDNEY = my_agents.SYDNEY
 TUESDAY = datetime(2026, 11, 17, 21, 0, tzinfo=SYDNEY)
 MONDAY_LATE = datetime(2026, 11, 16, 17, 30, tzinfo=SYDNEY)
 

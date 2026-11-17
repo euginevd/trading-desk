@@ -6,22 +6,22 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 
 1. Shell scripts must keep LF line endings or bash fails on Windows; don't override `.gitattributes`.
 2. A `CLAUDE.md` in the repo makes Claude Code skip `AGENTS.md`. Don't add one.
-3. A page that pins its CSS or JavaScript by integrity hash goes unstyled or dead after an edit: recompute each `sha384` after the last edit and load the page in a browser.
-4. Run the web apps' tests from an upper-case `C:\` path (`Set-Location C:\<repo>\apps\<app>`): from `c:` Vitest loads twice and every jest-dom matcher fails as "Invalid Chai property", or every suite fails with "Vitest failed to find the current suite". In Git Bash, `cd "C:/<repo>/apps/<app>"`.
-5. Never rewrite a source file with Windows PowerShell `Get-Content`/`Set-Content`: it reads UTF-8 as ANSI and writes a BOM (`·` became `Â·`). Use the Edit tool, or Python with `encoding="utf-8"`.
-6. A script pasted into CloudShell runs interactively, where `!word` is history expansion (`!starts_with` dropped a check): write ``== `false` `` instead.
-7. The repo is public: never copy the owner's real balances, costs, deposits, wallet addresses or emails into tests, demo data or docs. Use made-up numbers, including in mockups built from the owner's screenshots; the owner's data lives only in `local/` (SQLite, audit log) and `.env`, both git-ignored.
-8. Run `bash .lefthook/pre-push-scan.sh </dev/null` by hand: without a terminal it waits on stdin for git's pushed refs and hangs for hours.
-9. Don't write Python or TypeScript edits through a bash heredoc: backslash escapes (`\n`, `\b`, `\1`) arrive as line breaks or control characters. Use the Edit or Write tool.
-10. Before deleting CSS rules whose class no source file names, grep for classes built in template strings (`` `on-${side}` ``): a word-search prune dropped the order sheet's Buy and Sell colours and Settings' status dots (`is-${tone}`). Read the whole list: a `head -20` hid the second.
-11. Before naming a new CSS class, grep the app's stylesheets for it: a new `tr-call` for Trade's decision took the coin list's existing `tr-call` styles, right-aligning the call and stretching every coin row.
-12. Docker Compose v5 on Windows refuses its bake build ("additional privileges requested: --allow=fs.read=apps\api\Dockerfile"): build each image with `docker build -f apps/<app>/Dockerfile -t trading-desk-<app> .`, then `docker compose up -d --no-build`.
-13. A parser change doesn't reach a Profile version already saved: its typed fields are fixed at save, so profile.md needs a real edit (or a new version) to pick the change up.
+3. A page pinning CSS or JavaScript by integrity hash breaks after an edit: recompute each `sha384` last and load the page.
+4. Run web app tests from an upper-case `C:\` path (`Set-Location C:\<repo>\apps\<app>`; Git Bash `cd "C:/<repo>/apps/<app>"`): from `c:` Vitest loads twice and its suites fail.
+5. Never rewrite a source file with Windows PowerShell `Get-Content`/`Set-Content`: it misreads UTF-8 and writes a BOM. Use the Edit tool, or Python with `encoding="utf-8"`.
+6. In CloudShell, `!word` is history expansion (`!starts_with` dropped a check): write ``== `false` `` instead.
+7. The repo is public: never copy the owner's real balances, costs, deposits, addresses or emails into tests, demo data, mockups or docs; real data lives only in git-ignored `local/` and `.env`.
+8. Run `bash .lefthook/pre-push-scan.sh </dev/null` by hand: without a terminal it waits on stdin and hangs.
+9. Don't write Python or TypeScript edits through a bash heredoc: backslash escapes arrive mangled. Use the Edit or Write tool.
+10. Before deleting CSS rules no source names, grep for classes built in template strings (`` `on-${side}` ``, `is-${tone}`), and read the whole list, not a `head`.
+11. Before naming a new CSS class, grep the stylesheets for it: a new `tr-call` took the coin list's existing styles.
+12. Docker Compose v5 on Windows refuses its bake build ("--allow=fs.read"): `docker build -f apps/<app>/Dockerfile -t trading-desk-<app> .`, then `docker compose up -d --no-build`.
+13. A saved Profile version keeps its typed fields: after a parser change, profile.md needs a real edit or new version.
 
 ## CI
 
-7. A boolean `workflow_dispatch` input is empty on a push, which GitHub counts as `false`: test the event, as in `github.event_name != 'workflow_dispatch' || inputs.deploy`.
-8. The AWS CLI on GitHub's runners reads `--cli-input-json file:///dev/stdin` as empty: pass a request through a private temporary file, and delete it after.
+7. A boolean `workflow_dispatch` input is empty on a push: test the event, as in `github.event_name != 'workflow_dispatch' || inputs.deploy`.
+8. The AWS CLI on GitHub's runners reads `file:///dev/stdin` as empty: pass a request through a private temporary file, then delete it.
 
 ## AWS and Aurora DSQL
 
@@ -29,45 +29,43 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 ## Docs
 
-19. A rule cited by number elsewhere goes stale when `AGENTS.md` or this file renumbers (`pyproject.toml` cited rule 18 for rule 24): after renumbering, grep the repo for `rule <n>` and `known-mistakes <n>` and fix each.
-20. The GitHub MCP tools add a "Generated by Claude Code" footer to PR bodies and comments, which rule 29 forbids: check the posted text and edit the footer out.
+19. Renumbering `AGENTS.md` or this file stales citations: grep the repo for `rule <n>` and `known-mistakes <n>` and fix each.
+20. The GitHub MCP tools add a "Generated by Claude Code" footer, which rule 29 forbids: edit it out of the posted text.
 
 ## Web apps
 
-21. CSS `@keyframes` names are global: a new stylesheet's `rise` replaced another's and hid a sign-in form. Prefix a new stylesheet's keyframes (`chat-rise`).
+21. CSS `@keyframes` names are global (a new `rise` hid a sign-in form): prefix a new stylesheet's keyframes (`chat-rise`).
 22. `display: none` on a button's only text removes its name: hide a label visually (clipped, 1px) instead.
-23. A `file:` dependency's path in `package-lock.json` is relative to the app's folder (`../../packages/<pkg>`): build in the image at the repo's depth (`/web/apps/<app>`), or `npm ci` can't find it and prints only its usage.
-24. npm 10 drops the `libc` fields that npm 11 writes, so CI's `npm ci` on Node 24 sees a changed lock: write lock files with the npm CI uses (`npx npm@11 install`).
-25. axe flags low contrast on text caught mid fade-in: run accessibility checks with `reducedMotion: "reduce"` so they see the settled page.
-25a. A web font linked from Google Fonts breaks code-standards 27 and the desk's content security policy: install it from npm (`@fontsource/<font>`) and import it in `main.tsx`.
-25b. Headless Chrome on Windows lays a page out at 500px at least and crops a narrower screenshot: check phone layouts at `--window-size=500,…`, not 390.
-25c. On Windows, Git Bash at `/c/…` spells the drive `C:` while the project is `c:`: Vitest fails with "failed to find the runner" and `docker compose --build` asks for `--allow=fs.read`. Run both from `cd "c:/…"`.
-25d. The desk's api refuses any change that isn't JSON ("Send JSON.", its guard against other sites), so a POST with no body failed (Scan now): `call` in `api.ts` sends `{}` for a bodiless change, and testing an endpoint with `curl -d '{}'` hides it, so click the button too.
-26. Replacing a block of `styles.css` by slicing from its comment to the end of the file drops every rule appended after it (the sort headers lost their styles): slice to the next block's comment, then check the rules you didn't mean to touch are still there.
+23. A `file:` dependency's path in `package-lock.json` is relative to the app's folder: build in the image at the repo's depth (`/web/apps/<app>`), or `npm ci` fails.
+24. npm 10 drops the `libc` fields npm 11 writes, so CI sees a changed lock: write lock files with `npx npm@11 install`.
+25. axe flags text caught mid fade-in: run accessibility checks with `reducedMotion: "reduce"`.
+25a. A Google Fonts link breaks code-standards 27 and the CSP: install the font from npm (`@fontsource/<font>`) and import it in `main.tsx`.
+25b. Headless Chrome on Windows lays out at 500px at least: check phone layouts at `--window-size=500,…`, not 390.
+25c. Git Bash's `/c/…` spells the drive `C:` while the project is `c:`, breaking Vitest and `docker compose --build`: run both from `cd "c:/…"`.
+25d. The api refuses a change that isn't JSON, so a bodiless POST failed: `call` in `api.ts` sends `{}`; test by clicking the button, not only `curl -d '{}'`.
+26. Slicing `styles.css` from a block's comment to the file's end drops rules appended after it: slice to the next block's comment, then check the rest.
 
 ## Python and Postgres
 
-26. Two services that create the same tables at start (LangGraph's checkpointer and store) race on Postgres's catalog and one fails with `UniqueViolation` on `pg_type`: retry the setup a few times on `UniqueViolation`, `DuplicateTable` and `DuplicateObject`.
-27. Semgrep blocks `urllib` and `http.client` calls to a URL from a variable, even when the scheme is checked: use `httpx`.
-27b. A second reader of the same rate-limited source (the header's total beside the Dashboard) doubled the calls and tripped Taostats' 429, and a failed read showed the wallet as empty: keep the last good reading for outside sources and fall back to it (`apps/api/src/api/tao.py`).
-27a. Opening a log file in append mode for each line lost about 2% of lines when threads wrote at once on Windows, even under a lock: keep one handle per file, shared under the lock (`apps/api/src/api/audit.py`, tested in `test_audit.py`).
+26. Services creating the same tables at start race on Postgres's catalog: retry setup on `UniqueViolation`, `DuplicateTable` and `DuplicateObject`.
+27. Semgrep blocks `urllib` and `http.client` calls to a variable URL, even with the scheme checked: use `httpx`.
+27b. A second reader of a rate-limited source tripped Taostats' 429 and showed the wallet empty: keep and fall back to the last good reading (`tao.py`).
+27a. Appending to a log file per line lost lines under threads on Windows: keep one shared handle under the lock (`audit.py`, `test_audit.py`).
 
 ## Pull requests
 
-28. A prototype opened a PR for each small change: commit to the session's branch and open one PR only when the user says the batch is ready, or at the end of the session (AGENTS.md rule 16). It recurred when rule 16 let a finished request count; it no longer does.
+28. A prototype opened a PR per small change: commit to the session's branch and open one PR when the batch is ready or the session ends (rule 16).
 
 ## Binance
 
-29. Binance refuses the agent's cloud container (HTTP 451, restricted location): test against recorded replies, and the owner makes the first live run.
-
-29a. A timed-out order call (status 0) was treated as "not placed", so a live order could be lost or sent again: keep the row "placing" and look it up by its client id, and record a market sale before sending it (decision 47).
-
+29. Binance refuses the agent's cloud container (HTTP 451): test against recorded replies; the owner makes the first live run.
+29a. A timed-out order call was treated as not placed: keep the row "placing", look it up by client id, and record a market sale before sending (decision 47).
 29b. Binance order ids are unique per pair only: key them `PAIR:id`.
 29c. Bot names are public: link a Telegram chat only by a one-time code.
-29d. The pre-trade check first missed smart trades, which go as a bot switched on: list every route that sends a buy before adding a check.
-29e. Changing an order cancelled it before checking the replacement, so a refusal (trading off, a limit) left nothing working: size and check the new order first, then cancel. The Monday close-out's market buy also skipped the kill switch: every route that buys goes through the same check.
-29f. Real figures from the owner's plan and account (the weekly amount, the account's balance) went into public docs: write "the weekly plan" or "the account's balance"; the amounts stay in `local/`.
+29d. The pre-trade check first missed smart trades: list every route that sends a buy before adding a check.
+29e. Changing an order cancelled it before checking the replacement: check the new order first, then cancel. Every route that buys, the Monday close-out included, goes through the kill switch and limits.
+29f. Real plan and account figures went into public docs: write "the weekly plan" or "the account's balance"; amounts stay in `local/`.
 
 ## SQLite
 
-30. Semgrep blocks SQL built with an f-string, even from fixed names: write each query whole, as in `apps/api/src/api/store.py`.
+30. Semgrep blocks SQL built with an f-string: write each query whole, as in `store.py`.

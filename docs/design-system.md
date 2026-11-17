@@ -35,24 +35,25 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 ## Motion
 
 9. 120ms for hover and press, 200ms for tabs and dialogs. Animate only `transform` and `opacity`, and respect reduced motion.
-9a. Anything that opens over the page (a dialog, a sheet, a menu) closes on Esc and on a click outside it; a drag that starts inside doesn't close it. Dialogs get this from one handler in `main.tsx` (`dismiss.ts`); a confirm closed this way keeps, as its default.
+9a. A dialog, sheet or menu closes on Esc or a click outside (not a drag from inside), from one handler (`dismiss.ts`); a confirm closed so keeps.
 10. Prices update in place; a change flashes its tint for 400ms at most. Nothing loops or scrolls on its own.
 
 ## Components
 
-11. Button (secondary on `panel-2`, primary on `accent`, buy on `up`, sell on `down`), Input with a unit on the right, segmented Buy/Sell, Tabs with an accent underline, Table, Tag (Buy, Sell, Buy now, Wait, Avoid), Pill (connection and kill switch), Card, Dialog for the confirm step, Toast and Skeleton. Anything new is built from these and added here once settled.
-12. One primary button per view: Analyse on Trade (then Use this order on the ticket), Create on a bot page.
+11. Button (secondary `panel-2`, primary `accent`, buy `up`, sell `down`), Input with a unit, segmented Buy/Sell, Tabs, Table, Tag, Pill, Card, Dialog, Toast and Skeleton. Anything new is built from these and added here once settled.
+12. One primary button per view: Analyse on Trade, Create on a bot page.
 13. Coin mark: the coin's own logo, 24px (decision 25); its letters on `panel-2` when there's none.
-13a. Rule-break banner (red, Keep to my rules first, Place anyway (logged) set apart), an Out of date tag (`wait`), and agent cards with an initials avatar, the Coordinator leading (decisions 58, 59).
-13b. The trading agent: a run as a numbered timeline (done, working, skipped, failed, each with its model and cost), a ticket edged in `accent`, and Agent and Profile versions stamped on every call (decision 60).
-13c. Reader: a Markdown file (profile.md, trade.md) opens full page, read-only, with Contents down the side and a 760px reading column; a "Label: value" line reads as a label and value, "Not set" in `dim` (decision 61).
-13d. Profile: the plan as a road over time, not cards. A sentence headline carries the figures (where you are, the share of the goal, against the line); one chart shows the plan as a dashed line through each milestone to the goal, with a mint You dot today and each stop labelled with its date; below it a ledger of hairline rows: the plan's terms on one side, what's being built (BTC stack, cash floor, open items, the lesson) on the other, one column under 900px. Mint is you and done, `wait` next or short, `down` only the risk level. No pills, no middle dots. Figures round to K or M (US$98K; one decimal below 10K). Motion tells one story on load (the line draws, milestones arrive in turn, your dot lands, bars fill) and then answers change only: a live figure rolls in from the way it moved, tinted mint or red; what you open slides from where you opened it; an accepted diff folds away; none of it runs under reduced motion. Below 520px the ledger's labels sit above their values and the chart keeps only you, the next milestone and the goal. The agent tab is a profile sheet with Analyse's steps as a numbered list, the one real sequence. A proposed change shows as a line diff and saves only on Accept (decision 62).
-13e. Dashboard: the same language as the Profile (13d). The day as a sentence, then the Weekly DCA section (13j), and nothing else for now: the week rail, Watch today, Ask the desk and the weekly recap are off until the desk's new agents arrive (decision 63, TODO 10).
-13f. Portfolio: the same language. What you hold as a sentence, then the strip: the holdings by coin, 44px, the targets under it at 18px in the same order and colours; with targets set, a coin without one is neutral (`line-2`). Light slices take dark ink, deep ones light ink. Hover, focus or tap a slice for a sentence. Below, two hairline columns (Against your targets; Money in) and the holdings table without a card (decision 64).
-13g. Settings: the same language. What the desk runs on as a sentence, then hairline sections with their status at the right; providers and models stay selectable cards, as they're choices (decision 65).
-13h. Journal: the same language. Rules kept as a sentence (the count in mint), then the strip: a column a day, 12px dots stacked from the bottom, mint kept and `wait` broke a rule; then the ledger without a card and the tag lists last (decision 66).
-13i. My agents: a sentence, then a week rota: a hairline row per agent with its name and purpose, a seven-day track (weekend tinted) with a 10px mint dot each time it wakes, the next one ringed, and a dashed now line through every row; the model on the right. Each agent has a face: an icon picked in its file (`- Icon:`, one of ten jobs, each in its own tone) with a corner dot for switched on, and a persona (`- Persona: title: traits`) shown under its name. A row opens in place to its persona, facts, its week in words and the file (decision 70).
-13j. DCA book: on the Dashboard, one Weekly DCA section replaces the week rail (decision 72): dca-agent's icon and name, a sentence on where the week stands ("Next buy in 4 days: the week's USDC on 20 Nov (Fri) at 7pm."), then eight days on a line, Monday to Monday, with the buying window (Friday 7pm to Monday 7pm) as the one mint band, a white now line and each fill a dot at its time; under it the plan's coins with their amounts, and their limit or state once placed; one action at a time (Plan this week, Close out). Its own page (`#/dca-book`): a sentence, the totals, the plan's weeks as ticks (mint bought, amber a trim, `dim` missed, an outline this week), this week's planner, the positions with their lifelong IDs, and every order with filters and CSV export. Trims are `down`, buy-backs `up`, close-outs `wait`.
+13a. Rule-break banner (red, Place anyway (logged) set apart), an Out of date tag (`wait`), agent cards with initials (decisions 58, 59).
+In full (9a, 11, 12, 13a to 22): [design-system/pages.md](design-system/pages.md).
+13b. Trading agent: a numbered timeline and a ticket edged in `accent` (decision 60).
+13c. Reader: Markdown full page, read-only, in a 760px column (decision 61).
+13d. Profile: the plan as a road over time, then a hairline ledger (decision 62).
+13e. Dashboard: the day as a sentence, then Weekly DCA (13j) (decision 63, TODO 10).
+13f. Portfolio: a sentence, a strip of holdings over targets, the table (decision 64).
+13g. Settings: a sentence and hairline sections; providers as cards (decision 65).
+13h. Journal: rules kept as a sentence, daily dots, the ledger (decision 66).
+13i. My agents: a week rota, a row per agent opening in place (decision 70).
+13j. DCA book: a Weekly DCA section on the Dashboard and its own page (decision 72).
 
 ## Not this
 
@@ -67,7 +68,7 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 ## This project
 
 18. Locale: Australian English. Money follows the header's currency toggle (AUD, USD, INR, BTC); dates as 13 Nov 2026, times in am and pm, Sydney time. Money shows 2 decimal places, except the Dashboard's balances table, rounded to stay sleek ([details](design-system/screens.md#balances)). A coin amount elsewhere shows up to 8 places, trailing zeros dropped.
-19. Shell: a 232px side panel that folds to a 64px icon strip, with Dashboard, Portfolio, Journal, Trade and Bots (one page since decision 68), and at its foot the connections as quiet rows and the kill switch as a switch (red when off), always in view (spec 10). A slim header carries BTC, BTC dominance, market cap and Fear & Greed on the left (Fear & Greed opens its details), then the total (a link to the Portfolio) and the currency toggle. Details: [design-system/screens.md](design-system/screens.md#shell).
-20. Screens: sentences and hairline ledgers in place of widget cards (13d to 13f); DCA and grid bots as a table and a page per bot; Trade as the agent's workspace: coins with their last calls, the run's steps and ticket, and context beside it, the order form a sheet (decision 60). Destructive actions are red, set apart, and confirmed in a dialog whose default is to keep. Details: [design-system/screens.md](design-system/screens.md#screens).
-21. Charts: the Trade page shows a compact 4-hour line with the agent's add zone, no-chase and invalidation drawn on it; Full chart opens TradingView's Advanced Chart in a dialog, in the dark theme on the desk's `bg` and `line` colours, framed from TradingView's own site (decision 22).
-22. Status: Connected (dot, `up`), Stale, for data older than ten minutes (dot, `wait`), Disconnected (dot, `down`). Verdicts: Buy now (`up`), Wait (`wait`), Avoid (`down`). Smart trades keep their states from decision 12: Waiting for entry, Protected, Needs exits, Closed at take-profit, Closed at stop-loss and Cancelled. The kill switch: Trading on (`up`) or Trading off (`down`).
+19. Shell: a 232px side panel folding to 64px, with the pages, the connections and the kill switch always in view (spec 10). A slim header carries the market, the total and the currency toggle. Details: [design-system/screens.md](design-system/screens.md#shell).
+20. Screens: sentences and hairline ledgers, not widget cards (13d to 13f); Trade as the agent's workspace (decision 60). Destructive actions are red, set apart, and confirmed in a dialog whose default is to keep. Details: [design-system/screens.md](design-system/screens.md#screens).
+21. Charts: Trade shows a compact 4-hour line with the agent's levels; Full chart opens TradingView's Advanced Chart in a dialog, dark, on the desk's colours (decision 22).
+22. Status: Connected (`up`), Stale past ten minutes (`wait`), Disconnected (`down`); verdicts Buy now, Wait, Avoid in the same colours. Smart trade states follow decision 12; the kill switch reads Trading on (`up`) or off (`down`).

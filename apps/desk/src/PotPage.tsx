@@ -3,14 +3,7 @@
 // Scan now, what trading-agent proposes, the trades in tabs (positions, orders, history,
 // stats, the ledger) and, at the foot, the watchlist (AccountWatchlist.tsx).
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import {
-  checkPot,
-  dismissPotProposal,
-  getPot,
-  placePotTrade,
-  putInPot,
-  scanPot,
-} from "./api";
+import { checkPot, dismissPotProposal, getPot, placePotTrade, putInPot, scanPot } from "./api";
 import AgentAvatar from "./AgentIcons";
 import AccountWatchlist from "./AccountWatchlist";
 import CoinIcon from "./CoinIcon";
