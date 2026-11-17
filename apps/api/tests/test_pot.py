@@ -483,3 +483,15 @@ def test_each_coin_reads_as_a_trend_and_a_setup() -> None:
     assert falling["status"] == "wait"  # at its 21-day low
     assert insight(facts("85", "86", "90", "95", "100", "70"))["setup"].startswith("No long setup")
     assert insight(facts("50", "50", "", "", "55", "45"))["trend"].startswith("Too new")
+
+
+def test_a_coin_without_a_pair_is_left_out_not_fatal(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from api import account_coins  # noqa: PLC0415
+
+    real = demo.BALANCES
+    monkeypatch.setattr(demo, "BALANCES", [*real, {"asset": "LDBTC", "free": "1", "locked": "0"}])
+    coins = [c["coin"] for c in account_coins.snapshot(pot)["coins"]]
+    assert "LDBTC" not in coins
+    assert "BTC" in coins

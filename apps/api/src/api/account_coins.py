@@ -63,7 +63,10 @@ def snapshot(pot: Pot) -> dict[str, Any]:
         amount = Decimal(str(b["free"])) + Decimal(str(b["locked"]))
         if asset not in SKIP and amount > 0:
             held[asset] = held.get(asset, Decimal(0)) + amount
-    listed = binance.tickers([f"{c}{QUOTE}" for c in held]) if held else {}
+    # Binance refuses the whole request over one unknown pair, so ask only for listed ones.
+    pairs = [f"{c}{QUOTE}" for c in held]
+    known: set[str] = binance.symbols() if pairs else set()
+    listed = binance.tickers([p for p in pairs if p in known]) if pairs else {}
     tradable = set(pot.coins())
     watching = {p["coin"] for p in pot.proposals()}
     live = {
