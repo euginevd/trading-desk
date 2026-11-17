@@ -42,6 +42,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 25. axe flags text caught mid fade-in: run accessibility checks with `reducedMotion: "reduce"`.
 25a. A Google Fonts link breaks code-standards 27 and the CSP: install the font from npm (`@fontsource/<font>`) and import it in `main.tsx`.
 25b. Headless Chrome on Windows lays out at 500px at least: check phone layouts at `--window-size=500,…`, not 390.
+25c. A full-height panel inside the frame took only the frame's margin off `100vh`, so every page scrolled 30px: subtract margin, padding and border (`calc(100vh - 58px)`).
 25d. The api refuses a change that isn't JSON, so a bodiless POST failed: `call` in `api.ts` sends `{}`; test by clicking the button, not only `curl -d '{}'`.
 26. Slicing `styles.css` from a block's comment to the file's end drops rules appended after it: slice to the next block's comment, then check the rest.
 

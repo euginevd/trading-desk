@@ -221,24 +221,26 @@ export default function BotsPage({ only, note }: { only: "dca" | "grid"; note?: 
               Trading is off, so bots stay stopped until you turn it on in the side panel.
             </div>
           )}
-          <div className="bots-tabs" role="tablist" aria-label="Bots">
-            {(
-              [
-                ["running", `Running ${rows.filter((r) => r.running).length}`],
-                ["stopped", `Stopped ${rows.filter((r) => !r.running).length}`],
-                ["coins", "Coins"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                role="tab"
-                type="button"
-                aria-selected={tab === key}
-                onClick={() => setTab(key)}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="bots-tabs">
+            <div className="track" role="tablist" aria-label="Bots">
+              {(
+                [
+                  ["running", `Running ${rows.filter((r) => r.running).length}`],
+                  ["stopped", `Stopped ${rows.filter((r) => !r.running).length}`],
+                  ["coins", "Coins"],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  role="tab"
+                  type="button"
+                  aria-selected={tab === key}
+                  onClick={() => setTab(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <span className="spacer" />
             {only === "dca" ? (
               <CreateMenu

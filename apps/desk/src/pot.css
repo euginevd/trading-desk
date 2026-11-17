@@ -845,34 +845,6 @@ button.acc-coin:focus-visible {
   background: rgba(232, 176, 75, 0.14);
   color: var(--wait);
 }
-.acc-tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 14px;
-  border-bottom: 1px solid var(--line);
-  overflow-x: auto;
-}
-.acc-tabs button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 14px;
-  cursor: pointer;
-}
-.acc-tabs button.is-on {
-  border-bottom-color: var(--accent);
-  color: var(--text);
-}
-.acc-tabs button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
 .acc-n {
   padding: 0 7px;
   border-radius: 999px;

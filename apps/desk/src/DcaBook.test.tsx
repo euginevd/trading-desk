@@ -285,6 +285,21 @@ describe("DCA widget", () => {
     expect(screen.getByRole("link", { name: "Open in the DCA book" })).toBeTruthy();
   });
 
+  it("lists a coin's open orders first, and every order under All", async () => {
+    serve(book({ orders: [order({}), order({ ref: "DCA-BTC-26W47-2", status: "filled" })] }));
+    render(<DcaWidget now={START + 86_400_000} />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "BTC: open its position and orders" }),
+    );
+    const show = screen.getByRole("group", { name: "Show orders" });
+    expect(within(show).getByRole("button", { name: "Open 1" }).getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+    expect(screen.queryByText("DCA-BTC-26W47-2")).toBeNull();
+    fireEvent.click(within(show).getByRole("button", { name: "All 2" }));
+    expect(screen.getByText("DCA-BTC-26W47-2")).toBeTruthy();
+  });
+
   it("asks for a plan when there's none", async () => {
     serve(book({ plan: null }));
     render(<DcaWidget />);
@@ -340,21 +355,20 @@ describe("DCA book page", () => {
     expect(screen.getByText("SOL $20 just above Saturday's low.")).toBeTruthy();
   });
 
-  it("plans the week from the desk's odds and places after a review", async () => {
+  it("opens Weekly DCA as Add funds with the week's amount, its buys kept as the plan's", async () => {
     const fetch = serve(book());
     render(<DcaBookPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Plan this week's orders" }));
-    expect(await screen.findByText("69% (36 of 52)")).toBeTruthy();
-    fireEvent.click(screen.getByRole("checkbox", { name: "Place ETH" }));
-    fireEvent.click(screen.getByRole("button", { name: "Review 1 limit" }));
-    fireEvent.click(screen.getByRole("button", { name: "Place 1 limit" }));
-    await waitFor(() => expect(sent(fetch, "/dca/orders")).toHaveLength(1));
-    expect(JSON.parse(String(sent(fetch, "/dca/orders")[0]?.[1]?.body))).toEqual({
-      coin: "BTC",
-      spend: "50",
-      price: "63837.4",
+    expect(screen.queryByRole("button", { name: "Plan this week's orders" })).toBeNull();
+    fireEvent.click(await screen.findByRole("button", { name: "Weekly DCA" }));
+    expect(screen.getByRole("heading", { name: "Weekly DCA" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Amount in USDC" })).toHaveProperty("value", "70");
+    fireEvent.click(screen.getByRole("button", { name: "Plan it" }));
+    expect(await screen.findByText("Most to BTC, near last week's low.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Review \d limit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Place \d/ }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders").length).toBeGreaterThan(0));
+    expect(JSON.parse(String(sent(fetch, "/dca/orders")[0]?.[1]?.body))).toMatchObject({
       source: "weekly",
-      override: false,
     });
   });
 

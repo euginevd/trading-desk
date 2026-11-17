@@ -11,11 +11,9 @@ import {
   placeDcaOrder,
   sellCheck,
   setDcaPlan,
-  suggestDca,
 } from "./api";
 import { errorOf } from "./format";
 import CoinIcon from "./CoinIcon";
-import OrderReview from "./OrderReview";
 import DcaChat from "./DcaChat";
 import PositionDrawer from "./DcaPosition";
 import { Live } from "./Figures";
@@ -24,7 +22,6 @@ import DcaOrderDrawer from "./DcaOrderDrawer";
 import DcaOrders, { CancelDialog } from "./DcaOrders";
 import {
   SOURCE,
-  dated,
   dollars,
   STATUS,
   amountOf,
@@ -35,7 +32,6 @@ import {
   signed,
   toCsv,
   two,
-  when,
 } from "./dcaFormat";
 import type {
   DcaBook,
@@ -270,248 +266,6 @@ function Ticks({ book }: { book: DcaBook }) {
         {said}
       </p>
     </div>
-  );
-}
-
-// ---------------------------------------------------------------- this week's planner
-
-type Row = {
-  coin: string;
-  spend: string;
-  price: string;
-  odds: DcaOdds | null;
-  on: boolean;
-  result?: string;
-  failed?: boolean;
-};
-
-function Planner({
-  book,
-  onPlaced,
-  start = false,
-}: {
-  book: DcaBook;
-  onPlaced: () => void;
-  start?: boolean;
-}) {
-  const [rows, setRows] = useState<Row[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [held, setHeld] = useState<string | null>(null);
-  const dialog = useRef<HTMLDialogElement>(null);
-
-  const fetchPlan = useCallback(() => {
-    suggestDca().then(
-      (s) =>
-        setRows(
-          s.orders.map((o) => ({
-            coin: o.coin,
-            spend: o.spend,
-            price: o.price,
-            odds: o.odds,
-            on: true,
-          })),
-        ),
-      (e: unknown) => setError(errorOf(e, "The desk couldn't plan this week.")),
-    );
-  }, []);
-  const plan = () => {
-    setError(null);
-    setRows(null);
-    fetchPlan();
-  };
-  // Opened from the Dashboard's Plan this week: the plan comes straight away.
-  useEffect(() => {
-    if (start) fetchPlan();
-  }, [start, fetchPlan]);
-  const edit = (i: number, change: Partial<Row>) =>
-    setRows((r) => r?.map((x, k) => (k === i ? { ...x, ...change } : x)) ?? null);
-  const reOdds = (i: number) => {
-    const r = rows?.[i];
-    if (!r || !(Number(r.price) > 0)) return;
-    dcaOdds(r.coin, r.price).then(
-      (o) => edit(i, { odds: o }),
-      () => edit(i, { odds: null }),
-    );
-  };
-
-  const chosen = rows?.filter((r) => r.on && !r.result) ?? [];
-  const place = async (override = false) => {
-    if (!rows) return;
-    setBusy(true);
-    setHeld(null);
-    const next = [...rows];
-    for (const [i, r] of next.entries()) {
-      if (!r.on || r.result) continue;
-      try {
-        const order: DcaOrderRequest = {
-          coin: r.coin,
-          spend: r.spend,
-          price: r.price,
-          source: "weekly",
-          override,
-        };
-        const placed = await placeDcaOrder(order);
-        next[i] = { ...r, result: `${placed.ref}, ${STATUS[placed.status].toLowerCase()}` };
-      } catch (e) {
-        if (e instanceof ApiError && e.ruleBreaks.length) {
-          setHeld(e.message);
-          break;
-        }
-        next[i] = { ...r, result: errorOf(e, "Not placed."), failed: true };
-      }
-      setRows([...next]);
-    }
-    setBusy(false);
-    dialog.current?.close?.();
-    onPlaced();
-  };
-
-  return (
-    <section className="dcb-section" aria-labelledby="dcb-plan-title">
-      <div className="dcb-section-head">
-        <h2 id="dcb-plan-title">This week</h2>
-        <span className="muted">
-          Buying window {dated(book.week.start)} 7pm to {dated(book.week.closeOut)} 7pm, Sydney time
-        </span>
-      </div>
-      {!rows ? (
-        <div className="dcb-plan-start">
-          <button type="button" className="btn btn-accent" onClick={plan}>
-            Plan this week's orders
-          </button>
-          <span className="muted">
-            The desk picks each limit from a year of prices: the depth that filled about as often as
-            your plan asks, just above a round number.
-          </span>
-        </div>
-      ) : (
-        <>
-          <div className="dcb-scroll">
-            <table className="dcb-table" aria-label="This week's planned orders">
-              <thead>
-                <tr>
-                  <th>
-                    <span className="visually-hidden">Place</span>
-                  </th>
-                  <th>Coin</th>
-                  <th className="r">Limit</th>
-                  <th className="r">{book.quote}</th>
-                  <th className="r">Fill odds</th>
-                  <th>Result</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r, i) => (
-                  <tr key={`${r.coin}-${i}`}>
-                    <td>
-                      <input
-                        type="checkbox"
-                        aria-label={`Place ${r.coin}`}
-                        checked={r.on}
-                        disabled={Boolean(r.result)}
-                        onChange={(e) => edit(i, { on: e.target.checked })}
-                      />
-                    </td>
-                    <td>
-                      <Coin coin={r.coin} />
-                    </td>
-                    <td className="r">
-                      <input
-                        className="dcb-num"
-                        aria-label={`${r.coin} limit price`}
-                        inputMode="decimal"
-                        value={r.price}
-                        disabled={Boolean(r.result)}
-                        onChange={(e) => edit(i, { price: e.target.value })}
-                        onBlur={() => reOdds(i)}
-                      />
-                    </td>
-                    <td className="r">
-                      <input
-                        className="dcb-num"
-                        aria-label={`${r.coin} amount`}
-                        inputMode="decimal"
-                        value={r.spend}
-                        disabled={Boolean(r.result)}
-                        onChange={(e) => edit(i, { spend: e.target.value })}
-                      />
-                    </td>
-                    <td className="r num">{oddsWords(r.odds)}</td>
-                    <td className={r.failed ? "error-text" : "muted"}>{r.result ?? ""}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {held && (
-            <div className="alert" role="alert">
-              <span>{held}</span>
-              <button
-                type="button"
-                className="btn btn-small"
-                disabled={busy}
-                onClick={() => void place(true)}
-              >
-                Place anyway (logged)
-              </button>
-            </div>
-          )}
-          {error && (
-            <p className="error-text" role="alert">
-              {error}
-            </p>
-          )}
-          <div className="dcb-plan-foot">
-            <button type="button" className="link" onClick={plan}>
-              Plan again at today's prices
-            </button>
-            <button
-              type="button"
-              className="btn btn-accent"
-              disabled={chosen.length === 0 || busy}
-              onClick={() => dialog.current?.showModal?.()}
-            >
-              Review {chosen.length} {chosen.length === 1 ? "limit" : "limits"}
-            </button>
-          </div>
-        </>
-      )}
-      {error && !rows && (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      )}
-      <dialog ref={dialog} aria-labelledby="dcb-place-title">
-        <h2 id="dcb-place-title">
-          Place {chosen.length} limit {chosen.length === 1 ? "buy" : "buys"}?
-        </h2>
-        <OrderReview
-          quote={book.quote}
-          items={chosen.map((r) => ({
-            coin: r.coin,
-            action: "Buy" as const,
-            price: r.price,
-            usdc: r.spend,
-            odds: r.odds?.pct ?? null,
-          }))}
-          note={`They go to Binance now and wait for their price. Anything open at ${when(book.week.closeOut)} can be bought at market.`}
-        />
-        <div className="dlg-btns">
-          <button className="btn" type="button" onClick={() => dialog.current?.close()}>
-            Not yet
-          </button>
-          <button
-            className="btn btn-accent"
-            type="button"
-            disabled={busy}
-            onClick={() => void place()}
-          >
-            Place {chosen.length} {chosen.length === 1 ? "limit" : "limits"}
-          </button>
-        </div>
-      </dialog>
-    </section>
   );
 }
 
@@ -839,9 +593,12 @@ export default function DcaBookPage() {
   // The Dashboard's links open the book at Add funds or Remove funds.
   const [checked, setChecked] = useState<DcaCheck | null>(null);
   const [checking, setChecking] = useState(false);
-  const [funds, setFunds] = useState<"add" | "remove" | null>(() => {
-    const asked = new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("funds");
-    return asked === "add" || asked === "remove" ? asked : null;
+  // The Dashboard's "Plan this week" opens the weekly one.
+  const [funds, setFunds] = useState<"add" | "remove" | "weekly" | null>(() => {
+    const query = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+    const asked = query.get("funds");
+    if (asked === "add" || asked === "remove") return asked;
+    return query.has("plan") ? "weekly" : null;
   });
   const [cancelling, setCancelling] = useState<DcaOrder | null>(null);
   const [viewing, setViewing] = useState<{ ref: string; edit: boolean } | null>(null);
@@ -851,7 +608,9 @@ export default function DcaBookPage() {
       saveFlag(HIDE_KEY, !h);
       return !h;
     });
-  const planning = window.location.hash.includes("?plan");
+  const weeklyAmount = String(
+    (book?.plan?.orders ?? []).reduce((sum, o) => sum + Number(o.spend), 0) || "",
+  );
   const asked = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
   const chatting = asked.has("chat");
   // The Dashboard's coin links open that position with its orders.
@@ -1130,6 +889,15 @@ export default function DcaBookPage() {
           <div className="dcb-section-head">
             <h2 id="dcb-pos-title">Positions</h2>
             <span className="dcb-actions">
+              <button
+                type="button"
+                className="btn btn-small"
+                disabled={!weeklyAmount}
+                title={`This week's ${weeklyAmount} ${book.quote}, split by your plan`}
+                onClick={() => setFunds("weekly")}
+              >
+                Weekly DCA
+              </button>
               <button type="button" className="btn btn-small" onClick={() => setFunds("add")}>
                 Add funds
               </button>
@@ -1255,12 +1023,11 @@ export default function DcaBookPage() {
           </p>
         )}
 
-        <Planner key={planning ? "plan" : "week"} book={book} onPlaced={load} start={planning} />
-
         {funds && (
           <DcaFunds
             key={funds}
-            side={funds}
+            side={funds === "remove" ? "remove" : "add"}
+            weekly={funds === "weekly" ? weeklyAmount : undefined}
             quote={book.quote}
             onClose={() => setFunds(null)}
             onPlaced={(words) => {

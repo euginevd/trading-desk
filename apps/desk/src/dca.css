@@ -34,6 +34,41 @@
 .dcw-home:focus-visible h2 {
   color: var(--accent);
 }
+/* The whole panel opens the DCA book: the heading's link stretches over it, and the panel's own
+   controls (a coin's position, Close out, Plan this week) sit above it and keep their clicks. */
+.dcw {
+  position: relative;
+  transition: background-color 160ms var(--ease);
+}
+.dcw-home {
+  position: static;
+}
+.dcw-home::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  cursor: pointer;
+}
+.dcw-home:focus-visible {
+  outline: none;
+}
+.dcw-home:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-panel);
+}
+.dcw:has(.dcw-home:hover) {
+  background: var(--layer-2);
+}
+.dcw-coins button,
+.dcw-act > *,
+.dcw-start,
+.dcw .error-text button,
+.dcw-said {
+  position: relative;
+  z-index: 1;
+}
 .dcw-line {
   max-width: 44ch;
   margin: 12px 0 18px;
@@ -503,15 +538,6 @@ td.dcb-id {
   margin-left: 8px;
 }
 
-.dcb-plan-start {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-.dcb-plan-start .muted {
-  max-width: 60ch;
-}
 .dcb-plan-foot {
   display: flex;
   justify-content: space-between;
@@ -1300,6 +1326,16 @@ dialog.dcb-drawer {
 .dcb-drawer-facts dd {
   margin: 2px 0 0;
   color: var(--text);
+}
+.dcb-drawer-orders-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.dcb-drawer-orders-head .views {
+  margin: 0;
 }
 .dcb-drawer-sub {
   margin: 0 0 8px;

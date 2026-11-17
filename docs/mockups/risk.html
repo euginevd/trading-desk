@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Risk page mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<!-- Mockup for docs/plan-risk.md (the Risk page rethink). Every figure is made up (known-mistakes 7). -->
+<style>
+:root {
+  --field: #05080a; --frame: #0a1013; --panel: #0d1418; --panel-2: #121b20;
+  --line: #172228; --line-2: #213038; --text: #e9eff1; --body: #c2ccd1; --muted: #8b99a2; --dim: #808e97;
+  --accent: #50d2c1; --accent-ink: #04110f; --accent-soft: rgba(80,210,193,.1); --accent-line: rgba(80,210,193,.35);
+  --up: #2ebd85; --down: #f0616d; --up-soft: rgba(46,189,133,.12); --down-soft: rgba(240,97,109,.12);
+  --wait: #e8b04b; --wait-soft: rgba(232,176,75,.12);
+  --layer-1: rgba(255,255,255,.035); --layer-2: rgba(255,255,255,.06); --edge: rgba(255,255,255,.07);
+  --sheen: inset 0 1px 0 rgba(255,255,255,.045); --lift: 0 24px 48px -28px rgba(0,0,0,.85);
+  --r-frame: 28px; --r-panel: 18px; --ease: cubic-bezier(.2,0,0,1);
+  --serif: Newsreader, Georgia, serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--field); color: var(--body); }
+body { font: 15px/1.55 Inter, system-ui, sans-serif; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); } .up { color: var(--up); } .down { color: var(--down); } .wait { color: var(--wait); } .acc { color: var(--accent); }
+button { font: inherit; font-size: 14px; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 10px; padding: 7px 14px; cursor: pointer; box-shadow: var(--sheen); }
+button:hover { box-shadow: inset 0 0 0 100vmax rgba(255,255,255,.035), var(--sheen); }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+a { color: var(--accent); text-decoration: none; }
+
+/* mockup chrome: pick a state */
+.mk { position: sticky; top: 0; z-index: 20; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: #090e11; border-bottom: 1px solid var(--line); font-size: 13px; }
+.mk b { color: var(--text); margin-right: 8px; }
+.mk button { padding: 4px 10px; font-size: 13px; }
+.mk [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+
+.frame { max-width: 1240px; margin: 20px auto; background: var(--frame); border: 1px solid var(--edge); border-radius: var(--r-frame); padding: 32px 36px 48px; box-shadow: var(--lift); }
+@media (max-width: 720px) { .frame { margin: 0; border-radius: 0; padding: 22px 16px 40px; } }
+h1 { margin: 0 0 4px; font-size: 14px; font-weight: 600; letter-spacing: .02em; color: var(--muted); text-transform: none; }
+.lead { font-family: var(--serif); font-size: 34px; line-height: 1.2; color: var(--text); margin: 6px 0 10px; max-width: 30ch; font-weight: 400; animation: settle .5s var(--ease) both; }
+.lead.is-broken em { color: var(--down); font-style: normal; }
+.lead.is-kept em { color: var(--up); font-style: normal; }
+.sub { margin: 0 0 26px; color: var(--muted); max-width: 70ch; }
+.sub button { margin-left: 10px; }
+@keyframes settle { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+
+.cols { display: grid; grid-template-columns: minmax(0,1fr) 330px; gap: 26px; align-items: start; }
+@media (max-width: 1000px) { .cols { grid-template-columns: 1fr; } }
+
+/* The four big risks */
+.bigs { display: grid; gap: 14px; }
+.big { background: var(--layer-1); border: 1px solid var(--edge); border-radius: var(--r-panel); box-shadow: var(--sheen); overflow: hidden; }
+.big > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 30px minmax(0,1fr) auto; gap: 4px 14px; align-items: center; padding: 18px 20px; }
+.big > summary::-webkit-details-marker { display: none; }
+.big > summary:hover { background: rgba(255,255,255,.015); }
+.rank { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 600; background: var(--layer-2); color: var(--muted); }
+.big.is-broken .rank { background: var(--down-soft); color: var(--down); }
+.big.is-near .rank { background: var(--wait-soft); color: var(--wait); }
+.big.is-kept .rank { background: var(--up-soft); color: var(--up); }
+.big-title { display: grid; gap: 1px; }
+.big-title b { color: var(--text); font-size: 16px; font-weight: 600; }
+.big-title small { color: var(--muted); font-size: 13px; }
+.big-fig { text-align: right; display: grid; gap: 1px; }
+.big-fig b { color: var(--text); font-size: 20px; font-weight: 600; }
+.big-fig small { color: var(--muted); font-size: 12px; }
+.state { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 99px; margin-left: 8px; vertical-align: 2px; }
+.state.is-broken { background: var(--down-soft); color: var(--down); }
+.state.is-near { background: var(--wait-soft); color: var(--wait); }
+.state.is-kept { background: var(--up-soft); color: var(--up); }
+.meter { grid-column: 2 / -1; position: relative; height: 6px; border-radius: 3px; background: var(--layer-2); margin-top: 8px; }
+.meter i { position: absolute; inset: 0 auto 0 0; border-radius: 3px; background: var(--accent); transform-origin: left; animation: grow .6s var(--ease) both; }
+.big.is-broken .meter i { background: var(--down); opacity: .75; }
+.big.is-near .meter i { background: var(--wait); opacity: .8; }
+.meter .tick { position: absolute; top: -4px; bottom: -4px; width: 2px; border-radius: 1px; background: var(--text); opacity: .7; }
+.meter .tick-label { position: absolute; top: 10px; transform: translateX(-50%); font-size: 11px; color: var(--muted); white-space: nowrap; }
+@keyframes grow { from { transform: scaleX(0); } }
+.big-body { padding: 4px 20px 20px 64px; border-top: 1px solid var(--line); }
+@media (max-width: 720px) { .big-body { padding: 4px 16px 18px; } .big > summary { grid-template-columns: 30px 1fr; } .big-fig { grid-column: 2; text-align: left; } }
+.big-body h3 { font-size: 13px; font-weight: 600; color: var(--muted); margin: 16px 0 8px; }
+.big-body p { margin: 8px 0; max-width: 68ch; }
+.rule { font-size: 12px; color: var(--muted); }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--line); }
+td { padding: 9px 8px 9px 0; border-bottom: 1px solid var(--line); }
+td.r, th.r { text-align: right; }
+.coin { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 500; }
+.mark { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 11px; font-weight: 700; color: #111; }
+.m-btc { background: #f7931a; } .m-eth { background: #8c9eff; } .m-sol { background: #9ee6c5; } .m-zec { background: #f4b728; } .m-hype { background: #97fce4; } .m-usdc { background: #2775ca; color: #fff; }
+.src { font-size: 12px; color: var(--muted); }
+.split { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 10px 0 6px; background: var(--layer-2); }
+.split span { display: block; height: 100%; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: 0; }
+.move { background: var(--accent-soft); border: 1px solid var(--accent-line); border-radius: 14px; padding: 14px 16px; margin-top: 14px; }
+.move b { color: var(--text); }
+.move .row { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+
+.checks { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 2px; }
+.checks li { display: grid; grid-template-columns: 22px minmax(0,1fr) auto; gap: 10px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.dot { width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.dot.ok { background: var(--up-soft); color: var(--up); } .dot.due { background: var(--wait-soft); color: var(--wait); } .dot.no { background: var(--down-soft); color: var(--down); }
+.checks small { display: block; color: var(--muted); font-size: 13px; }
+.never { font-size: 13px; color: var(--muted); border-left: 2px solid var(--line-2); padding-left: 10px; margin-top: 12px; }
+
+.tao-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+@media (max-width: 720px) { .tao-grid { grid-template-columns: 1fr; } }
+.panel { background: var(--layer-1); border: 1px solid var(--edge); border-radius: 14px; padding: 14px 16px; }
+.panel h4 { margin: 0 0 4px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.figs { display: grid; grid-template-columns: repeat(3, auto); gap: 4px 18px; justify-content: start; margin: 6px 0 2px; }
+.figs b { display: block; color: var(--text); font-size: 18px; font-weight: 600; }
+.figs small { color: var(--muted); font-size: 12px; }
+svg text { fill: var(--muted); font: 11px Inter, sans-serif; }
+input[type=range] { width: 100%; accent-color: var(--accent); margin: 10px 0 4px; }
+.whatif-out { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 14px; margin-top: 8px; }
+.whatif-out b { color: var(--text); text-align: right; }
+.note { font-size: 13px; color: var(--muted); margin-top: 10px; }
+.thesis { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; margin-top: 14px; padding: 12px 14px; border-radius: 12px; background: var(--wait-soft); }
+.thesis.is-done { background: var(--up-soft); }
+
+/* Everyday limits: the old board, folded */
+.everyday { margin-top: 26px; }
+.everyday summary { cursor: pointer; color: var(--text); font-weight: 600; padding: 10px 0; }
+.ev-row { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 14px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.ev-row b { color: var(--text); font-weight: 500; }
+
+/* Side: risk-agent */
+.side { background: var(--layer-1); border: 1px solid var(--edge); border-radius: var(--r-panel); padding: 18px 20px; box-shadow: var(--sheen); position: sticky; top: 64px; }
+.agent { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+.avatar { width: 34px; height: 34px; border-radius: 10px; background: var(--accent-soft); display: grid; place-items: center; color: var(--accent); font-weight: 700; }
+.side h2 { margin: 0; font-size: 16px; color: var(--text); }
+.side .review { font-family: var(--serif); font-size: 18px; line-height: 1.4; color: var(--text); margin: 10px 0; }
+.side ol { padding-left: 18px; margin: 8px 0 14px; }
+.side li { margin: 4px 0; }
+.empty { padding: 18px; border: 1px dashed var(--line-2); border-radius: 14px; color: var(--muted); }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<div class="mk" role="toolbar" aria-label="Mockup state">
+  <b>Risk page mockup</b>
+  <button type="button" data-state="today" aria-pressed="true">Today: over the limit</button>
+  <button type="button" data-state="kept" aria-pressed="false">After the move: all kept</button>
+  <button type="button" data-state="noledger" aria-pressed="false">No Ledger addresses yet</button>
+</div>
+
+<div class="frame">
+  <h1>Risk</h1>
+  <p class="lead is-broken" id="lead">A$8,400 <em>over</em> your Binance limit, and only 16% of your 2026 coins on the Ledger.</p>
+  <p class="sub" id="sub">One move fixes both: A$9,600 of coins to the Ledger this month. Then TAO's share and the backup check.</p>
+
+  <div class="cols">
+    <div>
+      <div class="bigs" id="bigs">
+
+        <!-- 1. Exchange -->
+        <details class="big is-broken" id="b-exchange" open>
+          <summary>
+            <span class="rank">1</span>
+            <span class="big-title"><b>Money on Binance <span class="state is-broken" data-s>Over</span></b><small>If the exchange fails, everything on it goes. Profile 6.7: A$10K at most.</small></span>
+            <span class="big-fig"><b class="num" data-f>A$18,400</b><small>of A$10,000</small></span>
+            <span class="meter"><i style="width:92%"></i><span class="tick" style="left:50%"></span><span class="tick-label" style="left:50%">A$10K</span></span>
+          </summary>
+          <div class="big-body">
+            <h3>What's on it</h3>
+            <div class="split" aria-hidden="true">
+              <span style="width:81%;background:#3b8f86"></span><span style="width:11.4%;background:#7a93a0"></span><span style="width:7.6%;background:#4b6470"></span>
+            </div>
+            <div class="legend"><span><i style="background:#3b8f86"></i>DCA book coins A$14,900</span><span><i style="background:#7a93a0"></i>Trading account A$2,100</span><span><i style="background:#4b6470"></i>USDC waiting A$1,400</span></div>
+            <div class="move">
+              <div class="row"><span><b>This month's move to the Ledger: A$9,600</b> <span class="muted">· brings Binance to A$8,800 and the 2026 coins to 70% on the Ledger</span></span><button type="button" class="primary">Mark as moved</button></div>
+              <table style="margin-top:10px">
+                <thead><tr><th>Coin</th><th class="r">Move</th><th class="r">About</th><th class="r">Leaves on Binance</th></tr></thead>
+                <tbody>
+                  <tr><td><span class="coin"><span class="mark m-btc">B</span>BTC</span></td><td class="r num">A$4,800</td><td class="r num muted">0.0310 BTC</td><td class="r num">A$2,800</td></tr>
+                  <tr><td><span class="coin"><span class="mark m-eth">E</span>ETH</span></td><td class="r num">A$2,100</td><td class="r num muted">0.42 ETH</td><td class="r num">A$900</td></tr>
+                  <tr><td><span class="coin"><span class="mark m-sol">S</span>SOL</span></td><td class="r num">A$1,600</td><td class="r num muted">7.1 SOL</td><td class="r num">A$600</td></tr>
+                  <tr><td><span class="coin"><span class="mark m-hype">H</span>HYPE</span></td><td class="r num">A$1,100</td><td class="r num muted">31 HYPE</td><td class="r num">A$300</td></tr>
+                </tbody>
+              </table>
+              <p class="note">Largest first, keeping this week's DCA buys and the Trading account on Binance. The desk never withdraws: you send it from Binance, and the Ledger's balance confirms it arrived.</p>
+            </div>
+          </div>
+        </details>
+
+        <!-- 2. Cold storage -->
+        <details class="big is-broken" id="b-cold">
+          <summary>
+            <span class="rank">2</span>
+            <span class="big-title"><b>2026 coins on the Ledger <span class="state is-broken" data-s>Under</span></b><small>BTC, ETH, SOL, ZEC and HYPE held long term. Profile 6.7: 70% or more.</small></span>
+            <span class="big-fig"><b class="num" data-f>16%</b><small>of 70%+ · TAO 100% ✓</small></span>
+            <span class="meter"><i style="width:16%"></i><span class="tick" style="left:70%"></span><span class="tick-label" style="left:70%">70%</span></span>
+          </summary>
+          <div class="big-body">
+            <table data-cold>
+              <thead><tr><th>Coin</th><th class="r">Ledger</th><th class="r">Binance</th><th class="r">On Ledger</th><th>Read from</th></tr></thead>
+              <tbody>
+                <tr><td><span class="coin"><span class="mark m-btc">B</span>BTC</span></td><td class="r num">A$1,900</td><td class="r num">A$7,600</td><td class="r num">20%</td><td class="src">3 addresses · 2 min ago</td></tr>
+                <tr><td><span class="coin"><span class="mark m-eth">E</span>ETH</span></td><td class="r num">A$600</td><td class="r num">A$3,000</td><td class="r num">17%</td><td class="src">1 address · 2 min ago</td></tr>
+                <tr><td><span class="coin"><span class="mark m-sol">S</span>SOL</span></td><td class="r num">A$400</td><td class="r num">A$2,200</td><td class="r num">15%</td><td class="src">1 address · 2 min ago</td></tr>
+                <tr><td><span class="coin"><span class="mark m-zec">Z</span>ZEC</span></td><td class="r num">A$0</td><td class="r num">A$700</td><td class="r num">0%</td><td class="src">typed · 1 Nov</td></tr>
+                <tr><td><span class="coin"><span class="mark m-hype">H</span>HYPE</span></td><td class="r num">A$0</td><td class="r num">A$1,400</td><td class="r num">0%</td><td class="src">typed · 1 Nov</td></tr>
+              </tbody>
+            </table>
+            <div class="empty" data-noledger hidden>No Ledger addresses yet, so the desk counts 0% on the Ledger. <a href="#">Add public addresses in Settings</a>: watch-only, nothing that can sign or send.</div>
+            <p class="note">TAO is measured apart, so its bag can't make up for coins left on the exchange. Read by public address only; the desk never holds a Ledger key.</p>
+          </div>
+        </details>
+
+        <!-- 3. TAO -->
+        <details class="big is-near" id="b-tao">
+          <summary>
+            <span class="rank">3</span>
+            <span class="big-title"><b>TAO's share of crypto <span class="state is-near" data-s>Watch</span></b><small>One coin, high conviction. Profile 7.1: down to 60% by Dec 2027, with new money only.</small></span>
+            <span class="big-fig"><b class="num">77%</b><small>target 60% · on track</small></span>
+            <span class="meter"><i style="width:77%"></i><span class="tick" style="left:60%"></span><span class="tick-label" style="left:60%">60%</span></span>
+          </summary>
+          <div class="big-body">
+            <div class="figs">
+              <div><b class="num">A$61,200</b><small>value</small></div>
+              <div><b class="num">A$96,000</b><small>cost</small></div>
+              <div><b class="num down">−A$34,800</b><small>unrealised, −36%</small></div>
+            </div>
+            <div class="tao-grid" style="margin-top:14px">
+              <div class="panel">
+                <h4>Glide path, new money only</h4>
+                <svg id="glide" viewBox="0 0 320 150" role="img" aria-label="TAO's share falls from 77% now to 60% in about 26 weeks of the weekly DCA, at today's prices"></svg>
+                <p class="note">About <b class="acc">26 weeks</b> of the weekly DCA at today's prices, around May 2027. A falling TAO price gets there sooner; a rising one, later.</p>
+              </div>
+              <div class="panel">
+                <h4>What if you trimmed?</h4>
+                <label for="trim" class="muted" style="font-size:13px">Sell <b id="trim-pct" class="acc">20%</b> of TAO, into BTC</label>
+                <input id="trim" type="range" min="0" max="50" step="5" value="20">
+                <div class="whatif-out">
+                  <span class="muted">Sold</span><b class="num" id="w-sold">A$12,240</b>
+                  <span class="muted">Loss realised</span><b class="num down" id="w-loss">−A$6,960</b>
+                  <span class="muted">TAO's share after</span><b class="num" id="w-share">62%</b>
+                  <span class="muted">Glide path saved</span><b class="num" id="w-weeks">20 weeks</b>
+                </div>
+                <p class="note">A realised loss is carried forward against future capital gains; it doesn't reduce income tax. Selling to buy straight back is a wash sale the ATO can disallow. An estimate, for your accountant. The desk never proposes this sale: Profile 6.3 sells only on a written thesis break.</p>
+              </div>
+            </div>
+            <div class="thesis"><span><b>TAO's thesis isn't written yet</b> <span class="muted">· Profile open item 1. The quarterly review asks: does it still hold?</span></span><button type="button">Write it on the Profile</button></div>
+          </div>
+        </details>
+
+        <!-- 4. Backup key -->
+        <details class="big is-near" id="b-seed">
+          <summary>
+            <span class="rank">4</span>
+            <span class="big-title"><b>Ledger backup <span class="state is-near" data-s>Due</span></b><small>The seed is a single point of failure. Profile 7.6: checked every 6 months.</small></span>
+            <span class="big-fig"><b class="num">2 of 4</b><small>checks current</small></span>
+            <span class="meter"><i style="width:50%"></i><span class="tick" style="left:100%"></span></span>
+          </summary>
+          <div class="big-body">
+            <ul class="checks">
+              <li><span class="dot ok">✓</span><span>Seed backed up away from the device<small>Confirmed 3 Mar 2026</small></span><button type="button">Confirm again</button></li>
+              <li><span class="dot due">!</span><span>Backup is where it should be, and readable<small>Last checked 2 May 2026 · due 2 Nov</small></span><button type="button" class="primary">I checked it today</button></li>
+              <li><span class="dot ok">✓</span><span>Device PIN and passphrase known only to you<small>Confirmed 3 Mar 2026</small></span><button type="button">Confirm again</button></li>
+              <li><span class="dot no">✕</span><span>Inheritance plan: someone you trust can recover it<small>Not done · Profile 4.6</small></span><button type="button">Mark done</button></li>
+            </ul>
+            <p class="never">The desk stores only these dates. Never type a seed word, passphrase or the backup's location into the desk, a chat or Telegram; nobody from the desk will ever ask.</p>
+          </div>
+        </details>
+      </div>
+
+      <details class="everyday">
+        <summary>Everyday limits · 11 kept, 1 near</summary>
+        <div class="ev-row"><b>Trading account: open risk</b><span class="num muted">1.2% of 3%</span><span class="state is-kept">Kept</span></div>
+        <div class="ev-row"><b>Trading account: month</b><span class="num muted">−1.8% of −6%</span><span class="state is-kept">Kept</span></div>
+        <div class="ev-row"><b>DCA: this week's buys</b><span class="num muted">2 of 5 limits unfilled</span><span class="state is-near">Near</span></div>
+        <div class="ev-row"><b>DCA mix: BTC</b><span class="num muted">48% of 50%</span><span class="state is-kept">Kept</span></div>
+        <div class="ev-row"><b>Deposits this month</b><span class="num muted">A$4,100 of A$7,000</span><span class="state is-kept">Kept</span></div>
+        <p class="note">The rest of today's board, unchanged: pot drawdown, open trades, speculation, leverage, take-profit, drawdown exit.</p>
+      </details>
+    </div>
+
+    <aside class="side">
+      <div class="agent"><span class="avatar">R</span><div><h2>risk-agent</h2><small class="muted">Review of Sun 15 Nov · next Sun 6pm</small></div></div>
+      <p class="review">Too much sits on the exchange: the move this month is the one thing to do.</p>
+      <ol>
+        <li>Binance A$18,400, A$8,400 over (6.7). Up A$1,100 on the week: the DCA landed and nothing moved.</li>
+        <li>TAO 77%, down 1 point on the week: on its glide path.</li>
+        <li>Backup check due since 2 Nov.</li>
+      </ol>
+      <p class="muted" style="font-size:13px">Lesson 4: "keep long-term coins in self-custody."</p>
+      <button type="button">Write this week's review</button>
+    </aside>
+  </div>
+</div>
+
+<script>
+// Glide path: share falls as new money adds to the other coins, prices flat.
+function glide(from, to, weeks) {
+  const svg = document.getElementById("glide");
+  const W = 320, H = 150, L = 30, B = 128, T = 12, R = 310;
+  const y = (v) => B - ((v - 50) / 35) * (B - T);
+  const x = (w) => L + (w / 40) * (R - L);
+  let pts = [];
+  const tao = 61200, other0 = 17800, weekly = 900;
+  for (let w = 0; w <= 40; w++) pts.push([x(w), y(Math.max(50, (tao / (tao + other0 + weekly * w)) * 100))]);
+  const path = pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(" ");
+  svg.innerHTML =
+    `<line x1="${L}" x2="${R}" y1="${y(to)}" y2="${y(to)}" stroke="#50d2c1" stroke-dasharray="3 4" opacity=".6"/>` +
+    `<text x="${R}" y="${y(to) - 5}" text-anchor="end">target ${to}%</text>` +
+    `<path d="${path}" fill="none" stroke="#e8b04b" stroke-width="2" pathLength="1" style="stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1s cubic-bezier(.2,0,0,1) .2s forwards"/>` +
+    `<circle cx="${x(0)}" cy="${y(from)}" r="4" fill="#e8b04b"/><text x="${x(0) + 8}" y="${y(from) + 4}">now ${from}%</text>` +
+    `<circle cx="${x(weeks)}" cy="${y(to)}" r="4" fill="#50d2c1"/><text x="${x(weeks)}" y="${y(to) + 18}" text-anchor="middle">May 2027</text>` +
+    `<text x="${L}" y="${H - 4}">now</text><text x="${R}" y="${H - 4}" text-anchor="end">+40 weeks</text>` +
+    `<style>@keyframes draw{to{stroke-dashoffset:0}}@media (prefers-reduced-motion: reduce){path{animation:none!important;stroke-dashoffset:0!important}}</style>`;
+}
+glide(77, 60, 26);
+
+// What-if: sell part of TAO into BTC.
+const tao = 61200, cost = 96000, crypto = 79000;
+const aud = (n) => (n < 0 ? "−" : "") + "A$" + Math.abs(Math.round(n)).toLocaleString("en-AU");
+function whatIf() {
+  const p = Number(document.getElementById("trim").value) / 100;
+  const sold = tao * p, loss = (tao - cost) * p, share = ((tao - sold) / crypto) * 100;
+  const needed = (tao - sold) / 0.6 - (tao - sold) - (17800 + sold);
+  const weeks = Math.max(0, Math.ceil(needed / 900));
+  document.getElementById("trim-pct").textContent = Math.round(p * 100) + "%";
+  document.getElementById("w-sold").textContent = aud(sold);
+  document.getElementById("w-loss").textContent = aud(loss);
+  document.getElementById("w-share").textContent = Math.round(share) + "%";
+  document.getElementById("w-weeks").textContent = p === 0 ? "none" : Math.max(0, 26 - weeks) + " weeks";
+}
+document.getElementById("trim").addEventListener("input", whatIf);
+whatIf();
+
+// Mockup states
+const states = {
+  today: () => {},
+  kept: () => {
+    set("lead", 'Your four big risks are <em>kept</em>. TAO is on its glide path.', "is-kept");
+    set("sub", "Binance A$8,800 of A$10,000 · 70% of the 2026 coins on the Ledger · backup checked today.");
+    mark("b-exchange", "is-kept", "Kept", "A$8,800", 44);
+    mark("b-cold", "is-kept", "Kept", "70%", 70);
+    mark("b-seed", "is-kept", "Current", null, 100);
+    document.querySelector("#b-exchange .move").hidden = true;
+  },
+  noledger: () => {
+    set("lead", 'Add your Ledger\'s public addresses, and the desk can <em>see</em> your cold storage.', "is-broken");
+    set("sub", "Until then, every 2026 coin counts as on the exchange. Watch-only: nothing that can sign or send.");
+    mark("b-cold", "is-broken", "Not set up", "–", 0);
+    document.querySelector("[data-cold]").hidden = true;
+    document.querySelector("[data-noledger]").hidden = false;
+    document.getElementById("b-cold").open = true;
+  },
+};
+function set(id, html, cls) { const el = document.getElementById(id); el.innerHTML = html; if (cls) el.className = "lead " + cls; }
+function mark(id, cls, label, fig, pct) {
+  const d = document.getElementById(id);
+  d.className = "big " + cls;
+  const s = d.querySelector("[data-s]"); s.textContent = label; s.className = "state " + cls;
+  if (fig !== null && d.querySelector("[data-f]")) d.querySelector("[data-f]").textContent = fig;
+  d.querySelector(".meter i").style.width = pct + "%";
+}
+const original = document.querySelector(".frame").innerHTML;
+document.querySelectorAll(".mk [data-state]").forEach((b) =>
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".mk [data-state]").forEach((o) => o.setAttribute("aria-pressed", String(o === b)));
+    document.querySelector(".frame").innerHTML = original;
+    glide(77, 60, 26);
+    document.getElementById("trim").addEventListener("input", whatIf);
+    whatIf();
+    states[b.dataset.state]();
+  }),
+);
+</script>
+</body>
+</html>

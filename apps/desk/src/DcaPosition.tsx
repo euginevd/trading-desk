@@ -1,7 +1,7 @@
 // One position of the DCA book in a panel from the right (TODO 11): its value and P&L, its
 // facts, its share against its target, and every order it has had. The book page and the
 // Dashboard open the same panel; it closes on Esc, a click outside it, or Done.
-import { useEffect, useRef, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import CoinIcon from "./CoinIcon";
 import {
   dollars,
@@ -145,6 +145,10 @@ export default function PositionDrawer({
   }, []);
   const pos = book.positions.find((x) => x.coin === coin);
   const mine = book.orders.filter((o) => o.coin === coin);
+  // The orders list opens on what's still working; All shows filled and cancelled too.
+  const waiting = mine.filter((o) => o.status === "open" || o.status === "placing");
+  const [show, setShow] = useState<"open" | "all">(waiting.length > 0 ? "open" : "all");
+  const listed = show === "open" ? waiting : mine;
   const plan = book.plan?.orders ?? [];
   const all = plan.reduce((s, o) => s + Number(o.spend), 0) || 1;
   const target =
@@ -229,15 +233,31 @@ export default function PositionDrawer({
               <dd className="num">{dollars(pos.fees)}</dd>
             </div>
           </dl>
-          <h3 className="dcb-drawer-sub">
-            {mine.length} {mine.length === 1 ? "order" : "orders"}
-          </h3>
+          <div className="dcb-drawer-orders-head">
+            <h3 className="dcb-drawer-sub">Orders</h3>
+            {mine.length > 0 && (
+              <div className="views" role="group" aria-label="Show orders">
+                <button
+                  type="button"
+                  aria-pressed={show === "open"}
+                  onClick={() => setShow("open")}
+                >
+                  Open {waiting.length}
+                </button>
+                <button type="button" aria-pressed={show === "all"} onClick={() => setShow("all")}>
+                  All {mine.length}
+                </button>
+              </div>
+            )}
+          </div>
           {mine.length === 0 ? (
             <p className="muted">No orders for {coin} yet.</p>
+          ) : listed.length === 0 ? (
+            <p className="muted">No open orders for {coin}.</p>
           ) : renderOrders ? (
-            renderOrders(mine, label)
+            renderOrders(listed, label)
           ) : (
-            <Orders orders={mine} quote={book.quote} label={label} />
+            <Orders orders={listed} quote={book.quote} label={label} />
           )}
           <div className="dlg-btns">
             {footer}
