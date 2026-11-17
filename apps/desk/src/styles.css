@@ -549,8 +549,12 @@ button.tick:hover b {
   gap: 10px;
   padding: 4px 10px;
   border-radius: 10px;
+  border: 0;
+  background: none;
   color: var(--muted);
-  text-decoration: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .head-total:hover {
   background: var(--panel-2);
@@ -567,6 +571,18 @@ button.tick:hover b {
 .head-total small {
   font-size: 12px;
   color: var(--muted);
+}
+/* Each click shows the next currency: the figures slide in, so the change reads as an answer. */
+@media (prefers-reduced-motion: no-preference) {
+  .head-total-figures {
+    animation: total-in 0.22s ease-out;
+  }
+  @keyframes total-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
 }
 .pill {
   display: inline-flex;
@@ -1822,40 +1838,6 @@ tfoot td {
 }
 .st-sell {
   margin-bottom: 14px;
-}
-
-/* The currency toggle, top right: it sets the Dashboard's currency and the header total's. */
-.currency-toggle {
-  position: relative;
-  flex: none;
-  margin-left: 14px;
-}
-.currency-btn {
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.currency-btn span {
-  color: var(--muted);
-  font-size: 11px;
-}
-.currency-list {
-  right: 0;
-  left: auto;
-  min-width: 96px;
-}
-.currency-list button[aria-checked="true"] {
-  color: var(--accent);
-}
-.currency-list button:disabled {
-  color: var(--dim);
-  cursor: default;
 }
 
 /* Dashboard widgets open a details panel (decision 42). */
