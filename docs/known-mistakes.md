@@ -17,6 +17,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 11. Before naming a new CSS class, grep the stylesheets for it: a new `tr-call` took the coin list's existing styles.
 12. Docker Compose v5 on Windows refuses its bake build ("--allow=fs.read"): `docker build -f apps/<app>/Dockerfile -t trading-desk-<app> .`, then `docker compose up -d --no-build`.
 13. A saved Profile version keeps its typed fields: after a parser change, profile.md needs a real edit or new version.
+13a. A cloud session's git config can name Claude as author (rule 29): commit with `git -c user.name=… -c user.email=…` from the last human commit, and check `git log -1 --format=%an` before pushing.
 
 ## CI
 
@@ -43,7 +44,6 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 25b. Headless Chrome on Windows lays out at 500px at least: check phone layouts at `--window-size=500,…`, not 390.
 25c. Git Bash's `/c/…` spells the drive `C:` while the project is `c:`, breaking Vitest and `docker compose --build`: run both from `cd "c:/…"`.
 25d. The api refuses a change that isn't JSON, so a bodiless POST failed: `call` in `api.ts` sends `{}`; test by clicking the button, not only `curl -d '{}'`.
-26a. A class no `.tsx` names may still be built in a template (`tr-ch-${tone}`): list the `prefix-${` patterns before pruning CSS.
 26. Slicing `styles.css` from a block's comment to the file's end drops rules appended after it: slice to the next block's comment, then check the rest.
 
 ## Python and Postgres
