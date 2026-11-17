@@ -1,4 +1,4 @@
-// Locale rules from design-system 25: Australian English, money to 2 places, coins up to 8.
+// Locale rules from design-system 18: Australian English, money to 2 places, coins up to 8.
 const TZ = "Australia/Sydney";
 
 const money = new Intl.NumberFormat("en-AU", {

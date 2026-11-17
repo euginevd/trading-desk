@@ -31,7 +31,7 @@ The trading pot becomes its own book, as the DCA book is (decision 72), and trad
 - [x] Tests: refs and tags, sizing from the stop, each rule refusing, OCO after the fill, R after fees, the ledger, lost and refused replies
 - [x] Checks pass and a subagent review of the pot's money code (eight findings, all fixed)
 
-- [x] New trade: a trade by hand, sized and rule-checked as it's typed, drawn as a ladder, with its note (owner, 18 Nov 2026)
+- [x] New trade: a trade by hand, sized and rule-checked as it's typed, drawn as a ladder, with its note (owner, 17 Nov 2026)
 
 ### 2. Later
 

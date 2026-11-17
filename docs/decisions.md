@@ -7,15 +7,15 @@ Decisions 1 to 32: [decisions/index-01-32.md](decisions/index-01-32.md). Decisio
 To add one: its line here, and its record, in the same form, at the end of the newest file in [decisions/](decisions/) (a new file past about 2,000 words).
 
 58. The Profile is the owner's Investment Policy Statement: typed, versioned, read by every agent; unset rules are never enforced. [Record](decisions/from-58.md)
-59. The agents are a team of five under a Desk Coordinator, each with a name, title and remit. [Record](decisions/from-58.md)
+59. *Superseded by 70:* The agents are a team of five under a Desk Coordinator, each with a name, title and remit. [Record](decisions/from-58.md)
 60. A trading agent with a versioned profile; Analyse runs one coin step by step and proposes an order; Trade rebuilt around it. [Record](decisions/from-58.md)
-61. profile.md and trade.md are the source, changed through Claude Code; the desk renders them read-only. [Record](decisions/from-58.md)
+61. *Partly superseded by 70 (trade.md):* profile.md and trade.md are the source, changed through Claude Code; the desk renders them read-only. [Record](decisions/from-58.md)
 62. profile.md v2 is the Profile word for word; four widgets from it; the command bar changes it through a diff and Accept. [Record](decisions/from-58.md)
 63. The Dashboard as the morning check: the day in a sentence, a week rail of the plan's buys, what to watch. [Record](decisions/from-58.md)
 64. The Portfolio as what you hold in a sentence and one strip against targets; Fear & Greed in the top bar; a real kill switch. [Record](decisions/from-58.md)
 65. Settings as a sentence and hairline sections; the name only from the Profile; each fact on one page. [Record](decisions/from-58.md)
 66. The Journal as a sentence of rules kept, a 30-day strip of trades, then the filtered ledger. [Record](decisions/from-58.md)
-67. Trade leads with the agent's call; the steps fold away; the levels are a ladder around today's price. [Record](decisions/from-58.md)
+67. *Superseded by 69:* Trade leads with the agent's call; the steps fold away; the levels are a ladder around today's price. [Record](decisions/from-58.md)
 68. DCA and Grid bots share one Bots page, filtered by type; the old links open it filtered. [Record](decisions/from-58.md)
 69. Trade keeps only what you can act on: verdict, one line on what to do, the order and its checks; reasons fold away. [Record](decisions/from-58.md)
 70. My agents: one versioned Markdown file per agent in `local/agents/`, on a week rota on the Profile; the first is `dca-agent`. [Record](decisions/from-58.md)

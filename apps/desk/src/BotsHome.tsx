@@ -1,4 +1,4 @@
-// The Bots page in three tabs (owner, 18 Nov 2026): Accumulation, the long-term DCA book run by
+// The Bots page in three tabs (owner, 17 Nov 2026): Accumulation, the long-term DCA book run by
 // dca-agent; Opportunities, the short-term DCA bots (day and swing entries, volume-triggered
 // buys) on a budget of their own; and Grid bots. The tabs are links, so the Dashboard's DCA
 // widget and the old #/dca and #/grid links open the right one.

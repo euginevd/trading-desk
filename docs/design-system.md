@@ -29,7 +29,7 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 | `up` / `down` | `#2EBD85` / `#F0616D` | Gains and buys / losses and sells, each with a 12% tint for tags |
 | `wait` | `#E8B04B` | The Wait verdict and caution states, with a 12% tint |
 
-5. Type: Inter (400, 500, 600, 700) for figures, labels and controls, with tabular figures (`tnum`) on every number. Newsreader for `h1` and each page's lead sentence only, sized to Inter's x-height (one shared rule in `styles.css`). Body 13px, labels 11 to 12px, a pair 18px, page sentences 28 to 34px.
+5. Type: Inter (400, 500, 600, 700) for figures, labels and controls, with tabular figures (`tnum`) on every number. Newsreader for `h1` and each page's lead sentence only, sized to Inter's x-height. Body 13px, labels 11 to 12px, a pair 18px, page sentences 28 to 34px.
 6. Space: 4px base. Cards pad 14 to 16px; table cells 11px by 16px; gaps between cards 10px.
 7. Radius: 5px tags, 6 to 8px buttons and inputs, 10px cards and the verdict.
 8. Depth: hairlines and `sheen`; a drop shadow only under a dialog.
@@ -45,17 +45,17 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 11. Button (secondary `panel-2`, primary `accent`, buy `up`, sell `down`), Input with a unit, segmented Buy/Sell, Tabs, Table, Tag, Pill, Card, Dialog, Toast and Skeleton. Anything new is built from these and added here once settled.
 12. One primary button per view: Analyse on Trade, Create on a bot page.
 13. Coin mark: the coin's own logo, 24px (decision 25); its letters on `panel-2` when there's none.
-13a. Rule-break banner (red, Place anyway (logged) set apart), an Out of date tag (`wait`), agent cards with initials (decisions 58, 59).
-In full (9a, 11, 12, 13a to 22): [design-system/pages.md](design-system/pages.md).
-13b. Trading agent: a numbered timeline and a ticket edged in `accent` (decision 60).
+13a. Rule-break banner (red, Place anyway (logged) set apart), an Out of date tag (`wait`), agents' icons as avatars (decisions 58, 70).
+13b. Trading agent, off the menu since decision 73: a numbered timeline and the call (decisions 60, 69).
 13c. Reader: Markdown full page, read-only, in a 760px column (decision 61).
 13d. Profile: the plan as a road over time, then a hairline ledger (decision 62).
-13e. Dashboard: the day as a sentence, then Weekly DCA (13j) (decision 63, TODO 10).
+13e. Dashboard: the day as a sentence, the month's deposits, then Weekly DCA (13j) (decision 63, TODO 10).
 13f. Portfolio: a sentence, a strip of holdings over targets, the table (decision 64).
 13g. Settings: a sentence and hairline sections; providers as cards (decision 65).
 13h. Journal: rules kept as a sentence, daily dots, the ledger (decision 66).
 13i. My agents: a week rota, a row per agent opening in place (decision 70).
 13j. DCA book: a Weekly DCA section on the Dashboard and its own page (decision 72).
+In full (9a, 11, 12, 13a to 13j, 19 to 22): [design-system/pages.md](design-system/pages.md).
 
 ## Not this
 
@@ -71,6 +71,6 @@ In full (9a, 11, 12, 13a to 22): [design-system/pages.md](design-system/pages.md
 
 18. Locale: Australian English. Money follows the header's currency toggle (AUD, USD, INR, BTC); dates as 13 Nov 2026, times in am and pm, Sydney time. Money shows 2 decimal places, except the Dashboard's balances table, rounded to stay sleek ([details](design-system/screens.md#balances)). A coin amount elsewhere shows up to 8 places, trailing zeros dropped.
 19. Shell: a 232px side panel folding to 64px, with the pages, the connections and the kill switch always in view (spec 10). A slim header carries the market, the total and the currency toggle. Details: [design-system/screens.md](design-system/screens.md#shell).
-20. Screens: sentences and hairline ledgers, not widget cards (13d to 13f); Trade as the agent's workspace (decision 60). Destructive actions are red, set apart, and confirmed in a dialog whose default is to keep. Details: [design-system/screens.md](design-system/screens.md#screens).
+20. Screens: sentences and hairline ledgers, not widget cards (13d to 13f); Trade as the Trading account (decision 75). Destructive actions are red, set apart, and confirmed in a dialog whose default is to keep. Details: [design-system/screens.md](design-system/screens.md#screens).
 21. Charts: Trade shows a compact 4-hour line with the agent's levels; Full chart opens TradingView's Advanced Chart in a dialog, dark, on the desk's colours (decision 22).
 22. Status: Connected (`up`), Stale past ten minutes (`wait`), Disconnected (`down`); verdicts Buy now, Wait, Avoid in the same colours. Smart trade states follow decision 12; the kill switch reads Trading on (`up`) or off (`down`).
