@@ -4,10 +4,10 @@
 // trading-agent's (one model call per ask), then New trade on it.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { analysePotCoin, getAccountCoins, getMarket, unwatchCoin, watchCoin } from "./api";
-import { BotChart, type Level } from "./BotKit";
+import { type Average, BotChart, type Level } from "./BotKit";
 import CoinIcon from "./CoinIcon";
 import { dollars, limit } from "./dcaFormat";
-import type { AccountCoin, Market, PotAnalysis } from "./types";
+import type { AccountCoin, Interval, Market, PotAnalysis } from "./types";
 
 const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 const OPEN_KEY = "desk.account.watchlist";
@@ -240,6 +240,50 @@ export default function AccountWatchlist({
   );
 }
 
+// The timeframes the panel offers; daily is what trading-agent's rules read (trend, levels,
+// the 20-, 50- and 200-day), 4h times an entry, 1h shows the last few days up close.
+const TIMEFRAMES: [Interval, string][] = [
+  ["1h", "1h"],
+  ["4h", "4h"],
+  ["1d", "1D"],
+];
+const TF_NAME: Record<Interval, string> = {
+  "15m": "15-minute",
+  "1h": "hourly",
+  "4h": "4-hour",
+  "1d": "daily",
+};
+const TF_UNIT: Record<Interval, string> = {
+  "15m": "15 minutes",
+  "1h": "1 hour",
+  "4h": "4 hours",
+  "1d": "1 day",
+};
+const TF_WHY: Record<Interval, string> = {
+  "15m": "Noise for a swing trade.",
+  "1h": "The last few days up close: where an order fills.",
+  "4h": "Timing an entry inside the daily setup.",
+  "1d": "What trading-agent's rules read: the trend and the levels.",
+};
+const averagesOf = (tf: Interval): Average[] => {
+  const unit = tf === "1d" ? "-day" : ` × ${tf}`;
+  return [
+    { n: 20, title: `20${unit}`, color: ["--accent", "#50d2c1"] },
+    { n: 50, title: `50${unit}`, color: ["--wait", "#e8b04b"] },
+  ];
+};
+const shortDay = (ms: number) =>
+  new Date(ms).toLocaleDateString("en-AU", {
+    day: "numeric",
+    month: "short",
+    timeZone: "Australia/Sydney",
+  });
+function caption(tf: Interval, candles: Market["candles"]): string {
+  const first = candles[0]?.t ?? 0;
+  const last = candles.at(-1)?.t ?? 0;
+  return `${candles.length} ${TF_NAME[tf]} candles, each ${TF_UNIT[tf]}: ${shortDay(first)} to ${shortDay(last)}. Lines: 20 and 50 averages, support and resistance from the daily and weekly swings. Bars along the foot: volume.`;
+}
+
 const VERDICT: Record<PotAnalysis["verdict"], string> = {
   take: "Take",
   wait: "Wait",
@@ -262,12 +306,20 @@ function CoinDrawer({
     dialog.current?.showModal?.();
   }, []);
   const [market, setMarket] = useState<Market | null>(null);
+  const [tf, setTf] = useState<Interval>("1d");
   const [read, setRead] = useState<PotAnalysis | null>(null);
   const [asking, setAsking] = useState(false);
   const [error, setError] = useState("");
   useEffect(() => {
-    getMarket(`${coin.coin}${quote}`, "1d").then(setMarket, () => setMarket(null));
-  }, [coin.coin, quote]);
+    let on = true;
+    getMarket(`${coin.coin}${quote}`, tf).then(
+      (m) => on && setMarket(m),
+      () => on && setMarket(null),
+    );
+    return () => {
+      on = false;
+    };
+  }, [coin.coin, quote, tf]);
 
   const ask = () => {
     setAsking(true);
@@ -291,8 +343,6 @@ function CoinDrawer({
     ...(ind?.resistance
       ? [{ price: Number(ind.resistance), title: "Resistance", tone: "sell" as const }]
       : []),
-    ...(ind?.sma20 ? [{ price: Number(ind.sma20), title: "20-day", tone: "muted" as const }] : []),
-    ...(ind?.sma50 ? [{ price: Number(ind.sma50), title: "50-day", tone: "muted" as const }] : []),
     ...(read?.plan
       ? [
           { price: Number(read.plan.entry), title: "Entry", tone: "base" as const },
@@ -346,15 +396,29 @@ function CoinDrawer({
           <b className="num">{Number(coin.value) > 0 ? dollars(coin.value) : "—"}</b>
         </div>
       </div>
-      {market && market.candles.length > 1 ? (
+      <div className="acc-tf" role="group" aria-label="Timeframe">
+        {TIMEFRAMES.map(([key, name]) => (
+          <button key={key} type="button" aria-pressed={tf === key} onClick={() => setTf(key)}>
+            {name}
+            {key === "1d" && <small> best</small>}
+          </button>
+        ))}
+        <span className="muted">{TF_WHY[tf]}</span>
+      </div>
+      {market && market.interval === tf && market.candles.length > 1 ? (
         <BotChart
           candles={market.candles}
           levels={levels}
-          height={340}
-          label={`${coin.coin} daily candles with support, resistance and the 20- and 50-day averages`}
+          averages={averagesOf(tf)}
+          volume
+          height={360}
+          label={`${coin.coin} ${TF_NAME[tf]} candles with volume, the 20 and 50 averages, support and resistance`}
         />
       ) : (
-        <div className="skeleton" style={{ height: 340 }} />
+        <div className="skeleton" style={{ height: 360 }} />
+      )}
+      {market && market.candles.length > 1 && (
+        <p className="acc-tf-note muted">{caption(tf, market.candles)}</p>
       )}
 
       {coin.insight && (

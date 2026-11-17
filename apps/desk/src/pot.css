@@ -1116,3 +1116,39 @@ dialog.acc-drawer .dcb-drawer-figures b {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+/* The coin panel's timeframe: 1h, 4h, 1D (best), what each is for, and what's on show. */
+.acc-tf {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+.acc-tf button {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.acc-tf button small {
+  color: var(--accent);
+  font-size: 10.5px;
+}
+.acc-tf button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.acc-tf .muted {
+  margin-left: 8px;
+  font-size: 12.5px;
+}
+.acc-tf-note {
+  margin: 6px 0 0;
+  font-size: 12px;
+}

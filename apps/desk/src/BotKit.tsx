@@ -1,5 +1,6 @@
 import {
   CandlestickSeries,
+  HistogramSeries,
   LineSeries,
   LineStyle,
   createChart,
@@ -175,6 +176,14 @@ export interface ChartCandle {
   h: string;
   l: string;
   c: string;
+  v?: string;
+}
+
+// A moving average over the candles shown, drawn as a curve.
+export interface Average {
+  n: number;
+  title: string;
+  color: [string, string];
 }
 
 export interface Level {
@@ -205,12 +214,16 @@ export function BotChart({
   bands,
   label,
   height = 300,
+  averages,
+  volume = false,
 }: {
   candles: ChartCandle[];
   levels: Level[];
   bands?: { t: number; lower: string | null; upper: string | null }[];
   label: string;
   height?: number;
+  averages?: Average[];
+  volume?: boolean;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
@@ -219,6 +232,8 @@ export function BotChart({
   const upper = useRef<ISeriesApi<"Line"> | null>(null);
   const lines = useRef<IPriceLine[]>([]);
   const range = useRef<number[]>([]);
+  const curves = useRef<ISeriesApi<"Line">[]>([]);
+  const bars = useRef<ISeriesApi<"Histogram"> | null>(null);
 
   useEffect(() => {
     if (!box.current) return;
@@ -270,8 +285,67 @@ export function BotChart({
       chart.current = null;
       series.current = null;
       lines.current = [];
+      curves.current = [];
+      bars.current = null;
     };
   }, []);
+
+  // The averages and the volume, redrawn with the candles.
+  const avgKey = (averages ?? []).map((a) => `${a.n}${a.title}`).join(",");
+  useEffect(() => {
+    const c = chart.current;
+    if (!c) return;
+    const at = (t: number) => Math.floor(t / 1000) as UTCTimestamp;
+    for (const s of curves.current) c.removeSeries(s);
+    curves.current = (averages ?? []).map((a) => {
+      const s = c.addSeries(LineSeries, {
+        color: token(...a.color),
+        lineWidth: 1,
+        priceLineVisible: false,
+        lastValueVisible: true,
+        title: a.title,
+        crosshairMarkerVisible: false,
+      });
+      const closes = candles.map((k) => Number(k.c));
+      s.setData(
+        candles.flatMap((k, i) =>
+          i + 1 < a.n
+            ? []
+            : [
+                {
+                  time: at(k.t),
+                  value: closes.slice(i + 1 - a.n, i + 1).reduce((x, y) => x + y, 0) / a.n,
+                },
+              ],
+        ),
+      );
+      return s;
+    });
+    if (bars.current) {
+      c.removeSeries(bars.current);
+      bars.current = null;
+    }
+    if (volume && candles.some((k) => k.v)) {
+      const v = c.addSeries(HistogramSeries, {
+        priceScaleId: "volume",
+        priceFormat: { type: "volume" },
+        priceLineVisible: false,
+        lastValueVisible: false,
+      });
+      c.priceScale("volume").applyOptions({ scaleMargins: { top: 0.82, bottom: 0 } });
+      const up = token("--up", "#2ebd85");
+      const down = token("--down", "#f0616d");
+      v.setData(
+        candles.map((k) => ({
+          time: at(k.t),
+          value: Number(k.v ?? 0),
+          color: `${+k.c >= +k.o ? up : down}55`,
+        })),
+      );
+      bars.current = v;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- averages compared by avgKey
+  }, [candles, avgKey, volume]);
 
   useEffect(() => {
     const at = (t: number) => Math.floor(t / 1000) as UTCTimestamp;
