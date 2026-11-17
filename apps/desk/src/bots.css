@@ -257,12 +257,18 @@
 }
 
 /* The Bots page's tabs: Accumulation, Opportunities, Grid bots. */
-.botsh-tabs {
+.botsh-tabs.wrap {
   display: flex;
   gap: 4px;
   padding-top: 18px;
   padding-bottom: 0;
-  border-bottom: 1px solid var(--line);
+}
+.botsh-tabs a:first-child {
+  margin-left: -16px;
+}
+.botsh-tabs + main.wrap,
+.botsh-tabs + .wrap {
+  padding-top: 20px;
 }
 .botsh-tabs a {
   padding: 10px 16px;
