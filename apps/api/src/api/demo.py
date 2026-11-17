@@ -46,6 +46,7 @@ def _trades(symbol: str) -> list[dict[str, Any]]:
         {
             "symbol": symbol,
             "id": n,
+            "orderId": sum(map(ord, symbol)) * 100 + n,  # made up, unique per coin and buy
             "time": NOW_MS - days * DAY_MS,
             "price": price,
             "qty": qty,

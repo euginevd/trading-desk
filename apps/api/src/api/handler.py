@@ -1283,6 +1283,8 @@ def _failure(error: Exception) -> tuple[int, dict[str, str]]:
         return 400, {"error": str(error)}
     if isinstance(error, SignalError):
         return 503, {"error": str(error)}
+    if isinstance(error, (KeyError, IndexError)):  # LookupErrors too, but not a missing key
+        return 502, {"error": "A reply was missing something the desk needs. Try again."}
     return 503, {"error": "Add BINANCE_API_KEY and BINANCE_API_SECRET to .env."}
 
 

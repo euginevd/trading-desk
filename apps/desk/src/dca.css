@@ -79,7 +79,7 @@
 .dcw-track {
   position: relative;
   height: 28px;
-  border-radius: 6px;
+  border-radius: 10px;
   background: linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat;
 }
 .dcw-window {
@@ -175,7 +175,7 @@
   margin: -6px -8px;
   padding: 6px 8px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: none;
   color: inherit;
   font: inherit;
@@ -205,7 +205,7 @@
 .dcw-of {
   justify-self: end;
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .dcw-of b {
   color: var(--text);
@@ -230,7 +230,7 @@
 .dcw-coins li small {
   grid-column: 1 / -1;
   color: var(--dim);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .dcw-coins li.is-open small {
   color: var(--wait);
@@ -260,7 +260,7 @@
   padding: 0 12px 8px 0;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 500;
   text-align: left;
   white-space: nowrap;
@@ -294,7 +294,7 @@
   overflow: hidden;
   border-radius: 50%;
   background: var(--panel-2);
-  font-size: 8px;
+  font-size: 11px;
   font-style: normal;
 }
 .dcb-coin i img {
@@ -305,7 +305,7 @@
   display: inline-block;
   padding: 1px 7px;
   border-radius: 5px;
-  font-size: 11.5px;
+  font-size: 12px;
   background: var(--panel-2);
   color: var(--muted);
 }
@@ -361,7 +361,7 @@
 }
 .dcb-totals dt {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .dcb-totals dd {
   margin: 0;
@@ -488,7 +488,7 @@ td.dcb-id {
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--line-2);
-  border-radius: 7px;
+  border-radius: 10px;
   background: var(--panel-2);
   color: var(--body);
   font-size: 12px;
@@ -526,7 +526,7 @@ td.dcb-id {
   height: 32px;
   padding: 0 10px;
   border: 1px solid var(--line-2);
-  border-radius: 7px;
+  border-radius: 10px;
   background: var(--panel);
   color: var(--text);
   font: inherit;
@@ -578,7 +578,7 @@ td.dcb-id {
   display: inline-flex;
   width: max-content;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   overflow: hidden;
 }
 .dcb-seg button {
@@ -623,7 +623,7 @@ td.dcb-id {
   margin: 0 0 12px;
   padding: 8px 12px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 10px;
 }
 .dco-group legend {
   display: flex;
@@ -658,7 +658,7 @@ td.dcb-id {
   padding: 10px 14px;
   border-left: 3px solid var(--wait);
   background: var(--wait-soft);
-  border-radius: 6px;
+  border-radius: 10px;
 }
 .dcb-check.is-ok {
   border-left-color: var(--accent);
@@ -722,7 +722,7 @@ td.dcb-id {
   height: 36px;
   padding: 0 52px 0 12px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel);
   color: var(--text);
   font: inherit;
@@ -756,7 +756,7 @@ td.dcb-id {
   height: 30px;
   margin: 14px 0 10px;
   overflow: hidden;
-  border-radius: 6px;
+  border-radius: 10px;
   gap: 2px;
 }
 .dcf-seg {
@@ -842,7 +842,7 @@ td.dcb-id {
 .dcf-odds small {
   grid-column: 1 / -1;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .dcf-odds.is-low b {
   color: var(--wait);
@@ -854,7 +854,7 @@ td.dcb-id {
   min-width: 260px;
   white-space: normal !important;
   color: var(--body);
-  font-size: 12.5px;
+  font-size: 13px;
 }
 .dcf-table tfoot td {
   padding-top: 10px;
@@ -875,7 +875,7 @@ td.dcb-id {
 .dcf-lines li {
   max-width: 70ch;
   padding: 7px 11px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel-2);
 }
 .dcf-lines li.is-you {
@@ -893,7 +893,7 @@ td.dcb-id {
   height: 36px;
   padding: 0 12px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel);
   color: var(--text);
   font: inherit;
@@ -974,7 +974,7 @@ td.dcb-id {
   width: 30px;
   height: 30px;
   border: 1px solid var(--line-2);
-  border-radius: 7px;
+  border-radius: 10px;
   background: var(--panel-2);
   color: var(--muted);
   font-size: 16px;
@@ -1010,7 +1010,7 @@ td.dcb-id {
 }
 .dcc-launch small {
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .dcc-head {
   display: flex;
@@ -1063,7 +1063,7 @@ td.dcb-id {
   margin-top: 6px;
   padding: 10px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bg);
 }
 .dcc-card label {
@@ -1071,13 +1071,13 @@ td.dcb-id {
   grid-template-columns: auto auto auto 1fr auto;
   align-items: center;
   gap: 4px 8px;
-  font-size: 12.5px;
+  font-size: 13px;
   cursor: pointer;
 }
 .dcc-card label small {
   grid-column: 2 / -1;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .dcc-card label.is-failed small {
   color: var(--down);
@@ -1088,7 +1088,7 @@ td.dcb-id {
 .dcc-type {
   padding: 0 6px;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 12px;
   background: var(--panel-2);
 }
 .dcc-type.is-buy {
@@ -1141,7 +1141,7 @@ td.dcb-id {
   height: 36px;
   padding: 0 12px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--bg);
   color: var(--text);
   font: inherit;
@@ -1187,7 +1187,7 @@ td.dcb-id {
 }
 .dcb-count {
   color: var(--accent);
-  font-size: 11.5px;
+  font-size: 12px;
 }
 .dcb-table tr.is-open td {
   border-bottom-color: transparent;
@@ -1347,7 +1347,7 @@ dialog.dcb-drawer {
 }
 .dcr-note {
   margin: 0;
-  font-size: 12.5px;
+  font-size: 13px;
 }
 dialog:has(.dcr) {
   max-width: 460px;
@@ -1441,7 +1441,7 @@ dialog:has(.dcr) {
 }
 .dcb-ps-mark small {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 .dcb-ps-mark.is-now b {
   color: var(--accent);
@@ -1456,7 +1456,7 @@ dialog:has(.dcr) {
   gap: 6px 16px;
   margin-top: 14px;
   color: var(--body);
-  font-size: 13.5px;
+  font-size: 14px;
 }
 .dcb-ps-key {
   display: inline-flex;
@@ -1500,7 +1500,7 @@ dialog:has(.dcr) {
 .dco-n {
   margin-left: 6px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 .dco-selects {
@@ -1514,7 +1514,7 @@ dialog:has(.dcr) {
   height: 30px;
   padding: 0 10px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel);
   color: var(--text);
   font: inherit;
@@ -1592,7 +1592,7 @@ dialog:has(.dcr) {
   width: 30px;
   height: 26px;
   border: 1px solid transparent;
-  border-radius: 6px;
+  border-radius: 10px;
   background: none;
   color: var(--muted);
   font-size: 18px;
@@ -1613,14 +1613,14 @@ dialog:has(.dcr) {
   min-width: 150px;
   padding: 4px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--panel);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
 }
 .dco-menu [role="menuitem"] {
   padding: 8px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 10px;
   background: none;
   color: var(--text);
   font: inherit;
@@ -1697,7 +1697,7 @@ dialog.dco-drawer {
   height: 26px;
   padding: 0 10px;
   border: 1px solid var(--line-2);
-  border-radius: 6px;
+  border-radius: 10px;
   background: none;
   color: var(--muted);
   font: inherit;

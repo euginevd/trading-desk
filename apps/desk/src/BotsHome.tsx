@@ -4,21 +4,23 @@
 // widget and the old #/dca and #/grid links open the right one.
 import BotsPage from "./BotsPage";
 import DcaBookPage from "./DcaBookPage";
+import { BoltIcon, GridLinesIcon, LayersIcon } from "./icons";
 
 export type BotsTab = "accumulate" | "opportunities" | "grid";
 
-const TABS: [BotsTab, string, string][] = [
-  ["accumulate", "Accumulation", "#/dca-book"],
-  ["opportunities", "Opportunities", "#/bots?dca"],
-  ["grid", "Grid bots", "#/bots?grid"],
+const TABS: [BotsTab, string, string, () => React.JSX.Element][] = [
+  ["accumulate", "Accumulation", "#/dca-book", LayersIcon],
+  ["opportunities", "Opportunities", "#/bots?dca", BoltIcon],
+  ["grid", "Grid bots", "#/bots?grid", GridLinesIcon],
 ];
 
 export default function BotsHome({ tab }: { tab: BotsTab }) {
   return (
     <>
       <nav className="botsh-tabs wrap" aria-label="Bots">
-        {TABS.map(([key, name, href]) => (
+        {TABS.map(([key, name, href, Icon]) => (
           <a key={key} href={href} aria-current={tab === key ? "page" : undefined}>
+            <Icon />
             {name}
           </a>
         ))}

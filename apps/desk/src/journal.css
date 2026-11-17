@@ -42,7 +42,7 @@
   gap: 6px;
   min-width: 0;
   padding-top: 4px;
-  border-radius: 6px;
+  border-radius: 10px;
 }
 .jr-day:hover {
   background: var(--panel);
@@ -87,12 +87,12 @@
 }
 .jr-more {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 .jr-date {
   min-height: 1.2em;
   color: var(--dim);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 .jr-readout {
@@ -208,7 +208,7 @@ tr.jr-lit td {
     height: 7px;
   }
   .jr-date {
-    font-size: 9px;
+    font-size: 11px;
   }
   .jr-ledger-head .views {
     margin-left: 0;

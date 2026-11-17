@@ -1,12 +1,12 @@
 # Design system
 
-The desk's own look (decisions 15 and 76): a dark, dense trading screen after Hyperliquid, one teal accent, figures first, sentences in a serif. The UI rules every project follows are in `code-standards.md` (25–29).
+The desk's look (decisions 15, 76 and 77): a dark trading desk in a floating console, one teal accent, figures first, sentences in a serif. Shared UI rules: `code-standards.md` 25–29.
 
 ## Principles
 
 1. Figures first: prices, values and changes are the largest, clearest things on a screen; labels are small and muted.
 2. One accent, teal, for what's interactive, selected or suggested. Green and red mean up and down, buy and sell, and nothing else.
-3. Dense but calm: hairline borders between panels, surfaces that step up in light, no decoration. A trading screen fills the window; a reading screen sits in a 1320px column.
+3. The console (decision 77): the desk floats in a rounded frame; sections are panels of layered light. Reading screens sit in a 1320px column.
 4. The AI advises in plain words: a verdict, a confidence and its reasons, never a badge or a sparkle.
 
 ## Tokens
@@ -24,15 +24,16 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 | `muted` | `#8B99A2` | Labels and secondary text |
 | `dim` | `#5F6D75` | Placeholders, axes and notes; never essential text |
 | `sheen` | A top-edge highlight | Raised controls and cards |
+| `field` … `edge` | Washes | The field, frame, panels and their edges |
 | `*-hover` | Washes | Hovers that keep a button's own fill |
 | `accent` / `accent-ink` | `#50D2C1` / `#04110F` | Primary action, selection, focus, the suggested level / text on accent |
 | `up` / `down` | `#2EBD85` / `#F0616D` | Gains and buys / losses and sells, each with a 12% tint for tags |
 | `wait` | `#E8B04B` | The Wait verdict and caution states, with a 12% tint |
 
-5. Type: Inter (400, 500, 600, 700) for figures, labels and controls, with tabular figures (`tnum`) on every number. Newsreader for `h1` and each page's lead sentence only, sized to Inter's x-height. Body 13px, labels 11 to 12px, a pair 18px, page sentences 28 to 34px.
+5. Type: Inter for figures, labels and controls, tabular figures on every number; Newsreader for `h1` and each page's sentence, sized to Inter's x-height. Sizes: 11px axes and coin initials only, 12 labels, 14 body (13 on Trading account and Bots, 15 on reading screens), 16 headings, 24 figures, 34 sentences.
 6. Space: 4px base. Cards pad 14 to 16px; table cells 11px by 16px; gaps between cards 10px.
-7. Radius: 5px tags, 6 to 8px buttons and inputs, 10px cards and the verdict.
-8. Depth: hairlines and `sheen`; a drop shadow only under a dialog.
+7. Radius: 999px pills, 10 to 12px buttons and inputs, 18px panels, 22px the rail, 28px the frame.
+8. Depth: `sheen` on raised things, a soft lift under panels.
 
 ## Motion
 
@@ -55,11 +56,12 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 13h. Journal: rules kept as a sentence, daily dots, the ledger (decision 66).
 13i. My agents: a week rota, a row per agent opening in place (decision 70).
 13j. DCA book: a Weekly DCA section on the Dashboard and its own page (decision 72).
+13k. Tabs and filters are pills with a 16px icon beside the word; a filter's choice fills in `accent`.
 In full (9a, 11, 12, 13a to 13j, 19 to 22): [design-system/pages.md](design-system/pages.md).
 
 ## Not this
 
-14. Gradients other than the faint fill under a line chart, glassmorphism and glows.
+14. Gradients beyond the field's wash and a chart's fill; heavy blur; glows.
 15. Emoji, sparkle icons and "AI-powered" badges.
 16. Light theme, for now.
 
@@ -69,8 +71,8 @@ In full (9a, 11, 12, 13a to 13j, 19 to 22): [design-system/pages.md](design-syst
 
 ## This project
 
-18. Locale: Australian English. Money follows the header's currency toggle (AUD, USD, INR, BTC); dates as 13 Nov 2026, times in am and pm, Sydney time. Money shows 2 decimal places, except the Dashboard's balances table, rounded to stay sleek ([details](design-system/screens.md#balances)). A coin amount elsewhere shows up to 8 places, trailing zeros dropped.
-19. Shell: a 232px side panel folding to 64px, with the pages, the connections and the kill switch always in view (spec 10). A slim header carries the market, the total and the currency toggle. Details: [design-system/screens.md](design-system/screens.md#shell).
-20. Screens: sentences and hairline ledgers, not widget cards (13d to 13f); Trade as the Trading account (decision 75). Destructive actions are red, set apart, and confirmed in a dialog whose default is to keep. Details: [design-system/screens.md](design-system/screens.md#screens).
+18. Locale: Australian English; money follows the header's currency toggle; dates as 13 Nov 2026, times in am and pm, Sydney. Money to 2 places (the Dashboard's balances rounded: [details](design-system/screens.md#balances)); coin amounts up to 8, trailing zeros dropped.
+19. Shell: a 232px rail in the frame, folding to 64px, keeping the pages, connections and kill switch in view (spec 10); a slim header with the market, total and currency. [Details](design-system/screens.md#shell).
+20. Screens: a sentence, then panels (13d to 13f); destructive actions red, set apart and confirmed in a dialog that defaults to keep. [Details](design-system/screens.md#screens).
 21. Charts: Trade shows a compact 4-hour line with the agent's levels; Full chart opens TradingView's Advanced Chart in a dialog, dark, on the desk's colours (decision 22).
 22. Status: Connected (`up`), Stale past ten minutes (`wait`), Disconnected (`down`); verdicts Buy now, Wait, Avoid in the same colours. Smart trade states follow decision 12; the kill switch reads Trading on (`up`) or off (`down`).

@@ -87,7 +87,7 @@
   color: var(--text);
 }
 .port-bar.target .port-slice {
-  font-size: 10px;
+  font-size: 11px;
   opacity: 0.6;
 }
 .port-slice.dim {
@@ -211,7 +211,7 @@
 .port-targets a.drift-act {
   padding: 5px 10px;
   border: 1px solid var(--line-2);
-  border-radius: 8px;
+  border-radius: 10px;
   color: var(--text);
   text-decoration: none;
   transition:
@@ -267,7 +267,7 @@
 .dep-figure {
   flex: none;
   color: var(--text);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }

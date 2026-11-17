@@ -8,7 +8,16 @@ import ConfirmCancel from "./ConfirmCancel";
 import OrderDetail from "./OrderDetail";
 import Deposits from "./Deposits";
 import { Live } from "./Figures";
-import { ResetIcon } from "./icons";
+import {
+  ClockIcon,
+  CoinsIcon,
+  ExchangeIcon,
+  LayersIcon,
+  ListIcon,
+  PillWalletIcon,
+  ReceiptIcon,
+  ResetIcon,
+} from "./icons";
 import { type Currency, type Money, money } from "./money";
 import { amount, amountSleek, dateTime, fetchedAt, percent, price, trend, usd } from "./format";
 import type { Drift, Holding, Order, Portfolio as Data, TaoWallet } from "./types";
@@ -34,6 +43,11 @@ const SOURCES: [Source, string][] = [
   ["Binance", "Binance"],
   ["TAO wallet", "Wallet"],
 ];
+const SOURCE_ICON: Record<Source, () => React.JSX.Element> = {
+  all: LayersIcon,
+  Binance: ExchangeIcon,
+  "TAO wallet": PillWalletIcon,
+};
 // `#/portfolio?source=binance` or `?source=wallet` opens on that source; anything else shows all.
 export function sourceFromHash(): Source {
   const query = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
@@ -334,16 +348,16 @@ function Tables({
       </button>
     </th>
   );
-  const tabs: [Tab, string][] = [
-    ["bal", "Holdings"],
-    ["ord", `Open orders (${data.openOrders.length})`],
-    ["trd", "Recent trades"],
-    ["tax", "Tax"],
+  const tabs: [Tab, string, () => React.JSX.Element][] = [
+    ["bal", "Holdings", CoinsIcon],
+    ["ord", `Open orders (${data.openOrders.length})`, ClockIcon],
+    ["trd", "Recent trades", ListIcon],
+    ["tax", "Tax", ReceiptIcon],
   ];
   return (
     <section className="port-ledger" aria-label="Holdings and orders">
       <div className="tabs port-tabs" role="tablist">
-        {tabs.map(([key, label]) => (
+        {tabs.map(([key, label, Icon]) => (
           <button
             key={key}
             role="tab"
@@ -351,6 +365,7 @@ function Tables({
             aria-selected={tab === key}
             onClick={() => setTab(key)}
           >
+            <Icon />
             {label}
           </button>
         ))}
@@ -847,16 +862,20 @@ export default function Portfolio({
       <div className="port-head">
         {data && (
           <div className="views source-filter" role="group" aria-label="Show holdings from">
-            {SOURCES.map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={source === key}
-                onClick={() => setSource(key)}
-              >
-                {label}
-              </button>
-            ))}
+            {SOURCES.map(([key, label]) => {
+              const Icon = SOURCE_ICON[key];
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={source === key}
+                  onClick={() => setSource(key)}
+                >
+                  <Icon />
+                  {label}
+                </button>
+              );
+            })}
           </div>
         )}
         <span className="spacer" />
