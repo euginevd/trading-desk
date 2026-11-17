@@ -84,6 +84,7 @@ type Pending = {
   proposal?: string;
   style?: PotStyleKey;
   expires?: number;
+  verdict?: "take" | "wait" | "pass";
 };
 const STYLE_NAME = { scalp: "Scalp", day: "Day trade", swing: "Swing", position: "Position" };
 const pendingOf = (a: PotAction): Pending => ({
@@ -977,8 +978,14 @@ export default function PotPage() {
               <p className="muted">
                 {STYLE_NAME[pending.style]} · {pending.setup}
                 {pending.expires
-                  ? ` · good until ${new Date(pending.expires).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}`
+                  ? ` · good until ${new Date(pending.expires).toLocaleString("en-AU", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}`
                   : ""}
+              </p>
+            )}
+            {pending.verdict && pending.verdict !== "take" && (
+              <p className="ntf-warn" role="note">
+                trading-agent says {pending.verdict === "wait" ? "wait" : "pass"} on this one. Its
+                reason is below; you can still place it.
               </p>
             )}
             <ul className="pot-rv" aria-label="The trade's orders">
@@ -1033,7 +1040,11 @@ export default function PotPage() {
                   disabled={placing}
                   onClick={() => place()}
                 >
-                  {placing ? "Placing…" : "Place the trade"}
+                  {placing
+                    ? "Placing…"
+                    : pending.verdict && pending.verdict !== "take"
+                      ? "Place anyway"
+                      : "Place the trade"}
                 </button>
               </div>
             )}

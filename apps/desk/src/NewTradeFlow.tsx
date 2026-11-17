@@ -23,6 +23,7 @@ export type StyleTrade = {
   risk: string;
   style: PotStyleKey;
   expires: number;
+  verdict: "take" | "wait" | "pass";
 };
 
 type Step = "style" | "scan" | "pick";
@@ -374,6 +375,7 @@ export default function NewTradeFlow({
                         spend: p.spend ?? "0",
                         risk: p.risk ?? "0",
                         style: style.key,
+                        verdict: p.verdict,
                         expires: judge.expires,
                       })
                     }
