@@ -7,7 +7,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 1. Shell scripts must keep LF line endings or bash fails on Windows; don't override `.gitattributes`.
 2. A `CLAUDE.md` in the repo makes Claude Code skip `AGENTS.md`. Don't add one.
 3. A page pinning CSS or JavaScript by integrity hash breaks after an edit: recompute each `sha384` last and load the page.
-4. Run web app tests from an upper-case `C:\` path (`Set-Location C:\<repo>\apps\<app>`; Git Bash `cd "C:/<repo>/apps/<app>"`): from `c:` Vitest loads twice and its suites fail.
+4. Git Bash's `/c/…` path breaks Vitest (every suite fails: "failed to find the current suite") and `docker compose --build`: `cd "c:/<repo>/…"` first (either drive case works).
 5. Never rewrite a source file with Windows PowerShell `Get-Content`/`Set-Content`: it misreads UTF-8 and writes a BOM. Use the Edit tool, or Python with `encoding="utf-8"`.
 6. In CloudShell, `!word` is history expansion (`!starts_with` dropped a check): write ``== `false` `` instead.
 7. The repo is public: never copy the owner's real balances, costs, deposits, addresses or emails into tests, demo data, mockups or docs; real data lives only in git-ignored `local/` and `.env`.
@@ -42,7 +42,6 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 25. axe flags text caught mid fade-in: run accessibility checks with `reducedMotion: "reduce"`.
 25a. A Google Fonts link breaks code-standards 27 and the CSP: install the font from npm (`@fontsource/<font>`) and import it in `main.tsx`.
 25b. Headless Chrome on Windows lays out at 500px at least: check phone layouts at `--window-size=500,…`, not 390.
-25c. Git Bash's `/c/…` spells the drive `C:` while the project is `c:`, breaking Vitest and `docker compose --build`: run both from `cd "c:/…"`.
 25d. The api refuses a change that isn't JSON, so a bodiless POST failed: `call` in `api.ts` sends `{}`; test by clicking the button, not only `curl -d '{}'`.
 26. Slicing `styles.css` from a block's comment to the file's end drops rules appended after it: slice to the next block's comment, then check the rest.
 
