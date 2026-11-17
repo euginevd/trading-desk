@@ -48,3 +48,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 72. The DCA book: each coin is one position for life, fed only by orders placed from the desk, with every order kept and P&L judged against money added; the weekly plan lives in the local database, and the desk, not the model, works out fill odds. [Record](decisions/from-58.md)
 73. The trading pot is its own book, run by trading-agent: money put in as POT- rows, each trade a lifelong TRD- reference on every Binance order, stops and targets as one OCO. [Record](decisions/from-58.md)
 74. A scheduler wakes the agents: plain code, no model; it runs each job once per slot and brings proposals to Telegram with one-tap buttons that run the desk's own checks. [Record](decisions/from-58.md)
+75. The trading pot is the Trading account: money first, coins held as cards, trades in tabs; other buys that dip into its USDC are logged and shown, never blocked. [Record](decisions/from-58.md)
