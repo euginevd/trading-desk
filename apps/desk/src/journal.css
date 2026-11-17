@@ -231,9 +231,6 @@ tr.jr-lit td {
 /* Motion: the days rise in from the left, once; after that, dots answer the pointer and a picked
    trade's row glows. Off under reduced motion. */
 @media (prefers-reduced-motion: no-preference) {
-  .jr-headline {
-    animation: jr-rise 420ms var(--ease) both;
-  }
   .jr-day .jr-dots {
     animation: jr-rise 360ms var(--ease) both;
     animation-delay: calc(var(--i, 0) * 18ms + 120ms);

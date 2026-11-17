@@ -119,9 +119,6 @@
 /* Motion: the week arrives day by day and today's ring lands; then motion only answers change
    (a figure that moved rolls; the readout follows the day you're on). Off under reduced motion. */
 @media (prefers-reduced-motion: no-preference) {
-  .dash-headline {
-    animation: dash-rise 420ms var(--ease) both;
-  }
   .dash-day {
     animation: dash-rise 360ms var(--ease) both;
   }

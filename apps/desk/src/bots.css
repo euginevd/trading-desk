@@ -55,8 +55,6 @@
   background: var(--accent-soft);
 }
 
-/* Type chips with their counts. */
-
 /* A bot: its pair and status, when it started, its total, its figures in three columns, its
    actions. */
 .bots-list {
@@ -177,8 +175,6 @@
   margin: 12px 0;
 }
 
-/* Rebalancing, coming soon. */
-
 @media (max-width: 520px) {
   .bots-headline {
     font-size: 23px;
@@ -194,9 +190,6 @@
   }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .bots-headline {
-    animation: dash-rise 420ms var(--ease) both;
-  }
   .bot-block {
     animation: dash-rise 320ms var(--ease) both;
     animation-delay: calc(var(--i, 0) * 60ms);

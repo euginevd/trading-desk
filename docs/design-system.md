@@ -24,6 +24,8 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 | `muted` | `#8B99A2` | Labels and secondary text |
 | `dim` | `#5F6D75` | Placeholders, axes and notes; never essential text |
 | `sheen` | 1px white at 4.5%, inset on the top edge | Raised controls and cards |
+| `btn-hover` / `row-hover` | A 3.5% / 1.8% white wash | A button under the pointer (over any fill, so coloured buttons keep their ink) / a table row |
+| `accent-hover` / `accent-edge` | `#66DDCD` / accent at 12% | The primary button under the pointer / the current page's outline in the side panel |
 | `accent` / `accent-ink` | `#50D2C1` / `#04110F` | Primary action, selection, focus, the suggested level / text on accent |
 | `up` / `down` | `#2EBD85` / `#F0616D` | Gains and buys / losses and sells, each with a 12% tint for tags |
 | `wait` | `#E8B04B` | The Wait verdict and caution states, with a 12% tint |
