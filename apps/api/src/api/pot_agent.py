@@ -510,7 +510,11 @@ class PotAgent:
         out |= {"note": seen["note"], "riskPct": seen["riskPct"], "picks": [], "line": ""}
         out["expires"] = pot.now_ms() + style.expiry_s * 1000
         if not seen["allowed"] or not seen["shortlist"]:
-            out["line"] = seen["note"] or f"No {style.name.lower()} setups right now."
+            out["line"] = (
+                seen["note"]
+                if not seen["allowed"]
+                else f"No {style.name.lower()} setups right now."
+            )
             return out
         reply = self._ask(self._judge_prompt(style, seen), self.JUDGE, f"Pot: {key} picks", style)
         if reply is None:

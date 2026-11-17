@@ -107,7 +107,7 @@ const pot = (p: Partial<PotView> = {}): PotView => ({
   ...p,
 });
 
-function serve(reply: PotView, breaksRule = false) {
+function serve(reply: PotView, breaksRule = false, setups = true) {
   const fetch = vi.fn((url: string, init?: RequestInit) => {
     void init;
     const path = url.replace(/^\/api/, "");
@@ -245,8 +245,8 @@ function serve(reply: PotView, breaksRule = false) {
         note: "",
         riskPct: "0.5",
         warnings: [],
-        counts: { listed: 100, onBinance: 82, liquid: 31, setups: 3 },
-        shortlist: [{ coin: "SOL", setup: "Asia sweep", score: 7 }],
+        counts: { listed: 100, onBinance: 82, liquid: 31, setups: setups ? 3 : 0 },
+        shortlist: setups ? [{ coin: "SOL", setup: "Asia sweep", score: 7 }] : [],
         expires: Date.now() + 3_600_000,
       });
     if (path === "/pot/judge")
@@ -502,6 +502,18 @@ describe("the trading pot", () => {
     expect(placed.style).toBe("day");
     expect(placed.entry).toBe("137");
     expect(typeof placed.expires).toBe("number");
+  });
+
+  it("an empty scan stays on Scan and says so, without asking trading-agent", async () => {
+    const fetch = serve(pot({ proposals: [], trades: [] }), false, false);
+    render(<PotPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "New trade" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Day trade/ }));
+    expect(
+      await screen.findByText(/No day trade setups right now: 31 coins passed the rules/),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Scan again" })).toBeTruthy();
+    expect(sent(fetch, "/pot/judge")).toHaveLength(0);
   });
 
   it("fills New trade from trading-agent's analysis, by the rules", async () => {

@@ -241,6 +241,8 @@ export default function NewTradeFlow({
       .then((found) => {
         if (mine !== run.current) return null;
         setScreen(found);
+        // Nothing for trading-agent to read: stay on the scan and say so, no model call.
+        if (!found.allowed || found.shortlist.length === 0) return null;
         return judgePot(s.key);
       })
       .then(
@@ -315,7 +317,13 @@ export default function NewTradeFlow({
               <ScanLines screen={screen} judging={!!screen && !judge && !error} />
             )}
             {screen?.allowed && screen.shortlist.length === 0 && (
-              <p className="ntf-off">No {style.name.toLowerCase()} setups right now.</p>
+              <p className="ntf-off">
+                No {style.name.toLowerCase()} setups right now:{" "}
+                {screen.counts.liquid === 0
+                  ? "no coin passed the volume, rank and history rules."
+                  : `${screen.counts.liquid} ${screen.counts.liquid === 1 ? "coin passed" : "coins passed"} the rules, but none is at a setup on the last candle. trading-agent wasn't asked.`}
+                {screen.note ? ` ${screen.note}` : ""}
+              </p>
             )}
             {(error || (screen && (!screen.allowed || screen.shortlist.length === 0))) && (
               <div className="dlg-btns">
