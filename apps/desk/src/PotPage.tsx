@@ -430,6 +430,11 @@ export default function PotPage() {
   useEffect(() => {
     if (pending) review.current?.showModal?.();
   }, [pending]);
+  useEffect(() => {
+    if (!said) return;
+    const fade = window.setTimeout(() => setSaid(null), 6000);
+    return () => window.clearTimeout(fade);
+  }, [said]);
 
   const openChat = (on: boolean) => {
     setChatOpen(on);
@@ -604,21 +609,10 @@ export default function PotPage() {
   return (
     <main className={`wrap dcb pot${chatOpen ? " has-chat" : ""}`}>
       <div className="dcb-main">
-        <div className="dcb-top">
-          <div>
-            <h1 className="dcb-headline acc-title">Trading account</h1>
-            <p className="acc-said">
-              {putIn <= 0
-                ? "Put money in to start; it's kept apart from the DCA book."
-                : pot.proposals.length > 0
-                  ? `${pot.proposals.length} ${pot.proposals.length === 1 ? "setup is" : "setups are"} waiting for you.`
-                  : on.length === 0
-                    ? "No trades on: trading-agent waits for its setup."
-                    : `${on.length} ${on.length === 1 ? "trade" : "trades"} on${result !== 0 ? `, ${result > 0 ? "up" : "down"} ${dollars(Math.abs(result))} from trading` : ""}.`}
-            </p>
-          </div>
-          {putIn > 0 && (
-            <dl className="dcb-totals">
+        <h1 className="visually-hidden">Trading account</h1>
+        {putIn > 0 ? (
+          <section className="acc-head" aria-label="The account">
+            <dl className="acc-money">
               <div>
                 <dt>Available</dt>
                 <dd className="num">
@@ -637,23 +631,38 @@ export default function PotPage() {
               </div>
               <div>
                 <dt>This month</dt>
-                <dd
-                  className={`num dcb-pnl ${monthUsd > 0 ? "is-up" : monthUsd < 0 ? "is-down" : ""}`}
-                >
+                <dd className={`num ${monthUsd > 0 ? "up" : monthUsd < 0 ? "down" : ""}`}>
                   {dollars(monthUsd, true)} <span className="pot-of">{rWord(String(monthR))}</span>
                 </dd>
               </div>
             </dl>
-          )}
-        </div>
-
-        {putIn > 0 && (
-          <p className="acc-risk muted num">
-            Risk a trade <b>{dollars(pot.allowedRisk ?? "0")}</b> ({pot.config.riskPct}%
-            {pot.config.maxRisk ? `, at most ${cash(pot.config.maxRisk)}` : ""}), sized from the
-            stop. Open risk <b>{dollars(pot.openRisk)}</b> of {dollars(openLimit)}. Month's loss{" "}
-            <b>{dollars(used)}</b> of {dollars(pot.monthLimit)}.
-          </p>
+            <div className="acc-sub">
+              <p className="acc-said">
+                {pot.proposals.length > 0
+                  ? `${pot.proposals.length} ${pot.proposals.length === 1 ? "setup is" : "setups are"} waiting for you.`
+                  : on.length === 0
+                    ? "No trades on: trading-agent waits for its setup."
+                    : `${on.length} ${on.length === 1 ? "trade" : "trades"} on${result !== 0 ? `, ${result > 0 ? "up" : "down"} ${dollars(Math.abs(result))} from trading` : ""}.`}
+              </p>
+              <ul className="acc-chips num" aria-label="The risk rules">
+                <li title="Sized from the stop">
+                  Risk a trade <b>{dollars(pot.allowedRisk ?? "0")}</b>
+                  <small>
+                    {pot.config.riskPct}%
+                    {pot.config.maxRisk ? `, at most ${cash(pot.config.maxRisk)}` : ""}
+                  </small>
+                </li>
+                <li>
+                  Open risk <b>{dollars(pot.openRisk)}</b> <small>of {dollars(openLimit)}</small>
+                </li>
+                <li>
+                  Month's loss <b>{dollars(used)}</b> <small>of {dollars(pot.monthLimit)}</small>
+                </li>
+              </ul>
+            </div>
+          </section>
+        ) : (
+          <p className="acc-said">Put money in to start; it's kept apart from the DCA book.</p>
         )}
 
         {short > 0 && (
@@ -681,28 +690,21 @@ export default function PotPage() {
           </section>
         ) : (
           <>
-            <div className="pot-regime acc-market" aria-label="The market today">
-              <div className={`pot-state is-${pot.regime.state ?? "none"}`}>
-                <small>Market</small>
-                <b>{pot.regime.state ? REGIME[pot.regime.state] : "Unknown"}</b>
-              </div>
-              <div>
-                <small>BTC</small>
-                <span>{pot.regime.words || "—"}</span>
-              </div>
-              <div>
-                <small>
-                  {pot.lastScan ? `Last scan, ${when(pot.lastScan.at)}` : "Last scan"}
-                  {pot.scansOnItsOwn ? `. Next ${when(pot.nextScan)}` : ". Paused"}
-                </small>
-                <span>
-                  {scanning
-                    ? "trading-agent is reading the market and every coin's daily chart. About a minute."
-                    : pot.lastScan
-                      ? pot.lastScan.line
-                      : "Not yet"}
-                </span>
-              </div>
+            <div className="acc-strip" aria-label="The market today">
+              <span className={`acc-regime is-${pot.regime.state ?? "none"}`}>
+                {pot.regime.state ? REGIME[pot.regime.state] : "Unknown"}
+              </span>
+              <span className="acc-btc">BTC {pot.regime.words || "—"}</span>
+              <span
+                className="acc-scan"
+                title={`${pot.lastScan?.line ?? ""}${pot.scansOnItsOwn ? ` Next scan ${when(pot.nextScan)}.` : " Scans paused."}`}
+              >
+                {scanning
+                  ? "Scanning the market…"
+                  : pot.lastScan
+                    ? `${when(pot.lastScan.at)}: ${pot.lastScan.line}`
+                    : "Not scanned yet"}
+              </span>
               <div className="acc-acts">
                 <button type="button" className="btn" disabled={scanning} onClick={scan}>
                   {scanning ? "Scanning…" : "Scan now"}
@@ -714,7 +716,7 @@ export default function PotPage() {
             </div>
 
             {said && (
-              <p className="muted" role="status">
+              <p className="acc-toast" role="status">
                 {said}
               </p>
             )}

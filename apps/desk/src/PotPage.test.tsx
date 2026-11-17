@@ -333,7 +333,7 @@ describe("the trading pot", () => {
     render(<PotPage />);
     expect((await screen.findByRole("heading", { level: 1 })).textContent).toBe("Trading account");
     expect(screen.getByText("1 setup is waiting for you.")).toBeTruthy();
-    const money = document.querySelector(".dcb-totals") as HTMLElement;
+    const money = document.querySelector(".acc-money") as HTMLElement;
     expect(within(money).getByText("Available")).toBeTruthy();
     expect(within(money).getByText("In trades")).toBeTruthy();
     // Free USDC short of what the account holds: warned, never blocked.
@@ -460,7 +460,7 @@ describe("the trading pot", () => {
     const init = sent(fetch, "/pot/scan")[0]?.[1];
     expect(init?.body).toBe("{}");
     expect(init?.headers).toEqual({ "content-type": "application/json" });
-    expect((await screen.findAllByText("No setup today.")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText(/No setup today./)).length).toBeGreaterThan(0);
     expect(await screen.findByText(/Scanned: no setup today/)).toBeTruthy();
   });
 
