@@ -1,0 +1,266 @@
+/* The Journal (decision 66), on design-system.md's tokens; prefixed jr-. The same language as the
+   other pages: a sentence, one bold element (the days as a strip of trades), hairline ledgers. */
+.jr {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.jr-headline {
+  margin: 0 0 6px;
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  max-width: 34ch;
+  font-variant-numeric: tabular-nums;
+}
+.jr-kept {
+  color: var(--accent);
+}
+.jr-pct {
+  color: var(--muted);
+}
+.jr-lead {
+  margin: 0;
+  color: var(--body);
+  font-size: 15px;
+  max-width: 72ch;
+}
+
+/* The strip: a column a day, a dot a trade stacked from the bottom. */
+.jr-strip {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.jr-days {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+}
+.jr-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 4px;
+  border-radius: 6px;
+}
+.jr-day:hover {
+  background: var(--panel);
+}
+.jr-dots {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  height: 92px;
+  width: 100%;
+  border-bottom: 1px solid var(--line-2);
+  padding-bottom: 6px;
+}
+.jr-dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  transition: transform 140ms var(--ease);
+}
+.jr-dot.broke {
+  background: var(--wait);
+}
+.jr-dot.on,
+.jr-dot:hover {
+  transform: scale(1.35);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.jr-dot.broke.on,
+.jr-dot.broke:hover {
+  box-shadow: 0 0 0 3px var(--wait-soft);
+}
+.jr-dot:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.jr-more {
+  color: var(--muted);
+  font-size: 10px;
+}
+.jr-date {
+  min-height: 1.2em;
+  color: var(--dim);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.jr-readout {
+  margin: 10px 0 0;
+  min-height: 1.5em;
+  color: var(--text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The ledger, without a card. */
+.jr-ledger {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.jr-ledger-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.jr-ledger-head h2,
+.jr-lists h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.jr-ledger-head .views {
+  margin-left: auto;
+}
+.jr-rule {
+  display: inline-block;
+  margin: 1px 4px 1px 0;
+  font-size: 12px;
+}
+.jr-rule.ok {
+  color: var(--accent);
+}
+.jr-rule.broke {
+  color: var(--wait);
+}
+.jr-rule.broke::before {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--wait);
+  vertical-align: 1px;
+}
+tr.jr-lit td {
+  background: var(--accent-soft);
+  transition: background 1200ms ease-out;
+}
+.jr-more-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0 2px;
+}
+.jr-more-row .muted {
+  margin-left: auto;
+  font-size: 12px;
+}
+.jr-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+
+/* Your tags, quietly at the end. */
+.jr-lists {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.jr-lists h2 {
+  margin-bottom: 10px;
+}
+.jr-lists-row {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 8px 12px;
+  align-items: baseline;
+}
+.jr-lists-edit {
+  display: grid;
+  gap: 8px;
+  max-width: 640px;
+}
+
+@media (max-width: 900px) {
+  .jr-headline {
+    font-size: 26px;
+  }
+  .jr-dots {
+    height: 76px;
+  }
+  .jr-dot {
+    width: 9px;
+    height: 9px;
+  }
+}
+@media (max-width: 520px) {
+  .jr-headline {
+    font-size: 22px;
+  }
+  .jr-days {
+    gap: 1px;
+  }
+  .jr-dot {
+    width: 7px;
+    height: 7px;
+  }
+  .jr-date {
+    font-size: 9px;
+  }
+  .jr-ledger-head .views {
+    margin-left: 0;
+  }
+  .jr-ledger .jr-from,
+  .jr-time {
+    display: none;
+  }
+  .jr-ledger td,
+  .jr-ledger th {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+}
+.jr-when,
+.journal-tags .link {
+  white-space: nowrap;
+}
+
+/* Motion: the days rise in from the left, once; after that, dots answer the pointer and a picked
+   trade's row glows. Off under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .jr-headline {
+    animation: jr-rise 420ms var(--ease) both;
+  }
+  .jr-day .jr-dots {
+    animation: jr-rise 360ms var(--ease) both;
+    animation-delay: calc(var(--i, 0) * 18ms + 120ms);
+  }
+  .jr-readout,
+  .jr-ledger tbody tr {
+    animation: jr-fade 200ms ease-out both;
+  }
+}
+@keyframes jr-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes jr-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}

@@ -14,10 +14,28 @@ from api.handler import handler
 DAY = 86_400_000
 AUG_3 = 1_785_715_200_000  # 2026-08-03 10:00 Sydney
 ROWS: list[dict[str, Any]] = [
-    {"coin": "USDC", "amount": "700.5", "network": "BASE", "insertTime": AUG_3},
-    {"coin": "USDC", "amount": "690", "network": "BASE", "insertTime": AUG_3 + 5 * DAY},
-    {"coin": "USDC", "amount": "680.25", "network": "BASE", "insertTime": AUG_3 + 100 * DAY},
-    {"coin": "USDC", "amount": "999", "network": "BASE", "insertTime": AUG_3 - 60 * DAY},
+    {"coin": "USDC", "status": 1, "amount": "700.5", "network": "BASE", "insertTime": AUG_3},
+    {
+        "coin": "USDC",
+        "status": 1,
+        "amount": "820",
+        "network": "BASE",
+        "insertTime": AUG_3 + 5 * DAY,
+    },
+    {
+        "coin": "USDC",
+        "status": 1,
+        "amount": "680.25",
+        "network": "BASE",
+        "insertTime": AUG_3 + 100 * DAY,
+    },
+    {
+        "coin": "USDC",
+        "status": 1,
+        "amount": "999",
+        "network": "BASE",
+        "insertTime": AUG_3 - 60 * DAY,
+    },
 ]
 
 
@@ -49,20 +67,23 @@ def test_deposits_by_month_paid_where_known_estimated_otherwise(tmp_path: Path) 
     asked: list[dict[str, str]] = []
     got = report(binance(tmp_path, asked), {"700.5": "1000"}, fx(), date(2026, 11, 14))
     assert got["fy"] == "2026-27"
-    assert all(a["coin"] == "USDC" and a["status"] == "1" for a in asked)
+    assert all(a["coin"] == "USDC" and "status" not in a for a in asked)
     assert len(asked) == 2  # 1 Jul to 14 Nov is two 90-day windows
     by_month = {m["month"]: m for m in got["months"]}
     assert [m["label"] for m in got["months"]][:2] == ["Jul", "Aug"]
     assert got["months"][-1]["month"] == "2027-06"
     assert by_month["2026-08"]["count"] == 2
-    # 700.5 was paid A$1,000; 690 lands on Saturday 8 Aug: Friday's 1.52
-    assert by_month["2026-08"]["aud"] == "2048.8"
-    assert by_month["2026-11"]["aud"] == "999.97"  # 680.25 at 1.47
+    # 700.5 was paid A$1,000; 820 lands on Saturday 8 Aug: Friday's 1.52, A$1,246.40, too far
+    # from a whole A$1,000 to be one, so it stays an estimate.
+    assert by_month["2026-08"]["aud"] == "2246.4"
+    # 680.25 at 1.47 is A$999.97: within 5% of A$1,000, the owner's deposit size, so A$1,000.
+    assert by_month["2026-11"]["aud"] == "1000"
     assert by_month["2026-07"]["count"] == 0  # the June deposit is last year's
     basis = {d["amount"]: d["basis"] for d in got["deposits"]}
-    assert basis == {"700.5": "paid", "690": "estimate", "680.25": "estimate"}
+    assert basis == {"700.5": "paid", "820": "estimate", "680.25": "chunk"}
     assert got["total"]["paid"] == 1
-    assert got["total"]["aud"] == "3048.77"
+    assert got["total"]["chunks"] == 1
+    assert got["total"]["aud"] == "3246.4"
 
 
 def test_the_paid_route_records_and_audits_and_refuses_nonsense(
@@ -89,3 +110,20 @@ def test_the_paid_route_records_and_audits_and_refuses_nonsense(
     paid = [d for d in got["deposits"] if d["basis"] == "paid"]
     assert [(d["amount"], d["aud"]) for d in paid] == [("500", "720")]
     assert "deposit" in (tmp_path / "audit.jsonl").read_text()
+
+
+def test_a_fresh_deposit_counts_while_binance_still_locks_it(tmp_path: Path) -> None:
+    """Binance credits a new deposit as status 6 (credited, not yet withdrawable) for a while;
+    pending (0) and wrong (7) deposits never reached the account."""
+    rows = [
+        {"coin": "USDC", "amount": a, "status": st, "insertTime": 1_700_000_000_000 + i}
+        for i, (a, st) in enumerate([("100", 1), ("200", 6), ("300", 0), ("400", 7)])
+    ]
+
+    def reply(request: httpx.Request) -> httpx.Response:
+        assert "status" not in request.url.params  # every state is asked for, then filtered
+        return httpx.Response(200, json=rows)
+
+    client = httpx.Client(base_url="https://binance.test", transport=httpx.MockTransport(reply))
+    found = Binance(client, ("k", "s"), Audit(tmp_path / "audit.jsonl")).deposits("USDC", 0, 1)
+    assert [r["amount"] for r in found] == ["100", "200"]

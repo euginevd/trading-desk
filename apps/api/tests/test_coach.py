@@ -92,7 +92,6 @@ def plan_with(store: Store, audit: Audit, **rules: Any) -> dict[str, Any]:
         "take_profit_rule": "Up 7 days in a row or 15% in 7 days: trim back to target.",
         "behaviour_rules": ["No FOMO"],
     } | rules
-    doc["quotes"] = [{"text": "Opportunities always come back.", "author": "Me"}]
     if profile.clean(doc) != profile.current(store)[1]:
         profile.save(store, audit, doc, author=profile.OWNER, now=NOW_MS)
     return profile.current(store)[1]
@@ -143,11 +142,9 @@ def test_each_mood_band_gets_its_message(
     assert facts["greeting"] == "Evening, Sam."
     message = coach.written(facts, profile.current(store)[1])
     assert message["lines"][0].startswith(says)
+    assert "quote" not in message  # Quotes are gone (decision 62)
     if band in ("down", "sharp_down"):
-        assert message["quote"] == {"text": "Opportunities always come back.", "author": "Me"}
         assert "rules" in message["lines"][1]
-    else:
-        assert message["quote"] is None
     if band in ("up", "sharp_up"):
         assert message["lines"][-1].startswith("Your take-profit rule:")
 
@@ -199,6 +196,8 @@ def test_the_deposit_card_shows_the_year_the_month_and_the_cap(store: Store, aud
         "leftAud": "1800",
         "overAud": None,
         "usedPct": "70",
+        "resetsOn": facts["deposits"]["resetsOn"],
+        "daysLeft": facts["deposits"]["daysLeft"],
         "lesson": None,
     }
     over = coach.deposits(
@@ -222,6 +221,13 @@ def test_a_lesson_about_the_cap_shows_on_the_deposit_card() -> None:
     card = coach.deposits(None, date(2026, 11, 15), None, lessons)
     assert card["lesson"]["year"] == "2026"
     assert card["known"] is False
+
+
+def test_the_cap_resets_on_the_first_of_next_month() -> None:
+    nov = coach.deposits(None, date(2026, 11, 17), None, [])
+    assert (nov["resetsOn"], nov["daysLeft"]) == ("2026-12-01", 14)
+    dec = coach.deposits(None, date(2026, 12, 31), None, [])
+    assert (dec["resetsOn"], dec["daysLeft"]) == ("2027-01-01", 1)
 
 
 # Key points from real data.
@@ -265,7 +271,6 @@ def test_the_model_words_the_message_once_per_day_and_mood(store: Store, audit: 
         ["Hard day.", "You're within your rules."],
         "model",
     )  # noqa: E501
-    assert first["quote"]["text"] == "Opportunities always come back."  # from the list, by code
     assert '"mood": "sharp_down"' in asked[0]
     assert "No FOMO" in asked[0]  # the Plan goes with it
     kept = {"key": coach.cache_key(facts), "message": first}
@@ -279,9 +284,8 @@ def test_the_model_words_the_message_once_per_day_and_mood(store: Store, audit: 
     assert len(asked) == 2  # the mood changed: asked again  # noqa: PLR2004
 
 
-def test_without_the_model_or_a_quote_the_plain_words_stand(store: Store, audit: Audit) -> None:
+def test_without_the_model_the_plain_words_stand(store: Store, audit: Audit) -> None:
     facts = facts_for(store, audit, "-5")
-    profile.save_section(store, audit, "quotes", [], now=NOW_MS + 1)
     plan = profile.current(store)[1]
 
     def broken(_s: str, _t: str, _shape: dict[str, Any]) -> dict[str, Any]:
@@ -289,7 +293,6 @@ def test_without_the_model_or_a_quote_the_plain_words_stand(store: Store, audit:
 
     message = coach.message(facts, plan, "", None, broken)
     assert message["source"] == "plain"
-    assert message["quote"] is None  # never an invented one
     empty = coach.message(facts, plan, "", None, lambda _s, _t, _shape: {"lines": [], "coach": ""})
     assert empty["source"] == "plain"
 
@@ -375,13 +378,11 @@ def call(tmp_path: Path, store: Store, audit: Audit, monkeypatch: pytest.MonkeyP
 
 
 def test_the_routes_serve_the_coach_plan_agents_and_name(call: Any) -> None:
-    assert call("PUT", "/settings/profile", {"name": "  Sam  "}) == (200, {"name": "Sam"})
-    status, page = call("PUT", "/profile/strategy", {"value": {"text": "Buy in steps."}})
-    assert (status, page["profile"]["strategy"]["text"]) == (200, "Buy in steps.")
-    assert call("PUT", "/profile/diary", {"value": {}})[0] == 400  # noqa: PLR2004
+    assert call("PUT", "/settings/profile", {"name": "Sam"})[0] == 404  # noqa: PLR2004 - the Profile's
+    assert call("PUT", "/profile/strategy", {"value": {}})[0] == 404  # noqa: PLR2004 - no form edits
     status, dashboard = call("GET", "/coach")
     assert status == 200  # noqa: PLR2004
-    assert dashboard["greeting"].endswith(", Sam.")
+    assert dashboard["greeting"].endswith(".")  # the Profile's name, when its file has one
     assert (dashboard["mood"], dashboard["pending"]) == ("down", True)
     assert dashboard["message"]["source"] == "plain"
     assert call.written == []  # the GET never waits on the model

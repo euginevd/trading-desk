@@ -73,8 +73,9 @@ def balance(
 def _read(client: httpx.Client, key: str, address: str, audit: Audit) -> dict[str, Decimal]:
     try:
         response = client.get(
-            "/api/account/latest/v1",
-            params={"address": address, "network": "finney"},
+            # Taostats retired /api/account/latest/v1 (it answers 410 Gone); the address is
+            # checked above as 48 letters and digits, so it's safe in the path.
+            f"/v1/accounts/{address}",
             headers={"Authorization": key, "accept": "application/json"},
         )
     except httpx.HTTPError as error:

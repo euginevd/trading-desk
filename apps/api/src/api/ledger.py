@@ -69,6 +69,17 @@ def _symbol_trades(binance: Binance, symbol: str) -> list[dict[str, Any]]:
     return found
 
 
+def bought_since(binance: Binance, coin: str, from_ms: int) -> bool:
+    """Whether any buy of the coin, on its stablecoin pairs, filled since `from_ms`."""
+    symbols = binance.symbols()
+    return any(
+        t.get("isBuyer") is True and int(t["time"]) >= from_ms
+        for quote in STABLES
+        if f"{coin}{quote}" in symbols
+        for t in _symbol_trades(binance, f"{coin}{quote}")
+    )
+
+
 def coins_seen(store: Store, held: set[str]) -> set[str]:
     """The coins to read: held now, on any watchlist, or traded by the desk's own orders."""
     return held | store.watched_coins() | store.desk_coins()

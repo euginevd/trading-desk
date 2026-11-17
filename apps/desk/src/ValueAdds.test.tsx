@@ -1,6 +1,6 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { Drift, JournalData, TaxReport } from "./types";
+import type { Drift, JournalData, JournalEntry, TaxReport } from "./types";
 
 // Made-up figures only (known-mistakes 7).
 const tax: TaxReport = {
@@ -117,7 +117,7 @@ describe("the Tax tab", () => {
 describe("the drift card", () => {
   it("links an order back to target, within the per-trade size", async () => {
     render(<DriftCard />);
-    const link = await screen.findByRole("link", { name: /Trim A\$500\.00/ });
+    const link = await screen.findByRole("link", { name: /^Trim A\$500/ });
     expect(link.getAttribute("href")).toBe(
       "#/trade?coin=TAO&side=sell&price=410&qty=0.813&why=rebalance",
     );
@@ -125,11 +125,41 @@ describe("the drift card", () => {
   });
 });
 
+describe("the Journal's ledger", () => {
+  it("shows ten trades, then more on asking, and folds back", async () => {
+    const one = book.entries[0] as JournalEntry;
+    const kept = book.entries;
+    book.entries = Array.from({ length: 34 }, (_, i) => ({ ...one, key: `SOLUSDC:${i}` }));
+    render(<Journal />);
+    const rows = () => document.querySelectorAll(".jr-ledger tbody tr").length;
+    await screen.findByText("10 of 34");
+    expect(rows()).toBe(10);
+    fireEvent.click(screen.getByRole("button", { name: "Show 20 more" }));
+    expect(rows()).toBe(30);
+    fireEvent.click(screen.getByRole("button", { name: "Show 4 more" }));
+    expect(rows()).toBe(34);
+    fireEvent.click(screen.getByRole("button", { name: "Show fewer" }));
+    expect(rows()).toBe(10);
+    book.entries = kept;
+  });
+});
+
 describe("the Journal", () => {
   it("shows the score, the rules a trade broke, and tags it", async () => {
     render(<Journal />);
-    expect(await screen.findByText("33%")).toBeTruthy();
+    const hero = await screen.findByRole("region", { name: "Your last 30 days" });
+    expect(hero.querySelector("h2")?.textContent).toBe(
+      "1 of 3 trades kept every rule in the last 30 days (33%).",
+    );
+    expect(hero.querySelector("p")?.textContent).toBe(
+      "Over per-trade size broke it most, 1 time. Realised with a mistake tag A$0, without A$30.",
+    );
     expect(screen.getAllByText("Over per-trade size").length).toBeGreaterThan(0);
+    // Broke a rule shows it; Kept shows nothing.
+    const show = screen.getByRole("group", { name: "Show trades" });
+    fireEvent.click(within(show).getByRole("button", { name: "Kept 0" }));
+    expect(screen.getByText("No trade kept every rule.")).toBeTruthy();
+    fireEvent.click(within(show).getByRole("button", { name: "Broke a rule 1" }));
     expect(screen.getByText("DCA-1 · D-12")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "+ tag" }));
     fireEvent.click(screen.getByRole("button", { name: "FOMO" }));

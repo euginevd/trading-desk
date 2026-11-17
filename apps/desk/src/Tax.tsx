@@ -2,7 +2,8 @@
 // owner's records, not tax advice; drift only prefills orders on the Trade page.
 import { useEffect, useState } from "react";
 import { getDrift, getTax } from "./api";
-import { aud, amount, percent, shortDate } from "./format";
+import { aud, amount, shortDate } from "./format";
+import { km } from "./Figures";
 import type { Drift, TaxLot, TaxReport } from "./types";
 
 export function TaxTab() {
@@ -177,78 +178,105 @@ function LotsByCoin({ lots }: { lots: TaxLot[] }) {
   );
 }
 
-export function DriftCard() {
-  const [drift, setDrift] = useState<Drift | null>(null);
+// Each coin with a target: where it stands on a 0 to 100% track, its band, and the one order that
+// moves it back (a link that fills the Trade page; nothing is sent from here). The Portfolio passes
+// the drift it already read; on its own the card reads it.
+export function DriftCard({ drift: given }: { drift?: Drift | null }) {
+  const [read, setRead] = useState<Drift | null>(null);
   useEffect(() => {
-    getDrift().then(setDrift, () => setDrift(null));
-  }, []);
+    if (given === undefined) getDrift().then(setRead, () => setRead(null));
+  }, [given]);
+  const drift = given === undefined ? read : given;
   if (!drift) return null;
   if (!drift.hasTargets) {
     return (
-      <div className="card drift-card">
-        <h3>Allocation against your targets</h3>
+      <section className="port-targets" aria-label="Against your targets">
+        <h2>Against your targets</h2>
         <p className="muted">
           Set target allocations on your <a href="#/profile">Profile</a> to see drift here.
         </p>
-      </div>
+      </section>
     );
   }
   const band = Number(drift.band);
+  // One scale for every row, just past the largest target or holding, so the gaps compare.
+  const top = Math.min(
+    100,
+    Math.ceil(
+      Math.max(...drift.rows.map((r) => Math.max(Number(r.nowPct), Number(r.targetPct) + band))) /
+        10,
+    ) * 10,
+  );
+  const at = (pct: number) => `${(Math.min(pct, top) / top) * 100}%`;
+  const whole = (v: string) => `${Math.round(Number(v))}%`;
   return (
-    <div className="card drift-card">
-      <h3>
-        Allocation against your targets{" "}
-        <span className="muted coach-sub">
-          · band ±{drift.band} points ·{" "}
-          {drift.outside === 0 ? "all in band" : `${drift.outside} outside`}
+    <section className="port-targets" aria-label="Against your targets">
+      <h2>
+        Against your targets{" "}
+        <span className="muted">
+          {drift.outside === 0
+            ? `all inside your ±${drift.band} point band`
+            : `${drift.outside} of ${drift.rows.length} outside your ±${drift.band} point band`}
         </span>
-      </h3>
-      {drift.rows.map((r) => {
-        const target = Number(r.targetPct);
-        const now = Number(r.nowPct);
-        return (
-          <div className="drift-row" key={r.coin}>
-            <strong>{r.coin}</strong>
-            <div
-              className="drift-track"
-              aria-label={`${r.coin}: ${r.nowPct}% against a ${r.targetPct}% target`}
+      </h2>
+      <ul>
+        {drift.rows.map((r, i) => {
+          const target = Number(r.targetPct);
+          const now = Number(r.nowPct);
+          const gap = Math.round(now - target);
+          const where = gap === 0 ? "on target" : gap > 0 ? `${gap} pts over` : `${-gap} pts under`;
+          return (
+            <li
+              key={r.coin}
+              className={r.outside ? "out" : "in"}
+              style={{ "--i": i } as React.CSSProperties}
             >
-              <div
-                className="drift-band"
-                style={{ left: `${Math.max(0, target - band)}%`, width: `${band * 2}%` }}
-              />
-              <div
-                className={`drift-dot${r.outside ? " out" : ""}`}
-                style={{ left: `${Math.min(100, now)}%` }}
-              />
-            </div>
-            <span className="num">{percent(r.targetPct, false)}</span>
-            <span className={`num${r.outside ? " wait" : ""}`}>{percent(r.nowPct, false)}</span>
-            {r.outside && r.side ? (
-              <a
-                className="drift-act"
-                href={`#/trade?coin=${r.coin}&side=${r.side}&price=${r.price ?? ""}&qty=${r.qty ?? ""}&why=rebalance`}
-                title={
-                  r.capped
-                    ? `${aud(r.toTargetAud ?? null)} to target; one order of your per-trade size`
-                    : undefined
-                }
+              <strong>{r.coin}</strong>
+              <span
+                className="drift-scale"
+                role="img"
+                aria-label={`${r.coin}: ${whole(r.nowPct)} now, target ${whole(r.targetPct)}, ${where}`}
               >
-                {r.side === "sell" ? "Trim" : "Add"} {aud(r.orderAud ?? null)}
-                {r.capped ? " (of " + aud(r.toTargetAud ?? null) + ")" : ""} →
-              </a>
-            ) : (
-              <span className="muted">In band</span>
-            )}
-          </div>
-        );
-      })}
-      {drift.outside > 0 && (
-        <p className="muted drift-note">
-          Each link fills a limit order on the Trade page within your per-trade size. You review and
-          confirm it; nothing is sent automatically.
-        </p>
-      )}
-    </div>
+                <i
+                  className="drift-zone"
+                  style={{
+                    left: at(Math.max(0, target - band)),
+                    width: `calc(${at(Math.min(top, target + band))} - ${at(Math.max(0, target - band))})`,
+                  }}
+                />
+                <i className="drift-fill" style={{ width: at(now) }} />
+                <i className="drift-target" style={{ left: at(target) }} />
+              </span>
+              <span className="drift-read num">
+                <b>{whole(r.nowPct)}</b>
+                <span className="muted"> of {whole(r.targetPct)}</span>
+                <small className={r.outside ? "wait" : "muted"}>{where}</small>
+              </span>
+              {r.outside && r.side ? (
+                <a
+                  className="drift-act"
+                  href={`#/trade?coin=${r.coin}&side=${r.side}&price=${r.price ?? ""}&qty=${r.qty ?? ""}&why=rebalance`}
+                  title={
+                    r.capped
+                      ? `${km(r.toTargetAud ?? null)} to reach the target; one order of your per-trade size at a time`
+                      : undefined
+                  }
+                >
+                  {r.side === "sell" ? "Trim" : "Add"} {km(r.orderAud ?? null)}
+                </a>
+              ) : (
+                <span className="muted drift-act">In band</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      <p className="muted drift-note">
+        <span className="drift-key fill" aria-hidden="true" /> now{" "}
+        <span className="drift-key target" aria-hidden="true" /> target{" "}
+        <span className="drift-key zone" aria-hidden="true" /> band, on a 0 to {top}% scale.
+        {drift.outside > 0 && " Each action fills one order on Trade for you to check."}
+      </p>
+    </section>
   );
 }

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import {
   ApiError,
   cancelOrder,
@@ -43,7 +51,7 @@ function places(step: string): number {
   return (step.split(".")[1] ?? "").replace(/0+$/, "").length;
 }
 
-function floor(value: number, step: string): string {
+export function floor(value: number, step: string): string {
   if (!Number.isFinite(value) || value <= 0) return "";
   const factor = 10 ** places(step);
   return (Math.floor(value * factor + 1e-9) / factor).toFixed(places(step));
@@ -250,37 +258,6 @@ function NewTrade({
   const quick = useRef<HTMLDialogElement>(null);
   const [quickId] = useState(() => crypto.randomUUID());
   const quickQty = floor(Number(form.base) / Number(form.entry), terminal.step);
-  // A buy the pre-trade check held (decision 58): the request as sent, and the rules it breaks.
-  const [held, setHeld] = useState<{ request: OrderRequest; breaks: RuleBreak[] } | null>(null);
-  const sendNow = (request: OrderRequest) => {
-    setSending(true);
-    placeOrder(request).then(
-      (d) => {
-        setHeld(null);
-        quick.current?.close?.();
-        setSending(false);
-        onPlaced(d.message);
-      },
-      (e: unknown) => {
-        setSending(false);
-        if (e instanceof ApiError && e.ruleBreaks.length > 0 && !request.override) {
-          setHeld({ request, breaks: e.ruleBreaks });
-          return;
-        }
-        setHeld(null);
-        quick.current?.close?.();
-        setError(message(e));
-      },
-    );
-  };
-  const placeNow = () =>
-    sendNow({
-      clientId: quickId,
-      symbol: terminal.symbol,
-      side: "buy",
-      price: form.entry,
-      amount: quickQty,
-    });
   const [presetting, setPresetting] = useState(true);
   const [step, setStep] = useState(0);
   const [error, setError] = useState("");
@@ -334,7 +311,6 @@ function NewTrade({
   }, [terminal.symbol, terminal.tick, terminal.step]);
 
   const set = (key: keyof Form, value: string | boolean) => {
-    setHeld(null); // a changed form is a new order: the old check no longer applies
     setForm((f) => ({ ...f, [key]: value }));
     setWhy((w) => ({ ...w, [key]: "" }));
   };
@@ -651,35 +627,25 @@ function NewTrade({
         )}
       </section>
 
-      <dialog ref={quick} aria-labelledby="st-quick" onClose={() => setHeld(null)}>
-        <h2 id="st-quick">
-          Limit buy {quickQty} {terminal.base} at {price(form.entry)}?
-        </h2>
+      <OrderConfirm
+        dialog={quick}
+        request={{
+          clientId: quickId,
+          symbol: terminal.symbol,
+          side: "buy",
+          price: form.entry,
+          amount: quickQty,
+        }}
+        title={`Limit buy ${quickQty} ${terminal.base} at ${price(form.entry)}?`}
+        label="Place limit buy"
+        onPlaced={onPlaced}
+        onError={setError}
+      >
         <p>
           {two.format(Number(form.base) || 0)} {q}, one order with no DCA orders and no exits. It
           sits in Open orders until it fills or you cancel it.
         </p>
-        {held ? (
-          <RuleBreakBanner
-            breaks={held.breaks}
-            sending={sending}
-            onKeep={() => {
-              setHeld(null);
-              quick.current?.close?.();
-            }}
-            onOverride={() => sendNow({ ...held.request, override: true })}
-          />
-        ) : (
-          <div className="dlg-btns">
-            <button className="btn" type="button" onClick={() => quick.current?.close?.()}>
-              Back
-            </button>
-            <button className="btn btn-accent" type="button" disabled={sending} onClick={placeNow}>
-              {sending ? "Sending" : "Place limit buy"}
-            </button>
-          </div>
-        )}
-      </dialog>
+      </OrderConfirm>
       <dialog ref={dialog} aria-labelledby="st-confirm" onClose={keepTrade}>
         <h2 id="st-confirm">
           Place {rows.length} limit {rows.length === 1 ? "buy" : "buys"} of {terminal.base}?
@@ -764,24 +730,7 @@ function SellForm({
       : false;
   const [error, setError] = useState("");
   const [id, setId] = useState(() => crypto.randomUUID());
-  // Before a sale: would it use a lot under 12 months (decision 54)? Checked as the amount
-  // settles; a warning only.
-  const [check, setCheck] = useState<SellCheck | null>(null);
-  useEffect(() => {
-    if (!(Number(qty) > 0)) return;
-    let live = true;
-    const timer = window.setTimeout(() => {
-      sellCheck(terminal.base, qty).then(
-        (c) => live && setCheck(c),
-        () => live && setCheck(null),
-      );
-    }, 400);
-    return () => {
-      live = false;
-      window.clearTimeout(timer);
-    };
-  }, [qty, terminal.base]);
-  const shownCheck = Number(qty) > 0 ? check : null;
+  const shownCheck = useSellCheck(terminal.base, qty);
   const send = () => {
     placeOrder({
       clientId: id,
@@ -853,14 +802,7 @@ function SellForm({
           {price(terminal.price)}). Check it before you place it.
         </div>
       )}
-      {shownCheck?.young && shownCheck.youngest && (
-        <div className="tax-warn" role="note">
-          <b>Under 12 months.</b> Selling {coinAmount(qty)} {terminal.base} uses the lot bought{" "}
-          {shortDate(shownCheck.youngest.bought ?? "")}, {shownCheck.youngest.heldDays} days old.
-          Held another {shownCheck.youngest.daysToDiscount} days, half its gain would be discounted.
-          {shownCheck.gainAud !== null && ` Estimated gain now: ${aud(shownCheck.gainAud)}.`}
-        </div>
-      )}
+      <YoungLotWarning check={shownCheck} qty={qty} base={terminal.base} />
       <div className="kv">
         <span className="muted">Order value · held</span>
         <span className="num">
@@ -890,8 +832,126 @@ function SellForm({
   );
 }
 
+// Before a sale: would it use a lot under 12 months (decision 54)? Checked as the amount
+// settles; a warning only.
+export function useSellCheck(base: string, qty: string): SellCheck | null {
+  const [check, setCheck] = useState<SellCheck | null>(null);
+  useEffect(() => {
+    if (!(Number(qty) > 0)) return;
+    let live = true;
+    const timer = window.setTimeout(() => {
+      sellCheck(base, qty).then(
+        (c) => live && setCheck(c),
+        () => live && setCheck(null),
+      );
+    }, 400);
+    return () => {
+      live = false;
+      window.clearTimeout(timer);
+    };
+  }, [qty, base]);
+  return Number(qty) > 0 ? check : null;
+}
+
+export function YoungLotWarning({
+  check,
+  qty,
+  base,
+}: {
+  check: SellCheck | null;
+  qty: string;
+  base: string;
+}) {
+  if (!check?.young || !check.youngest) return null;
+  return (
+    <div className="tax-warn" role="note">
+      <b>Under 12 months.</b> Selling {coinAmount(qty)} {base} uses the lot bought{" "}
+      {shortDate(check.youngest.bought ?? "")}, {check.youngest.heldDays} days old. Held another{" "}
+      {check.youngest.daysToDiscount} days, half its gain would be discounted.
+      {check.gainAud !== null && ` Estimated gain now: ${aud(check.gainAud)}.`}
+    </div>
+  );
+}
+
+// The confirm step for one limit order: Back is the default. A buy the pre-trade check holds
+// (decision 58) shows the rules it breaks, to keep to or place past, logged.
+export function OrderConfirm({
+  dialog,
+  request,
+  title,
+  label,
+  children,
+  onPlaced,
+  onError,
+}: {
+  dialog: RefObject<HTMLDialogElement | null>;
+  request: OrderRequest;
+  title: string;
+  label: string;
+  children: ReactNode;
+  onPlaced: (note: string) => void;
+  onError: (problem: string) => void;
+}) {
+  const [held, setHeld] = useState<RuleBreak[] | null>(null);
+  const [sending, setSending] = useState(false);
+  const titleId = useId();
+  const close = () => dialog.current?.close?.();
+  const send = (override: boolean) => {
+    setSending(true);
+    placeOrder(override ? { ...request, override: true } : request).then(
+      (d) => {
+        setHeld(null);
+        setSending(false);
+        close();
+        onPlaced(d.message);
+      },
+      (e: unknown) => {
+        setSending(false);
+        if (e instanceof ApiError && e.ruleBreaks.length > 0 && !override) {
+          setHeld(e.ruleBreaks);
+          return;
+        }
+        setHeld(null);
+        close();
+        onError(message(e));
+      },
+    );
+  };
+  return (
+    <dialog ref={dialog} aria-labelledby={titleId} onClose={() => setHeld(null)}>
+      <h2 id={titleId}>{title}</h2>
+      {children}
+      {held ? (
+        <RuleBreakBanner
+          breaks={held}
+          sending={sending}
+          onKeep={() => {
+            setHeld(null);
+            close();
+          }}
+          onOverride={() => send(true)}
+        />
+      ) : (
+        <div className="dlg-btns">
+          <button className="btn" type="button" onClick={close}>
+            Back
+          </button>
+          <button
+            className="btn btn-accent"
+            type="button"
+            disabled={sending}
+            onClick={() => send(false)}
+          >
+            {sending ? "Sending" : label}
+          </button>
+        </div>
+      )}
+    </dialog>
+  );
+}
+
 // The limits, one line; Edit opens the two fields in place.
-function LimitsLine({
+export function LimitsLine({
   settings,
   quote,
   onSaved,

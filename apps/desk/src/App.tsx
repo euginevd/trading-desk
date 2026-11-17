@@ -1,16 +1,15 @@
+import "./dca.css";
 import { useCallback, useEffect, useState } from "react";
-import { getGlobal, getPortfolio, getSettings, getTickers, setTrading } from "./api";
-import { percent, price, trend, usdShort } from "./format";
+import { getGlobal, getPortfolio, getSentiment, getSettings, getTickers, setTrading } from "./api";
+import { percent, trend, usdShort } from "./format";
 import Coach from "./Coach";
 import Journal from "./Journal";
-import DcaBots from "./DcaBots";
-import GridBots from "./GridBots";
+import BotsHome, { type BotsTab } from "./BotsHome";
 import SettingsPage from "./SettingsPage";
 import {
   CollapseIcon,
   DashboardIcon,
   DcaIcon,
-  GridIcon,
   JournalIcon,
   MenuIcon,
   PlanIcon,
@@ -18,17 +17,28 @@ import {
   PowerIcon,
   SettingsIcon,
   TradeIcon,
+  RiskIcon,
   WalletIcon,
 } from "./icons";
 import ProfilePage from "./ProfilePage";
 import Portfolio from "./Portfolio";
 import { CURRENCIES, type Currency, money } from "./money";
-import Trade from "./Trade";
-import type { MarketGlobal, Settings, TaoWallet, Ticker } from "./types";
+import PotPage from "./PotPage";
+import RiskPage from "./RiskPage";
+import type { MarketGlobal, Sentiment, Settings, TaoWallet, Ticker } from "./types";
+import { FearPanel } from "./WidgetDetails";
 import type { Status } from "./ui";
 
 type Page =
-  "dashboard" | "profile" | "portfolio" | "journal" | "trade" | "dca" | "grid" | "settings";
+  | "dashboard"
+  | "profile"
+  | "portfolio"
+  | "journal"
+  | "trade"
+  | "risk"
+  | "bots"
+  | "settings"
+  | "dca-book";
 const TICK_MS = 30_000;
 const CURRENCY_KEY = "desk.currency";
 function readCurrency(): Currency {
@@ -47,11 +57,29 @@ const PAGES: { page: Page; hash: string; name: string; Icon: () => React.JSX.Ele
   { page: "portfolio", hash: "#/portfolio", name: "Portfolio", Icon: PortfolioIcon },
   { page: "journal", hash: "#/journal", name: "Journal", Icon: JournalIcon },
   { page: "trade", hash: "#/trade", name: "Trade", Icon: TradeIcon },
+  { page: "risk", hash: "#/risk", name: "Risk", Icon: RiskIcon },
 ];
-const BOT_PAGES: typeof PAGES = [
-  { page: "dca", hash: "#/dca", name: "DCA Bot", Icon: DcaIcon },
-  { page: "grid", hash: "#/grid", name: "Grid Bot", Icon: GridIcon },
-];
+// DCA and grid bots share one page (decision 68); the old links open it filtered.
+const BOTS_PAGE: (typeof PAGES)[number] = {
+  page: "bots",
+  hash: "#/bots",
+  name: "Bots",
+  Icon: DcaIcon,
+};
+const OLD_BOT_LINKS: Record<string, BotsTab> = { "#/dca": "opportunities", "#/grid": "grid" };
+
+// The Bots page's tab: Accumulation (the DCA book) unless the link asks for the others.
+function botsTabFromHash(): BotsTab {
+  const [path, query] = window.location.hash.split("?");
+  return (
+    OLD_BOT_LINKS[path ?? ""] ??
+    (path === "#/bots" && query === "dca"
+      ? "opportunities"
+      : path === "#/bots" && query === "grid"
+        ? "grid"
+        : "accumulate")
+  );
+}
 const PROFILE_PAGE: (typeof PAGES)[number] = {
   page: "profile",
   hash: "#/profile",
@@ -66,8 +94,10 @@ const SETTINGS_PAGE: (typeof PAGES)[number] = {
 };
 
 function pageFromHash(): Page {
-  const hash = window.location.hash.split("?")[0]; // "#/dca?new" opens the DCA wizard
-  const found = [...PAGES, ...BOT_PAGES, PROFILE_PAGE, SETTINGS_PAGE].find((p) => p.hash === hash);
+  const hash = window.location.hash.split("?")[0] ?? "";
+  if (hash in OLD_BOT_LINKS) return "bots";
+  if (hash === "#/dca-book") return "dca-book"; // reached from the Dashboard's DCA widget
+  const found = [...PAGES, BOTS_PAGE, PROFILE_PAGE, SETTINGS_PAGE].find((p) => p.hash === hash);
   return found?.page ?? "dashboard";
 }
 
@@ -101,6 +131,24 @@ function taoPill(tao: TaoWallet["status"] | null): { word: string; dot: string; 
   if (tao === "not_set")
     return { word: "No wallet", dot: "quiet", title: "Add TAO_COLDKEY to .env" };
   return { word: "Wallet", dot: "quiet", title: "Not read yet" };
+}
+
+// BTC dominance's move over 24 hours, in percentage points. CoinGecko gives today's share only, so
+// a day ago is worked out: the share times the market's growth over Bitcoin's (its price change
+// stands in for its market cap's, the supply barely moving in a day). Null without both.
+export function dominanceMove(global: MarketGlobal | null, tickers: Ticker[]): number | null {
+  const btc = tickers.find((t) => t.coin === "BTC")?.change24h;
+  if (!global?.btcShare || global.capChange === undefined || btc === null || btc === undefined)
+    return null;
+  const share = Number(global.btcShare);
+  const before = (share * (1 + Number(global.capChange) / 100)) / (1 + Number(btc) / 100);
+  return share - before;
+}
+
+// The index's mood, as the Dashboard's colours: fear red, greed green, neutral amber.
+function fearMood(value: number): string {
+  if (value < 45) return "down";
+  return value > 55 ? "up" : "wait";
 }
 
 function Logo() {
@@ -139,12 +187,15 @@ function PillLogo({ coin }: { coin: string }) {
 
 export default function App() {
   const [page, setPage] = useState<Page>(pageFromHash);
+  const [botsTab, setBotsTab] = useState<BotsTab>(botsTabFromHash);
   const [status, setStatus] = useState<Status>("fetching");
   const [tao, setTao] = useState<TaoWallet["status"] | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [switching, setSwitching] = useState(false);
   const [tickers, setTickers] = useState<Ticker[]>([]);
   const [global, setGlobal] = useState<MarketGlobal | null>(null);
+  const [fear, setFear] = useState<Sentiment | null>(null);
+  const [fearAt, setFearAt] = useState<DOMRect | null>(null);
   const [total, setTotal] = useState<{ usd: string; rates: Record<string, string> } | null>(null);
   const [currency, setCurrency] = useState<Currency>(readCurrency);
   const [currencyMenu, setCurrencyMenu] = useState(false);
@@ -163,6 +214,7 @@ export default function App() {
   useEffect(() => {
     const follow = () => {
       setPage(pageFromHash());
+      setBotsTab(botsTabFromHash());
       setDrawer(false);
     };
     window.addEventListener("hashchange", follow);
@@ -178,6 +230,7 @@ export default function App() {
       );
       getGlobal().then(setGlobal, () => setGlobal(null));
     };
+    const mood = () => getSentiment().then(setFear, () => setFear(null));
     const sum = () =>
       getPortfolio().then(
         (p) => {
@@ -193,8 +246,12 @@ export default function App() {
       );
     tick();
     sum();
+    mood();
     const timer = window.setInterval(tick, TICK_MS);
-    const slow = window.setInterval(sum, TOTAL_MS);
+    const slow = window.setInterval(() => {
+      sum();
+      mood();
+    }, TOTAL_MS);
     return () => {
       window.clearInterval(timer);
       window.clearInterval(slow);
@@ -203,7 +260,6 @@ export default function App() {
 
   const onStatus = useCallback((next: Status) => setStatus(next), []);
   const onTao = useCallback((next: TaoWallet["status"]) => setTao(next), []);
-  const onSettings = useCallback((next: Settings) => setSettings(next), []);
 
   const toggle = () => {
     if (!settings) return;
@@ -226,7 +282,9 @@ export default function App() {
     <a
       key={target}
       href={hash}
-      aria-current={page === target ? "page" : undefined}
+      aria-current={
+        page === target || (target === "bots" && page === "dca-book") ? "page" : undefined
+      }
       title={folded ? name : undefined}
     >
       <Icon />
@@ -259,26 +317,35 @@ export default function App() {
         </button>
         <nav className="side-nav" aria-label="Main">
           {PAGES.map(link)}
-          <div className="side-rule" />
-          <div className="side-label side-word">Bots</div>
-          {BOT_PAGES.map(link)}
+          {link(BOTS_PAGE)}
           <div className="side-rule" />
           {link(PROFILE_PAGE)}
           {link(SETTINGS_PAGE)}
         </nav>
         <div className="side-status">
-          <span className="pill" title={folded ? binance.word : undefined}>
+          {/* Each opens Portfolio showing what that source holds. */}
+          <a
+            className="pill"
+            href="#/portfolio?source=binance"
+            title={folded ? binance.word : undefined}
+            aria-label={`${binance.word}: what Binance holds`}
+          >
             <PillLogo coin="BNB" />
             <span className="side-word">{binance.word}</span>
             <span className={`dot ${binance.dot}`} aria-hidden="true" />
-          </span>
-          <span className="pill" title={wallet.title}>
+          </a>
+          <a
+            className="pill"
+            href="#/portfolio?source=wallet"
+            title={wallet.title}
+            aria-label={`${wallet.word}: what your TAO wallet holds. ${wallet.title}`}
+          >
             <PillLogo coin="TAO" />
             <span className="side-word">{wallet.word}</span>
             <span className={`dot ${wallet.dot}`} aria-hidden="true" />
-          </span>
+          </a>
           <button
-            className="pill"
+            className="pill kill"
             type="button"
             aria-pressed={on}
             disabled={!settings || switching}
@@ -291,7 +358,9 @@ export default function App() {
             <span className="side-word">
               {settings ? (on ? "Trading on" : "Trading off") : "Trading unknown"}
             </span>
-            <span className={`dot ${on ? "" : "off"}`} aria-hidden="true" />
+            <span className={`switch${on ? " on" : ""}`} aria-hidden="true">
+              <i />
+            </span>
           </button>
         </div>
       </aside>
@@ -312,13 +381,12 @@ export default function App() {
           >
             <MenuIcon />
           </button>
-          <div className="spacer" />
           <div className="tickers num" aria-label="Market">
             {tickers.map((t) => (
               <a key={t.coin} className="tick" href="#/trade" title="Bitcoin's price">
                 <span className="tick-coin">{t.coin}</span>
                 <span>
-                  <b>{price(t.price)}</b>{" "}
+                  <b>{Math.round(Number(t.price)).toLocaleString("en-AU")}</b>{" "}
                   <span className={trend(t.change24h)}>{percent(t.change24h)}</span>
                 </span>
               </a>
@@ -329,7 +397,18 @@ export default function App() {
                 title="Bitcoin's share of the whole market. Falling: money is moving into altcoins."
               >
                 <span className="tick-coin">BTC dominance</span>
-                <b>{Number(global.btcShare).toFixed(1)}%</b>
+                <span>
+                  <b>{Number(global.btcShare).toFixed(1)}%</b>{" "}
+                  {(() => {
+                    const moved = dominanceMove(global, tickers);
+                    return moved === null ? null : (
+                      <span className={trend(String(moved))}>
+                        {moved > 0 ? "+" : moved < 0 ? "−" : ""}
+                        {Math.abs(moved).toFixed(1)}%
+                      </span>
+                    );
+                  })()}
+                </span>
               </span>
             )}
             {global?.cap && (
@@ -343,9 +422,29 @@ export default function App() {
                 </span>
               </span>
             )}
+            {fear && (
+              <button
+                type="button"
+                className={`tick tick-fear ${fearMood(fear.value)}`}
+                aria-label={`Fear & Greed ${fear.value}, ${fear.label}: details`}
+                onClick={(e) => setFearAt(e.currentTarget.getBoundingClientRect())}
+              >
+                <span className="tick-coin">Fear &amp; Greed</span>
+                <span>
+                  <b>{fear.value}</b> <span className="tick-mood">{fear.label}</span>
+                </span>
+              </button>
+            )}
           </div>
+          <FearPanel at={fearAt} onClose={() => setFearAt(null)} />
+          <div className="spacer" />
           {total && (
-            <a className="head-total num" href="#/" aria-label="Total value">
+            <a
+              className="head-total num"
+              href="#/portfolio"
+              aria-label="Total value"
+              title="Your Portfolio"
+            >
               <WalletIcon />
               <span>
                 <b>{money(currency, total.rates).whole(total.usd)}</b>
@@ -391,11 +490,11 @@ export default function App() {
           </div>
         </header>
         {page === "trade" ? (
-          <Trade settings={settings} onSettings={onSettings} onStatus={onStatus} />
-        ) : page === "dca" ? (
-          <DcaBots />
-        ) : page === "grid" ? (
-          <GridBots />
+          <PotPage />
+        ) : page === "bots" || page === "dca-book" ? (
+          <BotsHome tab={botsTab} />
+        ) : page === "risk" ? (
+          <RiskPage />
         ) : page === "settings" ? (
           <SettingsPage />
         ) : page === "profile" ? (

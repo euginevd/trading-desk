@@ -9,7 +9,7 @@ Unnumbered; the same for every project of this business.
 - Business: ArcVault AI, an Australian AI and security consultancy. This is one of its portfolio projects, and its owner's own trading tool.
 - Size: one person, the owner, developer and only user. A few trades a day; plain Australian English, figures first.
 - Regulators and laws: none while it trades only its owner's money. Trading for anyone else would need an Australian financial services licence and AUSTRAC registration, so commercialising starts with legal advice (decision 6). An AI signal shown to others could count as financial advice too.
-- Data: no customer data. The owner's balances, trades, watchlist, Profile and keys stay on the owner's own machine. The AI features send Anthropic computed figures, the owner's position and their Profile, never keys, wallet addresses or ids (decisions 46 and 58).
+- Data: no customer data. The owner's balances, trades, watchlist, Profile and keys stay on the owner's own machine. The AI features send Anthropic computed figures, the owner's position, Profile, agent profile and a coin's tax lots, never keys, wallet addresses or ids (decisions 46, 58 and 60).
 - Risk appetite: none for losing funds through the software (no key can withdraw; no order the owner didn't confirm or switch on); low for showing balances to others.
 - Systems: Binance is the system of record for balances, orders and trades; Taostats for the TAO wallet; this keeps an audit log. The AI plan comes from Claude, by API key or the owner's subscription (decision 48). The Australian dollar rate comes from the European Central Bank's daily rates (Frankfurter). No payments.
 - People: the owner sets the trading rules and limits, and approves any new exchange, key permission or data flow.
@@ -21,8 +21,8 @@ Profile: `prototype`, plus two limits (decisions 1 and 2): the agent never reads
 Repo: `personal`, public (decision 5).
 
 1. Name: `trading-desk`
-2. Problem: the owner's holdings sit on Binance and in a TAO wallet, and deciding when to buy means reading charts, indicators and news in several places.
-3. Goal: one screen shows everything held, one screen shows a reasoned buy signal for each coin watched, and an order goes from the same screen, inside the same controls.
+2. Problem: the owner's holdings sit on Binance and in a TAO wallet; deciding when to buy means reading charts, indicators and news apart.
+3. Goal: one screen shows everything held, one shows a reasoned call for each coin watched, and an order goes from there, inside the same controls.
 4. Users: the owner, alone, for now. Later, friends trying it for free, then an open-source release, each a new decision first (decision 6).
 5. Where it runs: the owner's machine, in Docker, on `127.0.0.1` only. Hosting is decided later (decision 14).
 

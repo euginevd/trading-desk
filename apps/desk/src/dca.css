@@ -1,0 +1,1924 @@
+/* The DCA book and its Dashboard widget (TODO 11), on design-system.md's tokens; prefixed dcw-
+   (widget) and dcb- (book). The same language as the Dashboard: sentences, hairline ledgers,
+   mint for done and you, amber for now and for trims. One bold element: three years as ticks. */
+
+/* ---- the Dashboard's weekly DCA: the buying window ---- */
+.dcw {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.dcw-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.dcw-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dcw-agent {
+  color: var(--muted);
+  font-size: 13px;
+  text-decoration: none;
+}
+.dcw-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--r);
+  text-decoration: none;
+}
+.dcw-home:hover h2,
+.dcw-home:focus-visible h2 {
+  color: var(--accent);
+}
+.dcw-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-left: auto;
+}
+.dcw-links a {
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: none;
+}
+.dcw-links a:hover {
+  text-decoration: underline;
+}
+.dcw-links a.dcw-chat {
+  padding: 3px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 7px;
+}
+.dcw-links a.dcw-chat:hover {
+  background: var(--accent-soft);
+  text-decoration: none;
+}
+.dcw-line {
+  max-width: 44ch;
+  margin: 12px 0 18px;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+}
+.dcw-start {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+
+/* Eight days on a line; the window is the one bold mark on it. */
+.dcw-axis {
+  position: relative;
+}
+.dcw-days {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  margin: 0 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.dcw-days li {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding-left: 2px;
+  border-left: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 12px;
+}
+.dcw-days b {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+}
+.dcw-days li.is-today,
+.dcw-days li.is-today b {
+  color: var(--accent);
+}
+.dcw-track {
+  position: relative;
+  height: 28px;
+  border-radius: 6px;
+  background: linear-gradient(var(--line), var(--line)) center / 100% 1px no-repeat;
+}
+.dcw-window {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  border-radius: 5px;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(80, 210, 193, 0.45);
+  transform-origin: left;
+}
+.dcw-window.is-open {
+  background: rgba(80, 210, 193, 0.2);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.dcw-now {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+}
+.dcw-fill {
+  position: absolute;
+  top: 50%;
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+.dcw-marks {
+  position: relative;
+  height: 22px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcw-marks span {
+  position: absolute;
+  top: 0;
+  white-space: nowrap;
+}
+.dcw-marks span.is-end {
+  transform: translateX(-100%);
+}
+.dcw-marks b {
+  color: var(--text);
+  font-weight: 500;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dcw-window {
+    animation: dcw-draw 520ms var(--ease) both;
+  }
+  @keyframes dcw-draw {
+    from {
+      transform: scaleX(0);
+      opacity: 0.4;
+    }
+  }
+}
+
+/* The plan's coins, each with its limit or state. */
+.dcw-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+.dcw-coins {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dcw-coins li {
+  min-width: 150px;
+}
+/* The whole block opens the coin's position: name, figures, bar and what's waiting. */
+.dcw-coin {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 12px;
+  width: calc(100% + 16px);
+  margin: -6px -8px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s var(--ease);
+}
+.dcw-coin:hover,
+.dcw-coin:focus-visible {
+  background: var(--accent-soft);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dcw-coin {
+    transition: none;
+  }
+}
+.dcb-drawer .dlg-btns a.btn {
+  display: inline-flex;
+  align-items: center;
+  margin-right: auto;
+  color: var(--text);
+  text-decoration: none;
+}
+.dcw-coin:hover .dcb-coin {
+  color: var(--accent);
+}
+.dcw-of {
+  justify-self: end;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.dcw-of b {
+  color: var(--text);
+  font-weight: 500;
+}
+.dcw-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+.dcw-bar span {
+  display: block;
+  height: 100%;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.dcw-coins li.is-done .dcw-bar span {
+  background: var(--accent);
+}
+.dcw-coins li small {
+  grid-column: 1 / -1;
+  color: var(--dim);
+  font-size: 11.5px;
+}
+.dcw-coins li.is-open small {
+  color: var(--wait);
+}
+.dcw-coins li.is-filled small {
+  color: var(--accent);
+}
+.dcw-act {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.dcw-act a.btn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+}
+.dcw-said {
+  margin: 10px 0 0;
+}
+.dcw-table,
+.dcb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.dcw-table th,
+.dcb-table th {
+  padding: 0 12px 8px 0;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+}
+.dcw-table td,
+.dcb-table td {
+  padding: 9px 12px 9px 0;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.dcw-table tr:last-child td,
+.dcb-table tr:last-child td {
+  border-bottom: 0;
+}
+.dcw-table .r,
+.dcb-table .r {
+  text-align: right;
+}
+
+/* ---- shared marks ---- */
+.dcb-coin {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 500;
+}
+.dcb-coin i {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: var(--panel-2);
+  font-size: 8px;
+  font-style: normal;
+}
+.dcb-coin i img {
+  width: 100%;
+  height: 100%;
+}
+.dcb-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 11.5px;
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.dcb-tag.is-filled {
+  background: var(--up-soft);
+  color: var(--up);
+}
+.dcb-tag.is-cancelled {
+  color: var(--dim);
+}
+.dcb-src {
+  color: var(--muted);
+}
+.dcb-src.is-trim {
+  color: var(--down);
+}
+.dcb-src.is-buy-back {
+  color: var(--up);
+}
+.dcb-src.is-close-out {
+  color: var(--wait);
+}
+
+/* ---- the book ---- */
+.dcb {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 1180px;
+}
+.dcb-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: end;
+}
+.dcb-headline {
+  max-width: 30ch;
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+.dcb-sub {
+  max-width: 72ch;
+  margin: 0;
+  font-size: 14px;
+}
+.dcb-totals {
+  display: flex;
+  gap: 28px;
+  margin: 0;
+}
+.dcb-totals dt {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.dcb-totals dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 500;
+}
+.dcb-totals dd.dcb-pnl.is-up {
+  color: var(--up);
+}
+.dcb-totals dd.dcb-pnl.is-down {
+  color: var(--down);
+}
+.dcb-warn {
+  margin: 4px 0;
+  color: var(--wait);
+}
+
+.dcb-years {
+  margin: 18px 0 10px;
+}
+.dcb-ticks {
+  display: grid;
+  gap: 2px;
+  align-items: end;
+  height: 34px;
+}
+.dcb-tick {
+  min-width: 0;
+  height: 14px;
+  border-radius: 1px;
+  background: var(--line-2);
+  transform-origin: bottom;
+}
+.dcb-tick.is-bought {
+  height: 22px;
+  background: var(--accent);
+}
+.dcb-tick.is-missed {
+  height: 10px;
+  background: var(--dim);
+}
+.dcb-tick.is-trim {
+  height: 30px;
+  background: var(--wait);
+}
+.dcb-tick.is-now {
+  height: 26px;
+  background: transparent;
+  outline: 1.5px solid var(--accent);
+  outline-offset: -1.5px;
+}
+.dcb-tick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.dcb-years-said {
+  min-height: 20px;
+  margin: 8px 0 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dcb-tick.is-bought,
+  .dcb-tick.is-trim {
+    animation: dcb-grow 420ms var(--ease) both;
+    animation-delay: calc(var(--i) * 14ms);
+  }
+  @keyframes dcb-grow {
+    from {
+      transform: scaleY(0.2);
+      opacity: 0.3;
+    }
+  }
+}
+
+.dcb-section {
+  margin-top: 22px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.dcb-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+.dcb-section-head h2,
+.dcb-planform h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dcb-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.dcb-scroll {
+  overflow-x: auto;
+}
+.dcb-id {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+td.dcb-id {
+  display: table-cell;
+}
+.dcb-note {
+  margin: 10px 0 0;
+  color: var(--dim);
+  font-size: 12px;
+  max-width: 110ch;
+}
+.dcb-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.dcb-filters button[aria-pressed] {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--body);
+  font-size: 12px;
+  cursor: pointer;
+}
+.dcb-filters button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.dcb-filters .link {
+  margin-left: 8px;
+}
+
+.dcb-plan-start {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+.dcb-plan-start .muted {
+  max-width: 60ch;
+}
+.dcb-plan-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 12px;
+}
+.dcb-num,
+.dcb-table input:not([type="checkbox"]),
+.dcb-planhead input,
+.dcb-sheet-form input,
+.dcb-sheet-form select {
+  width: 120px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.dcb-num {
+  text-align: right;
+}
+
+.dcb-planform {
+  max-width: 620px;
+}
+.dcb-planform > p {
+  margin: 4px 0 14px;
+}
+.dcb-planhead {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+.dcb-planhead label,
+.dcb-sheet-form label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-planfoot {
+  display: flex;
+  justify-content: space-between;
+  margin: 8px 0 0;
+}
+
+.dcb-sheet {
+  max-width: 420px;
+}
+.dcb-sheet-form {
+  display: grid;
+  gap: 12px;
+}
+.dcb-sheet-form input,
+.dcb-sheet-form select {
+  width: 100%;
+}
+.dcb-sheet-form p {
+  margin: 0;
+}
+.dcb-seg {
+  display: inline-flex;
+  width: max-content;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.dcb-seg button {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  background: var(--panel-2);
+  color: var(--body);
+  cursor: pointer;
+}
+.dcb-seg button[aria-pressed="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.dcb-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Open orders, as an exchange lists them: a bar for many at once, then a row per order with
+   View, Modify and Cancel. */
+.dco-table tr.is-picked td {
+  background: var(--down-soft);
+}
+.dco-acts {
+  white-space: nowrap;
+  text-align: right;
+}
+.dco-acts > button + button {
+  margin-left: 14px;
+}
+.dco-edit {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.dco-dedupe {
+  max-width: 560px;
+}
+.dco-group {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.dco-group legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  font-weight: 600;
+}
+.dco-pick {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto 56px;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  cursor: pointer;
+}
+@media (max-width: 720px) {
+  .dco-edit {
+    grid-template-columns: 1fr;
+  }
+  .dco-pick {
+    grid-template-columns: auto minmax(0, 1fr) 56px;
+  }
+  .dco-pick > :nth-child(3) {
+    display: none;
+  }
+}
+
+/* Check against Binance. */
+.dcb-check {
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--wait);
+  background: var(--wait-soft);
+  border-radius: 6px;
+}
+.dcb-check.is-ok {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.dcb-check p {
+  margin: 0 0 6px;
+  color: var(--text);
+}
+.dcb-check ul {
+  margin: 0 0 8px;
+  padding-left: 18px;
+}
+.dcb-check b {
+  font-weight: 600;
+}
+
+/* ---- Add and Remove funds ---- */
+.dcf {
+  margin-top: 22px;
+  padding: 16px 18px 18px;
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r);
+}
+.dcf-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.dcf-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dcf-close {
+  margin-left: auto;
+}
+.dcf-ask {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 14px;
+}
+.dcf-amount {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcf-unit {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.dcf-unit input {
+  width: 160px;
+  height: 36px;
+  padding: 0 52px 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.dcf-unit small {
+  position: absolute;
+  right: 10px;
+  color: var(--dim);
+}
+.dcf-hint {
+  flex-basis: 100%;
+  max-width: 76ch;
+  margin: 0;
+}
+.dcf-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 18px 0 8px;
+}
+.dcf-note p {
+  max-width: 80ch;
+  margin: 2px 0 0;
+  color: var(--text);
+}
+.dcf-said {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: var(--wait);
+}
+/* The split as one bar: each coin's share, in the Portfolio's allocation tones. */
+.dcf-split {
+  display: flex;
+  height: 30px;
+  margin: 14px 0 10px;
+  overflow: hidden;
+  border-radius: 6px;
+  gap: 2px;
+}
+.dcf-seg {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0 10px;
+  overflow: hidden;
+  color: var(--accent-ink);
+  font-size: 12px;
+  white-space: nowrap;
+  transition: flex-grow 200ms var(--ease);
+}
+.dcf-seg b {
+  margin-right: 4px;
+  font-weight: 600;
+}
+.dcf-seg.tone-1 {
+  background: var(--alloc-1);
+}
+.dcf-seg.tone-2 {
+  background: var(--alloc-2);
+  color: var(--text);
+}
+.dcf-seg.tone-3 {
+  background: var(--alloc-3);
+}
+.dcf-seg.tone-4 {
+  background: var(--alloc-4);
+}
+.dcf-seg.tone-5 {
+  background: var(--alloc-5);
+  color: var(--text);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dcf-seg {
+    transition: none;
+  }
+}
+/* Numbers first: the fields only look like fields on hover or focus. */
+.dcf-table input.dcb-num {
+  border-color: transparent;
+  background: transparent;
+}
+.dcf-table tr:hover input.dcb-num,
+.dcf-table input.dcb-num:focus {
+  border-color: var(--line-2);
+  background: var(--panel);
+}
+.dcf-table tr.is-skipped td {
+  color: var(--dim);
+}
+.dcf-table tr.is-skipped .dcb-coin,
+.dcf-table tr.is-skipped .dcf-odds b {
+  color: var(--muted);
+}
+.dcf-table tr.is-skipped .dcf-odds i span {
+  background: var(--line-2);
+}
+.dcf-out {
+  color: var(--muted);
+  font-weight: 500;
+}
+.dcf-table .dcf-pct {
+  width: 72px;
+}
+.dcf-odds {
+  display: grid;
+  grid-template-columns: auto 64px;
+  align-items: center;
+  gap: 2px 10px;
+  font-variant-numeric: tabular-nums;
+}
+.dcf-odds b {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dcf-odds i {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--line-2);
+}
+.dcf-odds i span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.dcf-odds small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.dcf-odds.is-low b {
+  color: var(--wait);
+}
+.dcf-odds.is-low i span {
+  background: var(--wait);
+}
+.dcf-why {
+  min-width: 260px;
+  white-space: normal !important;
+  color: var(--body);
+  font-size: 12.5px;
+}
+.dcf-table tfoot td {
+  padding-top: 10px;
+  border-top: 1px solid var(--line-2);
+  border-bottom: 0;
+  color: var(--muted);
+}
+.dcf-chat {
+  margin-top: 14px;
+}
+.dcf-lines {
+  display: grid;
+  gap: 6px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+.dcf-lines li {
+  max-width: 70ch;
+  padding: 7px 11px;
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.dcf-lines li.is-you {
+  justify-self: end;
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.dcf-say {
+  display: flex;
+  gap: 8px;
+}
+.dcf-say input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+}
+.dcf-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .dcb-top {
+    grid-template-columns: 1fr;
+  }
+  .dcb-totals {
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+}
+@media (max-width: 720px) {
+  .dcw-head {
+    flex-wrap: wrap;
+  }
+  .dcw-links {
+    flex-basis: 100%;
+    margin-left: 0;
+  }
+  .dcw-line {
+    font-size: 18px;
+  }
+  .dcw-days li span {
+    display: none;
+  }
+  .dcw-marks {
+    height: 38px;
+  }
+  .dcw-marks span.is-end {
+    top: 18px;
+  }
+  .dcb-headline {
+    font-size: 24px;
+  }
+  .dcb-ticks {
+    gap: 1px;
+  }
+  .dcb-hide {
+    display: none;
+  }
+}
+
+/* ---- the book, with dca-agent folded away or open on the right ---- */
+.dcb.has-chat {
+  padding-right: 420px;
+}
+.dcb-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+/* dca-agent's chat: the book's one place to ask for anything, open on the right or folded. */
+.dcc {
+  position: fixed;
+  top: 64px;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: 384px;
+  border: 1px solid var(--line-2);
+  border-top: 3px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--panel);
+}
+.dcc[hidden] {
+  display: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dcc.is-open {
+    animation: dcb-slide 220ms var(--ease);
+  }
+}
+.dcc-fold {
+  margin-left: auto;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line-2);
+  border-radius: 7px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+}
+.dcc-fold:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.dcc-launch {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px 8px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 28px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dcc-launch:hover {
+  background: var(--accent-soft);
+}
+.dcc-launch b {
+  display: block;
+  font-size: 13px;
+}
+.dcc-launch small {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.dcc-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.dcc-head b {
+  display: block;
+  color: var(--text);
+  font-size: 15px;
+}
+.dcc-head small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcc-lines {
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-height: 160px;
+  margin: 0;
+  padding: 14px 16px;
+  overflow-y: auto;
+  list-style: none;
+}
+.dcc-lines li p {
+  margin: 0 0 4px;
+}
+.dcc-lines li.is-you {
+  justify-self: end;
+  max-width: 85%;
+  padding: 7px 11px;
+  border-radius: 10px 10px 2px 10px;
+  background: var(--accent-soft);
+  color: var(--text);
+}
+.dcc-lines li.is-agent {
+  color: var(--body);
+}
+.dcc-hello,
+.dcc-wait {
+  color: var(--muted);
+}
+.dcc-card {
+  display: grid;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.dcc-card label {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr auto;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.dcc-card label small {
+  grid-column: 2 / -1;
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.dcc-card label.is-failed small {
+  color: var(--down);
+}
+.dcc-card .btn {
+  justify-self: end;
+}
+.dcc-type {
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: var(--panel-2);
+}
+.dcc-type.is-buy {
+  background: var(--up-soft);
+  color: var(--up);
+}
+.dcc-type.is-sell {
+  background: var(--down-soft);
+  color: var(--down);
+}
+.dcc-type.is-change {
+  background: var(--wait-soft);
+  color: var(--wait);
+}
+.dcc-odds {
+  color: var(--accent);
+}
+.dcc-odds.is-low {
+  color: var(--wait);
+}
+.dcc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 16px 10px;
+}
+.dcc-chips button {
+  padding: 4px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--body);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dcc-chips button:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.dcc-say {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--line);
+}
+.dcc-say input {
+  flex: 1;
+  min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+/* The book against its targets: share now as a bar, the target as a tick. */
+.dcb-targets {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 6px;
+  padding: 0;
+  list-style: none;
+}
+.dcb-targets li {
+  display: grid;
+  grid-template-columns: 90px minmax(0, 1fr) 110px minmax(0, 260px);
+  align-items: center;
+  gap: 12px;
+}
+.dcb-targets a.dcb-coin {
+  text-decoration: none;
+}
+.dcb-tbar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--line);
+}
+.dcb-tnow {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.dcb-ttarget {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: var(--text);
+}
+.dcb-targets small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* A position opens to its own orders. */
+.dcb-expand {
+  display: grid;
+  gap: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dcb-expand:hover .dcb-coin {
+  color: var(--accent);
+}
+.dcb-count {
+  color: var(--accent);
+  font-size: 11.5px;
+}
+.dcb-table tr.is-open td {
+  border-bottom-color: transparent;
+}
+.dcb-history > td {
+  padding: 0 0 12px 24px;
+  background: var(--panel);
+}
+.dcb-history .dcb-table {
+  font-size: 12.5px;
+}
+.dcb-more {
+  align-self: flex-start;
+  margin-top: 18px;
+  padding: 6px 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+@media (max-width: 1100px) {
+  .dcb.has-chat {
+    padding-right: 24px;
+  }
+  .dcc {
+    top: 56px;
+    right: 0;
+    bottom: 0;
+    width: min(420px, 100vw);
+    border-radius: 0;
+  }
+}
+@media (max-width: 720px) {
+  .dcb-targets li {
+    grid-template-columns: 80px minmax(0, 1fr) 90px;
+  }
+  .dcb-targets small {
+    grid-column: 2 / -1;
+  }
+}
+
+/* A position opens as a panel from the right: its figures, then its orders. */
+dialog.dcb-drawer {
+  width: min(760px, 100vw);
+  max-width: none;
+  height: 100vh;
+  max-height: 100vh;
+  margin: 0 0 0 auto;
+  padding: 22px 24px;
+  overflow-y: auto;
+  border: 0;
+  border-left: 1px solid var(--line-2);
+  border-radius: 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  dialog.dcb-drawer[open] {
+    animation: dcb-slide 220ms var(--ease);
+  }
+  @keyframes dcb-slide {
+    from {
+      transform: translateX(40px);
+      opacity: 0;
+    }
+  }
+}
+.dcb-drawer-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.dcb-drawer-head h2 {
+  margin: 0;
+  font-size: 20px;
+}
+.dcb-drawer-head .dcb-id {
+  display: inline;
+}
+.dcb-drawer-close {
+  margin-left: auto;
+}
+.dcb-drawer-figures {
+  display: flex;
+  gap: 36px;
+  margin-bottom: 18px;
+}
+.dcb-drawer-figures small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-drawer .dcb-drawer-figures b {
+  display: block;
+  margin-top: 2px;
+  color: var(--text);
+  font-size: 28px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.dcb-drawer .dcb-drawer-figures b.up {
+  color: var(--up);
+}
+.dcb-drawer .dcb-drawer-figures b.down {
+  color: var(--down);
+}
+.dcb-drawer-figures .dcb-drawer-pct {
+  font-size: 14px;
+}
+.dcb-drawer-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 24px;
+  margin: 0 0 22px;
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.dcb-drawer-facts dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-drawer-facts dd {
+  margin: 2px 0 0;
+  color: var(--text);
+}
+.dcb-drawer-sub {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+/* The review before placing: a line per order, then the total. */
+.dcr ul {
+  display: grid;
+  gap: 0;
+  margin: 4px 0 10px;
+  padding: 0;
+  list-style: none;
+}
+.dcr li {
+  display: grid;
+  grid-template-columns: 58px 84px minmax(0, 1fr) 64px 40px;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.dcr-price,
+.dcr-usdc,
+.dcr-odds {
+  text-align: right;
+}
+.dcr-usdc {
+  color: var(--text);
+}
+.dcr-odds {
+  color: var(--accent);
+  font-size: 12px;
+}
+.dcr-total {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 8px;
+  color: var(--muted);
+}
+.dcr-total b {
+  color: var(--text);
+  font-weight: 600;
+}
+.dcr-note {
+  margin: 0;
+  font-size: 12.5px;
+}
+dialog:has(.dcr) {
+  max-width: 460px;
+}
+
+/* Room under the last row for the folded dca-agent button. */
+.dcb:not(.has-chat) .dcb-main {
+  padding-bottom: 72px;
+}
+
+/* Open orders fold to their one-line summary. */
+.dco-fold > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.dco-fold > summary::-webkit-details-marker {
+  display: none;
+}
+.dco-fold > summary h2::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 0 3px 10px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s var(--ease);
+}
+.dco-fold[open] > summary h2::after {
+  transform: rotate(45deg);
+}
+.dco-fold[open] > summary {
+  margin-bottom: 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .dco-fold > summary h2::after {
+    transition: none;
+  }
+}
+
+/* Open orders read in the wait colour: money set aside, not yet spent. */
+.dcb-open {
+  color: var(--wait);
+}
+.dcb-totals dd.dcb-open {
+  color: var(--wait);
+}
+/* The share of the book against its target, small, in the positions table. */
+.dcb-mix {
+  display: grid;
+  grid-template-columns: 90px auto;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+/* The position panel's price strip: average cost and now as labelled pins, the gap between
+   them in green or red, filled buys as dots and open orders as amber ticks. */
+.dcb-ps {
+  margin: 4px 0 22px;
+}
+.dcb-ps-line {
+  position: relative;
+  height: 64px;
+  margin: 0 28px;
+  border-bottom: 1px solid var(--line-2);
+}
+.dcb-ps-gap {
+  position: absolute;
+  bottom: -2px;
+  height: 3px;
+  border-radius: 2px;
+}
+.dcb-ps-gap.is-up {
+  background: var(--up);
+}
+.dcb-ps-gap.is-down {
+  background: var(--down);
+}
+.dcb-ps-buy,
+.dcb-ps-open {
+  position: absolute;
+  bottom: -5px;
+  width: 9px;
+  height: 9px;
+  margin-left: -4.5px;
+  border-radius: 50%;
+}
+.dcb-ps-buy {
+  background: var(--body);
+  border: 2px solid var(--panel);
+}
+.dcb-ps-open {
+  bottom: -7px;
+  width: 3px;
+  height: 14px;
+  margin-left: -1.5px;
+  border-radius: 1px;
+  background: var(--wait);
+}
+.dcb-ps-mark {
+  position: absolute;
+  bottom: 0;
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  padding-bottom: 12px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dcb-ps-mark::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  height: 10px;
+  border-left: 1px dashed var(--muted);
+}
+.dcb-ps-mark small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.dcb-ps-mark.is-now b {
+  color: var(--accent);
+}
+.dcb-ps-mark.is-now::after {
+  border-left: 2px solid var(--accent);
+}
+.dcb-ps figcaption {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-top: 14px;
+  color: var(--body);
+  font-size: 13.5px;
+}
+.dcb-ps-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-ps-key i {
+  position: static;
+  margin: 0 0 0 6px;
+}
+
+/* Every order: Hide cancelled, and the note of how many are hidden. */
+.dcb-hide-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.dcb-hidden-note {
+  margin: 8px 0 0;
+}
+
+/* Orders: one section for every order. A line of what matters, filters, one table, a sticky
+   bar for what's ticked, and a panel per order. */
+.dco-insight {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: -4px 0 14px;
+  color: var(--muted);
+}
+.dco-insight b {
+  color: var(--text);
+  font-weight: 600;
+}
+.dco-filters {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 12px;
+}
+.dco-filters .dcb-filters {
+  flex-wrap: wrap;
+}
+.dco-n {
+  margin-left: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.dco-selects {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.dco-selects select,
+.dco-search {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+.dco-search {
+  width: 170px;
+}
+.dco-empty {
+  padding: 14px 0;
+}
+.dco-table td,
+.dco-table th {
+  white-space: nowrap;
+}
+.dco-table .dcb-coin .tag {
+  margin-left: 6px;
+}
+.dco-table .dco-tick {
+  width: 28px;
+}
+.dco-table .dco-more {
+  width: 40px;
+  text-align: right;
+}
+.dco-row {
+  cursor: pointer;
+}
+.dco-row:hover td {
+  background: var(--panel-2, rgba(255, 255, 255, 0.025));
+}
+.dco-row.is-closed td {
+  color: var(--muted);
+}
+.dco-row td .up {
+  color: var(--up);
+}
+.dco-row td .down {
+  color: var(--down);
+}
+.dco-grp th {
+  padding-top: 16px;
+  text-align: left;
+  font-weight: 600;
+}
+.dco-grp th img,
+.dco-grp th svg {
+  vertical-align: -3px;
+}
+.dco-odds {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.dco-odds-bar {
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line-2);
+  overflow: hidden;
+}
+.dco-odds-bar i {
+  display: block;
+  height: 100%;
+  background: var(--up);
+}
+.dco-odds-bar i.is-low {
+  background: var(--wait);
+}
+.dco-menu {
+  position: relative;
+  display: inline-block;
+}
+.dco-dots {
+  width: 30px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.dco-dots:hover,
+.dco-dots[aria-expanded="true"] {
+  border-color: var(--line-2);
+  color: var(--text);
+}
+.dco-menu [role="menu"] {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.dco-menu [role="menuitem"] {
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.dco-menu [role="menuitem"]:hover,
+.dco-menu [role="menuitem"]:focus-visible {
+  background: var(--line);
+}
+.dco-menu [role="menuitem"].danger {
+  color: var(--down);
+}
+.dco-bulk {
+  position: sticky;
+  bottom: 12px;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.dco-bulk > span {
+  margin-right: auto;
+}
+.dco-moves {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+.dco-moves li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 64px;
+  gap: 12px;
+}
+.dco-moves li > :last-child {
+  text-align: right;
+}
+
+/* The order's panel. */
+dialog.dco-drawer {
+  width: min(880px, 100vw);
+}
+.dco-drawer .dcb-drawer-head {
+  align-items: center;
+  margin-bottom: 4px;
+}
+.dco-drawer-ref {
+  display: block;
+  margin: 0 0 16px;
+}
+.dco-drawer .dcb-drawer-figures {
+  flex-wrap: wrap;
+  gap: 16px 36px;
+}
+.dco-drawer .dcb-drawer-figures b {
+  font-size: 22px;
+}
+.dco-chart-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0;
+}
+.dco-chart-bar button {
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.dco-chart-bar button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--text);
+}
+.dco-chart-bar .muted {
+  margin-left: 8px;
+  font-size: 12px;
+}
+.dco-chart {
+  height: 380px;
+}
+.dco-chart.is-dragging {
+  outline: 1px dashed var(--accent);
+  outline-offset: 2px;
+}
+.dco-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 8px 0 16px;
+  font-size: 12px;
+}
+.dco-legend .k::before {
+  content: "";
+  display: inline-block;
+  width: 14px;
+  height: 0;
+  margin: 0 6px 3px 0;
+  border-top: 2px solid var(--muted);
+}
+.dco-legend .k-this::before {
+  border-top-color: var(--accent);
+}
+.dco-legend .k-other::before {
+  border-top-style: dashed;
+}
+.dco-legend .k-avg::before {
+  border-top: 2px dotted var(--wait);
+}
+.dco-legend .k-lvl::before {
+  border-top: 2px dotted var(--up);
+}
+.dco-legend .k-ma::before {
+  border-top: 2px dashed var(--dim, #5e6c74);
+}
+.dco-legend .k-fill::before {
+  display: none;
+}
+.dco-chain h3 {
+  margin: 22px 0 8px;
+  font-size: 14px;
+}
+.dco-chain ol {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dco-chain li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) 1fr 0.8fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.dco-chain li.is-this {
+  color: var(--text);
+}
+@media (max-width: 720px) {
+  .dco-chart {
+    height: 280px;
+  }
+  .dco-chain li {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .dco-chain li > :nth-child(3),
+  .dco-chain li > :nth-child(5) {
+    display: none;
+  }
+  .dco-search {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dco-menu [role="menu"] {
+    animation: dco-pop 120ms var(--ease);
+  }
+  @keyframes dco-pop {
+    from {
+      opacity: 0;
+      transform: translateY(-4px);
+    }
+  }
+}

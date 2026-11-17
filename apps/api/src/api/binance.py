@@ -34,6 +34,9 @@ class BinanceError(Exception):
         self.message = message
 
 
+CREDITED = (1, 6)  # Binance deposit states: success, and credited but locked
+
+
 @dataclass(frozen=True)
 class Filters:
     """A pair's trading rules: amount step, price step and the smallest order in quote."""
@@ -123,16 +126,36 @@ class Binance:
         query = urlencode({"symbol": symbol, "interval": interval, "limit": str(limit)})
         return list(self._get("/api/v3/klines", query, f"candles {symbol} {interval}"))
 
+    def klines_since(self, symbol: str, interval: str, start_ms: int) -> list[list[Any]]:
+        """Every candle from start_ms to now, a thousand a call (the DCA book's fill odds)."""
+        found: list[list[Any]] = []
+        while True:
+            query = urlencode(
+                {
+                    "symbol": symbol,
+                    "interval": interval,
+                    "startTime": str(start_ms),
+                    "limit": "1000",
+                }
+            )
+            page = list(self._get("/api/v3/klines", query, f"candles {symbol} {interval}"))
+            found.extend(page)
+            if len(page) < 1000:  # noqa: PLR2004 - Binance's page size
+                return found
+            start_ms = int(page[-1][0]) + 1
+
     def deposits(self, coin: str, start_ms: int, end_ms: int) -> list[dict[str, Any]]:
-        """Completed deposits of one coin in a window of at most 90 days (decision 31)."""
+        """Deposits of one coin that reached the account, in a window of at most 90 days
+        (decision 31): status 1 (success) and 6 (credited, not yet withdrawable). A fresh
+        deposit sits at 6 for a while, so asking for 1 alone hid it."""
         params = {
             "coin": coin,
-            "status": "1",
             "startTime": str(start_ms),
             "endTime": str(end_ms),
             "limit": "1000",
         }
-        return list(self._signed("/sapi/v1/capital/deposit/hisrec", params, f"{coin} deposits"))
+        rows = self._signed("/sapi/v1/capital/deposit/hisrec", params, f"{coin} deposits")
+        return [r for r in rows if int(r.get("status", -1)) in CREDITED]
 
     def open_orders(self) -> list[dict[str, Any]]:
         return list(self._signed("/api/v3/openOrders", {}, "open orders"))
@@ -148,6 +171,19 @@ class Binance:
             if len(page) < TRADES_PAGE:
                 return found
             from_id = int(page[-1]["id"]) + 1
+
+    def all_orders(self, symbol: str) -> list[dict[str, Any]]:
+        """Every order on one pair, oldest first, a page at a time (Binance may drop ones that were
+        cancelled or expired with nothing filled after about 90 days)."""
+        found: list[dict[str, Any]] = []
+        from_id = 0
+        while True:
+            params = {"symbol": symbol, "orderId": str(from_id), "limit": str(TRADES_PAGE)}
+            page = list(self._signed("/api/v3/allOrders", params, f"orders {symbol}"))
+            found.extend(page)
+            if len(page) < TRADES_PAGE:
+                return found
+            from_id = int(page[-1]["orderId"]) + 1
 
     def order_fills(self, symbol: str, order_id: int) -> list[dict[str, Any]]:
         params = {"symbol": symbol, "orderId": str(order_id)}
@@ -207,11 +243,25 @@ class Binance:
         params |= {"quantity": plain(qty), "stopPrice": plain(stop)}
         return self._order(params, f"stop-loss sell {plain(qty)} {symbol} at {plain(stop)}")
 
-    def sell_oco(self, symbol: str, qty: Decimal, take: Decimal, stop: Decimal) -> dict[str, Any]:
-        """Take-profit above as a limit maker, stop-loss below as a stop: whichever fills first."""
+    def sell_oco(
+        self,
+        symbol: str,
+        qty: Decimal,
+        take: Decimal,
+        stop: Decimal,
+        client_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Take-profit above as a limit maker, stop-loss below as a stop: whichever fills first.
+        A client id names the pair of orders and each leg (-T the target, -S the stop)."""
         params = {"symbol": symbol, "side": "SELL", "quantity": plain(qty)}
         params |= {"aboveType": "LIMIT_MAKER", "abovePrice": plain(take)}
         params |= {"belowType": "STOP_LOSS", "belowStopPrice": plain(stop)}
+        if client_id:
+            params |= {
+                "listClientOrderId": client_id,
+                "aboveClientOrderId": f"{client_id}T",
+                "belowClientOrderId": f"{client_id}S",
+            }
         label = f"exits for {plain(qty)} {symbol}: {plain(take)} or {plain(stop)}"
         return dict(self._signed("/api/v3/orderList/oco", params, label, "POST"))
 
@@ -247,6 +297,11 @@ class Binance:
     def order_list(self, list_id: int) -> dict[str, Any]:
         params = {"orderListId": str(list_id)}
         return dict(self._signed("/api/v3/orderList", params, f"exits {list_id}"))
+
+    def order_list_by_client(self, client_id: str) -> dict[str, Any]:
+        """An OCO found by the id the desk gave it, for one whose reply never arrived."""
+        params = {"origClientOrderId": client_id}
+        return dict(self._signed("/api/v3/orderList", params, f"exits {client_id}"))
 
     def cancel_list(self, symbol: str, list_id: int) -> dict[str, Any]:
         params = {"symbol": symbol, "orderListId": str(list_id)}

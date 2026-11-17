@@ -1,4 +1,22 @@
 import type {
+  AccountCoin,
+  PotAction,
+  PotCheck,
+  PotAnalysis,
+  RiskBoard,
+  PotPreview,
+  PotTrade,
+  PotTradeRequest,
+  PotView,
+  DcaAction,
+  DcaCheck,
+  FundsPlan,
+  DcaBook,
+  DcaOdds,
+  DcaOrder,
+  DcaOrderRequest,
+  DcaPlan,
+  DcaWeekPlan,
   Drift,
   JournalData,
   SellCheck,
@@ -8,14 +26,12 @@ import type {
   Coach,
   AgentInfo,
   CommandReply,
-  ProfileDoc,
   ProfilePage,
-  ProfileSection,
+  ProfileSuggestion,
   ProfileVersion,
-  PlannerReview,
+  ProfileVersionDetail,
   Recap,
   RuleBreak,
-  ScoreRow,
   AiMode,
   AiSettings,
   Interval,
@@ -23,17 +39,12 @@ import type {
   OrderRequest,
   Portfolio,
   Settings,
-  Signal,
-  SmartTrade,
-  SmartTradeRequest,
   Terminal,
   Ticker,
   Watchlist,
   FyDeposits,
   Sentiment,
   SentimentDetail,
-  PlanFacts,
-  PriceAlert,
   MarketGlobal,
   DcaBots,
   DcaPreview,
@@ -45,7 +56,14 @@ import type {
   GridBots,
   GridPreview,
   GridRequest,
-  LadderRequest,
+  AgentCall,
+  AgentPage,
+  MyAgentsPage,
+  AgentRun,
+  CoinRank,
+  MarkdownFile,
+  PriceAlert,
+  TicketChoice,
 } from "./types";
 
 export class ApiError extends Error {
@@ -61,10 +79,13 @@ export class ApiError extends Error {
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   let response: Response;
   try {
+    // The api takes changes only as JSON (its guard against other sites), so a change with
+    // nothing to say still sends an empty object.
+    const sent = body === undefined && method !== "GET" ? {} : body;
     response = await fetch(`/api${path}`, {
       method,
-      headers: body === undefined ? undefined : { "content-type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: sent === undefined ? undefined : { "content-type": "application/json" },
+      body: sent === undefined ? undefined : JSON.stringify(sent),
     });
   } catch {
     throw new ApiError("The desk's api isn't running. Start it, then try again.");
@@ -103,10 +124,6 @@ export const finishSignIn = (code: string) =>
 export const setTrading = (on: boolean) => call<Settings>("PUT", "/trading", { on });
 export const setLimits = (perOrder: string, perDay: string) =>
   call<Settings>("PUT", "/limits", { perOrder, perDay });
-export const placeTrade = (request: SmartTradeRequest) =>
-  call<SmartTrade>("POST", "/trades", request);
-export const cancelTrade = (id: number) => call<SmartTrade>("POST", `/trades/${id}/cancel`, {});
-export const closeTrade = (id: number) => call<SmartTrade>("POST", `/trades/${id}/close`, {});
 
 export const getTickers = (coins: string[]) =>
   call<{ tickers: Ticker[] }>("GET", `/tickers?coins=${encodeURIComponent(coins.join(","))}`);
@@ -125,8 +142,6 @@ export const getMarket = (coin: string, interval: Interval) =>
     "GET",
     `/market?symbol=${encodeURIComponent(coin)}&interval=${encodeURIComponent(interval)}`,
   );
-export const runSignal = (coin: string, force: boolean) =>
-  call<{ signal: Signal }>("POST", "/signal", { coin, force });
 export const placeOrder = (request: OrderRequest) =>
   call<{ message: string }>("POST", "/orders", request);
 // The owner's average cost for a holding with no trades here; null clears it (decision 27).
@@ -169,8 +184,6 @@ export const switchGrid = (id: number, on: boolean) =>
   call<GridBots>("POST", `/grids/${id}/switch`, { on, confirmed: on });
 
 // Ladder buys on the smart trade (decision 39): all rungs checked together, then placed.
-export const placeLadder = (request: LadderRequest) =>
-  call<{ message: string }>("POST", "/orders/ladder", request);
 
 // Smart trades (decision 41): one-off DCA deals, entered at the owner's price.
 export const getSmart = () => call<DcaBots>("GET", "/smart");
@@ -185,18 +198,6 @@ export const editOrder = (request: {
   clientId: string;
 }) => call<{ message: string; orderId: number }>("POST", "/orders/edit", request);
 
-// The AI panel's live facts, the owner's risk rules and price alerts (decision 46).
-export const getPlan = (coin: string) =>
-  call<PlanFacts>("GET", `/plan?coin=${encodeURIComponent(coin)}`);
-export const addAlert = (alert: {
-  coin: string;
-  direction: "above" | "below";
-  price: string;
-  note: string;
-}) => call<{ alerts: PriceAlert[] }>("POST", "/alerts", alert);
-export const deleteAlert = (id: number) =>
-  call<{ alerts: PriceAlert[] }>("DELETE", `/alerts/${id}`, {});
-
 // The coach and the agents (decisions 52 and 59).
 export const getCoach = () => call<Coach>("GET", "/coach");
 export const writeCoach = () => call<Coach>("POST", "/coach/message", {});
@@ -204,9 +205,6 @@ export const getAgents = () => call<{ agents: AgentInfo[] }>("GET", "/agents");
 export const getAgent = (id: string) => call<AgentThread>("GET", `/agents/${id}`);
 export const sendAgent = (id: string, text: string) =>
   call<AgentThread>("POST", `/agents/${id}`, { text });
-export const getProfile = () => call<{ name: string }>("GET", "/settings/profile");
-export const setProfile = (name: string) =>
-  call<{ name: string }>("PUT", "/settings/profile", { name });
 
 // Tax lots, drift, the Journal and Telegram (decisions 54 to 57).
 export const getTax = () => call<TaxReport>("GET", "/tax");
@@ -231,29 +229,141 @@ export const linkTelegram = () => call<TelegramSettings>("POST", "/settings/tele
 
 // The Profile (decision 58).
 export const getProfilePage = () => call<ProfilePage>("GET", "/profile");
-export const saveProfileSection = <K extends ProfileSection | "locks">(
-  section: K,
-  value: ProfileDoc[K],
-  reason = "",
-) => call<ProfilePage>("PUT", `/profile/${section}`, { value, reason });
 export const getProfileVersions = () =>
   call<{ versions: ProfileVersion[] }>("GET", "/profile/versions");
 export const getProfileVersion = (n: number) =>
-  call<ProfileVersion & { profile: ProfileDoc }>("GET", `/profile/versions/${n}`);
+  call<ProfileVersionDetail>("GET", `/profile/versions/${n}`);
 export const restoreProfile = (n: number) => call<ProfilePage>("POST", "/profile/restore", { n });
-export const importProfile = (markdown: string) =>
-  call<ProfilePage>("POST", "/profile/import", { markdown });
-export const exportProfile = () =>
-  call<{ markdown: string; version: number }>("GET", "/profile/export");
+// The command bar (decision 62): an answer, or a change to profile.md shown as a diff to accept.
 export const askProfile = (text: string) =>
   call<CommandReply>("POST", "/profile/command", { text });
-export const acceptSuggestion = (id: string, reason = "") =>
-  call<ProfilePage>("POST", `/profile/suggestions/${id}/accept`, { reason });
+export const acceptSuggestion = (id: string) =>
+  call<ProfilePage>("POST", `/profile/suggestions/${id}/accept`, {});
 export const rejectSuggestion = (id: string) =>
-  call<unknown>("POST", `/profile/suggestions/${id}/reject`, {});
-export const reviewAllocation = () =>
-  call<{ planner: PlannerReview }>("POST", "/profile/planner", {});
-export const getScorecard = () =>
-  call<{ windows: Record<string, ScoreRow[]> }>("GET", "/profile/scorecard");
+  call<{ suggestions: ProfileSuggestion[] }>("POST", `/profile/suggestions/${id}/reject`, {});
 export const getRecaps = () => call<{ recaps: Recap[] }>("GET", "/recaps");
 export const writeRecap = () => call<{ recap: Recap }>("POST", "/recaps", {});
+
+// The trading agent (TODO 6): its profile, read from local/trade.md, and Analyse runs.
+export const getTradingAgent = () => call<AgentPage>("GET", "/agent");
+// The owner's files, read only (decision 61): they change them by asking Claude Code.
+export const getProfileFile = () => call<MarkdownFile>("GET", "/profile/file");
+// My agents (TODO 10): one file each in local/agents/, read only.
+// risk-agent (local/agents/risk-agent.md).
+export const getRiskBoard = () => call<RiskBoard>("GET", "/risk-board");
+export const writeRiskReview = () => call<RiskBoard>("POST", "/risk-board/review");
+export const getMyAgents = () => call<MyAgentsPage>("GET", "/my-agents");
+export const setAgentsOn = (on: boolean) => call<unknown>("PUT", "/my-agents/schedule", { on });
+export const getMyAgentFile = (slug: string) =>
+  call<{ markdown: string; error: string | null }>(
+    "GET",
+    `/my-agents/file?slug=${encodeURIComponent(slug)}`,
+  );
+
+// Analyse: start a run, then ask for one step at a time until it isn't running.
+export const startAnalysis = (coin: string) => call<AgentRun>("POST", "/analyse", { coin });
+export const nextAnalysisStep = (id: number) => call<AgentRun>("POST", "/analyse/next", { id });
+export const getLastAnalysis = (coin: string) =>
+  call<{ run: AgentRun | null }>("GET", `/analyse/last?coin=${encodeURIComponent(coin)}`);
+export const getAnalysisCalls = () => call<{ calls: AgentCall[] }>("GET", "/analyse/calls");
+export const askAnalysis = (id: number, question: string) =>
+  call<AgentRun>("POST", "/analyse/ask", { id, question });
+export const chooseTicket = (id: number, choice: TicketChoice) =>
+  call<AgentRun>("POST", "/analyse/choice", { id, choice });
+export const rankCoins = (coins: string[]) =>
+  call<{ ranked: CoinRank[]; cost: string }>("POST", "/analyse/rank", { coins });
+
+// Price alerts (decision 46), set from the agent's Watch for lines.
+export const getAlerts = (coin: string) =>
+  call<{ alerts: PriceAlert[] }>("GET", `/alerts?coin=${encodeURIComponent(coin)}`);
+export const addAlert = (alert: {
+  coin: string;
+  direction: "above" | "below";
+  price: string;
+  note: string;
+}) => call<{ alerts: PriceAlert[] }>("POST", "/alerts", alert);
+export const deleteAlert = (id: number) =>
+  call<{ alerts: PriceAlert[] }>("DELETE", `/alerts/${id}`, {});
+
+// The DCA book (TODO 11).
+export const getDcaBook = () => call<DcaBook>("GET", "/dca");
+export const setDcaPlan = (plan: DcaPlan) => call<DcaBook>("PUT", "/dca/plan", plan);
+export const suggestDca = () => call<DcaWeekPlan>("GET", "/dca/suggest");
+export const dcaOdds = (coin: string, price: string) =>
+  call<DcaOdds & { now: string }>(
+    "GET",
+    `/dca/odds?coin=${encodeURIComponent(coin)}&price=${encodeURIComponent(price)}`,
+  );
+export const placeDcaOrder = (order: DcaOrderRequest) =>
+  call<DcaOrder>("POST", "/dca/orders", order);
+export const cancelDcaOrder = (ref: string) =>
+  call<DcaOrder>("POST", "/dca/orders/cancel", { ref });
+export const closeOutDca = () => call<{ closed: string[] }>("POST", "/dca/close-out");
+// The desk's own plan at once; dca-agent's only when asked.
+export const analyseFunds = (side: "add" | "remove", amount: string, agent = false) =>
+  call<FundsPlan>("POST", "/dca/funds/analyse", { side, amount, agent });
+export const chatFunds = (body: {
+  side: "add" | "remove";
+  amount: string;
+  orders: { coin: string; usdc: string; price: string; reason: string }[];
+  history: { who: "you" | "agent"; text: string }[];
+  message: string;
+}) => call<FundsPlan>("POST", "/dca/funds/chat", body);
+export const fundsOdds = (coin: string, price: string, side: "add" | "remove") =>
+  call<{ hit: number; windows: number; pct: number | null; now: string }>(
+    "GET",
+    `/dca/funds/odds?coin=${encodeURIComponent(coin)}&price=${encodeURIComponent(price)}&side=${side}`,
+  );
+export const checkDca = () => call<DcaCheck>("GET", "/dca/check");
+export const fixDca = () => call<DcaCheck>("POST", "/dca/check/fix");
+export const agentChat = (message: string, history: { who: string; text: string }[]) =>
+  call<{ reply: string; actions: DcaAction[]; said: string[]; quote: string }>(
+    "POST",
+    "/dca/agent",
+    {
+      message,
+      history,
+    },
+  );
+// spend or qty only when the owner changed it (the api keeps what's left otherwise); raise
+// when a buy's new amount is more than what's left of it.
+export const amendDcaOrder = (change: {
+  ref: string;
+  price: string;
+  spend?: string;
+  qty?: string;
+  raise?: boolean;
+}) => call<DcaOrder>("POST", "/dca/orders/amend", change);
+
+// The trading pot (docs/plan-trade.md).
+export const getPot = () => call<PotView>("GET", "/pot");
+export const putInPot = (usdc: string) => call<PotView>("POST", "/pot/put-in", { usdc });
+export const previewPotTrade = (body: {
+  coin: string;
+  entry?: string;
+  stop?: string;
+  target?: string;
+}) => call<PotPreview>("POST", "/pot/preview", body);
+export const analysePotCoin = (body: {
+  coin: string;
+  entry?: string;
+  stop?: string;
+  target?: string;
+}) => call<PotAnalysis>("POST", "/pot/analyse", body);
+export const placePotTrade = (body: PotTradeRequest) => call<PotTrade>("POST", "/pot/trades", body);
+export const cancelPotTrade = (ref: string) =>
+  call<PotTrade>("POST", "/pot/trades/cancel", { ref });
+export const movePotStop = (ref: string, stop: string) =>
+  call<PotTrade>("POST", "/pot/trades/stop", { ref, stop });
+export const closePotTrade = (ref: string) => call<PotTrade>("POST", "/pot/trades/close", { ref });
+export const scanPot = () => call<PotView>("POST", "/pot/scan");
+export const dismissPotProposal = (id: string) =>
+  call<PotView>("POST", "/pot/proposals/dismiss", { id });
+export const potAgent = (message: string, history: { who: string; text: string }[]) =>
+  call<{ reply: string; actions: PotAction[]; said: string[] }>("POST", "/pot/agent", {
+    message,
+    history,
+  });
+export const checkPot = () => call<PotCheck>("GET", "/pot/check");
+export const getAccountCoins = () =>
+  call<{ quote: string; list: number; max: number; coins: AccountCoin[] }>("GET", "/pot/coins");

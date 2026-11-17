@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trading pot mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+<!-- Mockup for docs/plan-trade.md (the trading pot and trading-agent). Every figure is made up (known-mistakes 7). -->
+<style>
+:root {
+  --bg: #0a0f12; --bar: #0b1215; --panel: #0f171b; --panel-2: #131d22;
+  --line: #1b272d; --line-2: #24333a; --text: #e6ecef; --muted: #8c9aa3; --dim: #5e6c74;
+  --accent: #50d2c1; --accent-ink: #04110f; --accent-soft: rgba(80,210,193,.1);
+  --up: #2ebd85; --down: #f0616d; --up-soft: rgba(46,189,133,.12); --down-soft: rgba(240,97,109,.12);
+  --wait: #e8b04b; --wait-soft: rgba(232,176,75,.12); --body: #c3cdd2;
+  --r: 10px; --ease: cubic-bezier(.2,0,0,1);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--body); }
+body { font: 13px/1.5 Inter, system-ui, sans-serif; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); } .dim { color: var(--dim); }
+.up { color: var(--up); } .down { color: var(--down); } .wait { color: var(--wait); } .acc { color: var(--accent); }
+button { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 7px; padding: 7px 12px; cursor: pointer; transition: border-color 120ms var(--ease), background 120ms var(--ease); }
+button:hover { border-color: #33464f; }
+button:focus-visible, a:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button.link { background: none; border: 0; padding: 0; color: var(--accent); }
+button.danger { border-color: rgba(240,97,109,.4); color: var(--down); }
+a { color: var(--accent); text-decoration: none; }
+input { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line-2); border-radius: 7px; padding: 7px 10px; }
+
+/* mockup chrome: pick a state */
+.mk { position: sticky; top: 0; z-index: 20; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; padding: 10px 16px; background: var(--bar); border-bottom: 1px solid var(--line); }
+.mk b { color: var(--text); margin-right: 10px; font-weight: 600; }
+.mk [aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+main { max-width: 1180px; margin: 0 auto; padding: 28px 24px 96px; transition: padding-right 200ms var(--ease); }
+body.chat-open main { padding-right: 420px; max-width: 1600px; }
+.screen[hidden] { display: none; }
+
+h1 { color: var(--text); font-size: 28px; font-weight: 500; letter-spacing: -.02em; line-height: 1.25; margin: 0 0 6px; max-width: 32ch; }
+h2 { color: var(--text); font-size: 15px; font-weight: 600; margin: 0; }
+.sub { color: var(--muted); font-size: 13.5px; margin: 0; max-width: 70ch; }
+section { border-top: 1px solid var(--line); padding: 20px 0; }
+.head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+.coin { display: inline-flex; align-items: center; gap: 8px; color: var(--text); font-weight: 500; }
+.mark { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 9px; font-weight: 700; color: #111; }
+.m-btc { background: #f7931a; } .m-sol { background: linear-gradient(135deg,#9945ff,#14f195); } .m-eth { background: #8c8fa6; } .m-sui { background: #4da2ff; }
+.id { color: var(--dim); font-size: 11.5px; letter-spacing: .01em; }
+.tag { display: inline-block; font-size: 11.5px; padding: 1px 7px; border-radius: 5px; }
+.tag.wait { background: var(--wait-soft); color: var(--wait); }
+.tag.live { background: var(--accent-soft); color: var(--accent); }
+.tag.won { background: var(--up-soft); color: var(--up); }
+.tag.lost { background: var(--down-soft); color: var(--down); }
+
+/* hero */
+.top { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 24px; align-items: end; padding-bottom: 18px; }
+.totals { display: flex; gap: 26px; margin: 0; }
+.totals div { display: grid; gap: 2px; }
+.totals dt { color: var(--muted); font-size: 11.5px; }
+.totals dd { margin: 0; color: var(--text); font-size: 19px; font-weight: 600; }
+.totals dd.up { color: var(--up); }
+
+/* the market strip: regime, crowding, next scan, Scan now */
+.regime { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)) auto; gap: 18px; align-items: center; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); margin-bottom: 20px; }
+.regime .state { display: grid; gap: 1px; }
+.regime .state b { font-size: 15px; color: var(--wait); font-weight: 600; }
+.regime .state.bull b { color: var(--up); } .regime .state.bear b { color: var(--down); }
+.regime small { color: var(--muted); font-size: 11.5px; display: block; }
+.regime span { color: var(--body); }
+
+/* a proposal from trading-agent */
+.proposal { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; padding: 16px; border: 1px solid rgba(80,210,193,.35); border-radius: var(--r); background: linear-gradient(180deg, var(--accent-soft), transparent 70%); }
+.proposal .who { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; margin-bottom: 8px; }
+.avatar { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--accent); }
+.proposal h3 { margin: 0 0 4px; color: var(--text); font-size: 17px; font-weight: 500; }
+.proposal p { margin: 0 0 12px; max-width: 72ch; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0; }
+.facts div { display: grid; }
+.facts dt { color: var(--muted); font-size: 11.5px; }
+.facts dd { margin: 0; color: var(--text); font-weight: 500; }
+.proposal .act { display: flex; flex-direction: column; gap: 8px; align-self: center; }
+
+/* a trade as a ladder: stop, entry, target, and now */
+.trades { list-style: none; margin: 0; padding: 0; }
+.trades li > button { all: unset; box-sizing: border-box; cursor: pointer; display: grid; grid-template-columns: 210px minmax(0, 1fr) 130px 100px; gap: 18px; align-items: center; width: 100%; padding: 12px 10px; margin: 0 -10px; width: calc(100% + 20px); border-radius: 8px; border-bottom: 1px solid var(--line); }
+.trades li > button:hover, .trades li > button:focus-visible { background: var(--accent-soft); }
+.ladder { position: relative; height: 34px; }
+.ladder .rail { position: absolute; left: 0; right: 0; top: 15px; height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--down-soft) 0 var(--e), var(--up-soft) var(--e) 100%); }
+.ladder .pin { position: absolute; top: 0; transform: translateX(-50%); font-size: 10.5px; color: var(--muted); white-space: nowrap; text-align: center; }
+.ladder .pin::after { content: ""; display: block; width: 2px; height: 10px; margin: 1px auto 0; background: var(--line-2); }
+.ladder .pin.stop { color: var(--down); transform: none; text-align: left; } .ladder .pin.stop::after { margin-left: 0; }
+.ladder .pin.tgt { transform: translateX(-100%); text-align: right; } .ladder .pin.tgt::after { margin-right: 0; }
+.ladder .pin.stop .ladder .pin.stop::after { background: var(--down); }
+.ladder .pin.tgt { color: var(--up); } .ladder .pin.tgt::after { background: var(--up); }
+.ladder .now { position: absolute; top: 11px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+.ladder .now.waiting { background: var(--bg); border: 2px solid var(--wait); box-shadow: 0 0 0 4px var(--wait-soft); }
+.r { text-align: right; }
+.big-r { font-size: 15px; font-weight: 600; }
+
+.empty { padding: 18px 0 6px; color: var(--muted); }
+.empty b { color: var(--text); font-weight: 500; }
+
+/* Show more */
+.more-btn { margin-top: 8px; }
+table { border-collapse: collapse; width: 100%; }
+th { text-align: left; font-weight: 500; font-size: 11.5px; color: var(--muted); padding: 0 12px 8px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th.r, td.r { text-align: right; }
+.stats { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
+.stats div { padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.stats dt { color: var(--muted); font-size: 11.5px; } .stats dd { margin: 0; color: var(--text); font-size: 16px; font-weight: 600; }
+.cols { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 32px; }
+
+/* the chat, folded or open on the right */
+.launch { position: fixed; right: 20px; bottom: 20px; z-index: 10; display: flex; gap: 10px; align-items: center; padding: 10px 16px 10px 10px; border-radius: 999px; border: 1px solid rgba(80,210,193,.4); background: var(--panel); text-align: left; }
+.launch b { display: block; color: var(--text); } .launch small { color: var(--muted); }
+.chat { position: fixed; top: 52px; right: 0; bottom: 0; width: 400px; z-index: 10; display: flex; flex-direction: column; border-left: 1px solid var(--line); background: var(--bar); }
+.chat[hidden] { display: none; }
+.chat header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.chat header b { color: var(--text); } .chat header button { margin-left: auto; }
+.chat ol { list-style: none; margin: 0; padding: 16px; display: grid; gap: 10px; overflow: auto; flex: 1; align-content: start; }
+.chat li { max-width: 88%; padding: 8px 12px; border-radius: 10px; background: var(--panel-2); }
+.chat li.you { justify-self: end; background: var(--accent-soft); color: var(--text); }
+.chat .card { border: 1px solid var(--line-2); border-radius: 8px; padding: 8px 10px; margin-top: 8px; background: var(--panel); }
+.chat .chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 16px 10px; }
+.chat .chips button { font-size: 12px; padding: 4px 10px; border-radius: 999px; }
+.chat form { display: flex; gap: 8px; padding: 12px 16px 16px; border-top: 1px solid var(--line); }
+.chat form input { flex: 1; }
+
+/* the trade's panel and the review: dialogs */
+dialog { color: var(--body); background: var(--panel); border: 1px solid var(--line-2); border-radius: 12px; padding: 22px; max-width: 520px; width: calc(100% - 32px); }
+dialog::backdrop { background: rgba(0,0,0,.55); }
+dialog h2 { font-size: 17px; margin-bottom: 4px; }
+dialog.drawer { margin: 0 0 0 auto; height: 100vh; max-height: 100vh; max-width: 680px; border-radius: 0; border-width: 0 0 0 1px; }
+.btns { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; flex-wrap: wrap; }
+.btns .left { margin-right: auto; }
+.figs { display: flex; gap: 32px; margin: 16px 0; }
+.figs small { display: block; color: var(--muted); }
+.figs b { font-size: 26px; font-weight: 600; color: var(--text); }
+.chart { width: 100%; height: 150px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); margin: 8px 0 16px; }
+.rv { list-style: none; margin: 10px 0; padding: 0; }
+.rv li { display: grid; grid-template-columns: 70px 1fr auto; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.rv li b { color: var(--text); font-weight: 500; }
+.skeleton { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--panel) 0, var(--panel-2) 50%, var(--panel) 100%); background-size: 200% 100%; animation: shimmer 1.4s infinite; margin: 10px 0; }
+@keyframes shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+.alert { display: flex; gap: 12px; align-items: center; padding: 12px 14px; border: 1px solid rgba(240,97,109,.4); border-radius: var(--r); background: var(--down-soft); color: var(--text); }
+
+@media (max-width: 860px) {
+  body.chat-open main { padding-right: 24px; }
+  .chat { width: 100%; }
+  .top, .proposal, .cols { grid-template-columns: 1fr; }
+  .regime { grid-template-columns: 1fr 1fr; }
+  .stats { grid-template-columns: repeat(3, 1fr); }
+  .trades li > button { grid-template-columns: 1fr auto; }
+  .trades .ladder { grid-column: 1 / -1; grid-row: 2; }
+  main { padding: 20px 16px 96px; }
+}
+</style>
+</head>
+<body>
+<div class="mk" role="toolbar" aria-label="Mockup state">
+  <b>Trading pot mockup</b>
+  <button aria-pressed="true" data-s="live">A trade on, one proposed</button>
+  <button aria-pressed="false" data-s="first">First day: $100, nothing yet</button>
+  <button aria-pressed="false" data-s="loading">Loading</button>
+  <button aria-pressed="false" data-s="error">Binance down</button>
+  <span style="flex:1"></span>
+  <button data-open="drawer">Open a trade's panel</button>
+  <button data-open="review">Review dialog</button>
+</div>
+
+<main>
+  <!-- ======================= A trade on, one proposed ======================= -->
+  <div class="screen" data-screen="live">
+    <div class="top">
+      <div>
+        <h1>Pot $101.36, up $1.36 from trading. One trade on, one waiting for you.</h1>
+        <p class="sub">$100 put in on 17 Nov. Test phase: $10 a trade, at most $1 at risk. Next goal A$5K.</p>
+      </div>
+      <dl class="totals">
+        <div><dt>Put in</dt><dd class="num">$100</dd></div>
+        <div><dt>Trading result</dt><dd class="num up">+$1.36</dd></div>
+        <div><dt>Open risk</dt><dd class="num">$1.38</dd></div>
+        <div><dt>Month's loss limit</dt><dd class="num">$0 <span class="muted" style="font-size:12px;font-weight:400">of $6</span></dd></div>
+      </dl>
+    </div>
+
+    <div class="regime" aria-label="The market today">
+      <div class="state"><small>Regime</small><b>Neutral</b></div>
+      <div><small>BTC</small><span>above its 200-day, 50-day still under it</span></div>
+      <div><small>Crowding</small><span>Funding normal, open interest flat</span></div>
+      <div><small>Next scan</small><span>18 Nov (Wed) 11:15am</span></div>
+      <button>Scan now</button>
+    </div>
+
+    <section aria-labelledby="p-title" style="border-top:0;padding-top:0">
+      <div class="head"><h2 id="p-title">Waiting for you</h2><span class="muted">Proposed 11:16am today</span></div>
+      <div class="proposal">
+        <div>
+          <div class="who"><span class="avatar" aria-hidden="true">↗</span> trading-agent proposes</div>
+          <h3><span class="coin"><span class="mark m-sui">S</span>SUI</span>, trend pullback to its 20-day average</h3>
+          <p>Up trend with higher lows, stronger than BTC over 30 days. Pulled back to the 20-day on falling volume; the stop sits under last week's low, 2.4 ATR away.</p>
+          <dl class="facts">
+            <div><dt>Entry, limit</dt><dd class="num">3.4172</dd></div>
+            <div><dt>Stop</dt><dd class="num down">3.1388</dd></div>
+            <div><dt>Target</dt><dd class="num up">4.0091</dd></div>
+            <div><dt>Size</dt><dd class="num">$10.00 <span class="muted">(2.93 SUI)</span></dd></div>
+            <div><dt>At risk</dt><dd class="num">$0.81 <span class="muted">(8.1%)</span></dd></div>
+            <div><dt>Reward to risk</dt><dd class="num">2.1 : 1</dd></div>
+            <div><dt>Crowding</dt><dd>Clear</dd></div>
+          </dl>
+        </div>
+        <div class="act">
+          <button class="primary" data-open="review">Review</button>
+          <button>Dismiss</button>
+          <button class="link">Ask why</button>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="o-title">
+      <div class="head"><h2 id="o-title">Open trades</h2><span class="muted">2 on, $1.38 at risk</span></div>
+      <ul class="trades">
+        <li><button data-open="drawer" aria-label="SOL trade: open its panel">
+          <span><span class="coin"><span class="mark m-sol">S</span>SOL</span><br><span class="id">TRD-SOL-26W47-1, pullback</span></span>
+          <span class="ladder" style="--e:33%" aria-label="Stop 131.20, entry 135.47, target 144.10, now 138.02">
+            <span class="rail"></span>
+            <span class="pin stop" style="left:0%">131.20</span>
+            <span class="pin" style="left:33%">135.47</span>
+            <span class="pin tgt" style="left:100%">144.10</span>
+            <span class="now" style="left:52%"></span>
+          </span>
+          <span class="r"><span class="big-r up num">+0.6R</span><br><span class="up num">+$0.19</span></span>
+          <span class="r"><span class="tag live">In trade</span></span>
+        </button></li>
+        <li><button data-open="drawer" aria-label="ETH trade: open its panel">
+          <span><span class="coin"><span class="mark m-eth">E</span>ETH</span><br><span class="id">TRD-ETH-26W47-1, breakout retest</span></span>
+          <span class="ladder" style="--e:30%" aria-label="Stop 1,741.30, entry 1,788.60, target 1,903.40, now 1,802.55; entry not filled">
+            <span class="rail"></span>
+            <span class="pin stop" style="left:0%">1,741.30</span>
+            <span class="pin" style="left:30%">1,788.60</span>
+            <span class="pin tgt" style="left:100%">1,903.40</span>
+            <span class="now waiting" style="left:39%"></span>
+          </span>
+          <span class="r"><span class="muted">0.8% above entry</span></span>
+          <span class="r"><span class="tag wait">Entry waiting</span></span>
+        </button></li>
+      </ul>
+    </section>
+
+    <section aria-labelledby="c-title">
+      <div class="head"><h2 id="c-title">Closed this month</h2><span class="muted">1 trade, +1.0R, +$1.05</span></div>
+      <button class="link more-btn" id="more">Show more: every trade, the numbers, the pot's ledger, Check against Binance</button>
+      <div id="more-body" hidden style="margin-top:16px">
+        <dl class="stats">
+          <div><dt>Trades</dt><dd class="num">1</dd></div>
+          <div><dt>Win rate</dt><dd class="num">100%</dd></div>
+          <div><dt>Average win</dt><dd class="num">+1.0R</dd></div>
+          <div><dt>Average loss</dt><dd class="num">—</dd></div>
+          <div><dt>Expectancy</dt><dd class="num">+1.0R</dd></div>
+          <div><dt>Deepest drawdown</dt><dd class="num">0%</dd></div>
+        </dl>
+        <p class="muted" style="margin:-8px 0 16px">The method is judged after 30 trades: 1 of 30 so far.</p>
+        <div class="cols">
+          <div>
+            <h2 style="margin-bottom:8px">Every trade</h2>
+            <table>
+              <thead><tr><th>Trade</th><th>Setup</th><th class="r">Entry</th><th class="r">Exit</th><th class="r">Result</th><th class="r">Fees</th><th>Rules</th></tr></thead>
+              <tbody>
+                <tr><td><span class="coin"><span class="mark m-btc">B</span>BTC</span> <span class="id">TRD-BTC-26W47-1</span></td><td>Pullback</td><td class="r num">63,412.80</td><td class="r num">64,688.10</td><td class="r num up">+1.0R, +$1.05</td><td class="r num muted">$0.02</td><td><span class="tag won">Kept</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div>
+            <h2 style="margin-bottom:8px">The pot's ledger</h2>
+            <table>
+              <thead><tr><th>Ref</th><th>What</th><th class="r">USDC</th></tr></thead>
+              <tbody>
+                <tr><td class="id">POT-IN-1</td><td>Put in, 17 Nov</td><td class="r num">+100.00</td></tr>
+                <tr><td class="id">TRD-BTC-26W47-1</td><td>Closed, after fees</td><td class="r num up">+1.05</td></tr>
+                <tr><td class="id">TRD-SOL-26W47-1</td><td>Open, value now</td><td class="r num up">+0.31</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:12px"><button>Check against Binance</button> <button class="link" style="margin-left:10px">Export CSV</button></p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ======================= First day ======================= -->
+  <div class="screen" data-screen="first" hidden>
+    <div class="top">
+      <div>
+        <h1>Pot $100. No trades yet: trading-agent waits for its setup.</h1>
+        <p class="sub">$100 put in today. Test phase: every trade is $10, with at most $1 at risk (a stop within 10%).</p>
+      </div>
+      <dl class="totals">
+        <div><dt>Put in</dt><dd class="num">$100</dd></div>
+        <div><dt>Trading result</dt><dd class="num">$0</dd></div>
+        <div><dt>Open risk</dt><dd class="num">$0</dd></div>
+      </dl>
+    </div>
+    <div class="regime">
+      <div class="state"><small>Regime</small><b>Neutral</b></div>
+      <div><small>BTC</small><span>above its 200-day, 50-day still under it</span></div>
+      <div><small>Crowding</small><span>Funding normal, open interest flat</span></div>
+      <div><small>Next scan</small><span>18 Nov (Wed) 11:15am</span></div>
+      <button class="primary">Scan now</button>
+    </div>
+    <section>
+      <div class="head"><h2>Open trades</h2></div>
+      <p class="empty"><b>No setup today.</b> SOL and SUI are near their 20-day averages but haven't held them; trading-agent looks again after tomorrow's daily close. Most days end like this, and that's the method working.</p>
+    </section>
+  </div>
+
+  <!-- ======================= Loading ======================= -->
+  <div class="screen" data-screen="loading" hidden aria-busy="true">
+    <p class="muted">Reading the pot…</p>
+    <div class="skeleton" style="width:55%;height:28px"></div>
+    <div class="skeleton" style="width:40%"></div>
+    <div class="skeleton" style="height:56px;margin-top:20px"></div>
+    <div class="skeleton" style="height:40px;margin-top:20px"></div>
+    <div class="skeleton" style="height:40px"></div>
+  </div>
+
+  <!-- ======================= Error ======================= -->
+  <div class="screen" data-screen="error" hidden>
+    <h1>Pot $101.36 by the desk's records.</h1>
+    <p class="sub" style="margin-bottom:16px">$100 put in, 2 trades open.</p>
+    <div class="alert" role="alert"><span>Binance didn't answer, so prices and results are missing. Your stops and targets sit on Binance, so they still work. Proposals wait until it's back.</span><button>Try again</button></div>
+  </div>
+</main>
+
+<button class="launch" id="launch" aria-label="Open trading-agent's chat"><span class="avatar" aria-hidden="true">↗</span><span><b>Ask trading-agent</b><small>Trade, move a stop, ask why</small></span></button>
+<aside class="chat" id="chat" hidden aria-label="trading-agent">
+  <header><span class="avatar" aria-hidden="true">↗</span><b>trading-agent</b><span class="muted">propose only</span><button id="fold" aria-label="Fold trading-agent away">⟩</button></header>
+  <ol>
+    <li class="you">move the SOL stop to break-even once it's 1R up</li>
+    <li>SOL is at +0.6R now. I'll propose it at 1R, which is 139.74. Want me to set an alert there?</li>
+    <li class="you">buy $10 BTC at 62,800, stop 60,100</li>
+    <li>That's $0.43 at risk, 0.4% of the pot, inside the rules. Target 68,200 gives 2 : 1.
+      <div class="card"><b>Buy BTC</b> limit 62,800.00, $10.00<br><span class="muted">Stop 60,100.00, target 68,200.00, 2.0 : 1</span><br><label><input type="checkbox" checked> Include</label></div>
+    </li>
+  </ol>
+  <div class="chips"><button>Why no trade today?</button><button>How's the pot doing?</button><button>Tighten my stops</button></div>
+  <form onsubmit="return false"><input aria-label="Message to trading-agent" placeholder="Message trading-agent"><button class="primary">Send</button></form>
+</aside>
+
+<!-- the trade's panel -->
+<dialog class="drawer" id="drawer" aria-labelledby="d-title">
+  <div class="head" style="margin-bottom:0">
+    <h2 id="d-title"><span class="coin"><span class="mark m-sol">S</span>SOL, trend pullback</span></h2>
+    <button class="link" data-close>Close</button>
+  </div>
+  <span class="id">TRD-SOL-26W47-1, opened 17 Nov 2:40pm, Neutral market</span>
+  <div class="figs">
+    <div><small>Now</small><b class="num">138.02</b></div>
+    <div><small>Result so far</small><b class="num up">+0.6R</b> <span class="up">+$0.31</span></div>
+  </div>
+  <svg class="chart" viewBox="0 0 600 150" preserveAspectRatio="none" role="img" aria-label="SOL daily price with the entry, stop and target">
+    <line x1="0" x2="600" y1="128" y2="128" stroke="#f0616d" stroke-dasharray="4 4"/>
+    <line x1="0" x2="600" y1="96" y2="96" stroke="#8c9aa3" stroke-dasharray="4 4"/>
+    <line x1="0" x2="600" y1="22" y2="22" stroke="#2ebd85" stroke-dasharray="4 4"/>
+    <polyline fill="none" stroke="#50d2c1" stroke-width="2" points="0,70 40,60 80,66 120,50 160,58 200,44 240,62 280,80 320,92 360,98 400,90 440,84 480,80 520,76 560,74 600,75"/>
+    <text x="6" y="124" fill="#f0616d" font-size="11">Stop 131.20</text>
+    <text x="6" y="92" fill="#8c9aa3" font-size="11">Entry 135.47</text>
+    <text x="6" y="18" fill="#2ebd85" font-size="11">Target 144.10</text>
+  </svg>
+  <dl class="facts" style="gap:10px 28px">
+    <div><dt>Size</dt><dd class="num">$10.00 <span class="muted">(0.0738 SOL)</span></dd></div>
+    <div><dt>At risk</dt><dd class="num">$0.32</dd></div>
+    <div><dt>Reward to risk</dt><dd class="num">2.0 : 1</dd></div>
+    <div><dt>Fees so far</dt><dd class="num">$0.01</dd></div>
+    <div><dt>Rules</dt><dd>All kept</dd></div>
+  </dl>
+  <h2 style="margin:20px 0 8px">Orders</h2>
+  <table>
+    <thead><tr><th>Binance tag</th><th>What</th><th class="r">Price</th><th>State</th></tr></thead>
+    <tbody>
+      <tr><td class="id">TRD-SOL-26W47-1-E</td><td>Entry, limit buy</td><td class="r num">135.47</td><td><span class="tag won">Filled</span></td></tr>
+      <tr><td class="id">TRD-SOL-26W47-1-X</td><td>Exit, OCO: stop and target as one</td><td class="r num">131.20 / 144.10</td><td><span class="tag live">On Binance</span></td></tr>
+    </tbody>
+  </table>
+  <p class="muted" style="margin-top:12px">Why: pulled back to the 20-day average on falling volume, above a higher low. The stop only moves toward profit.</p>
+  <div class="btns">
+    <button class="danger left">Close at market</button>
+    <button>Move stop to break-even</button>
+    <button class="primary" data-close>Done</button>
+  </div>
+</dialog>
+
+<!-- the review before anything reaches Binance -->
+<dialog id="review" aria-labelledby="r-title">
+  <h2 id="r-title">Place the SUI trade?</h2>
+  <ul class="rv">
+    <li><span class="tag live">Entry</span><span><b>SUI</b> limit buy 3.4172</span><span class="num">$10.00</span></li>
+    <li><span class="tag lost">Stop</span><span>sell all at 3.1388</span><span class="num down">−$0.81</span></li>
+    <li><span class="tag won">Target</span><span>sell all at 4.0091</span><span class="num up">+$1.73</span></li>
+  </ul>
+  <p class="muted">The entry goes to Binance now, tagged TRD-SUI-26W47-1. Once it fills, the desk places the stop and target there as one OCO order, so they hold even if the desk is off.</p>
+  <div class="btns"><button data-close>Not yet</button><button class="primary" data-close>Place the trade</button></div>
+</dialog>
+
+<script>
+const $ = (s) => document.querySelector(s);
+document.querySelectorAll('.mk [data-s]').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.mk [data-s]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  document.querySelectorAll('.screen').forEach((s) => { s.hidden = s.dataset.screen !== b.dataset.s; });
+}));
+document.querySelectorAll('[data-open]').forEach((b) => b.addEventListener('click', () => $('#' + b.dataset.open).showModal()));
+document.querySelectorAll('dialog').forEach((d) => {
+  d.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => d.close()));
+  d.addEventListener('click', (e) => { if (e.target === d) d.close(); }); // click away closes (design-system 9a)
+});
+const chat = (open) => { $('#chat').hidden = !open; $('#launch').hidden = open; document.body.classList.toggle('chat-open', open); };
+$('#launch').addEventListener('click', () => chat(true));
+$('#fold').addEventListener('click', () => chat(false));
+$('#more').addEventListener('click', () => { const m = $('#more-body'); m.hidden = !m.hidden; });
+</script>
+</body>
+</html>

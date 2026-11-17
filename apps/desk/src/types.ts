@@ -125,18 +125,6 @@ export interface Terminal {
   openOrders: Order[];
 }
 
-export interface SmartTradeRequest {
-  clientId: string;
-  symbol: string;
-  entry: "market" | "limit";
-  limitPrice?: string;
-  spend: string;
-  takeProfit?: string;
-  stopLoss?: string;
-  // Past a Profile rule the pre-trade check named, by the owner's choice (decision 58).
-  override?: boolean;
-}
-
 // The AI desk (TODO 3): tickers, the watchlist, charts and signals (apps/api/src/api/handler.py).
 export interface Ticker {
   coin: string;
@@ -186,13 +174,163 @@ export interface Signal {
 
 export type PlanAction = "Buy" | "Add" | "Hold" | "Trim" | "Sell" | "Wait";
 
-// The Profile's three risk rules; null where the owner hasn't set one (decision 58).
-export interface RiskRules {
-  maxCoinPct: string | null;
-  tradeBudgetAud: string | null;
-  maxLossPct: string | null;
+// The trading agent (TODO 6): its versioned profile, and a run of Analyse on one coin.
+export type AgentStepKey = "macro" | "technical" | "planfit" | "debate" | "risk" | "decision";
+export type AgentStyle = "careful" | "balanced" | "opportunistic";
+export type AgentFocus = "dca" | "swing" | "both";
+export type AgentAutonomy = "advise" | "propose";
+
+export interface AgentDoc {
+  name: string;
+  title: string;
+  style: AgentStyle;
+  focus: AgentFocus;
+  brief: string;
+  always: string[];
+  never: string[];
+  confidenceFloor: number;
+  autonomy: AgentAutonomy;
+  steps: Record<AgentStepKey, { on: boolean; model: string }>;
 }
 
+export interface AgentPage {
+  version: number; // 0 until the first save: the defaults
+  time: number | null;
+  agent: AgentDoc;
+  history: { n: number; time: number; author: string; summary: string }[]; // newest first
+  told: string;
+  estimate: string; // US$ a run
+  models: { id: string; name: string }[];
+  steps: { key: AgentStepKey; title: string; who: string; fixed: boolean }[];
+}
+
+// One of the owner's Markdown files (decision 61), exactly as written. `error` is set when the
+// latest edit didn't parse; the last good version stays in force.
+export interface MarkdownFile {
+  markdown: string;
+  version: number;
+  time: number | null;
+  error: string | null;
+}
+
+// My agents (TODO 10): a file's header and schedule. `day` 0 is Monday; `minute` is from
+// midnight, Sydney time. An item with no day is a trigger ("When the USDC lands").
+export interface MyAgentSlot {
+  day: number | null;
+  minute: number | null;
+  label: string;
+}
+
+// A job the scheduler runs for an agent (api.schedule).
+export interface AgentJob {
+  key: string;
+  agent: string;
+  label: string;
+  when: string;
+  next: number;
+  last: { at: number; status: "ok" | "failed" | "running"; line: string } | null;
+}
+
+export interface MyAgent {
+  slug: string;
+  file: string;
+  purpose: string;
+  about: string;
+  model: { id: string; name: string; effort: string };
+  autonomy: string;
+  cost: string;
+  icon: string;
+  persona: { title: string; traits: string };
+  sends: string;
+  coins: string[];
+  schedule: MyAgentSlot[];
+  next: { at: number; label: string } | null;
+  version: number;
+  time: number;
+  running: boolean;
+  jobs?: AgentJob[];
+}
+
+export interface MyAgentsPage {
+  agents: MyAgent[];
+  folder: string;
+  scheduleOn?: boolean;
+}
+
+export interface RunStep {
+  key: "brief" | AgentStepKey;
+  title: string;
+  who: string;
+  model: string | null;
+  status: "pending" | "done" | "skipped" | "failed";
+  summary: string;
+  points: string[];
+  events: { when: string; what: string }[];
+  cost: string;
+  note: string | null;
+}
+
+export interface AgentTicket {
+  side: "buy" | "sell";
+  price: string;
+  qty: string;
+  totalUsd: string;
+  totalAud: string;
+  breaks: RuleBreak[]; // empty: within the Profile
+}
+
+export type TicketChoice = "used" | "edited" | "dismissed";
+
+export interface AgentRun {
+  id: number;
+  coin: string;
+  started: number;
+  finished: number | null;
+  status: "running" | "done" | "stopped";
+  agentVersion: number;
+  profileVersion: number;
+  cost: string;
+  agent: { name: string; title: string; autonomy: string };
+  price: string;
+  change24h: string;
+  position: {
+    held: boolean;
+    qty: string;
+    avgCost: Num;
+    value: string;
+    pnlPct: Num;
+    weightPct: Num;
+  };
+  cashUsd: string;
+  levels: { id: string; price: string; source: string; awayPct: Num }[];
+  guardrails: {
+    capAud: Num;
+    monthSpentAud: string;
+    maxPctPerCoin: Num;
+    sharePct: Num;
+    perTradeAud: Num;
+    minCashAud: Num;
+    audPerUsd: string;
+  };
+  steps: RunStep[];
+  signal: Signal | null;
+  ticket: AgentTicket | null;
+  noTicket: string | null;
+  choice: TicketChoice | null;
+  asks: { q: string; a: string }[];
+  outOfDate: boolean;
+  busy?: boolean; // another request holds the step: nothing was run
+}
+
+export interface AgentCall {
+  coin: string;
+  action: string;
+  confidence: number;
+  ranAt: number;
+  outOfDate: boolean;
+}
+
+// A price alert on a coin (decision 46): sent to Telegram when the price crosses it.
 export interface PriceAlert {
   id: number;
   coin: string;
@@ -203,40 +341,10 @@ export interface PriceAlert {
   triggered: number | null;
 }
 
-// The live half of the AI panel: everything worked out in code (decision 46).
-export interface PlanFacts {
+export interface CoinRank {
   coin: string;
-  pair: string;
-  quote: string;
-  price: string;
-  position: {
-    held: boolean;
-    qty: string;
-    avgCost: Num;
-    invested: Num;
-    value: Num;
-    pnl: Num;
-    pnlPct: Num;
-    weightPct: Num;
-  };
-  cash: Num;
-  total: Num;
-  audPerUsd: string;
-  rules: RiskRules;
-  whatIf: {
-    amount: Num;
-    price: string;
-    newAvg: Num;
-    breakEvenBefore: Num;
-    breakEvenAfter: Num;
-    weightBefore: Num;
-    weightAfter: Num;
-    cashLeft: Num;
-  };
-  checks: { canAdd: boolean; pastMaxLoss: boolean; notes: string[] };
-  levels: { id: string; price: string; source: string; awayPct: Num }[];
-  track: { scored: number; correct: number; hours: number };
-  alerts: PriceAlert[];
+  priority: "high" | "medium" | "low";
+  reason: string;
 }
 
 export interface WatchedCoin {
@@ -309,19 +417,6 @@ export interface OrderRequest {
 }
 
 // Ladder buys (decision 39): limit buys from top to bottom, each a smart trade.
-export interface LadderRequest {
-  clientId: string;
-  symbol: string;
-  top: string;
-  bottom: string;
-  count: string;
-  spend: string;
-  weighting: "equal" | "lower";
-  takeProfit?: string;
-  stopLoss?: string;
-  override?: boolean;
-}
-
 // The api's /deposits reply (apps/api/src/api/deposits.py, decision 31).
 export interface FyDeposits {
   fy: string;
@@ -336,7 +431,7 @@ export interface FyDeposits {
     amount: string;
     network: string;
     aud: Num;
-    basis: "paid" | "estimate" | "unknown";
+    basis: "paid" | "chunk" | "estimate" | "unknown";
     rate: Num;
   }[];
 }
@@ -643,6 +738,27 @@ export type KeyPoint =
   | { kind: "mover"; coin: string; pct: string; rule: false }
   | { kind: "addZone"; coin: string; low: string; high: string; rule: false }
   | { kind: "nearInvalidation"; coin: string; pct: string; price: string; rule: false };
+// The Dashboard's week rail (decision 63): Monday to Sunday with the plan's buys on their days.
+export type BuyState = "upcoming" | "due" | "done" | "missed" | "unknown";
+export interface CoachWeek {
+  today: string;
+  days: { date: string; name: string; kind: "" | "buy" | "extra" }[];
+  buy: {
+    date: string;
+    aud: string;
+    boughtAud: string | null;
+    state: BuyState;
+    // With a DCA book plan (decision 72): the weekly buy in the quote, and what's bought of it.
+    usdc?: string;
+    boughtUsdc?: string;
+    quote?: string;
+    coins?: string[];
+  } | null;
+  extra: { date: string; aud: string; fearGreedBelow: number | null; state: BuyState } | null;
+  boughtAud: string | null;
+  maxWeekAud: string | null;
+  maxMonthAud: string | null;
+}
 export interface Coach {
   greeting: string;
   mood: Mood;
@@ -661,14 +777,16 @@ export interface Coach {
     leftAud: string | null;
     overAud: string | null;
     usedPct: string | null;
+    resetsOn?: string; // the 1st of next month, when the cap starts again
+    daysLeft?: number;
     lesson: ProfileLesson | null;
   };
   keyPoints: KeyPoint[];
   day: string;
+  week?: CoachWeek | null; // decision 63: null before profile.md is v2
   message: {
     lines: string[];
     coach: string;
-    quote: { text: string; author: string } | null;
     link: "trade" | null;
     source: "plain" | "model";
     outOfDate?: boolean;
@@ -696,10 +814,6 @@ export interface ProfileHolding {
 export interface ProfileLesson {
   year: string | null;
   text: string;
-}
-export interface ProfileQuote {
-  text: string;
-  author: string | null;
 }
 export interface ProfileRules {
   monthly_deposit_cap_aud: Num;
@@ -737,8 +851,8 @@ export interface ProfileDoc {
   rules: ProfileRules;
   holdings: ProfileHolding[];
   lessons: ProfileLesson[];
-  quotes: ProfileQuote[];
   additional_info: string;
+  markdown: string;
   locks: { goals: boolean; min_cash: boolean; deposit_cap: boolean };
 }
 export type ProfileSection = Exclude<keyof ProfileDoc, "locks">;
@@ -755,7 +869,9 @@ export interface ProfileSuggestion {
   time: number;
   author: string;
   baseVersion: number;
-  sections: Partial<ProfileDoc>;
+  sections?: Partial<ProfileDoc>;
+  markdown?: string;
+  diff?: DiffLine[];
   changes: ProfileChange[];
   summary: string;
   reason: string;
@@ -804,26 +920,117 @@ export interface ProfilePage {
     checks: Partial<Record<keyof ProfileRules, { status: CheckStatus; text: string }>>;
     foundations: Record<string, FoundationStatus>;
   };
+  board: ProfileBoard | null;
   suggestions: ProfileSuggestion[];
   planner: PlannerReview | null;
   recap: Recap | null;
 }
+
+// profile.md v2's four widgets (decision 62), worked out by the api. Money is whole A$ or US$.
+export interface DiffLine {
+  kind: "same" | "del" | "add" | "gap";
+  text: string;
+}
+export interface BoardTick {
+  usd?: string;
+  aud?: string;
+  year?: number;
+  state: "passed" | "next" | "";
+}
+export interface BoardSummary {
+  name: string | null;
+  age: number | null;
+  subline: string;
+  risk: string | null;
+  goalPct: Num;
+  dca: {
+    weeklyAud: Num;
+    day: string | null;
+    extraAud: Num;
+    fearGreedBelow: number | null;
+    maxMonthAud: Num;
+  };
+  split: string[];
+  splitLabel: string | null;
+  cash: { totalAud: Num; floorAud: Num; below: boolean };
+  chips: string[];
+  openItems: string[];
+  lesson: { title: string; story: string; lesson: string } | null;
+}
+export interface BoardRoad {
+  known: boolean;
+  goalUsd: string;
+  goalDate: string;
+  ticks: BoardTick[];
+  then: { usd: string; year: number } | null;
+  totalUsd?: string;
+  totalAud?: string;
+  parts?: { taoAud: string; binanceAud: string; emergencyAud: string };
+  pct?: Num;
+  onTrack?: boolean;
+  pathUsd?: Num;
+  leg?: {
+    fromUsd: string;
+    toUsd: string;
+    year: number;
+    pct: Num;
+    toGoUsd: string;
+    monthsLeft: number;
+  } | null;
+  thenPct?: Num;
+  path: { date: string; usd: string }[];
+  today: string;
+}
+export interface BoardStack {
+  known: boolean;
+  target: string;
+  weeklyAud: Num;
+  day: string | null;
+  bought: boolean | null;
+  ticks: string[];
+  held?: string;
+  pct?: Num;
+  valueAud?: Num;
+  priceAud?: Num;
+  next?: Num;
+  leg?: { from: string; to: string; pct: Num; toGo: string; weeksLeft: number | null } | null;
+  projected?: string | null;
+}
+export interface BoardCash {
+  totalAud: string;
+  floorAud: string;
+  pct: Num;
+  parkedAud: string;
+  emergencyAud: string;
+  parkedPct: Num;
+  emergencyPct: Num;
+  monthlyAud: Num;
+  shortAud: string;
+  full: boolean;
+  ticks: BoardTick[];
+  projected: string | null;
+  emergency: { targetAud: Num; pct: Num; toGoAud: Num; months: number } | null;
+}
+export interface ProfileBoard {
+  summary: BoardSummary;
+  road: BoardRoad | null;
+  stack: BoardStack | null;
+  cash: BoardCash | null;
+  fx: { audPerUsd: Num; date: string | null };
+}
+export interface ProfileVersionDetail extends ProfileVersion {
+  markdown: string;
+  diff: DiffLine[];
+}
+export type CommandReply =
+  | { kind: "answer"; answer: string; question: string; profileVersion: number }
+  | { kind: "change"; suggestion: ProfileSuggestion };
 export interface ProfileVersion {
   n: number;
   time: number;
   author: string;
   summary: string;
   reason: string;
-}
-export type CommandReply =
-  | { kind: "answer"; answer: string; question: string; profileVersion: number }
-  | { kind: "change"; suggestion: ProfileSuggestion };
-export interface ScoreRow {
-  rule: string;
-  label: string;
-  kept: number;
-  broken: number;
-  brokenResultPct: string | null;
 }
 export interface RuleBreak {
   rule: string;
@@ -942,4 +1149,396 @@ export interface TelegramSettings {
   linkCode: string | null;
   time: string;
   lastSent: string | null;
+}
+
+// The DCA book (TODO 11): five lifelong positions fed only by orders placed from the desk.
+export type DcaSource =
+  "weekly" | "named" | "close-out" | "trim" | "buy-back" | "desk" | "imported";
+export interface DcaPlan {
+  start: string;
+  weeks: number;
+  orders: { coin: string; spend: string; odds: number }[];
+}
+export interface DcaOrder {
+  ref: string;
+  coin: string;
+  side: "buy" | "sell";
+  kind: "limit" | "market";
+  source: DcaSource;
+  link: string | null;
+  week: string;
+  price: string | null;
+  qty: string | null;
+  spend: string | null;
+  status: "placing" | "open" | "filled" | "cancelled";
+  filledQty: string;
+  filledQuote: string;
+  avgPrice: string | null;
+  fee: string;
+  created: number;
+  updated: number;
+}
+export interface DcaPosition {
+  coin: string;
+  id: string;
+  since: number | null;
+  qty: string;
+  avgCost: string | null;
+  avgCostAud: string | null;
+  added: string;
+  price: string | null;
+  value: string | null;
+  pnl: string | null;
+  pnlPct: string | null;
+  realised: string;
+  fees: string;
+}
+export interface DcaTick {
+  week: number;
+  key: string;
+  friday: string;
+  state: "bought" | "missed" | "now";
+  trim: boolean;
+  usdc: string;
+}
+export interface DcaBook {
+  quote: string;
+  rate: string;
+  plan: DcaPlan | null;
+  positions: DcaPosition[];
+  totals: {
+    added: string;
+    value: string | null;
+    pnl: string | null;
+    pnlPct: string | null;
+    realised: string;
+    fees: string;
+  };
+  progress: {
+    week: number;
+    weeks: number;
+    weekly: string;
+    onPlan: string;
+    planTotal: string;
+    ticks: DcaTick[];
+  } | null;
+  week: { key: string; start: number; closeOut: number; orders: DcaOrder[] };
+  next: { key: string; start: number; closeOut: number };
+  orders: DcaOrder[];
+  priceError: string | null;
+}
+export interface DcaOdds {
+  hit: number;
+  weeks: number;
+  pct: number | null;
+  few: boolean;
+}
+export interface DcaWeekPlan {
+  week: string;
+  closeOut: number;
+  quote: string;
+  orders: {
+    coin: string;
+    spend: string;
+    price: string;
+    now: string;
+    target: number;
+    odds: DcaOdds;
+  }[];
+}
+export interface DcaOrderRequest {
+  coin: string;
+  side?: "buy" | "sell";
+  kind?: "limit" | "market";
+  price?: string;
+  spend?: string;
+  qty?: string;
+  source: DcaSource;
+  link?: string;
+  override?: boolean;
+}
+
+// Add or Remove funds on the DCA book (TODO 11): dca-agent's split, checked by the desk.
+export interface FundsOrder {
+  coin: string;
+  pct: string;
+  usdc: string;
+  price: string;
+  now: string;
+  qty: string;
+  odds: { hit: number; windows: number; pct: number | null };
+  reason: string;
+}
+export interface FundsPlan {
+  side: "buy" | "sell";
+  amount: string;
+  quote: string;
+  orders: FundsOrder[];
+  note: string;
+  said: string[];
+  // Every plan coin not in the orders, at the desk's price, with why: a share brings it back.
+  skipped: FundsOrder[];
+  by: "dca-agent" | "desk";
+  reply?: string;
+}
+
+// Check against Binance: every order tagged DCA- on Binance, against the book.
+export interface DcaCheck {
+  onBinance: number;
+  inBook: number;
+  matched: number;
+  differ: {
+    ref: string;
+    coin: string;
+    book: { status: string; filledQty: string };
+    binance: { status: string; filledQty: string };
+  }[];
+  onlyBook: DcaOrder[];
+  onlyBinance: { ref: string; coin: string; side: string; status: string; filledQty: string }[];
+  at: number;
+  fixed?: number;
+  added?: number;
+}
+
+// A change dca-agent proposes to an open order, checked by the desk.
+export interface OpenChange {
+  ref: string;
+  coin: string;
+  side: "buy" | "sell";
+  was: string;
+  price: string;
+  usdc: string;
+  now: string;
+  odds: { hit: number; windows: number; pct: number | null };
+  reason: string;
+}
+
+// One action dca-agent proposes in the book's chat, already checked by the desk.
+export interface DcaAction {
+  type: "buy" | "sell" | "change" | "cancel";
+  coin: string;
+  ref: string;
+  side: "buy" | "sell";
+  was: string | null;
+  price: string;
+  usdc: string;
+  now?: string;
+  odds?: { hit: number; windows: number; pct: number | null };
+  reason: string;
+}
+
+// The trading pot (docs/plan-trade.md): its own book, run by trading-agent.
+export interface PotOrder {
+  ref: string;
+  role: "entry" | "exit" | "close";
+  kind: "limit" | "oco" | "market";
+  price: string | null;
+  stop: string | null;
+  qty: string;
+  status: "placing" | "open" | "filled" | "cancelled";
+  created: number;
+}
+
+export interface PotTrade {
+  ref: string;
+  coin: string;
+  setup: string;
+  regime: string;
+  reason: string;
+  status: "placing" | "waiting" | "open" | "closed" | "cancelled";
+  entry: string;
+  stop: string;
+  target: string;
+  qty: string;
+  spend: string;
+  risk: string;
+  fillPrice: string | null;
+  now: string | null;
+  exitPrice: string | null;
+  exitKind: "target" | "stop" | "market" | null;
+  result: string | null;
+  r: string | null;
+  fees: string;
+  rulesKept: boolean;
+  created: number;
+  filled: number | null;
+  closed: number | null;
+  note: string | null;
+  orders: PotOrder[];
+}
+
+export interface PotProposal {
+  id: string;
+  created: number;
+  coin: string;
+  setup: string;
+  reason: string;
+  entry: string;
+  stop: string;
+  target: string;
+  qty: string;
+  spend: string;
+  risk: string;
+  stopPct: string;
+  rr: string;
+  crowding: string;
+}
+
+// The Trading account's coin snapshot (GET /pot/coins): each coin held on Binance.
+export interface AccountCoin {
+  coin: string;
+  amount: string;
+  price: string;
+  value: string;
+  change24hPct: string;
+  change30dPct: string | null;
+  spark: string[];
+  insight: { trend: string; setup: string; status: "watch" | "wait" | "none" } | null;
+  tradable: boolean;
+  watching: boolean;
+  inTrade: boolean;
+}
+
+// risk-agent's board (GET /risk-board): every limit from the desk's figures.
+export interface RiskLimit {
+  key: string;
+  area: "Trading pot" | "DCA book" | "Deposits" | "Portfolio";
+  name: string;
+  value: string;
+  warn: string | null;
+  limit: string | null;
+  figure: string;
+  of: string;
+  rule: string;
+  owner: string;
+  state: "kept" | "near" | "broken";
+  words: string;
+}
+
+export interface RiskBoard {
+  sentence: string;
+  limits: RiskLimit[];
+  missing: string[];
+  review: {
+    at: number;
+    headline: string;
+    sections: { title: string; text: string }[];
+    action: string;
+  } | null;
+  checkedAt: number;
+  jobs: AgentJob[];
+  scheduleOn: boolean;
+}
+
+// trading-agent's read of one coin for New trade (POST /pot/analyse).
+export interface PotAnalysis {
+  coin: string;
+  verdict: "take" | "wait" | "pass";
+  headline: string;
+  points: string[];
+  watch: string;
+  plan: {
+    setup: string;
+    entry: string;
+    stop: string;
+    target: string;
+    why: string;
+    wrongIf: string;
+  } | null;
+  regime: { state: string | null; words: string };
+}
+
+// A trade typed by hand, sized by the api as it's typed (POST /pot/preview).
+export interface PotPreview {
+  coin: string;
+  ref: string;
+  now: string | null;
+  tick: string;
+  trade: {
+    coin: string;
+    entry: string;
+    stop: string;
+    target: string;
+    qty: string;
+    spend: string;
+    risk: string;
+    stopPct: string;
+    rr: string;
+    reward: string;
+    targetPct: string;
+    riskOfPot: string;
+    allowed: string;
+    fees: string;
+    breakeven: string;
+  } | null;
+  problems: string[];
+}
+
+export interface PotView {
+  quote: string;
+  config: { mode: "test" | "risk"; fixed: string; riskPct: string; maxRisk?: string };
+  allowedRisk?: string;
+  // Free USDC on Binance against the account's available money (one wallet).
+  backing?: { free: string; held: string; short: string } | null;
+  putIn: string;
+  value: string;
+  result: string;
+  resultPct: string | null;
+  cash: string;
+  openRisk: string;
+  fees: string;
+  monthResult: string;
+  monthLimit: string;
+  regime: { state: "bull" | "neutral" | "bear" | null; words: string };
+  nextScan: number;
+  lastScan: { at: number; line: string } | null;
+  scansOnItsOwn?: boolean;
+  proposals: PotProposal[];
+  trades: PotTrade[];
+  moves: { ref: string; kind: "in" | "out"; usdc: string; created: number }[];
+  stats: {
+    trades: number;
+    wins: number;
+    losses: number;
+    winRate: string | null;
+    avgWinR: string | null;
+    avgLossR: string | null;
+    expectancyR: string | null;
+    drawdownPct: string;
+    judgeAfter: number;
+  };
+  coins: string[];
+  priceError: string | null;
+}
+
+export interface PotAction {
+  type: "open" | "stop" | "close" | "cancel";
+  ref: string | null;
+  coin: string | null;
+  setup: string | null;
+  entry: string | null;
+  stop: string | null;
+  target: string | null;
+  qty: string | null;
+  spend: string | null;
+  risk: string | null;
+  rr: string | null;
+  reason: string;
+}
+
+export interface PotCheck {
+  matched: number;
+  missing: string[];
+  unknown: string[];
+  differ: { ref: string; desk: string; binance: string }[];
+}
+
+export interface PotTradeRequest {
+  coin: string;
+  entry: string;
+  stop: string;
+  target: string;
+  setup: string;
+  reason: string;
+  proposal?: string;
 }

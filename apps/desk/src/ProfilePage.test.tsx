@@ -1,118 +1,138 @@
-// The Profile page (decision 58). Made-up figures only (known-mistakes 7).
+// The Profile page (decisions 58, 61 and 62). Made-up figures only (known-mistakes 7).
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { project } from "./ProfileTools";
 import type {
+  MyAgentsPage,
+  MarkdownFile,
+  ProfileBoard,
   ProfileDoc,
-  ProfileGoal,
-  ProfileHolding,
   ProfilePage,
   ProfileSuggestion,
 } from "./types";
 
-function doc(): ProfileDoc {
+function board(): ProfileBoard {
   return {
-    identity: { name: "Sam", date_of_birth: "1988-03-04" },
-    income: {
-      gross_monthly_aud: "18000",
-      after_tax_monthly_aud: null,
-      living_monthly_aud: null,
-      available_monthly_aud: "5600",
-      notes: null,
-    },
-    goals: [
-      {
-        label: "First milestone",
-        amount: "500000",
-        currency: "USD",
-        date: "2030-12-31",
-        then_rule: "never drop below it",
+    summary: {
+      name: "Sam",
+      age: 36,
+      subline: "Crypto only for now · rules and automation decide",
+      risk: "Aggressive",
+      goalPct: "3.8",
+      dca: {
+        weeklyAud: "500",
+        day: "Friday",
+        extraAud: "250",
+        fearGreedBelow: 40,
+        maxMonthAud: "3000",
       },
-    ],
-    foundations: {
-      emergency_fund_aud: "30000",
-      emergency_months: "6",
-      parked_funds_aud: null,
-      min_cash_aud: "60000",
-      insurance: [],
-      health_cover_status: "parked",
-      health_cover_monthly_aud: "350",
-      debt: "none",
-      wills: null,
-    },
-    strategy: { text: "Cash floor first.", focus: null, targets: [] },
-    rules: {
-      monthly_deposit_cap_aud: "4000",
-      deposit_cadence: "weekly",
-      max_pct_per_coin: "40",
-      per_trade_aud: null,
-      max_loss_pct: null,
-      rebalance_band: null,
-      take_profit_rule: null,
-      entry_strategy: null,
-      behaviour_rules: ["No buying after a 20% day"],
-    },
-    holdings: [
-      {
-        name: "Binance",
-        source: "binance",
-        invested_aud: "118000",
-        value_aud: null,
-        cash: false,
-        counts: true,
+      split: ["BTC 60%", "ETH, SOL 20% each"],
+      splitLabel: "2026 split",
+      cash: { totalAud: "20000", floorAud: "40000", below: true },
+      chips: ["No leverage", "Sell only on thesis break", "Memes max 5%"],
+      openItems: ["Exit trigger per coin: not set", "Health cover: not chosen"],
+      lesson: {
+        title: "2021 Peak",
+        story: "no profit taken",
+        lesson: "take profit at milestones",
       },
-    ],
-    lessons: [{ year: "2025", text: "Doubled deposits, then stopped." }],
-    quotes: [],
-    additional_info: "",
-    locks: { goals: true, min_cash: false, deposit_cap: true },
+    },
+    road: {
+      known: true,
+      goalUsd: "1000000",
+      goalDate: "2030-12-31",
+      ticks: [
+        { usd: "150000", year: 2027, state: "next" },
+        { usd: "500000", year: 2029, state: "" },
+        { usd: "1000000", year: 2030, state: "" },
+      ],
+      then: { usd: "5000000", year: 2050 },
+      totalUsd: "38000",
+      totalAud: "57000",
+      parts: { taoAud: "21000", binanceAud: "24000", emergencyAud: "12000" },
+      pct: "3.8",
+      onTrack: true,
+      pathUsd: "32847",
+      leg: {
+        fromUsd: "0",
+        toUsd: "150000",
+        year: 2027,
+        pct: "25.3",
+        toGoUsd: "112000",
+        monthsLeft: 13,
+      },
+      thenPct: "0.8",
+      path: [
+        { date: "2026-11-01", usd: "26000" },
+        { date: "2027-12-31", usd: "150000" },
+        { date: "2029-12-31", usd: "500000" },
+        { date: "2030-12-31", usd: "1000000" },
+      ],
+      today: "2026-11-16",
+    },
+    stack: {
+      known: true,
+      target: "1",
+      weeklyAud: "300",
+      day: "Friday",
+      bought: false,
+      ticks: ["0.1", "0.25", "0.5", "0.75", "1"],
+      held: "0.2",
+      pct: "20",
+      valueAud: "18000",
+      priceAud: "90000",
+      next: "0.25",
+      leg: { from: "0.1", to: "0.25", pct: "66.7", toGo: "0.05", weeksLeft: 15 },
+      projected: "2031-06-20",
+    },
+    cash: {
+      totalAud: "20000",
+      floorAud: "40000",
+      pct: "50",
+      parkedAud: "8000",
+      emergencyAud: "12000",
+      parkedPct: "20",
+      emergencyPct: "30",
+      monthlyAud: "1000",
+      shortAud: "20000",
+      full: false,
+      ticks: [
+        { aud: "20000", state: "passed" },
+        { aud: "36000", state: "next" },
+        { aud: "40000", state: "" },
+      ],
+      projected: "2028-07",
+      emergency: { targetAud: "20000", pct: "60", toGoAud: "8000", months: 8 },
+    },
+    fx: { audPerUsd: "1.5", date: "2026-11-16" },
   };
 }
 
-function page(version = 14, changes: Partial<ProfilePage> = {}): ProfilePage {
+// A part of the fixture the test knows is there.
+function part<T>(value: T | null): T {
+  if (value === null) throw new Error("The fixture is missing a part.");
+  return value;
+}
+
+function page(version = 4, changes: Partial<ProfilePage> = {}): ProfilePage {
   return {
     version,
     time: Date.UTC(2026, 10, 15, 2),
-    profile: doc(),
-    updated: {
-      identity: Date.UTC(2026, 10, 2),
-      income: null,
-      goals: null,
-      foundations: null,
-      strategy: null,
-      rules: Date.UTC(2026, 10, 9),
-      holdings: null,
-      lessons: null,
-      quotes: null,
-      additional_info: null,
-    },
+    profile: {} as ProfileDoc, // the page reads the board, not the typed Profile
+    updated: {} as ProfilePage["updated"],
     live: {
       known: true,
       strip: {
-        totalAud: "212400",
-        totalUsd: "141600",
-        nextGoal: { ...(doc().goals[0] as ProfileGoal), pct: "28.3", have: "141600" },
-        cash: { now: "45000", floor: "60000", pct: "75", status: "attention" },
-        month: { spent: "2600", cap: "4000", pct: "65", status: "ok" },
+        totalAud: "57000",
+        totalUsd: "38000",
+        nextGoal: null,
+        cash: { now: "20000", floor: "40000", pct: "50", status: "attention" },
+        month: { spent: "0", cap: "3000", pct: "0", status: "ok" },
       },
-      holdings: [
-        {
-          ...(doc().holdings[0] as ProfileHolding),
-          now_aud: "110500",
-          pnl_aud: "-7500",
-          pnl_pct: "-6.4",
-        },
-      ],
-      checks: {
-        monthly_deposit_cap_aud: { status: "ok", text: "A$2,600 bought this month of A$4,000" },
-        max_pct_per_coin: { status: "broken", text: "ETH 52% vs max 40%" },
-      },
-      foundations: {
-        emergency_fund_aud: "done",
-        min_cash_aud: "below",
-        health_cover_status: "parked",
-      },
+      holdings: [],
+      checks: {},
+      foundations: {},
     },
+    board: board(),
     suggestions: [],
     planner: null,
     recap: null,
@@ -120,207 +140,310 @@ function page(version = 14, changes: Partial<ProfilePage> = {}): ProfilePage {
   };
 }
 
-const suggestion: ProfileSuggestion = {
+const PROFILE_MD = `# Profile
+- Name: Sam | age 36
+
+## 2. Goals
+1. **US$1M by 31 Dec 2030**
+
+## 4. Foundations
+1. Emergency fund (6 months): **~A$12K of A$20K**
+`;
+
+const AGENT_MD = `# weekly-buyer
+
+Buys the weekly amount.
+
+## Never
+
+- Sell.
+`;
+
+function file(markdown: string, error: string | null = null): MarkdownFile {
+  return { markdown, version: 4, time: Date.UTC(2026, 10, 15, 2), error };
+}
+
+const change: ProfileSuggestion = {
   id: "abc123abc123",
-  time: 1,
+  time: Date.UTC(2026, 10, 16),
   author: "Command bar",
-  baseVersion: 14,
-  sections: { rules: { ...doc().rules, max_pct_per_coin: "35" } },
-  changes: [
-    { section: "rules", key: "max_pct_per_coin", label: "Max % per coin", from: "40%", to: "35%" },
+  baseVersion: 4,
+  markdown: PROFILE_MD.replace("~A$12K", "~A$15K"),
+  diff: [
+    { kind: "same", text: "## 4. Foundations" },
+    { kind: "del", text: "1. Emergency fund (6 months): **~A$12K of A$20K**" },
+    { kind: "add", text: "1. Emergency fund (6 months): **~A$15K of A$20K**" },
   ],
-  summary: "Max per coin 40% → 35%",
-  reason: "",
-  conflicts: ["ETH is 52% already, over a 35% max: no more buying it."],
+  changes: [],
+  summary: "Emergency fund (6 months) ~A$12K of A$20K → ~A$15K of A$20K",
+  reason: "Bonus came in",
+  conflicts: [],
   blocked: null,
 };
 
 const api = {
   getProfilePage: vi.fn(),
-  saveProfileSection: vi.fn(),
-  askProfile: vi.fn(),
-  acceptSuggestion: vi.fn(),
-  rejectSuggestion: vi.fn(),
+  getProfileFile: vi.fn(),
   getProfileVersions: vi.fn(),
   getProfileVersion: vi.fn(),
   restoreProfile: vi.fn(),
-  getScorecard: vi.fn(),
+  askProfile: vi.fn(),
+  acceptSuggestion: vi.fn(),
+  rejectSuggestion: vi.fn(),
+  getMyAgents: vi.fn(),
+  getMyAgentFile: vi.fn(),
 };
 vi.mock("./api", () => ({
   getProfilePage: () => api.getProfilePage(),
-  saveProfileSection: (s: string, v: unknown, r: string) => api.saveProfileSection(s, v, r),
-  askProfile: (t: string) => api.askProfile(t),
-  acceptSuggestion: (id: string, r: string) => api.acceptSuggestion(id, r),
-  rejectSuggestion: (id: string) => api.rejectSuggestion(id),
+  getProfileFile: () => api.getProfileFile(),
   getProfileVersions: () => api.getProfileVersions(),
   getProfileVersion: (n: number) => api.getProfileVersion(n),
   restoreProfile: (n: number) => api.restoreProfile(n),
-  getScorecard: () => api.getScorecard(),
-  importProfile: vi.fn(),
-  exportProfile: vi.fn(),
-  reviewAllocation: vi.fn(),
+  askProfile: (text: string) => api.askProfile(text),
+  acceptSuggestion: (id: string) => api.acceptSuggestion(id),
+  rejectSuggestion: (id: string) => api.rejectSuggestion(id),
+  getMyAgents: () => api.getMyAgents(),
+  getMyAgentFile: (slug: string) => api.getMyAgentFile(slug),
 }));
 
 const { default: Profile } = await import("./ProfilePage");
 
-function card(section: string) {
-  const found = document.getElementById(`pf-card-${section}`);
-  if (!found) throw new Error(`No ${section} card`);
-  return within(found);
-}
+const agents: MyAgentsPage = {
+  folder: "local/agents",
+  agents: [
+    {
+      slug: "weekly-buyer",
+      file: "agents/weekly-buyer.md",
+      purpose: "buys the weekly amount",
+      about: "Buys a little every week.",
+      model: { id: "claude-opus-5-5", name: "Claude Opus 5.5", effort: "high" },
+      autonomy: "propose",
+      cost: "about $0.20 a week",
+      icon: "dca",
+      persona: { title: "The patient buyer", traits: "steady, never chases" },
+      sends: "Telegram messages",
+      coins: ["BTC", "ETH"],
+      schedule: [
+        { day: 4, minute: 1020, label: "deposit day" },
+        { day: null, minute: null, label: "When the money lands" },
+        { day: 0, minute: 1110, label: "close-out" },
+      ],
+      next: { at: new Date(2026, 10, 20, 17, 0).getTime(), label: "deposit day" },
+      version: 2,
+      time: Date.UTC(2026, 10, 16, 2),
+      running: false,
+    },
+  ],
+};
 
 beforeEach(() => {
   for (const fn of Object.values(api)) fn.mockReset();
   api.getProfilePage.mockResolvedValue(page());
-  api.getScorecard.mockResolvedValue({
-    windows: {
-      "30": [
-        {
-          rule: "max_pct_per_coin",
-          label: "Max % per coin",
-          kept: 3,
-          broken: 1,
-          brokenResultPct: "-6",
-        },
-      ],
-      "90": [],
-    },
+  api.getProfileFile.mockResolvedValue(file(PROFILE_MD));
+  api.getProfileVersions.mockResolvedValue({
+    versions: [
+      { n: 4, time: Date.UTC(2026, 10, 15), author: "You", summary: "Rules", reason: "" },
+      {
+        n: 3,
+        time: Date.UTC(2026, 10, 9),
+        author: "Command bar",
+        summary: "Emergency fund (6 months) ~A$10K of A$20K → ~A$12K of A$20K",
+        reason: "",
+      },
+    ],
   });
+  api.getMyAgents.mockResolvedValue(agents);
+  api.getMyAgentFile.mockResolvedValue({ markdown: AGENT_MD, error: null });
 });
 afterEach(cleanup);
 
 describe("Profile", () => {
-  it("shows every section, the version chip, the strip and unset rules as Not set", async () => {
+  it("shows the plan as a road over time and a ledger", async () => {
     render(<Profile />);
-    expect(await screen.findByRole("button", { name: "Version history, now v14" })).toBeTruthy();
-    expect(screen.getByText("v14 · 15 Nov 2026")).toBeTruthy();
-    for (const title of [
-      "Identity",
-      "Income",
-      "Goals",
-      "Foundations",
-      "Strategy",
-      "Rules",
-      "Holdings",
-      "Lessons",
-      "Quotes",
-      "Additional info",
-    ])
-      expect(screen.getByRole("heading", { name: title })).toBeTruthy();
-    expect(screen.getByText("A$212,400")).toBeTruthy();
-    expect(screen.getByText("A$45,000 / A$60,000")).toBeTruthy();
-    const rules = card("rules");
-    expect(rules.getByText("ETH 52% vs max 40%")).toBeTruthy();
-    expect(rules.getAllByText("Not set").length).toBeGreaterThan(2);
-    expect(rules.getAllByText("Not checked").length).toBeGreaterThan(0);
-    expect(rules.getByText("Deposit cap locked")).toBeTruthy();
-    expect(await rules.findByText(/Max % per coin: broken 1 of 4/)).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Set up with wizard" })).toHaveProperty(
-      "disabled",
-      true,
+    expect(await screen.findByText("v4, 15 Nov 2026")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "History" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "View profile.md" })).toBeTruthy();
+    expect(screen.getByText(/Your plan. Every agent follows it./)).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Ask or change your plan" })).toBeTruthy();
+
+    const road = screen.getByRole("region", { name: "Road to US$1M" });
+    expect(within(road).getByRole("heading").textContent).toBe(
+      "US$38K of US$1M. 3.8% of the way, on or above the line.",
     );
+    expect(road.textContent).toContain("A$57K: TAO A$21K, Binance A$24K, emergency fund A$12K.");
+    expect(road.textContent).toContain("Next: US$150K by Dec 2027, US$112K to go in 13 months.");
+    expect(road.textContent).toContain("Then US$5M by 2050, 0.8% there.");
+    const chart = within(road).getByRole("figure");
+    expect(within(chart).getByText("You")).toBeTruthy();
+    expect(within(chart).getByText("US$500K")).toBeTruthy();
+
+    const plan = screen.getByRole("region", { name: "The plan" });
+    expect(plan.textContent).toContain("A$500 every Friday");
+    expect(plan.textContent).toContain("+A$250 when Fear & Greed is under 40");
+    expect(plan.textContent).toContain("A$3K a month at most");
+    expect(within(plan).getByText("2026 split")).toBeTruthy();
+    expect(within(plan).getByText("Memes max 5%")).toBeTruthy();
+
+    const building = screen.getByRole("region", { name: "Building" });
+    const stack = within(building).getByRole("group", { name: "Stack to 1 BTC" });
+    expect(stack.textContent).toContain("0.2 BTC of 1, worth A$18K.");
+    expect(within(stack).queryByText(/this week/)).toBeNull(); // the Dashboard's week rail
+    expect(stack.textContent).toContain(
+      "Next 0.25 BTC in 15 weekly buys of A$300. 1 BTC by Jun 2031 at today's price.",
+    );
+    const cash = within(building).getByRole("group", { name: "Cash floor" });
+    expect(within(cash).getByText("A$20K short")).toBeTruthy();
+    expect(cash.textContent).toContain("Full by Jul 2028 at A$1K a month.");
+    expect(within(building).getByText("Open items")).toBeTruthy();
+    expect(within(building).getByText("Take profit at milestones")).toBeTruthy();
+    expect(screen.getByText(/^Sam, 36\./)).toBeTruthy();
+    expect(screen.getByText("Aggressive risk")).toBeTruthy();
   });
 
-  it("saves a card's edit as a new version", async () => {
-    api.saveProfileSection.mockResolvedValue(page(15));
+  it("reads the plan month by month on the chart, by keyboard as by pointer", async () => {
     render(<Profile />);
-    fireEvent.click(await screen.findByRole("button", { name: "Edit rules" }));
-    fireEvent.change(screen.getByLabelText("Per-trade size"), { target: { value: "2K" } });
-    fireEvent.change(screen.getByLabelText("Why (optional, kept with the version)"), {
-      target: { value: "Smaller bites" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Save as a new version" }));
-    await waitFor(() => expect(api.saveProfileSection).toHaveBeenCalled());
-    const [section, value, reason] = api.saveProfileSection.mock.calls[0] ?? [];
-    expect([section, (value as ProfileDoc["rules"]).per_trade_aud, reason]).toEqual([
-      "rules",
-      "2K",
-      "Smaller bites",
-    ]);
-    expect((value as ProfileDoc["rules"]).max_loss_pct).toBeNull(); // still Not set
-    expect(await screen.findByText("Saved as v15.")).toBeTruthy();
+    const chart = await screen.findByRole("slider", { name: /Plan over time/ });
+    fireEvent.focus(chart);
+    expect(chart.getAttribute("aria-valuetext")).toBe("Today: you US$38K, plan US$30K");
+    fireEvent.keyDown(chart, { key: "ArrowRight" });
+    expect(chart.getAttribute("aria-valuetext")).toBe("Dec 2026, in 1 month: plan US$39K");
+    expect(screen.getByText("Dec 2026, in 1 month: plan US$39K")).toBeTruthy(); // the readout
+    fireEvent.keyDown(chart, { key: "End" });
+    expect(chart.getAttribute("aria-valuetext")).toBe("Dec 2030, in 49 months: milestone US$1M");
+    fireEvent.keyDown(chart, { key: "Escape" });
+    expect(screen.queryByText(/milestone US\$1M/)).toBeNull();
   });
 
-  it("shows a command bar change as a diff with conflicts, and accepts it", async () => {
-    api.askProfile.mockResolvedValue({ kind: "change", suggestion });
-    api.getProfilePage
-      .mockResolvedValueOnce(page())
-      .mockResolvedValue(page(14, { suggestions: [suggestion] }));
-    api.acceptSuggestion.mockResolvedValue(page(15));
+  it("reads the live figures again and rolls a figure that moved", async () => {
     render(<Profile />);
-    fireEvent.change(await screen.findByLabelText("Ask or change your profile"), {
-      target: { value: "max per coin 35%" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Send" }));
-    const rulesCard = card("rules");
-    expect(await rulesCard.findByText("1 suggestion")).toBeTruthy();
-    expect(rulesCard.getByText("40%", { selector: "del" })).toBeTruthy();
-    expect(rulesCard.getByText("35%", { selector: "ins" })).toBeTruthy();
-    expect(rulesCard.getByText(/Conflict: ETH is 52% already/)).toBeTruthy();
-    fireEvent.click(rulesCard.getByRole("button", { name: "Accept" }));
-    await waitFor(() => expect(api.acceptSuggestion).toHaveBeenCalledWith("abc123abc123", ""));
+    const road = await screen.findByRole("region", { name: "Road to US$1M" });
+    expect(within(road).getByText("US$38K").className).toBe("pf-live"); // first value: no roll
+    const higher = page();
+    higher.board = board();
+    higher.board.road = { ...part(board().road), totalUsd: "41200", pct: "4.1" };
+    api.getProfilePage.mockResolvedValue(higher);
+    document.dispatchEvent(new Event("visibilitychange")); // as the minute's refresh does
+    const moved = await within(road).findByText("US$41K");
+    expect(moved.className).toBe("pf-live rise");
   });
 
-  it("answers a question under the bar and changes nothing", async () => {
+  it("opens profile.md in the reader, with the rate the desk uses", async () => {
+    render(<Profile />);
+    fireEvent.click(await screen.findByRole("button", { name: "View profile.md" }));
+    const reader = await screen.findByRole("dialog", { name: "Profile" });
+    expect(within(reader).getByText(/v4, 15 Nov 2026\. US\$1 = A\$1\.5000/)).toBeTruthy();
+    expect(within(reader).getByRole("heading", { level: 2, name: "2. Goals" })).toBeTruthy();
+    expect(within(reader).getByRole("button", { name: "Export .md" })).toBeTruthy();
+    expect(within(reader).queryByRole("button", { name: "Edit" })).toBeNull();
+  });
+
+  it("answers a question from the command bar", async () => {
     api.askProfile.mockResolvedValue({
       kind: "answer",
-      answer: "Behind: 28% of the way.",
-      question: "am I on track?",
-      profileVersion: 14,
+      answer: "A$12K of A$20K.",
+      question: "How's my emergency fund?",
+      profileVersion: 4,
     });
     render(<Profile />);
-    fireEvent.click(await screen.findByRole("button", { name: "Review my rules" }));
-    expect(await screen.findByText("Behind: 28% of the way.")).toBeTruthy();
-    expect(api.askProfile).toHaveBeenCalledWith(expect.stringContaining("Which of my rules"));
-    expect(api.saveProfileSection).not.toHaveBeenCalled();
+    const box = await screen.findByRole("textbox", { name: "Ask or change your plan" });
+    fireEvent.change(box, { target: { value: "How's my emergency fund?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(await screen.findByText("A$12K of A$20K.")).toBeTruthy();
+    expect(api.askProfile).toHaveBeenCalledWith("How's my emergency fund?");
   });
 
-  it("blocks accepting a change to a locked field", async () => {
-    const locked = { ...suggestion, blocked: "Deposit cap locked: unlock on the card first." };
-    api.getProfilePage.mockResolvedValue(page(14, { suggestions: [locked] }));
+  it("shows a change as a diff and saves it only on Accept", async () => {
+    api.askProfile.mockResolvedValue({ kind: "change", suggestion: change });
+    const after = page(5);
+    after.board = board();
+    after.board.cash = { ...part(board().cash), emergencyAud: "15000" };
+    api.acceptSuggestion.mockResolvedValue(after);
     render(<Profile />);
-    const card = within(await screen.findByLabelText("Suggested by Command bar"));
-    expect(card.getByText(/Deposit cap locked/)).toBeTruthy();
-    expect(card.getByRole("button", { name: "Accept" })).toHaveProperty("disabled", true);
-  });
-
-  it("compares two versions and restores one as a new version", async () => {
-    api.getProfileVersions.mockResolvedValue({
-      versions: [
-        { n: 14, time: 2, author: "You", summary: "Max % per coin 35% → 40%", reason: "" },
-        { n: 13, time: 1, author: "Command bar", summary: "Added 2025 lesson", reason: "" },
-      ],
-    });
-    const older = doc();
-    older.rules.max_pct_per_coin = "35";
-    api.getProfileVersion.mockImplementation((n: number) =>
-      Promise.resolve({
-        n,
-        time: n,
-        author: "You",
-        summary: "",
-        reason: "",
-        profile: n === 13 ? older : doc(),
-      }),
+    const box = await screen.findByRole("textbox", { name: "Ask or change your plan" });
+    fireEvent.change(box, { target: { value: "Emergency fund is 15K now" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    const diff = await screen.findByRole("list", { name: "Changes to profile.md" });
+    expect(
+      within(diff)
+        .getByText(/~A\$12K of A\$20K/)
+        .closest("li")?.className,
+    ).toBe("del");
+    expect(
+      within(diff)
+        .getByText(/~A\$15K of A\$20K/)
+        .closest("li")?.className,
+    ).toBe("add");
+    expect(screen.getByText("Why: Bonus came in")).toBeTruthy();
+    expect(api.acceptSuggestion).not.toHaveBeenCalled();
+    api.getProfilePage.mockResolvedValue(after);
+    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    await waitFor(() => expect(api.acceptSuggestion).toHaveBeenCalledWith("abc123abc123"));
+    expect(await screen.findByText("v5, 15 Nov 2026")).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.queryByRole("list", { name: "Changes to profile.md" })).toBeNull(),
     );
-    api.restoreProfile.mockResolvedValue(page(15));
-    render(<Profile />);
-    fireEvent.click(await screen.findByRole("button", { name: "Version history, now v14" }));
-    fireEvent.click(await screen.findByLabelText("Compare v14"));
-    fireEvent.click(screen.getByLabelText("Compare v13"));
-    expect(await screen.findByText("Rules · Max % per coin")).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Restore v13" }));
-    expect(await screen.findByText("v13 restored as v15.")).toBeTruthy();
+    expect(screen.getByText(/emergency fund A\$15K/)).toBeTruthy();
   });
 
-  it("says when live figures couldn't be read, with dashes for the totals", async () => {
+  it("says why a change was refused", async () => {
+    api.askProfile.mockRejectedValue(new Error("The change didn't match profile.md exactly."));
+    render(<Profile />);
+    const box = await screen.findByRole("textbox", { name: "Ask or change your plan" });
+    fireEvent.change(box, { target: { value: "Change something" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(screen.getByText("The change didn't match profile.md exactly.")).toBeTruthy();
+  });
+
+  it("lists the versions with a diff and restores an old one as a new version", async () => {
+    api.getProfileVersion.mockResolvedValue({
+      n: 3,
+      time: Date.UTC(2026, 10, 9),
+      author: "Command bar",
+      summary: "",
+      reason: "",
+      markdown: PROFILE_MD,
+      diff: [{ kind: "add", text: "1. Emergency fund (6 months): **~A$12K of A$20K**" }],
+    });
+    api.restoreProfile.mockResolvedValue(page(5));
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(true);
+    render(<Profile />);
+    fireEvent.click(await screen.findByRole("button", { name: "History" }));
+    const history = await screen.findByRole("complementary", { name: "Version history" });
+    expect(await within(history).findByText("v4 · current")).toBeTruthy();
+    fireEvent.click(part(within(history).getAllByRole("button", { name: "Diff" })[1] ?? null));
+    const diff = await within(history).findByRole("list", { name: "What changed in v3" });
+    expect(within(diff).getByText(/~A\$12K of A\$20K/)).toBeTruthy();
+    fireEvent.click(within(history).getByRole("button", { name: "Restore" }));
+    await waitFor(() => expect(api.restoreProfile).toHaveBeenCalledWith(3));
+    expect(confirm).toHaveBeenCalled();
+    confirm.mockRestore();
+  });
+
+  it("says when profile.md has a problem and which version is in force", async () => {
+    api.getProfileFile.mockResolvedValue(file(PROFILE_MD, "Section 6 is missing from profile.md"));
+    render(<Profile />);
+    expect(
+      await screen.findByText(
+        "profile.md has a problem: Section 6 is missing from profile.md. The desk is still using v4.",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("keeps the plan when live figures couldn't be read", async () => {
     const off = page();
     off.live = { ...off.live, known: false };
+    off.board = board();
+    off.board.road = { ...part(board().road), known: false };
+    off.board.stack = { ...part(board().stack), known: false };
     api.getProfilePage.mockResolvedValue(off);
     render(<Profile />);
-    expect(await screen.findByText(/Live figures couldn't be read/)).toBeTruthy();
-    expect(screen.getByText("Live figures unavailable")).toBeTruthy();
-    expect(screen.queryByText("A$212,400")).toBeNull();
+    expect(await screen.findByText(/Live figures couldn't be read, so/)).toBeTruthy();
+    expect(
+      screen.getByRole("heading", { name: /Live figures couldn't be read just now/ }),
+    ).toBeTruthy();
+    expect(screen.getByText("Live figures couldn't be read just now.")).toBeTruthy(); // the stack
+    expect(screen.getByRole("group", { name: "Cash floor" })).toBeTruthy(); // from the file
   });
 
   it("shows an error with a retry", async () => {
@@ -328,15 +451,53 @@ describe("Profile", () => {
       .mockRejectedValueOnce(new Error("The api couldn't answer."))
       .mockResolvedValue(page());
     render(<Profile />);
-    expect(await screen.findByRole("alert")).toBeTruthy();
+    expect(await screen.findByText("The api couldn't answer.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Try again" }));
-    expect(await screen.findByRole("heading", { name: "Rules" })).toBeTruthy();
+    expect(await screen.findByRole("button", { name: "View profile.md" })).toBeTruthy();
   });
 });
 
-describe("What-if", () => {
-  it("compounds monthly with each month's amount added", () => {
-    expect(project(1000, 100, 0, 3)).toEqual([1000, 1100, 1200, 1300]);
-    expect(project(1000, 0, 12, 12).at(-1)).toBeGreaterThan(1120);
+describe("My agents tab", () => {
+  it("lists each agent on a week, collapsed, and opens its file", async () => {
+    render(<Profile />);
+    fireEvent.click(screen.getByRole("tab", { name: "My agents" }));
+    expect(await screen.findByText(/1 agent, none running on its own yet\./)).toBeTruthy();
+    const row = screen.getByRole("button", { name: /^weekly-buyer/ });
+    // At a glance: its next run from the file (by hand, no job yet), no last run, its state.
+    expect(row.textContent).toContain("Deposit day, by hand for now");
+    expect(row.textContent).toContain("Runs when you ask");
+    expect(row.textContent).toContain("By hand");
+    expect(row.getAttribute("aria-expanded")).toBe("false"); // collapsed until opened
+    expect(screen.queryByRole("heading", { name: "Its week" })).toBeNull();
+    fireEvent.click(row);
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(row.textContent).toContain("Opus 5.5");
+    expect(screen.getByText("Claude Opus 5.5, high effort")).toBeTruthy();
+    expect(screen.getByText("Proposes; you approve each order")).toBeTruthy();
+    expect(screen.getByText("v2, 16 Nov 2026")).toBeTruthy();
+    const week = screen.getByRole("heading", { name: "Its week" }).parentElement as HTMLElement;
+    expect(
+      within(week)
+        .getAllByRole("listitem")
+        .map((li) => li.textContent),
+    ).toEqual(["Fri 5pmDeposit day", "WhenThe money lands", "Mon 6:30pmClose-out"]);
+    fireEvent.click(screen.getByRole("button", { name: "Read weekly-buyer.md" }));
+    const reader = await screen.findByRole("dialog", { name: "weekly-buyer.md" });
+    expect(api.getMyAgentFile).toHaveBeenCalledWith("weekly-buyer");
+    expect(
+      await within(reader).findByRole("heading", { level: 1, name: "weekly-buyer" }),
+    ).toBeTruthy();
+    fireEvent.click(row);
+    expect(screen.queryByRole("heading", { name: "Its week" })).toBeNull();
+  });
+
+  it("says how to add the first agent", async () => {
+    api.getMyAgents.mockResolvedValue({ folder: "local/agents", agents: [] });
+    render(<Profile />);
+    fireEvent.click(screen.getByRole("tab", { name: "My agents" }));
+    expect(await screen.findByText("No agents yet.")).toBeTruthy();
+    expect(screen.getByText(/ask Claude Code to write it in/).textContent).toContain(
+      "local/agents/",
+    );
   });
 });

@@ -1,46 +1,48 @@
+// The Portfolio (decision 64): what you hold in a sentence, one strip of it against your
+// targets, then the ledgers: targets, money in, and the holdings with orders, trades and tax.
 import { DriftCard, TaxTab } from "./Tax";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, cancelOrder, getPortfolio, setCost } from "./api";
+import { ApiError, cancelOrder, getDrift, getPortfolio, setCost } from "./api";
 import CoinIcon from "./CoinIcon";
 import ConfirmCancel from "./ConfirmCancel";
 import OrderDetail from "./OrderDetail";
 import Deposits from "./Deposits";
-import { FearGreed, Movers, Signals } from "./Widgets";
-import { ResetIcon, WalletIcon } from "./icons";
+import { Live } from "./Figures";
+import { ResetIcon } from "./icons";
 import { type Currency, type Money, money } from "./money";
-import { Clickable, DetailPanel, type DetailKind } from "./WidgetDetails";
-import {
-  amount,
-  amountSleek,
-  dateTime,
-  fetchedAt,
-  percent,
-  price,
-  trend,
-  usd,
-  usdWhole,
-} from "./format";
-import type { Holding, Order, Portfolio as Data, TaoWallet } from "./types";
+import { amount, amountSleek, dateTime, fetchedAt, percent, price, trend, usd } from "./format";
+import type { Drift, Holding, Order, Portfolio as Data, TaoWallet } from "./types";
 import type { Status } from "./ui";
+import "./portfolio.css";
 
-// The US-dollar figure and rate under the total: kept, but hidden at the owner's request.
-const SHOW_RATE_LINE = false;
-
+const REFRESH_MS = 60_000; // the TAO wallet reading is reused for a minute (tao.py)
 const DUST = 5; // a holding worth less than this, or nothing, is dust: never shown
 export function isDust(h: Holding): boolean {
   return h.value === null || Number(h.value) < DUST;
 }
 
-const COLOURS = [1, 2, 3, 4, 5, 6].map((n) => `var(--alloc-${n})`);
+// Slice colours in order; the light ones (1, 3, 4) carry dark ink, the deep ones light ink.
+const COLOURS = [1, 2, 3, 4, 5].map((n) => `var(--alloc-${n})`);
+const LIGHT = new Set([0, 2, 3]);
+const REST = "var(--line-2)"; // coins without a target, when there are targets, and the small ones
 type Tab = "bal" | "ord" | "trd" | "tax";
 
-// Where a holding is kept; the Dashboard can show one source or all of them.
+// Where a holding is kept; the page shows one source or all of them.
 export type Source = "all" | Holding["source"];
 const SOURCES: [Source, string][] = [
   ["all", "All"],
   ["Binance", "Binance"],
   ["TAO wallet", "Wallet"],
 ];
+// `#/portfolio?source=binance` or `?source=wallet` opens on that source; anything else shows all.
+export function sourceFromHash(): Source {
+  const query = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
+  const asked = query.get("source");
+  if (asked === "binance") return "Binance";
+  if (asked === "wallet") return "TAO wallet";
+  return "all";
+}
+
 const SOURCE_WORD: Record<Source, string> = {
   all: "all sources",
   Binance: "Binance",
@@ -105,193 +107,7 @@ function Coin({ symbol, name, tag }: { symbol: string; name?: string; tag?: stri
   );
 }
 
-type By = "coin" | "wallet";
 type SortKey = "coin" | "invested" | "value" | "change" | "pnl";
-
-// A card's heading with its By coin / By wallet switch (Allocation, PnL).
-function ByHeading({ title, by, onBy }: { title: string; by: By; onBy: (by: By) => void }) {
-  return (
-    <div className="kv" style={{ padding: 0, alignItems: "center" }}>
-      <span className="label">{title}</span>
-      <div className="views views-small" role="group" aria-label={`${title} by`}>
-        {(["coin", "wallet"] as const).map((key) => (
-          <button key={key} type="button" aria-pressed={by === key} onClick={() => onBy(key)}>
-            By {key}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-const WALLETS = ["Binance", "TAO wallet"] as const;
-
-// Every coin held (dust is already out), or the split between Binance and the wallet; shares of
-// what's shown, so they add to 100%. The largest five get their own colour, the rest share one.
-function Allocation({ holdings }: { holdings: Holding[] }) {
-  const [by, setBy] = useState<By>("coin");
-  const valued = holdings.filter((h) => h.value !== null && Number(h.value) > 0);
-  const whole = valued.reduce((s, h) => s + Number(h.value), 0) || 1;
-  const groups =
-    by === "coin"
-      ? valued.map((h) => ({
-          key: `${h.asset}-${h.source}`,
-          label: h.source === "TAO wallet" ? "TAO (wallet)" : h.asset,
-          coin: h.asset as string | null,
-          wallet: h.source === "TAO wallet",
-          value: Number(h.value),
-        }))
-      : WALLETS.map((source) => ({
-          key: source,
-          label: SOURCE_WORD[source],
-          coin: null as string | null,
-          wallet: source === "TAO wallet",
-          value: valued.filter((h) => h.source === source).reduce((s, h) => s + Number(h.value), 0),
-        }))
-          .filter((g) => g.value > 0)
-          .sort((a, b) => b.value - a.value);
-  const parts = groups.map((g, i) => ({
-    ...g,
-    share: (g.value / whole) * 100,
-    colour: COLOURS[Math.min(i, COLOURS.length - 1)],
-  }));
-  return (
-    <>
-      <ByHeading title="Allocation" by={by} onBy={setBy} />
-      <div className="alloc" aria-hidden="true">
-        {parts.map((p) => (
-          <div key={p.key} style={{ flex: p.share, background: p.colour }} />
-        ))}
-      </div>
-      <div className={`legend${by === "coin" ? " legend-coins" : ""}`}>
-        {parts.map((p) => {
-          const pct = `${p.share > 0 && p.share < 1 ? "<1" : p.share.toFixed(0)}%`;
-          // By coin: the logo and share only; the name stays for screen readers and on hover.
-          return p.coin ? (
-            <span key={p.key} title={`${p.label} ${pct}`}>
-              <span className="legend-mark">
-                <span className="legend-icon" style={{ boxShadow: `0 0 0 1.5px ${p.colour}` }}>
-                  <CoinIcon coin={p.coin} />
-                </span>
-                {p.wallet && (
-                  <span className="legend-badge" aria-hidden="true">
-                    <WalletIcon />
-                  </span>
-                )}
-              </span>
-              <span className="visually-hidden">{p.label}</span>
-              <span className="num">{pct}</span>
-            </span>
-          ) : (
-            <span key={p.key}>
-              <s style={{ background: p.colour }} />
-              {p.label} {pct}
-            </span>
-          );
-        })}
-      </div>
-    </>
-  );
-}
-
-// Unrealised PnL per account (Binance, Wallet) in the chosen currency and percent, from each holding's
-// average cost: its trades', or one the owner entered (decision 27). A holding with neither has
-// no PnL; a note counts them.
-function Pnl({ holdings, m }: { holdings: Holding[]; m: Money }) {
-  const costOf = (h: Holding) => {
-    const p = Number(h.profitPercent ?? 0);
-    return p ? Number(h.profit) / (p / 100) : 0;
-  };
-  const sum = (list: Holding[]) => {
-    const costed = list.filter((h) => h.profit !== null);
-    const profit = costed.reduce((s, h) => s + Number(h.profit), 0);
-    const cost = costed.reduce((s, h) => s + costOf(h), 0);
-    return { profit, pct: cost > 0 ? String((profit / cost) * 100) : null, costed: costed.length };
-  };
-  const total = sum(holdings);
-  const accounts = WALLETS.filter((w) => holdings.some((h) => h.source === w)).map((w) => ({
-    key: w,
-    label: SOURCE_WORD[w],
-    ...sum(holdings.filter((h) => h.source === w)),
-  }));
-  return (
-    <div className="card stat widget pnl">
-      <div className="kv" style={{ padding: 0 }}>
-        <span className="label">PnL</span>
-        <span className="label muted">Unrealised</span>
-      </div>
-      <div className={`big num ${trend(String(Math.round(total.profit)))}`}>
-        {m.whole(total.profit, true)}
-      </div>
-      <div style={{ marginTop: 4 }}>
-        <span className={`num ${trend(total.pct)}`}>{percent(total.pct)}</span>
-      </div>
-      <table className="pnl-accounts" aria-label="PnL by account">
-        <thead>
-          <tr>
-            <th>Account</th>
-            <th className="r">{m.currency}</th>
-            <th className="r">%</th>
-          </tr>
-        </thead>
-        <tbody>
-          {accounts.map((a) => {
-            const none = a.costed === 0;
-            const tone = none ? "" : trend(String(Math.round(a.profit)));
-            return (
-              <tr key={a.key}>
-                <td>{a.label}</td>
-                <td className={`r num ${tone}`}>{none ? "–" : m.whole(a.profit, true)}</td>
-                <td className={`r num ${trend(a.pct)}`}>{percent(a.pct)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-function TaoLine({ tao }: { tao: TaoWallet }) {
-  if (tao.status === "connected") {
-    return (
-      <div
-        className="kv"
-        title={`${amount(tao.staked)} staked + ${amount(tao.free)} free${
-          Number(tao.rewards ?? 0) > 0
-            ? `; ${amount(tao.rewards ?? "0")} in root rewards to claim`
-            : ""
-        }`}
-      >
-        <span className="muted">TAO</span>
-        <span className="num">
-          {/* The whole: staked + free + rewards to claim, cut (not rounded) to 1 place. */}
-          {(Math.floor((Number(tao.total) + Number(tao.rewards ?? 0)) * 10) / 10).toLocaleString(
-            "en-AU",
-            { minimumFractionDigits: 1, maximumFractionDigits: 1 },
-          )}{" "}
-          τ
-          {Number(tao.rewards ?? 0) > 0 && (
-            <span className="muted">
-              {" "}
-              · incl.{" "}
-              {(Math.floor(Number(tao.rewards) * 10) / 10).toLocaleString("en-AU", {
-                maximumFractionDigits: 1,
-              })}{" "}
-              τ in baskets
-            </span>
-          )}
-        </span>
-      </div>
-    );
-  }
-  return (
-    <div className="kv">
-      <span className="muted">Wallet</span>
-      <span className="dim">{tao.status === "error" ? tao.error : "Not set up"}</span>
-    </div>
-  );
-}
 
 function OrderRow({
   o,
@@ -447,6 +263,20 @@ function CostCell({
   );
 }
 
+// What a holding is worth against what it cost, as a short bar under its PnL: full and mint at or
+// above cost, red and as long as what's kept below it.
+function Kept({ holding: h }: { holding: Holding }) {
+  const cost = Number(invested(h) ?? 0);
+  if (!cost || h.value === null) return null;
+  const covered = Number(h.covered ?? 0) * Number(h.price ?? 0);
+  const kept = covered / cost;
+  return (
+    <span className={`port-kept${kept >= 1 ? " above" : ""}`} aria-hidden="true">
+      <i style={{ width: `${Math.min(100, kept * 100)}%` }} />
+    </span>
+  );
+}
+
 function Tables({
   data,
   holdings,
@@ -505,14 +335,14 @@ function Tables({
     </th>
   );
   const tabs: [Tab, string][] = [
-    ["bal", "Balances"],
+    ["bal", "Holdings"],
     ["ord", `Open orders (${data.openOrders.length})`],
     ["trd", "Recent trades"],
     ["tax", "Tax"],
   ];
   return (
-    <div className="card" style={{ marginTop: 10 }}>
-      <div className="tabs" role="tablist">
+    <section className="port-ledger" aria-label="Holdings and orders">
+      <div className="tabs port-tabs" role="tablist">
         {tabs.map(([key, label]) => (
           <button
             key={key}
@@ -574,6 +404,7 @@ function Tables({
                         {h.profitPercent !== null && (
                           <small className="sub">{percent(h.profitPercent)}</small>
                         )}
+                        <Kept holding={h} />
                       </td>
                       <td className={`r num ${trend(h.change24h)}`}>{percent(h.change24h)}</td>
                       <td className="r num">{m.price(h.price)}</td>
@@ -686,7 +517,245 @@ function Tables({
             </table>
           </div>
         ))}
-    </div>
+    </section>
+  );
+}
+
+// The TAO wallet in a line: the whole (staked, free and rewards to claim) cut to one place.
+function TaoLine({ tao }: { tao: TaoWallet }) {
+  const tenth = (v: number) =>
+    (Math.floor(v * 10) / 10).toLocaleString("en-AU", {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    });
+  if (tao.status !== "connected") {
+    return (
+      <p className="port-tao">
+        {tao.status === "error"
+          ? `The wallet couldn't be read: ${tao.error ?? "Taostats didn't answer"}.`
+          : "No wallet yet. Add TAO_COLDKEY to .env."}
+      </p>
+    );
+  }
+  const rewards = Number(tao.rewards ?? 0);
+  return (
+    <p
+      className="port-tao"
+      title={`${amount(tao.staked)} staked and ${amount(tao.free)} free${
+        rewards > 0 ? `, with ${amount(tao.rewards ?? "0")} in root rewards to claim` : ""
+      }`}
+    >
+      <span className="num">{tenth(Number(tao.total) + rewards)} τ</span> in the wallet
+      {rewards > 0 && (
+        <>
+          , <span className="num">{tenth(rewards)} τ</span> of it in baskets to claim
+        </>
+      )}
+      .
+    </p>
+  );
+}
+
+// What you hold, in a sentence: the value, against what it cost, then today's move.
+function Hero({
+  data,
+  source,
+  sum,
+  m,
+  accounts,
+}: {
+  data: Data;
+  source: Source;
+  sum: Totals;
+  m: Money;
+  accounts: { binance: number; wallet: number };
+}) {
+  const who =
+    source === "all" ? "You hold" : source === "Binance" ? "Binance holds" : "Your wallet holds";
+  const profit = Math.round(sum.profit);
+  return (
+    <section className="port-hero" aria-label="What you hold">
+      <h2 className="port-headline num">
+        {who}{" "}
+        <Live value={String(Math.round(sum.value))}>
+          <span title={m.whole(sum.value)}>{m.short(sum.value)}</span>
+        </Live>
+        {profit !== 0 && (
+          <>
+            ,{" "}
+            <span className={profit > 0 ? "up" : "down"}>
+              {m.short(Math.abs(profit))} {profit > 0 ? "above" : "under"}
+            </span>{" "}
+            what it cost
+          </>
+        )}
+        .
+      </h2>
+      <p className="port-lead num">
+        {source === "all" && (
+          <>
+            Binance {m.short(accounts.binance)}, the wallet {m.short(accounts.wallet)}.
+          </>
+        )}
+      </p>
+      {source !== "Binance" && <TaoLine tao={data.wallets.tao} />}
+    </section>
+  );
+}
+
+interface Slice {
+  key: string;
+  label: string;
+  value: number;
+  share: number;
+  target: number | null;
+  colour: string;
+  ink: "dark" | "light";
+  coins: string[];
+}
+
+const UNDER = 1; // coins under 1% without a target share one slice at the end
+const LABELLED = 7; // a slice this wide (in %) carries its name inside
+
+// The one bold thing: what you hold as a strip, coin by coin, with your targets under it in the
+// same order and colours, so drift reads at a glance. Move over a slice, focus it or tap it.
+export function Strip({
+  holdings,
+  drift,
+  m,
+}: {
+  holdings: Holding[];
+  drift: Drift | null;
+  m: Money;
+}) {
+  const [picked, setPicked] = useState<string | null>(null);
+  const byCoin = new Map<string, number>();
+  for (const h of holdings) {
+    if (h.value !== null && Number(h.value) > 0)
+      byCoin.set(h.asset, (byCoin.get(h.asset) ?? 0) + Number(h.value));
+  }
+  const whole = [...byCoin.values()].reduce((a, b) => a + b, 0);
+  if (whole <= 0) return null;
+  const targets = new Map(
+    (drift?.hasTargets ? drift.rows : []).map((r) => [r.coin, Number(r.targetPct)]),
+  );
+  // Coins with a target first, largest target first; then the rest by value.
+  const rank = (c: string) => targets.get(c) ?? -1;
+  const coins = [...new Set([...targets.keys(), ...byCoin.keys()])].sort(
+    (a, b) => rank(b) - rank(a) || (byCoin.get(b) ?? 0) - (byCoin.get(a) ?? 0),
+  );
+  const slices: Slice[] = [];
+  const small: string[] = [];
+  let painted = 0;
+  for (const coin of coins) {
+    const value = byCoin.get(coin) ?? 0;
+    const share = (value / whole) * 100;
+    if (share < UNDER && !targets.has(coin)) {
+      small.push(coin);
+      continue;
+    }
+    slices.push({
+      key: coin,
+      label: coin,
+      value,
+      share,
+      target: targets.get(coin) ?? null,
+      // With targets, only coins that have one take a colour: the rest read as unplanned.
+      colour: targets.size && !targets.has(coin) ? REST : (COLOURS[painted++] ?? REST),
+      ink: LIGHT.has(painted - 1) && (!targets.size || targets.has(coin)) ? "dark" : "light",
+      coins: [coin],
+    });
+  }
+  if (small.length) {
+    const value = small.reduce((s, c) => s + (byCoin.get(c) ?? 0), 0);
+    slices.push({
+      key: "rest",
+      label: `${small.length} more`,
+      value,
+      share: (value / whole) * 100,
+      target: null,
+      colour: REST,
+      ink: "light",
+      coins: small,
+    });
+  }
+  const pct = (v: number) => (v > 0 && v < 1 ? "<1%" : `${Math.round(v)}%`);
+  const targeted = slices.filter((s) => s.target !== null);
+  const untargeted = Math.max(0, 100 - targeted.reduce((s, x) => s + (x.target ?? 0), 0));
+  const band = Number(drift?.band ?? 0);
+  const read = (s: Slice) => {
+    const what = s.key === "rest" ? s.coins.join(", ") : s.label;
+    const now = `${what}: ${m.short(s.value)}, ${pct(s.share)} of what you hold`;
+    if (s.target === null) return s.key === "rest" ? `${now}.` : `${now}. No target set.`;
+    const gap = Math.round(s.share - s.target);
+    const side = gap > 0 ? `${gap} points over` : gap < 0 ? `${-gap} points under` : "on target";
+    const inside = Math.abs(s.share - s.target) <= band ? ", inside your band" : "";
+    return `${now}. Target ${pct(s.target)}, ${side}${inside}.`;
+  };
+  const shown = slices.find((s) => s.key === picked);
+  const largest = [...slices].sort((a, b) => b.value - a.value)[0];
+  const outside = drift?.hasTargets ? drift.outside : 0;
+  const idle = drift?.hasTargets
+    ? outside === 0
+      ? "Every coin is inside your band."
+      : `${outside} coin${outside === 1 ? " is" : "s are"} outside your ±${drift.band} point band.`
+    : largest
+      ? `The largest, ${largest.label}, is ${pct(largest.share)} of what you hold.`
+      : "";
+  const slice = (s: Slice, width: number, i: number, now: boolean) => {
+    const style = { flexGrow: width, background: s.colour, "--i": i } as React.CSSProperties;
+    const name =
+      width >= LABELLED ? (
+        <span aria-hidden="true">
+          {s.label} {pct(width)}
+        </span>
+      ) : null;
+    const dim = picked && picked !== s.key ? " dim" : "";
+    return now ? (
+      <button
+        key={s.key}
+        type="button"
+        className={`port-slice ${s.ink}${dim}`}
+        style={style}
+        aria-label={read(s)}
+        onPointerEnter={() => setPicked(s.key)}
+        onFocus={() => setPicked(s.key)}
+        onClick={() => setPicked(s.key)}
+      >
+        {name}
+      </button>
+    ) : (
+      <i
+        key={s.key}
+        className={`port-slice ${s.ink}${dim}`}
+        style={style}
+        onPointerEnter={() => setPicked(s.key)}
+      >
+        {name}
+      </i>
+    );
+  };
+  return (
+    <section className="port-strip" aria-label="What you hold, against your targets">
+      <div className="port-bars" onPointerLeave={() => setPicked(null)}>
+        <span className="port-bar-name">Now</span>
+        <div className="port-bar now" role="group" aria-label="What you hold, by coin">
+          {slices.map((s, i) => slice(s, s.share, i, true))}
+        </div>
+        {targeted.length > 0 && (
+          <>
+            <span className="port-bar-name">Target</span>
+            <div className="port-bar target" aria-hidden="true">
+              {targeted.map((s, i) => slice(s, s.target ?? 0, i, false))}
+              {untargeted > 0 && <i className="port-untargeted" style={{ flexGrow: untargeted }} />}
+            </div>
+          </>
+        )}
+      </div>
+      <p className="port-readout" key={picked ?? "idle"} aria-live="polite">
+        {shown ? read(shown) : idle}
+      </p>
+    </section>
   );
 }
 
@@ -704,13 +773,14 @@ export default function Portfolio({
   // Coming back to the page shows the last figures at once while fresh ones load.
   const [state, setState] = useState<State>({ kind: "loading", last: lastSeen });
   const [problem, setProblem] = useState("");
-  const [source, setSource] = useState<Source>("all");
-  const [detail, setDetail] = useState<DetailKind | null>(null);
-  const [detailAt, setDetailAt] = useState<DOMRect | null>(null);
-  const openDetail = (kind: DetailKind, at: DOMRect) => {
-    setDetailAt(at);
-    setDetail(kind);
-  };
+  const [source, setSource] = useState<Source>(sourceFromHash);
+  // The side panel's Binance and Wallet links open the page on that source.
+  useEffect(() => {
+    const follow = () => setSource(sourceFromHash());
+    window.addEventListener("hashchange", follow);
+    return () => window.removeEventListener("hashchange", follow);
+  }, []);
+  const [drift, setDrift] = useState<Drift | null>(null);
 
   const settle = useCallback(
     (pending: Promise<Data>) => {
@@ -730,32 +800,39 @@ export default function Portfolio({
           onStatus("disconnected");
         },
       );
+      // The targets move with prices, so they're read with the balances.
+      getDrift().then(setDrift, () => setDrift(null));
     },
     [onStatus, onTao],
   );
 
+  // Balances change on Binance outside the desk (an app trade, a deposit), so the page reads them
+  // again every minute while it's in view, and at once when the tab comes back into view.
   useEffect(() => {
+    const quiet = () => {
+      if (document.visibilityState === "visible") settle(getPortfolio());
+    };
     settle(getPortfolio());
+    const timer = window.setInterval(quiet, REFRESH_MS);
+    document.addEventListener("visibilitychange", quiet);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", quiet);
+    };
   }, [settle]);
 
-  const load = () => {
+  const reload = (issue?: string) => {
+    setProblem(issue ?? "");
     setState((s) => ({ kind: "loading", last: s.kind === "ready" ? s.data : s.last }));
     onStatus("fetching");
     settle(getPortfolio());
   };
 
-  const reload = (issue?: string) => {
-    setProblem(issue ?? "");
-    load();
-  };
-
   const data = state.kind === "ready" ? state.data : state.last;
-  const binanceValue = data?.holdings
-    .filter((h) => h.source === "Binance")
-    .reduce((s, h) => s + Number(h.value ?? 0), 0);
-  const walletValue = data?.holdings
-    .filter((h) => h.source === "TAO wallet")
-    .reduce((s, h) => s + Number(h.value ?? 0), 0);
+  const valueOf = (where: Holding["source"]) =>
+    (data?.holdings ?? [])
+      .filter((h) => h.source === where)
+      .reduce((s, h) => s + Number(h.value ?? 0), 0);
   const held = data?.holdings.filter((h) => !isDust(h)) ?? [];
   const shown = held.filter((h) => source === "all" || h.source === source);
   const sum = data ? totals(data, source) : null;
@@ -763,15 +840,11 @@ export default function Portfolio({
     currency,
     data?.total.rates ?? (data?.total.audRate ? { AUD: data.total.audRate } : undefined),
   );
-  const rateText =
-    m.currency === "USD"
-      ? ""
-      : m.rate.toLocaleString("en-AU", { maximumSignificantDigits: m.currency === "BTC" ? 4 : 6 });
 
   return (
-    <main className="wrap">
-      <div className="head-row dash-head">
-        <h1 className="visually-hidden">Dashboard</h1>
+    <main className="wrap port">
+      <h1 className="visually-hidden">Portfolio</h1>
+      <div className="port-head">
         {data && (
           <div className="views source-filter" role="group" aria-label="Show holdings from">
             {SOURCES.map(([key, label]) => (
@@ -787,8 +860,8 @@ export default function Portfolio({
           </div>
         )}
         <span className="spacer" />
-        <span className="label">
-          {data?.demo ? "Demo data · " : ""}
+        <span className="port-stamp">
+          {data?.demo ? "Demo data. " : ""}
           {data ? `Fetched ${fetchedAt(data.fetchedAt)}` : "Fetching"}
         </span>
         <button
@@ -819,75 +892,18 @@ export default function Portfolio({
 
       {data && sum ? (
         <>
-          {/* Eight compact widgets, four a row (design-system 19). */}
-          <div className="widgets">
-            <Clickable kind="total" onOpen={openDetail}>
-              <div className="card stat widget">
-                <div className="label">
-                  {source === "all" ? "Total value" : `${SOURCE_WORD[source]} value`}
-                </div>
-                <div className="big num">{m.whole(sum.value)}</div>
-                <div className={`num ${trend(String(sum.change))}`} style={{ marginTop: 4 }}>
-                  {m.whole(sum.change, true)} (
-                  {percent(sum.changePercent === null ? null : String(sum.changePercent))}){" "}
-                  <span className="muted">24h</span>
-                </div>
-                {SHOW_RATE_LINE && m.currency !== "USD" && (
-                  <div className="muted num" style={{ marginTop: 4 }}>
-                    US{usdWhole(String(sum.value))} at {rateText} {m.currency}
-                  </div>
-                )}
-              </div>
-            </Clickable>
-            <Clickable kind="accounts" onOpen={openDetail}>
-              <div className="card stat widget">
-                <div className="label">Accounts</div>
-                <div className="kv">
-                  <span className="muted">Binance</span>
-                  <span className="num">{m.whole(binanceValue ?? 0)}</span>
-                </div>
-                <div className="kv">
-                  <span className="muted">Wallet</span>
-                  <span className="num">{m.whole(walletValue ?? 0)}</span>
-                </div>
-                <TaoLine tao={data.wallets.tao} />
-              </div>
-            </Clickable>
-            <Clickable kind="pnl" onOpen={openDetail}>
-              <Pnl holdings={shown} m={m} />
-            </Clickable>
-            <Clickable kind="fear" onOpen={openDetail}>
-              <FearGreed />
-            </Clickable>
-            <Clickable kind="allocation" onOpen={openDetail}>
-              <div className="card stat widget">
-                <Allocation holdings={shown} />
-              </div>
-            </Clickable>
-            <Clickable kind="deposits" onOpen={openDetail}>
-              <Deposits />
-            </Clickable>
-            <Clickable kind="movers" onOpen={openDetail}>
-              <Movers holdings={shown} />
-            </Clickable>
-            <Clickable kind="signals" onOpen={openDetail}>
-              <Signals />
-            </Clickable>
-          </div>
-          <DetailPanel
-            kind={detail}
-            at={detailAt}
-            onClose={() => setDetail(null)}
-            holdings={shown}
+          <Hero
+            data={data}
+            source={source}
+            sum={sum}
             m={m}
-            history={data.history ?? []}
-            accounts={[
-              { name: "Binance", value: binanceValue ?? 0 },
-              { name: "Wallet", value: walletValue ?? 0 },
-            ]}
+            accounts={{ binance: valueOf("Binance"), wallet: valueOf("TAO wallet") }}
           />
-
-          <DriftCard />
+          <Strip holdings={shown} drift={source === "all" ? drift : null} m={m} />
+          <div className="port-pair">
+            {source === "all" && <DriftCard drift={drift} />}
+            <Deposits />
+          </div>
           <Tables data={data} holdings={shown} source={source} m={m} onReload={reload} />
         </>
       ) : (

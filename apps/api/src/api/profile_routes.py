@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from api import profile, profile_ai, profile_live
+from api import ledger, md_files, profile, profile_ai, profile_board, profile_live, profile_v2
 from api.binance import BinanceError, plain
 from api.profile_md import export, parse
 from api.tao import TaoError
@@ -107,18 +107,50 @@ def page(s: "Services", read: Callable[[], dict[str, Any]]) -> dict[str, Any]:
             "checks": found.checks,
             "foundations": profile_live.foundations(doc, found.strip["cash"]["now"]),
         },
+        "board": _board(s, doc, found) if doc["markdown"] else None,
         "suggestions": profile_ai.suggestions(s.store),
         "planner": _dated(profile_ai.last_planner(s.store), n),
         "recap": _dated(next(iter(profile_ai.recaps(s.store)), None), n),
     }
 
 
+def _bought(s: "Services", day: str | None, today: Any) -> bool | None:
+    """Whether BTC was bought since the latest DCA day; None when Binance can't say."""
+    start = profile_board.week_start(today, day)
+    from_ms = int(datetime.combine(start, datetime.min.time(), SYDNEY).timestamp() * 1000)
+    try:
+        return ledger.bought_since(s.binance, "BTC", from_ms)
+    except LIVE_ERRORS:
+        return None
+
+
+def _board(s: "Services", doc: dict[str, Any], found: Live) -> dict[str, Any]:
+    v = profile_v2.values(doc["markdown"])
+    today = datetime.now(SYDNEY).date()
+    bought = _bought(s, v["dca"]["day"], today) if found.portfolio is not None else None
+    return profile_board.board(v, found.portfolio, found.rate, today, bought)
+
+
+def _text(doc: dict[str, Any], n: int, time_ms: int) -> str:
+    return doc["markdown"] or export(doc, n, time_ms)
+
+
 def _version(s: "Services", n: str) -> dict[str, Any]:
+    """One version, with its file and what changed from the version before."""
     row = s.store.profile_version(int(n))
     if row is None:
         raise Refused("No such version.")
+    doc = profile.clean(json.loads(row["doc"]))
+    text = _text(doc, int(row["n"]), int(row["time"]))
+    before = s.store.profile_version(int(row["n"]) - 1)
+    old = (
+        _text(profile.clean(json.loads(before["doc"])), int(before["n"]), int(before["time"]))
+        if before
+        else ""
+    )
     return {k: row[k] for k in ("n", "time", "author", "summary", "reason")} | {
-        "profile": profile.clean(json.loads(row["doc"]))
+        "markdown": text,
+        "diff": profile_v2.diff(old, text),
     }
 
 
@@ -271,6 +303,7 @@ def route(  # noqa: PLR0911, PLR0913, PLR0917 - one return per route; each input
         ("POST", "/profile/restore"): lambda: _restore(s, body),
         ("POST", "/profile/import"): lambda: _import(s, body),
         ("GET", "/profile/export"): lambda: _export(s),
+        ("GET", "/profile/file"): lambda: md_files.file_view(s.store, "profile"),
         ("POST", "/profile/command"): lambda: _command(s, read, body),
         ("POST", "/profile/planner"): lambda: _planner(s, read),
         ("GET", "/profile/scorecard"): lambda: _scorecard(s, read, journal),
@@ -283,16 +316,6 @@ def route(  # noqa: PLR0911, PLR0913, PLR0917 - one return per route; each input
     version = re.fullmatch(r"/profile/versions/(\d{1,9})", path)
     if version and method == "GET":
         return _version(s, version.group(1))
-    section = re.fullmatch(r"/profile/([a-z_]{1,20})", path)
-    if section and method == "PUT":
-        return profile.save_section(
-            s.store,
-            s.audit,
-            section.group(1),
-            body.get("value"),
-            now=now,
-            reason=str(body.get("reason", "")),
-        )
     choice = re.fullmatch(r"/profile/suggestions/([0-9a-f]{12})/(accept|reject)", path)
     if choice and method == "POST":
         if choice.group(2) == "reject":

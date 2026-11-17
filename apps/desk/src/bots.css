@@ -1,0 +1,292 @@
+/* The Bots page (decision 68), on design-system.md's tokens; prefixed bots- and bot-. After the
+   exchanges' bot pages: a sentence for the total, tabs by state, chips by type with counts, and
+   each bot a block of its figures on hairlines. */
+.bots {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.bots-headline {
+  margin: 0 0 6px;
+  font-size: 32px;
+  font-weight: 500;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.bots-lead {
+  margin: 0;
+  color: var(--body);
+  font-size: 15px;
+  max-width: 72ch;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Running, Stopped, Coins; the two new-bot menus at the right, quiet. */
+.bots-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  border-bottom: 1px solid var(--line);
+}
+.bots-tabs [role="tab"] {
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.bots-tabs [role="tab"][aria-selected="true"] {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.bots-tabs .create-menu > .btn-accent {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line-2);
+  background: none;
+  color: var(--text);
+}
+.bots-tabs .create-menu > .btn-accent:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Type chips with their counts. */
+.bots-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bots-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.bots-chips button:hover {
+  color: var(--text);
+}
+.bots-chips button[aria-pressed="true"] {
+  background: var(--panel-2);
+  color: var(--text);
+}
+.bots-chips .num {
+  color: var(--dim);
+}
+.bots-soon {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--wait-soft);
+  color: var(--wait);
+  font-size: 11px;
+}
+
+/* A bot: its pair and status, when it started, its total, its figures in three columns, its
+   actions. */
+.bots-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bot-block {
+  padding: 16px 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.bot-block-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.bot-block-head b {
+  font-size: 17px;
+  font-weight: 600;
+}
+.bot-type {
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+}
+.bot-ref {
+  font-size: 12px;
+}
+.bot-status {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+}
+.bot-status::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 8px;
+  border-top: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  transform: translateY(-1px) rotate(45deg);
+}
+.bot-status.on {
+  color: var(--up);
+}
+.bot-status.wait {
+  color: var(--wait);
+}
+.bot-when {
+  margin: 4px 0 10px;
+  font-size: 12px;
+}
+.bot-total {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.bot-total b {
+  font-size: 22px;
+  font-weight: 600;
+}
+.bot-total small {
+  font-size: 13px;
+  font-weight: 500;
+}
+.bot-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 24px;
+  margin: 0 0 14px;
+}
+.bot-facts div {
+  min-width: 0;
+}
+.bot-facts dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.bot-facts dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+}
+.bot-facts div:nth-child(3n) {
+  text-align: right;
+}
+.bot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.bot-actions .bot-delete {
+  margin-left: auto;
+}
+
+/* What the bots hold. */
+.bots-coins {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bots-coins li {
+  display: grid;
+  grid-template-columns: minmax(90px, 1fr) 1fr 1fr 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.bots-empty {
+  margin: 12px 0;
+}
+
+/* Rebalancing, coming soon. */
+.bots-soon-panel {
+  max-width: 68ch;
+  padding: 4px 0;
+}
+.bots-soon-panel h2 {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 600;
+}
+.bots-soon-panel a {
+  color: var(--accent);
+}
+.bots-soon-panel p {
+  margin: 0 0 8px;
+}
+
+@media (max-width: 520px) {
+  .bots-headline {
+    font-size: 23px;
+  }
+  .bot-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .bot-facts div:nth-child(3n) {
+    text-align: left;
+  }
+  .bots-coins li {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .bots-headline {
+    animation: dash-rise 420ms var(--ease) both;
+  }
+  .bot-block {
+    animation: dash-rise 320ms var(--ease) both;
+    animation-delay: calc(var(--i, 0) * 60ms);
+  }
+}
+
+/* The Bots page's tabs: Accumulation, Opportunities, Grid bots. */
+.botsh-tabs.wrap {
+  display: flex;
+  gap: 4px;
+  padding-top: 18px;
+  padding-bottom: 0;
+}
+.botsh-tabs a:first-child {
+  margin-left: -16px;
+}
+.botsh-tabs + main.wrap,
+.botsh-tabs + .wrap {
+  padding-top: 20px;
+}
+.botsh-tabs a {
+  padding: 10px 16px;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-weight: 500;
+  text-decoration: none;
+}
+.botsh-tabs a:hover {
+  color: var(--text);
+}
+.botsh-tabs a[aria-current="page"] {
+  border-bottom-color: var(--accent);
+  color: var(--text);
+}
+.botsh-budget {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--wait);
+  color: var(--body);
+}

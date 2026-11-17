@@ -20,10 +20,10 @@ const WarnIcon = () => (
   </svg>
 );
 
-export function OutOfDate() {
+export function OutOfDate({ because = "your Profile changed" }: { because?: string }) {
   return (
     <span className="tag wait out-of-date">
-      <WarnIcon /> Out of date · your Profile changed
+      <WarnIcon /> Out of date · {because}
     </span>
   );
 }

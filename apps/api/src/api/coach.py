@@ -1,10 +1,9 @@
 """The Dashboard's coach (decision 52): a greeting, a mood from the portfolio's day, a deposit
 coach against the monthly cap and today's key points, all worked out here. The model only words
-the short messages, from these facts and the owner's Plan; quotes come only from the Plan's list.
+the short messages, from these facts and the owner's Plan.
 Messages are kept per day and per mood, and every one has a plain fallback written here.
 """
 
-import hashlib
 import json
 from collections.abc import Callable
 from datetime import date, datetime
@@ -23,7 +22,6 @@ STABLES = ("USDC", "USDT", "FDUSD")
 DUST = Decimal(5)
 POINTS = 4
 CACHE_KEY = "coach_message"
-NAME_KEY = "owner_name"
 LABELS = {
     "sharp_up": "Sharp up",
     "up": "Up",
@@ -96,6 +94,7 @@ def deposits(
     month = next((m for m in (report or {}).get("months", []) if m["month"] == month_key), None)
     in_month = Decimal(month["aud"]) if month else Decimal(0)
     left = cap - in_month if cap is not None else None
+    resets = date(today.year + (today.month == 12), today.month % 12 + 1, 1)  # noqa: PLR2004
     note = next(
         (
             item
@@ -113,6 +112,8 @@ def deposits(
         "leftAud": plain(max(left, Decimal(0))) if left is not None else None,
         "overAud": plain(-left) if left is not None and left < 0 else None,
         "usedPct": plain((in_month / cap * 100).quantize(Decimal("0.1"))) if cap else None,
+        "resetsOn": resets.isoformat(),
+        "daysLeft": (resets - today).days,
         "lesson": note,
     }
 
@@ -251,15 +252,6 @@ def facts(  # noqa: PLR0913 - every input is a separate source, passed in for te
     }
 
 
-def quote(plan: dict[str, Any], day: str) -> dict[str, str] | None:
-    """One of the owner's own quotes, the same all day; none if the list is empty."""
-    quotes = plan["quotes"]
-    if not quotes:
-        return None
-    index = int(hashlib.sha256(day.encode()).hexdigest(), 16) % len(quotes)
-    return {"text": quotes[index]["text"], "author": quotes[index]["author"]}
-
-
 def written(facts_: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
     """The plain wording, used until the model has written its own, and if it can't."""
     band, dep = facts_["mood"], facts_["deposits"]
@@ -293,11 +285,9 @@ def written(facts_: dict[str, Any], plan: dict[str, Any]) -> dict[str, Any]:
         coach = f"A${dep['leftAud']} left under your A${dep['capAud']} cap this month."
         if band in ("down", "sharp_down"):
             coach += " Stick to it; opportunities come back."
-    show_quote = band in ("down", "sharp_down")
     return {
         "lines": lines[:3],
         "coach": coach,
-        "quote": quote(plan, facts_["day"]) if show_quote else None,
         "link": "trade" if facts_["streak"] else None,
         "source": "plain",
     }

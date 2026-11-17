@@ -17,6 +17,7 @@ export type Money = {
   rate: number; // units of the currency per US dollar
   full: (usd: number | string | null, signed?: boolean) => string;
   whole: (usd: number | string | null, signed?: boolean) => string;
+  short: (usd: number | string | null, signed?: boolean) => string;
   price: (usd: number | string | null) => string;
 };
 
@@ -56,6 +57,22 @@ export function money(asked: Currency, rates: Partial<Record<string, string>> | 
       if (n === null) return "–";
       const body = currency === "BTC" ? btc(n) : fmt(Math.round(n), {});
       const shown = currency === "BTC" ? n : Math.round(n);
+      return `${sign(shown, signed)}${SYMBOL[currency]}${body}`;
+    },
+    // Rounded like the Profile's figures (A$98K, A$1.2M, A$4.7K); bitcoin as `whole`.
+    short: (usd, signed = false) => {
+      const n = convert(usd);
+      if (n === null) return "–";
+      if (currency === "BTC") return `${sign(n, signed)}${SYMBOL[currency]}${btc(n)}`;
+      const a = Math.abs(n);
+      const trim = (x: number, places: number) => String(Number(x.toFixed(places)));
+      const body =
+        a >= 999_500
+          ? `${trim(a / 1_000_000, 2)}M`
+          : a >= 1_000
+            ? `${trim(a / 1_000, a >= 9_950 ? 0 : 1)}K`
+            : String(Math.round(a));
+      const shown = a >= 1_000 ? n : Math.round(n);
       return `${sign(shown, signed)}${SYMBOL[currency]}${body}`;
     },
     // A coin's price as sleek as the table's (decision 26), in the chosen currency.

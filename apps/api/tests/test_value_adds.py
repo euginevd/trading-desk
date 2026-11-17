@@ -223,7 +223,6 @@ COACH: dict[str, Any] = {
     "changeAud": "-2450",
     "message": {
         "lines": ["You're within your rules."],
-        "quote": {"text": "It passes.", "author": "Me"},
     },  # noqa: E501
     "keyPoints": [{"kind": "concentration", "coin": "TAO", "pct": "41", "cap": "25", "rule": True}],
     "deposits": {"capAud": "6000", "monthAud": "4200", "leftAud": "1800", "overAud": None},
@@ -235,7 +234,7 @@ def test_the_summary_reads_like_the_mockup() -> None:
     assert telegram.summary(COACH) == (
         "Morning, Sam.\nYour portfolio is down 4.2% today (−A$2,450).\nYou're within your rules.\n"
         "\n• TAO is 41% of your portfolio, over your 25% cap.\n\n"
-        "Deposits: A$4,200 of A$6,000 this month, A$1,800 left.\n“It passes.” — Me"
+        "Deposits: A$4,200 of A$6,000 this month, A$1,800 left."
     )
 
 

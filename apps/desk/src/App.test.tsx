@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import App from "./App";
+import App, { dominanceMove } from "./App";
 import { amount, amountSleek, percent, price, priceSleek, usd, usdShort, usdWhole } from "./format";
 import type { Portfolio, Settings } from "./types";
 
@@ -160,6 +160,17 @@ describe("format", () => {
   });
 });
 
+describe("top bar", () => {
+  it("works out BTC dominance's move from the market's and Bitcoin's 24h changes", () => {
+    const btc = (change24h: string) => [{ coin: "BTC", price: "98400", change24h }];
+    // 50% of a market flat on the day, Bitcoin up 2%: it was 50 / 1.02 = 49.02% a day ago.
+    expect(dominanceMove({ btcShare: "50", capChange: "0" }, btc("2"))?.toFixed(2)).toBe("0.98");
+    expect(dominanceMove({ btcShare: "50", capChange: "2" }, btc("2"))).toBe(0);
+    expect(dominanceMove({ btcShare: "50" }, btc("2"))).toBeNull();
+    expect(dominanceMove({ btcShare: "50", capChange: "1" }, [])).toBeNull();
+  });
+});
+
 describe("side panel", () => {
   it("links Dashboard, Trade and the bots, and folds to icons", async () => {
     serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
@@ -171,17 +182,26 @@ describe("side panel", () => {
       "Portfolio",
       "Journal",
       "Trade",
-      "DCA Bot",
-      "Grid Bot",
+      "Risk",
+      "Bots",
       "Profile",
       "Settings",
     ]);
     fireEvent.click(screen.getByRole("button", { name: "Collapse side panel" }));
     expect(screen.getByRole("button", { name: "Expand side panel" })).toBeTruthy();
     expect(window.localStorage.getItem("desk.side.folded")).toBe("1");
+    // The old Grid Bot link opens Bots on its Grid bots tab; no rebalancing for now.
     window.location.hash = "#/grid";
     fireEvent(window, new HashChangeEvent("hashchange"));
-    expect(await screen.findByRole("heading", { name: "Grid Bot" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "Bots" })).toBeTruthy();
+    const tabs = screen.getByRole("navigation", { name: "Bots" });
+    expect(within(tabs).getByRole("link", { name: "Grid bots" }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+    expect(within(tabs).getByRole("link", { name: "Accumulation" }).getAttribute("href")).toBe(
+      "#/dca-book",
+    );
+    expect(screen.queryByText(/Rebalancing/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Expand side panel" }));
   });
 });
@@ -191,18 +211,35 @@ describe("portfolio page", () => {
     window.location.hash = "#/portfolio"; // today's content, moved off the Dashboard
   });
 
+  it("reads the balances again when the tab comes back into view", async () => {
+    const fetch = serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
+    render(<App />);
+    expect((await screen.findAllByText("A$62,762")).length).toBeGreaterThan(0);
+    const reads = () => fetch.mock.calls.filter(([url]) => url.endsWith("/portfolio")).length;
+    const before = reads();
+    document.dispatchEvent(new Event("visibilitychange"));
+    await waitFor(() => expect(reads()).toBe(before + 1));
+  });
+
   it("shows Binance and the TAO wallet, the total and the value line", async () => {
     serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
     render(<App />);
-    // AUD first: 42,585 at 1.4738, in the card and the header
+    // AUD first: 42,585 at 1.4738, exact in the header and rounded in the sentence
     expect((await screen.findAllByText("A$62,762")).length).toBeGreaterThan(0);
-    expect(screen.getByText(/98\.9 τ/)).toBeTruthy(); // 85 staked + 12.4 free + 1.5 rewards
-    expect(screen.getByText(/· incl\. 1\.5 τ in baskets/)).toBeTruthy();
+    const hero = screen.getByRole("region", { name: "What you hold" });
+    expect(hero.querySelector("h2")?.textContent).toBe("You hold A$63K, A$192 above what it cost.");
+    // 1,500 up today; Binance 2,415.48 and the wallet 40,177.50
+    expect(within(hero).getByText(/Binance A\$3\.6K, the wallet A\$59K\./)).toBeTruthy();
+    expect(within(hero).queryByText(/today/)).toBeNull(); // the Dashboard says the day's move
+    // 85 staked + 12.4 free + 1.5 rewards
+    expect(hero.querySelector(".port-tao")?.textContent).toBe(
+      "98.9 τ in the wallet, 1.5 τ of it in baskets to claim.",
+    );
     expect(screen.getByText("A$870")).toBeTruthy(); // BNB average cost 590 in AUD, whole at 100 up
     expect(screen.queryByText(/ at 1.4738 AUD/)).toBeNull(); // the rate line is hidden
     expect(screen.queryByText("Account value")).toBeNull(); // the 30-day box is gone for now
     expect(screen.getByText(/Demo data/)).toBeTruthy();
-    expect(await screen.findByText("98,400.00")).toBeTruthy(); // the top bar's ticker
+    expect(await screen.findByText("98,400")).toBeTruthy(); // the top bar's ticker, whole dollars
     expect(screen.getByRole("button", { name: "Trading on" })).toBeTruthy();
   });
 
@@ -211,28 +248,74 @@ describe("portfolio page", () => {
     render(<App />);
     expect((await screen.findAllByText("NEAR")).length).toBeGreaterThan(0); // $7.86: shown, not dust
     expect(screen.queryByText("PEPE")).toBeNull();
-    // Allocation lists every coin held, by logo and share; the name is on hover and for readers.
-    expect(screen.getByTitle("NEAR <1%")).toBeTruthy();
-    expect(within(screen.getByTitle(/^TAO \(wallet\) /)).getByText("TAO (wallet)")).toBeTruthy();
-    expect(screen.queryByText(/^Other/)).toBeNull();
-    const by = screen.getByRole("group", { name: "Allocation by" });
-    fireEvent.click(within(by).getByRole("button", { name: "By wallet" }));
-    expect(screen.getByText("Wallet 94%")).toBeTruthy(); // 40,177.50 of 42,592.86
-    expect(screen.getByText("Binance 6%")).toBeTruthy();
-    expect(screen.queryByText(/small balance/)).toBeNull();
+    // The strip: every coin held by share; under 1% they share one slice, read on hover.
+    const strip = screen.getByRole("group", { name: "What you hold, by coin" });
+    const slices = within(strip).getAllByRole("button");
+    expect(slices.map((b) => b.getAttribute("aria-label"))).toEqual([
+      "TAO: A$59K, 94% of what you hold. No target set.", // 40,177.50 of 42,592.86
+      "BNB: A$3.5K, 6% of what you hold. No target set.",
+      "NEAR: A$12, <1% of what you hold.",
+    ]);
+    expect(screen.getByText("The largest, TAO, is 94% of what you hold.")).toBeTruthy();
+    fireEvent.pointerEnter(slices[1] as HTMLElement);
+    expect(
+      screen.getByText("BNB: A$3.5K, 6% of what you hold. No target set.", { selector: "p" }),
+    ).toBeTruthy();
   });
 
-  it("sums PnL per account in the chosen currency and percent", async () => {
-    serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
+  it("sets your targets under the strip, in the same order, and reads the gap", async () => {
+    serve({
+      ...basics,
+      "GET /portfolio": () => [200, portfolio],
+      "GET /rebalance": () => [
+        200,
+        {
+          band: "5",
+          outside: 2,
+          hasTargets: true,
+          rows: [
+            {
+              coin: "TAO",
+              targetPct: "60",
+              nowPct: "94",
+              outside: true,
+              side: "sell",
+              orderAud: "150",
+              toTargetAud: "21000",
+              price: "412.5",
+              qty: "0.25",
+              capped: true,
+            },
+            {
+              coin: "BNB",
+              targetPct: "40",
+              nowPct: "6",
+              outside: true,
+              side: "buy",
+              orderAud: "150",
+              toTargetAud: "21000",
+              price: "642",
+              qty: "0.16",
+              capped: true,
+            },
+          ],
+        },
+      ],
+    });
     render(<App />);
-    const table = await screen.findByRole("table", { name: "PnL by account" });
-    const binance = within(table).getByText("Binance").closest("tr") as HTMLElement;
-    expect(within(binance).getByText("+A$192")).toBeTruthy(); // 130 at 1.4738
-    expect(within(binance).getByText("+8.8%")).toBeTruthy();
-    const wallet = within(table).getByText("Wallet").closest("tr") as HTMLElement;
-    expect(within(wallet).getAllByText("–").length).toBe(2); // no cost yet
-    expect(screen.queryByText(/no cost yet/)).toBeNull();
-    expect(within(table.closest(".pnl") as HTMLElement).queryByText("Invested")).toBeNull();
+    expect(await screen.findByText("2 coins are outside your ±5 point band.")).toBeTruthy();
+    const strip = screen.getByRole("group", { name: "What you hold, by coin" });
+    const tao = within(strip).getByRole("button", { name: /^TAO/ });
+    expect(tao.getAttribute("aria-label")).toBe(
+      "TAO: A$59K, 94% of what you hold. Target 60%, 34 points over.",
+    );
+    const targets = screen.getByRole("region", { name: "Against your targets" });
+    const trim = within(targets).getByRole("link", { name: "Trim A$150" });
+    expect(trim.getAttribute("title")).toMatch(/^A\$21K to reach the target/);
+    expect(
+      within(targets).getByRole("img", { name: "TAO: 94% now, target 60%, 34 pts over" }),
+    ).toBeTruthy();
+    expect(within(targets).getByRole("link", { name: "Add A$150" })).toBeTruthy();
   });
 
   it("closes the average cost editor when focus leaves it", async () => {
@@ -277,12 +360,21 @@ describe("portfolio page", () => {
     expect(screen.getByTitle(/^From trades for 66%/)).toBeTruthy(); // BNB: 2.5 of 3.75
     expect(within(filter).getByRole("button", { name: "All" })).toBeTruthy(); // no counts
     fireEvent.click(within(filter).getByRole("button", { name: /^Wallet/ }));
-    expect(screen.getByText("Wallet value")).toBeTruthy();
-    expect(screen.getAllByText("A$59,214").length).toBeGreaterThan(0); // 40,177.50 at 1.4738
+    const said = () => screen.getByRole("region", { name: "What you hold" }).querySelector("h2");
+    expect(said()?.textContent).toBe("Your wallet holds A$59K."); // 40,177.50 at 1.4738, no cost
+    expect(screen.getAllByText("A$59,214").length).toBeGreaterThan(0); // exact in the table
     expect(screen.queryByText("BNB")).toBeNull();
     fireEvent.click(within(filter).getByRole("button", { name: /^Binance/ }));
     expect(screen.getAllByText("BNB").length).toBeGreaterThan(0);
-    expect(screen.getByText("Binance value")).toBeTruthy();
+    expect(said()?.textContent).toBe("Binance holds A$3.6K, A$192 above what it cost.");
+    // The side panel's Wallet row is a link to the same page, on the wallet.
+    const status = document.querySelector(".side-status") as HTMLElement;
+    const wallet = within(status).getByRole("link", { name: /^Wallet: what your TAO wallet/ });
+    expect(wallet.getAttribute("href")).toBe("#/portfolio?source=wallet");
+    window.location.hash = "#/portfolio?source=wallet";
+    fireEvent(window, new HashChangeEvent("hashchange"));
+    await waitFor(() => expect(said()?.textContent).toBe("Your wallet holds A$59K."));
+    window.location.hash = "";
   });
 
   it("switches the whole Dashboard between AUD, USD, INR and BTC, and remembers it", async () => {
@@ -297,8 +389,8 @@ describe("portfolio page", () => {
     pick("USD");
     expect(screen.getAllByText("$42,585")[0]).toBeTruthy();
     expect(screen.queryByText(/ at 1.4738 AUD/)).toBeNull();
-    const pnl = screen.getByRole("table", { name: "PnL by account" });
-    expect(within(pnl).getByText("+$130")).toBeTruthy();
+    const hero = screen.getByRole("region", { name: "What you hold" });
+    expect(hero.querySelector("h2")?.textContent).toBe("You hold $43K, $130 above what it cost.");
     pick("INR");
     expect(screen.getAllByText("₹35,86,083")[0]).toBeTruthy(); // 42,585 at 84.21, Indian grouping
     pick("BTC");
@@ -366,13 +458,20 @@ describe("portfolio page", () => {
     render(<App />);
     const card = await screen.findByRole("region", { name: "USDC deposits" });
     await within(card).findByText("FY 2026-27");
-    expect(within(card).getAllByText("A$2,049")).toHaveLength(2); // the year, and August
+    expect(within(card).getAllByText("A$2K")).toHaveLength(3); // the year, over August's bar, the line
     const bars = within(card).getByRole("group", { name: "Deposits by month" });
     expect(within(bars).getAllByRole("button")).toHaveLength(12);
-    const aug = within(bars).getByRole("button", { name: /^Aug: A\$2,049 from 2 deposits/ });
+    const aug = within(bars).getByRole("button", { name: /^Aug: A\$2K from 2 deposits/ });
     expect(aug.getAttribute("aria-pressed")).toBe("true"); // the latest month with deposits
-    expect(within(card).getByText(/2 deposits · 1 estimated/)).toBeTruthy();
-    expect(within(card).queryByRole("list", { name: "Latest deposits" })).toBeNull();
+    expect(within(card).getByText(/from 2 deposits, 1 estimated\./)).toBeTruthy();
+    expect(within(card).queryByRole("list", { name: "Deposits in Aug" })).toBeNull();
+    fireEvent.click(within(card).getByRole("button", { name: "See them" }));
+    const list = within(card).getByRole("list", { name: "Deposits in Aug" });
+    expect(within(list).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(list).getByText("690 USDC")).toBeTruthy(); // newest first
+    expect(within(list).getByText("701 USDC")).toBeTruthy(); // whole numbers: 700.5 rounds up
+    expect(within(list).getAllByText("A$1K")).toHaveLength(2); // A$1,048.80 and A$1,000
+    expect(within(list).queryByRole("button", { name: /more/ })).toBeNull(); // 5 or fewer
   });
 
   it("sorts the balances by coin, value, PnL percent or 24h", async () => {
@@ -453,7 +552,7 @@ describe("widget details", () => {
     window.location.hash = "#/portfolio"; // today's content, moved off the Dashboard
   });
 
-  it("opens Fear & Greed's details from its card", async () => {
+  it("opens Fear & Greed's details from the top bar", async () => {
     HTMLDialogElement.prototype.showModal = function (this: HTMLDialogElement) {
       this.setAttribute("open", "");
     };
@@ -487,11 +586,13 @@ describe("widget details", () => {
       ],
     });
     render(<App />);
-    fireEvent.click(await screen.findByRole("button", { name: "Details: Fear & Greed Index" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Fear & Greed 17, Extreme Fear: details" }),
+    );
     expect(await screen.findByText(/from Neutral a month ago/)).toBeTruthy();
     expect(screen.getByText("Last week")).toBeTruthy();
     expect(screen.getByRole("img", { name: "17, Extreme Fear" })).toBeTruthy();
-    expect(screen.getByText("$2.3T")).toBeTruthy();
+    expect(screen.getByText("$73.9B")).toBeTruthy(); // volume; the cap is in the top bar
   });
 
   it("opens an open order on its chart, says how far it is, and changes it in one step", async () => {

@@ -1,0 +1,421 @@
+/* The Portfolio (decision 64), on design-system.md's tokens; prefixed port-. Like the Dashboard and
+   the Profile: a sentence for the hero, one bold element (the strip of what you hold against your
+   targets), hairline ledgers instead of cards. */
+.port {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.port-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+.port-stamp {
+  color: var(--dim);
+  font-size: 12px;
+}
+
+/* What you hold, in a sentence. */
+.port-headline {
+  margin: 0 0 6px;
+  font-size: 34px;
+  font-weight: 500;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  max-width: 36ch;
+}
+.port-lead,
+.port-tao {
+  margin: 0;
+  color: var(--body);
+  font-size: 15px;
+  max-width: 72ch;
+}
+.port-tao {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* The strip: now on top, your targets under it in the same order and colours. */
+.port-strip {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.port-bars {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px 10px;
+}
+.port-bar-name {
+  color: var(--muted);
+  font-size: 12px;
+}
+.port-bar {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
+}
+.port-bar.now {
+  height: 44px;
+}
+.port-bar.target {
+  height: 18px;
+}
+.port-slice {
+  position: relative;
+  flex-basis: 0;
+  min-width: 3px;
+  display: flex;
+  align-items: center;
+  padding: 0 0 0 8px;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  color: var(--accent-ink);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    opacity 160ms var(--ease),
+    filter 160ms var(--ease);
+}
+.port-slice.light {
+  color: var(--text);
+}
+.port-bar.target .port-slice {
+  font-size: 10px;
+  opacity: 0.6;
+}
+.port-slice.dim {
+  opacity: 0.25;
+}
+.port-bar.target .port-slice.dim {
+  opacity: 0.15;
+}
+.port-slice:hover,
+.port-slice:focus-visible {
+  filter: brightness(1.12);
+}
+.port-slice:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 2px;
+}
+.port-untargeted {
+  flex-basis: 0;
+  border-radius: 4px;
+  background: repeating-linear-gradient(135deg, var(--panel-2) 0 4px, transparent 4px 8px);
+  border: 1px solid var(--line);
+}
+.port-readout {
+  margin: 10px 0 0 62px;
+  min-height: 1.5em;
+  color: var(--text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Targets and money in: two hairline columns. */
+.port-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+  gap: 0 48px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+.port-pair:empty {
+  display: none;
+}
+.port-pair h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+.port-pair h2 .muted {
+  font-size: 13px;
+  font-weight: 400;
+}
+.port-targets ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.port-targets li {
+  display: grid;
+  grid-template-columns: 48px minmax(80px, 1fr) 118px 84px;
+  gap: 14px;
+  align-items: center;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+/* Each row on the shared scale: the band shaded, the target a tick, where it is now a fill
+   (amber outside the band, mint inside). */
+.drift-scale {
+  position: relative;
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--panel-2);
+}
+.drift-scale i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: block;
+}
+.drift-zone {
+  background: var(--accent-soft);
+  border-radius: 5px;
+}
+.drift-fill {
+  left: 0;
+  border-radius: 5px;
+  background: var(--wait);
+  transition: width 700ms var(--ease);
+}
+.port-targets li.in .drift-fill {
+  background: var(--accent);
+}
+.drift-target {
+  top: -4px !important;
+  bottom: -4px !important;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+}
+.drift-read {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 4px;
+  align-items: baseline;
+  line-height: 1.3;
+}
+.drift-read b {
+  font-size: 15px;
+  font-weight: 600;
+}
+.drift-read small {
+  grid-column: 1 / -1;
+  font-size: 12px;
+}
+.port-targets .drift-act {
+  justify-self: end;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.port-targets a.drift-act {
+  padding: 5px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  color: var(--text);
+  text-decoration: none;
+  transition:
+    border-color 140ms var(--ease),
+    background 140ms var(--ease);
+}
+.port-targets a.drift-act:hover,
+.port-targets a.drift-act:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.drift-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+.drift-key {
+  display: inline-block;
+  width: 12px;
+  height: 6px;
+  margin: 0 3px 0 6px;
+  border-radius: 3px;
+  vertical-align: 1px;
+}
+.drift-key:first-child {
+  margin-left: 0;
+}
+.drift-key.fill {
+  background: var(--wait);
+}
+.drift-key.target {
+  width: 2px;
+  height: 10px;
+  vertical-align: -1px;
+  background: var(--text);
+}
+.drift-key.zone {
+  background: var(--accent-soft);
+  outline: 1px solid var(--line-2);
+}
+.port-money-total {
+  margin: 0 0 10px;
+}
+.port-money-total strong {
+  font-size: 22px;
+  font-weight: 600;
+}
+.port-dep-bars {
+  height: 84px;
+}
+.port-dep-bars button {
+  position: relative;
+}
+.dep-figure {
+  flex: none;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.port-money-month {
+  margin: 10px 0 0;
+}
+.port-money-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  font-size: 13px;
+}
+.port-money-list li {
+  display: grid;
+  grid-template-columns: 64px 1fr auto;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+}
+.port-money-list li.port-money-more {
+  display: block;
+  border-bottom: 0;
+}
+
+/* The ledger: tabs over a hairline table, no card. */
+.port-ledger {
+  border-top: 1px solid var(--line);
+}
+.port-tabs {
+  border-bottom: 1px solid var(--line);
+}
+.port-ledger table tfoot th,
+.port-ledger table tfoot td {
+  border: 0;
+  border-top: 1px solid var(--line-2);
+  background: none;
+  font-weight: 600;
+}
+.port-kept {
+  display: block;
+  width: 56px;
+  height: 3px;
+  margin: 4px 0 0 auto;
+  border-radius: 2px;
+  background: var(--down-soft);
+  overflow: hidden;
+}
+.port-kept i {
+  display: block;
+  height: 100%;
+  background: var(--down);
+  opacity: 0.7;
+  transition: width 700ms var(--ease);
+}
+.port-kept.above {
+  background: var(--up-soft);
+}
+.port-kept.above i {
+  background: var(--up);
+}
+
+/* Narrow (~650px pane): one column; phones: shorter type, the strip keeps its names inside. */
+@media (max-width: 900px) {
+  .port-pair {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 22px;
+  }
+  .port-headline {
+    font-size: 27px;
+  }
+}
+@media (max-width: 520px) {
+  .port-headline {
+    font-size: 23px;
+  }
+  .port-bars {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+  .port-readout {
+    margin-left: 0;
+  }
+  .port-bar.target .port-slice span {
+    display: none;
+  }
+  .port-targets li {
+    grid-template-columns: 40px minmax(60px, 1fr) auto;
+    row-gap: 8px;
+  }
+  .port-targets .drift-act {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+/* Motion: the strip fills in from the left, slice by slice, and the targets follow; then motion
+   only answers you (the readout follows the slice you're on) or shows change (a moved total
+   rolls). Off under reduced motion. */
+@media (prefers-reduced-motion: no-preference) {
+  .port-headline {
+    animation: port-rise 420ms var(--ease) both;
+  }
+  .port-bar .port-slice {
+    animation: port-grow 520ms var(--ease) both;
+    animation-delay: calc(var(--i, 0) * 70ms + 120ms);
+  }
+  .port-slice.light {
+    color: var(--text);
+  }
+  .port-bar.target .port-slice {
+    animation-delay: calc(var(--i, 0) * 70ms + 520ms);
+  }
+  .port-readout,
+  .port-money-month {
+    animation: port-fade 200ms ease-out both;
+  }
+  .port-money-list {
+    animation: port-rise 240ms var(--ease) both;
+  }
+  .port-targets .drift-fill {
+    animation: port-grow 700ms var(--ease) both;
+    animation-delay: calc(var(--i, 0) * 80ms + 300ms);
+  }
+}
+@keyframes port-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes port-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes port-grow {
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}

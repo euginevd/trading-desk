@@ -75,11 +75,7 @@ def binance(request: httpx.Request) -> httpx.Response:
             }
             for s, (p, c) in PRICES.items()
         ],
-        "/api/v3/klines": klines(
-            symbol,
-            request.url.params.get("interval", "4h"),
-            min(int(request.url.params.get("limit", "120")), 1000),
-        ),
+        "/api/v3/klines": _klines(request),
         "/api/v3/myTrades": _trades(symbol),
         "/sapi/v1/capital/deposit/hisrec": [
             {"coin": "USDC", "amount": a, "network": "BASE", "status": 1, "insertTime": t}
@@ -88,6 +84,7 @@ def binance(request: httpx.Request) -> httpx.Response:
             <= t
             <= int(request.url.params.get("endTime", NOW_MS))
         ],
+        "/api/v3/allOrders": [o for o in EXCHANGE.orders.values() if o["symbol"] == symbol],
         "/api/v3/openOrders": [
             {"origQty": o.get("origQty", o["executedQty"]), "price": "0", **o}
             for o in EXCHANGE.orders.values()
@@ -103,6 +100,16 @@ def binance(request: httpx.Request) -> httpx.Response:
     if path not in replies:
         return httpx.Response(404, json={"msg": "Not in the demo."})
     return httpx.Response(200, json=replies[path])
+
+
+def _klines(request: httpx.Request) -> list[list[Any]]:
+    """Candles ending now; from startTime when one is asked for, as Binance pages them."""
+    params = request.url.params
+    limit = min(int(params.get("limit", "120")), 1000)
+    rows = klines(params.get("symbol", ""), params.get("interval", "4h"), limit)
+    if "startTime" in params:
+        rows = [r for r in rows if int(r[0]) >= int(params["startTime"])]
+    return rows
 
 
 # Two made-up USDC deposits for the FY deposits card (decision 31).
@@ -123,6 +130,7 @@ class Exchange:
     def __init__(self) -> None:
         self.orders: dict[int, dict[str, Any]] = {}
         self.lists: dict[int, list[int]] = {}
+        self.names: dict[str, int] = {}
         self.next_id = 100
         for n, o in enumerate(ORDERS, start=1):  # the demo's standing orders, cancellable
             self.orders[n] = {
@@ -178,23 +186,25 @@ class Exchange:
         made = self._new({k: v for k, v in p.items() if k != "cancelOrderId"})
         return httpx.Response(200, json={"cancelResult": "SUCCESS", "newOrderResponse": made})
 
-    def handle(self, request: httpx.Request) -> httpx.Response:
-        p = dict(request.url.params)
-        path, method = request.url.path, request.method
-        if path == "/api/v3/myTrades":
-            order = self.orders[int(p["orderId"])]
-            fills = [{"commission": "0", "commissionAsset": "USDT"}]
-            return httpx.Response(200, json=fills if order["status"] == "FILLED" else [])
+    def _list(self, path: str, method: str, p: dict[str, str]) -> httpx.Response:
+        """OCO exits: placed, looked up by id or client id, cancelled."""
         if path == "/api/v3/orderList/oco":
+            above = {"newClientOrderId": p.get("aboveClientOrderId", "")}
+            below = {"newClientOrderId": p.get("belowClientOrderId", "")}
             legs = [
-                self._new({**p, "type": "LIMIT_MAKER"}),
-                self._new({**p, "type": "STOP_LOSS"}),
+                self._new({**p, **above, "type": "LIMIT_MAKER", "price": p["abovePrice"]}),
+                self._new({**p, **below, "type": "STOP_LOSS", "price": p["belowStopPrice"]}),
             ]
             list_id = self._id()
             self.lists[list_id] = [leg["orderId"] for leg in legs]
+            if p.get("listClientOrderId"):
+                self.names[p["listClientOrderId"]] = list_id
             return httpx.Response(200, json={"orderListId": list_id, "orders": legs})
         if path == "/api/v3/orderList":
-            ids = self.lists[int(p["orderListId"])]
+            if "origClientOrderId" in p and p["origClientOrderId"] not in self.names:
+                return httpx.Response(400, json={"msg": "Order list does not exist."})
+            found = self.names.get(p.get("origClientOrderId", ""), int(p.get("orderListId", 0)))
+            ids = self.lists[found]
             filled = any(self.orders[i]["status"] == "FILLED" for i in ids)
             for i in ids:  # as on Binance: once one leg fills, the other is cancelled
                 if method == "DELETE" or (filled and self.orders[i]["status"] == "NEW"):
@@ -202,7 +212,19 @@ class Exchange:
             done = all(self.orders[i]["status"] != "NEW" for i in ids)
             status = "ALL_DONE" if done else "EXECUTING"
             orders = [{"orderId": i} for i in ids]
-            return httpx.Response(200, json={"listOrderStatus": status, "orders": orders})
+            body = {"orderListId": found, "listOrderStatus": status, "orders": orders}
+            return httpx.Response(200, json=body)
+        return httpx.Response(400, json={"msg": "Unknown order list call."})
+
+    def handle(self, request: httpx.Request) -> httpx.Response:
+        p = dict(request.url.params)
+        path, method = request.url.path, request.method
+        if path == "/api/v3/myTrades":
+            order = self.orders[int(p["orderId"])]
+            fills = [{"commission": "0", "commissionAsset": "USDT"}]
+            return httpx.Response(200, json=fills if order["status"] == "FILLED" else [])
+        if path.startswith("/api/v3/orderList"):
+            return self._list(path, method, p)
         if method == "POST":
             return httpx.Response(200, json=self._new(p))
         if "origClientOrderId" in p:
@@ -261,8 +283,10 @@ def klines(symbol: str, interval: str, count: int = 120) -> list[list[Any]]:
 
 
 def taostats(request: httpx.Request) -> httpx.Response:
-    """Made-up Taostats reply: 12.4 TAO free, 85 staked and 1.5 to claim, in rao."""
-    del request
+    """Made-up Taostats reply: 12.4 TAO free, 85 staked and 1.5 to claim, in rao. Only the
+    current accounts path answers; the retired one is Gone, as on Taostats."""
+    if not request.url.path.startswith("/v1/accounts/"):
+        return httpx.Response(410, json={"message": "Gone", "status_code": 410})
     row = {
         "balance_free": "12400000000",
         "balance_staked": "85000000000",
@@ -285,8 +309,11 @@ def history(store: "Store", today: str, value: str) -> None:
 
 def ask(system: str, prompt: str, shape: dict[str, Any]) -> tuple[dict[str, Any], Decimal]:
     """A made-up plan from the facts in the prompt, so demo mode needs no Anthropic key."""
-    del system, shape
+    del system
     import json  # noqa: PLC0415 - demo only
+
+    if "action" not in shape.get("properties", {}):
+        return filled(shape), Decimal(0)
 
     facts = json.loads(prompt.split("\n", 3)[3])
     trend = facts["frames"]["4h"]["trend"]
@@ -316,6 +343,26 @@ def ask(system: str, prompt: str, shape: dict[str, Any]) -> tuple[dict[str, Any]
         "summary": "Demo mode: a made-up plan from the computed facts.",
     }
     return reply, Decimal(0)
+
+
+def filled(shape: dict[str, Any]) -> Any:  # noqa: PLR0911 - one return per kind
+    """A made-up reply of any shape: the trading agent's steps in demo mode."""
+    kind = shape.get("type")
+    if "enum" in shape:
+        return shape["enum"][len(shape["enum"]) // 2]
+    if kind == "object":
+        return {k: filled(v) for k, v in shape.get("properties", {}).items()}
+    if kind == "array":
+        item = shape.get("items", {})
+        if item.get("type") == "object" and "enum" in item.get("properties", {}).get("coin", {}):
+            return [
+                {"coin": c, "priority": "medium", "reason": "Demo mode: made up."}
+                for c in item["properties"]["coin"]["enum"]
+            ]
+        return [filled(item)]
+    if kind == "integer":
+        return 60
+    return "Demo mode: a made-up note."
 
 
 def sentiment_detail() -> dict[str, Any]:

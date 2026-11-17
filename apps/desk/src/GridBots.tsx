@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import {
   createGrid,
   deleteGrid,
@@ -9,9 +9,18 @@ import {
   suggestGrid,
   switchGrid,
 } from "./api";
-import { BotChart, CoinSelect, CreateMenu, RobotIcon, useWatchCoins, type Level } from "./BotKit";
+import {
+  BotChart,
+  CoinSelect,
+  CreateMenu,
+  RobotIcon,
+  Shell,
+  useWatchCoins,
+  type BotAsk,
+  type Level,
+} from "./BotKit";
 import CoinIcon from "./CoinIcon";
-import { ORDER_STATUS, message, quoteAmount } from "./DcaBots";
+import { ORDER_STATUS, message, quoteAmount, type Embed } from "./DcaBots";
 import { dateTime, price } from "./format";
 import type { GridBot, GridBots as Grids, GridDetail, GridPreview, GridRequest } from "./types";
 
@@ -55,7 +64,7 @@ type View =
   | { kind: "copy"; grid: GridBot }
   | { kind: "grid"; id: number };
 
-export default function GridBots() {
+export default function GridBots({ embed }: { embed?: Embed<Grids> } = {}) {
   const [view, setView] = useState<Grids | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState<View>({ kind: "list" });
@@ -73,6 +82,15 @@ export default function GridBots() {
       (e: unknown) => setError(message(e)),
     );
   }, []);
+
+  const onData = embed?.onData;
+  const onFocus = embed?.onFocus;
+  useEffect(() => {
+    if (view) onData?.(view);
+  }, [view, onData]);
+  useEffect(() => {
+    onFocus?.(page.kind !== "list");
+  }, [page.kind, onFocus]);
 
   useEffect(() => {
     load();
@@ -117,19 +135,38 @@ export default function GridBots() {
   const grids = view?.grids ?? [];
   const create = (coin: string) => setPage({ kind: "new", coin });
 
+  // The Bots page's asks: open, edit, copy, start or stop, delete, or a new one.
+  useImperativeHandle(embed?.handle, () => ({
+    act: (ask: BotAsk) => {
+      if (ask.kind === "new") {
+        setPage({ kind: "new", coin: ask.coin });
+        return;
+      }
+      const b = view?.grids.find((x) => x.id === ask.id);
+      if (!b) return;
+      if (ask.kind === "open") setPage({ kind: "grid", id: b.id });
+      else if (ask.kind === "edit") setPage({ kind: "edit", grid: b });
+      else if (ask.kind === "copy") setPage({ kind: "copy", grid: b });
+      else if (ask.kind === "toggle") toggle(b);
+      else if (b.status === "off" || b.status === "paused") act(deleteGrid(b.id));
+    },
+  }));
+
   return (
-    <main className="wrap dca-page">
-      <div className="head-row">
-        <h1 className="visually-hidden">Grid Bot</h1>
-        {page.kind === "list" && <CreateMenu coins={coins} onPick={create} />}
-      </div>
+    <Shell embedded={Boolean(embed)} label="Grid bots">
+      {!embed && (
+        <div className="head-row">
+          <h1 className="visually-hidden">Grid Bot</h1>
+          {page.kind === "list" && <CreateMenu coins={coins} onPick={create} />}
+        </div>
+      )}
 
       {error && (
         <div className="alert" role="alert">
           {error}
         </div>
       )}
-      {view && !view.tradingOn && (
+      {view && !view.tradingOn && !embed && (
         <div className="alert notice" role="status">
           Trading is off, so grids stay stopped until you turn it on.
         </div>
@@ -165,7 +202,7 @@ export default function GridBots() {
         />
       )}
 
-      {page.kind === "list" && (
+      {page.kind === "list" && !embed && (
         <>
           {view === null && !error && <div className="skeleton" style={{ height: 160 }} />}
           {view && grids.length === 0 && (
@@ -204,7 +241,7 @@ export default function GridBots() {
           </button>
         </div>
       </dialog>
-    </main>
+    </Shell>
   );
 }
 

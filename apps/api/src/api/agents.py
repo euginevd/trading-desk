@@ -130,6 +130,6 @@ def instructions(store: Store, agent: str) -> str:
         "The owner's Profile below is the source of truth. Read its goals, foundations, "
         "strategy, rules and lessons before answering, and say plainly when a suggestion would "
         "break one of its rules, naming the rule. A rule marked Not set is no rule: never "
-        "enforce it. Quote only from its quotes, never invent one.\n"
+        "enforce it.\n"
         f"Profile:\n{for_agents(store)}"
     )

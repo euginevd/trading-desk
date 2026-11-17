@@ -17,34 +17,46 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from api import (
+    account_coins,
     agents,
     ai_client,
+    analyse,
     coach,
+    coach_week,
     demo,
     env_file,
     journal,
     ledger,
+    md_files,
+    my_agents,
     profile,
     profile_ai,
     profile_live,
     profile_routes,
+    profile_v2,
     rebalance,
+    risk,
+    schedule,
     tax,
     telegram,
+    trading_agent,
 )
-from api.advisor import futures, gather, history_candles, rules_of
+from api.advisor import futures, gather, rules_of
 from api.ai_client import capped, subscription, switched
 from api.ai_signal import Ask, SignalError, Signals, claude
 from api.ai_signin import SignIn
 from api.audit import Audit
-from api.binance import Binance, BinanceError
+from api.binance import Binance, BinanceError, plain
 from api.bots import Bots
+from api.dca_book import DcaBook
+from api.dca_funds import Funds
 from api.deposits import amount_key
 from api.deposits import report as deposit_report
 from api.grid import Grids
 from api.icons import Icons
 from api.market import QUOTE, MarketError, coin_symbol, market
-from api.plan import track
+from api.pot import Pot
+from api.pot_agent import PotAgent
 from api.profile_md import for_agents
 from api.sentiment import SentimentError, fear_and_greed, fear_and_greed_detail, market_global
 from api.service import CostRules, TradeCache, Wallet, fetch
@@ -445,6 +457,7 @@ def live_services() -> Generator[Services]:
     store = Store(store_path())
     audit = _audit()
     try:
+        md_files.sync(store, audit, _now_ms())  # the owner's files are the source (decision 61)
         with _binance() as binance:
             signals = Signals(_ask(store), store, audit, _cap(), capped=lambda: capped(store))
             yield Services(binance, store, signals, audit)
@@ -462,6 +475,35 @@ def _body(event: dict[str, object]) -> dict[str, Any]:
 
 
 Route = Callable[[Trading, dict[str, str], dict[str, Any]], dict[str, Any]]
+# The DCA book (TODO 11): five lifelong positions, fed only by orders placed here.
+DCA_ROUTES: dict[tuple[str, str], Route] = {
+    ("GET", "/dca"): lambda desk, _q, _b: DcaBook(desk).view(),
+    ("PUT", "/dca/plan"): lambda desk, _q, b: DcaBook(desk).set_plan(b),
+    ("GET", "/dca/suggest"): lambda desk, _q, _b: DcaBook(desk).suggest(),
+    ("GET", "/dca/odds"): lambda desk, q, _b: DcaBook(desk).odds(
+        str(q.get("coin", "")), q.get("price")
+    ),
+    ("POST", "/dca/orders"): lambda desk, _q, b: DcaBook(desk).place(b),
+    ("POST", "/dca/orders/cancel"): lambda desk, _q, b: DcaBook(desk).cancel(b.get("ref")),
+    ("POST", "/dca/orders/amend"): lambda desk, _q, b: DcaBook(desk).amend(b),
+    ("POST", "/dca/close-out"): lambda desk, _q, _b: DcaBook(desk).close_out(),
+    ("GET", "/dca/check"): lambda desk, _q, _b: DcaBook(desk).check(),
+    ("POST", "/dca/check/fix"): lambda desk, _q, _b: DcaBook(desk).repair(),
+}
+# The trading pot (docs/plan-trade.md): trading-agent's book, every trade by its reference.
+POT_ROUTES: dict[tuple[str, str], Route] = {
+    ("GET", "/pot"): lambda desk, _q, _b: Pot(desk).view(),
+    ("PUT", "/pot/config"): lambda desk, _q, b: Pot(desk).set_config(b),
+    ("POST", "/pot/put-in"): lambda desk, _q, b: Pot(desk).put_in(b),
+    ("POST", "/pot/trades"): lambda desk, _q, b: Pot(desk).place(b),
+    ("POST", "/pot/preview"): lambda desk, _q, b: Pot(desk).preview(b),
+    ("POST", "/pot/trades/cancel"): lambda desk, _q, b: Pot(desk).cancel(b.get("ref")),
+    ("POST", "/pot/trades/stop"): lambda desk, _q, b: Pot(desk).move_stop(b),
+    ("POST", "/pot/trades/close"): lambda desk, _q, b: Pot(desk).close(b.get("ref")),
+    ("POST", "/pot/proposals/dismiss"): lambda desk, _q, b: Pot(desk).dismiss(b),
+    ("GET", "/pot/check"): lambda desk, _q, _b: Pot(desk).check(),
+    ("GET", "/pot/coins"): lambda desk, _q, _b: account_coins.snapshot(Pot(desk)),
+}
 ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/trade"): lambda desk, q, _: desk.terminal(coin_symbol(q.get("symbol") or "BTC")),
     ("GET", "/settings"): lambda desk, _q, _b: desk.settings(),
@@ -474,6 +516,8 @@ ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/orders/cancel"): lambda desk, _, b: desk.cancel_order(
         b.get("symbol"), b.get("orderId")
     ),
+    **DCA_ROUTES,
+    **POT_ROUTES,
 }
 
 
@@ -506,7 +550,7 @@ def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
     return {"source": source, "asset": asset, "averageCost": average}
 
 
-BUYS = ("/trades", "/orders", "/orders/ladder")
+BUYS = ("/trades", "/orders", "/orders/ladder", "/dca/orders")
 PRETRADE_RULES = ("monthly_deposit_cap_aud", "per_trade_aud", "max_pct_per_coin")
 
 
@@ -514,6 +558,8 @@ def _spend_of(path: str, body: dict[str, Any]) -> Decimal | None:
     """What a buy request would spend, in the quote; None when it isn't a buy or can't be read
     (the order itself then refuses it)."""
     try:
+        if path == "/dca/orders" and body.get("side", "buy") != "buy":
+            return None
         if path == "/orders":
             if body.get("side") != "buy":
                 return None
@@ -534,7 +580,10 @@ def _pretrade(
     if spend is None or not spend.is_finite() or spend <= 0:
         return None
     _, store, audit, _ = desk.parts()
-    coin = coin_symbol(body.get("symbol", "")).removesuffix(QUOTE)
+    symbol = coin_symbol(body.get("symbol") or body.get("coin", ""))
+    if path != "/dca/orders" and symbol.endswith(QUOTE):  # the DCA book guards its own buys
+        Pot(desk).guard(spend)
+    coin = symbol.removesuffix(QUOTE)
     return _rule_check(store, audit, coin, spend, body.get("override") is True, portfolio)[0]
 
 
@@ -660,30 +709,12 @@ def _coin(raw: object) -> str:
     return coin_symbol(raw).removesuffix(QUOTE)
 
 
-def _run_signal(s: Services, body: dict[str, Any]) -> dict[str, Any]:
-    n, _ = profile.current(s.store)
-    facts = _facts(s, _coin(body.get("coin"))) | {
-        "plan": for_agents(s.store),
-        "profileVersion": n,
-    }
-    return {"signal": _dated_signal(s, s.signals.run(facts, body.get("force") is True))}
-
-
 def _dated_signal(s: Services, signal: dict[str, Any] | None) -> dict[str, Any] | None:
     """A signal, marked out of date once the Profile has moved past the version it read."""
     if signal is None:
         return None
     n, _ = profile.current(s.store)
     return signal | {"outOfDate": signal.get("profileVersion") not in (None, n)}
-
-
-def _plan(s: Services, q: dict[str, str]) -> dict[str, Any]:
-    """The live half of the panel: position, what-if, rules, levels, track record, alerts."""
-    coin = _coin(q.get("coin", "BTC"))
-    facts = gather(s.binance, s.store, (s.portfolio or live_portfolio)(), coin)
-    history = s.store.signal_history(coin)
-    record = track(history, history_candles(s.binance, coin), int(time.time() * 1000))
-    return {**facts, "track": record, "alerts": s.store.alerts(coin)}
 
 
 def _add_alert(s: Services, b: dict[str, Any]) -> dict[str, Any]:
@@ -701,6 +732,86 @@ def _add_alert(s: Services, b: dict[str, Any]) -> dict[str, Any]:
     s.store.add_alert(coin, direction, format(at.normalize(), "f"), note, int(time.time() * 1000))
     s.audit.record("alert", f"Alert set on {coin}", f"{direction} {at}")
     return {"alerts": s.store.alerts(coin)}
+
+
+def _funds(s: Services) -> Funds:
+    """Add and Remove funds on the DCA book, with dca-agent on the desk's AI provider."""
+    return Funds(DcaBook(Trading(s.binance, s.store, s.audit)), s.signals)
+
+
+def risk_board(s: Services, now: datetime | None = None) -> dict[str, Any]:
+    """risk-agent's board: every limit from the desk's own figures, by area. A source that
+    can't be read is named, and its limits left out rather than shown as kept."""
+    now = now or datetime.now(SYDNEY)
+    desk = Trading(s.binance, s.store, s.audit)
+    rows: list[dict[str, Any]] = []
+    missing: list[str] = []
+    book = DcaBook(desk)
+    sources: list[tuple[str, Callable[[], list[dict[str, Any]]]]] = [
+        ("the trading pot", lambda: risk.pot_limits(Pot(desk).view())),
+        ("the DCA book", lambda: risk.dca_limits(book.view(), len(book.open_weekly()), now)),
+        ("deposits", lambda: risk.deposit_limits(_coach(s, write=False)["deposits"])),
+        ("the portfolio", lambda: risk.portfolio_limits((s.portfolio or live_portfolio)())),
+    ]
+    for name, read in sources:
+        try:
+            rows += read()
+        except Exception as error:  # noqa: BLE001 - one source down must not hide the rest
+            missing.append(name)
+            s.audit.record("risk", f"Board: {name}", f"Not read: {type(error).__name__}")
+    plan = schedule.view(s.store, now)
+    return {
+        "sentence": risk.sentence(rows),
+        "limits": rows,
+        "missing": missing,
+        "review": risk.last_review(s.store),
+        "checkedAt": int(now.timestamp() * 1000),
+        "jobs": [j for j in plan["jobs"] if j["agent"] == risk.AGENT],
+        "scheduleOn": plan["on"],
+    }
+
+
+def risk_model(s: Services) -> str:
+    listing = cast(list[dict[str, Any]], my_agents.listing(s.store)["agents"])
+    none: dict[str, Any] = {}
+    mine = next((a for a in listing if a["slug"] == risk.AGENT), none)
+    return str(cast(dict[str, Any], mine.get("model") or {}).get("id") or "")
+
+
+def _risk_review(s: Services) -> dict[str, Any]:
+    """risk-agent writes the weekly review now, from the board."""
+    board = risk_board(s)
+    try:
+        risk.review(s.store, s.signals, board["limits"], board["checkedAt"], lambda: risk_model(s))
+    except LookupError as error:
+        raise Refused(str(error)) from None
+    return risk_board(s)
+
+
+def _schedule_on(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    """Agents running on their own, on or off: off, nothing wakes them; the desk still works."""
+    on = body.get("on")
+    if not isinstance(on, bool):
+        raise Refused("Say on or off.")
+    schedule.set_on(s.store, on)
+    s.audit.record("agents", "Scheduler", "On" if on else "Off")
+    return schedule.view(s.store, datetime.now(SYDNEY))
+
+
+def _pot_agent(s: Services, body: dict[str, Any] | None, job: str = "chat") -> dict[str, Any]:
+    """trading-agent's scan (no body), chat or one coin's analysis, with Binance's public
+    futures data for crowding; the demo has none."""
+    pot = Pot(Trading(s.binance, s.store, s.audit))
+
+    def run(agent: PotAgent) -> dict[str, Any]:
+        if body is None:
+            return agent.scan()
+        return agent.analyse(body) if job == "analyse" else agent.chat(body)
+
+    if _demo():
+        return run(PotAgent(pot, s.signals))
+    with httpx.Client(timeout=TIMEOUT_SECONDS) as futures:
+        return run(PotAgent(pot, s.signals, futures))
 
 
 ServiceRoute = Callable[[Services, dict[str, str], dict[str, Any]], object]
@@ -740,7 +851,140 @@ def _deposit_paid(s: Services, b: dict[str, Any]) -> dict[str, Any]:
     return {"amount": key, "aud": aud}
 
 
+def _coins(raw: object, s: Services) -> list[str]:
+    asked = [_coin(c) for c in str(raw or "").split(",") if c.strip()][:20]
+    return asked or sorted(s.store.watched_coins())
+
+
+def _lots(s: Services, coin: str) -> list[dict[str, Any]]:
+    """The coin's tax lots for Ellis, read only when Plan fit runs; none when the ledger
+    can't be read, since only that step needs them."""
+    if not trading_agent.current(s.store)[1]["steps"]["planfit"]["on"]:
+        return []
+    try:
+        return [lot for lot in _tax(s)["lots"] if lot["coin"] == coin]
+    except (Refused, SignalError, BinanceError, MarketError, httpx.HTTPError, KeyError):
+        return []
+    except InvalidOperation:
+        return []
+
+
+def _sellable(s: Services, facts: dict[str, Any]) -> str:
+    """The coin on Binance, less what open sells already hold: the most a sell ticket asks."""
+    coin = facts["coin"]
+    on_binance = sum(
+        (
+            Decimal(str(h.get("amount") or "0"))
+            for h in (s.portfolio or live_portfolio)()["holdings"]
+            if h["asset"] == coin and h.get("source", "Binance") == "Binance"
+        ),
+        Decimal(0),
+    )
+    selling = sum(
+        (Decimal(o["amount"]) for o in facts.get("openOrders", []) if o["side"] == "sell"),
+        Decimal(0),
+    )
+    return plain(max(on_binance - selling, Decimal(0)))
+
+
+def _analyse(s: Services, b: dict[str, Any]) -> dict[str, Any]:
+    coin = _coin(b.get("coin"))
+    facts = _facts(s, coin)
+    facts["sellable"] = _sellable(s, facts)
+    return analyse.start(s.store, s.audit, facts, _lots(s, coin), _now_ms())
+
+
+def _calls(s: Services, q: dict[str, str]) -> dict[str, Any]:
+    def dated(coin: str) -> dict[str, Any] | None:
+        return _dated_signal(s, s.signals.last(coin))
+
+    return {"calls": analyse.calls(_coins(q.get("coins"), s), dated)}
+
+
+def _rank(s: Services, b: dict[str, Any]) -> dict[str, Any]:
+    coins = _coins(",".join(map(str, b.get("coins") or [])), s)
+    prices = {t["coin"]: t for t in _tickers(s.binance, ",".join(coins))["tickers"]}
+    portfolio = (s.portfolio or live_portfolio)()
+    total = Decimal(portfolio["total"]["value"] or "0")
+    rows: list[dict[str, Any]] = []
+    for coin in coins:
+        last = _dated_signal(s, s.signals.last(coin))
+        value = sum(
+            (Decimal(h.get("value") or "0") for h in portfolio["holdings"] if h["asset"] == coin),
+            Decimal(0),
+        )
+        rows.append(
+            {
+                "coin": coin,
+                "change24h": prices.get(coin, {}).get("change24h"),
+                "sharePct": plain((value / total * 100).quantize(Decimal("0.1")))
+                if total
+                else None,
+                "lastCall": {
+                    "action": last["action"],
+                    "hoursAgo": round((_now_ms() - last["ranAt"]) / 3_600_000),
+                    "outOfDate": last["outOfDate"],
+                }
+                if last
+                else None,
+            }
+        )
+    return analyse.rank(s.signals, s.store, rows)
+
+
+def _agent_version(s: Services, q: dict[str, str]) -> dict[str, Any]:
+    try:
+        n = int(q.get("n", ""))
+    except ValueError:
+        raise Refused("No such version.") from None
+    return trading_agent.version(s.store, n)
+
+
+def _restore_agent(s: Services, b: dict[str, Any]) -> dict[str, Any]:
+    try:
+        n = int(str(b.get("n")))
+    except ValueError:
+        raise Refused("No such version.") from None
+    return trading_agent.restore(s.store, s.audit, n, _now_ms())
+
+
+def _import_agent(s: Services, b: dict[str, Any]) -> dict[str, Any]:
+    doc = trading_agent.parse(str(b.get("markdown") or ""))
+    return trading_agent.save(s.store, s.audit, doc, now=_now_ms(), summary_text="Imported")
+
+
+def _agent_markdown(s: Services) -> str:
+    n, doc = trading_agent.current(s.store)
+    return trading_agent.export(doc, n, _now_ms())
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
 SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
+    ("GET", "/agent"): lambda s, _q, _b: trading_agent.view(s.store),
+    ("GET", "/agent/file"): lambda s, _q, _b: md_files.file_view(s.store, "agent"),
+    ("PUT", "/agent"): lambda s, _, b: trading_agent.save(
+        s.store, s.audit, b.get("agent"), now=_now_ms()
+    ),
+    ("GET", "/agent/version"): lambda s, q, _b: _agent_version(s, q),
+    ("POST", "/agent/restore"): lambda s, _, b: _restore_agent(s, b),
+    ("GET", "/agent/export"): lambda s, _q, _b: {"markdown": _agent_markdown(s)},
+    ("POST", "/agent/import"): lambda s, _, b: _import_agent(s, b),
+    ("POST", "/analyse"): lambda s, _, b: _analyse(s, b),
+    ("POST", "/analyse/next"): lambda s, _, b: analyse.advance(
+        s.store, s.audit, s.signals, b.get("id"), _now_ms()
+    ),
+    ("GET", "/analyse/last"): lambda s, q, _b: {"run": analyse.last(s.store, _coin(q.get("coin")))},
+    ("GET", "/analyse/calls"): lambda s, q, _b: _calls(s, q),
+    ("POST", "/analyse/ask"): lambda s, _, b: analyse.ask(
+        s.store, s.signals, b.get("id"), b.get("question")
+    ),
+    ("POST", "/analyse/choice"): lambda s, _, b: analyse.choose(
+        s.store, s.audit, b.get("id"), b.get("choice")
+    ),
+    ("POST", "/analyse/rank"): lambda s, _, b: _rank(s, b),
     ("GET", "/deposits"): lambda s, q, _: _deposits(s, q),
     ("PUT", "/deposits/paid"): lambda s, _, b: _deposit_paid(s, b),
     ("GET", "/tickers"): lambda s, q, _: _tickers(s.binance, q.get("coins", "BTC,ETH,TAO")),
@@ -755,8 +999,6 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
             s, s.signals.last(coin_symbol(q.get("coin", "")).removesuffix(QUOTE))
         )
     },
-    ("POST", "/signal"): lambda s, _, b: _run_signal(s, b),
-    ("GET", "/plan"): lambda s, q, _: _plan(s, q),
     ("GET", "/risk"): lambda s, _q, _b: rules_of(s.store).view(),
     ("GET", "/alerts"): lambda s, q, _: {
         "alerts": s.store.alerts(_coin(q["coin"]) if q.get("coin") else None)
@@ -765,11 +1007,26 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("GET", "/settings/ai"): lambda s, _q, _b: ai_client.view(s.store, s.signals),
     ("PUT", "/settings/ai"): lambda s, _, b: ai_client.choose(s.store, s.audit, s.signals, b),
     ("PUT", "/settings/ai/key"): lambda s, _, b: _save_key(s, b),
-    ("GET", "/settings/profile"): lambda s, _q, _b: _profile(s),
-    ("PUT", "/settings/profile"): lambda s, _, b: _set_profile(s, b),
     ("GET", "/coach"): lambda s, _q, _b: _coach(s, write=False),
     ("POST", "/coach/message"): lambda s, _q, _b: _coach(s, write=True),
     ("GET", "/agents"): lambda _s, _q, _b: agents.listing(),
+    ("GET", "/my-agents"): lambda s, _q, _b: my_agents.listing(s.store),
+    ("POST", "/dca/funds/analyse"): lambda s, _q, b: _funds(s).analyse(
+        b.get("side"), b.get("amount"), b.get("agent", True) is not False
+    ),
+    ("POST", "/dca/funds/chat"): lambda s, _q, b: _funds(s).chat(b),
+    ("POST", "/pot/scan"): lambda s, _q, _b: _pot_agent(s, None),
+    ("GET", "/risk-board"): lambda s, _q, _b: risk_board(s),
+    ("POST", "/risk-board/review"): lambda s, _q, _b: _risk_review(s),
+    ("GET", "/my-agents/schedule"): lambda s, _q, _b: schedule.view(s.store, datetime.now(SYDNEY)),
+    ("PUT", "/my-agents/schedule"): lambda s, _q, b: _schedule_on(s, b),
+    ("POST", "/pot/agent"): lambda s, _q, b: _pot_agent(s, b),
+    ("POST", "/pot/analyse"): lambda s, _q, b: _pot_agent(s, b, "analyse"),
+    ("POST", "/dca/agent"): lambda s, _q, b: _funds(s).agent(b),
+    ("GET", "/dca/funds/odds"): lambda s, q, _b: _funds(s).odds(
+        str(q.get("coin", "")), q.get("price"), str(q.get("side", "add"))
+    ),
+    ("GET", "/my-agents/file"): lambda s, q, _b: my_agents.file(s.store, str(q.get("slug", ""))),
     ("GET", "/tax"): lambda s, _q, _b: _tax(s),
     ("GET", "/tax/sell-check"): lambda s, q, _b: _sell_check(s, q),
     ("GET", "/rebalance"): lambda s, _q, _b: rebalance.drift(
@@ -843,18 +1100,6 @@ def _named_route(
     return None
 
 
-def _profile(s: Services) -> dict[str, str]:
-    return {"name": s.store.setting(coach.NAME_KEY, "")}
-
-
-def _set_profile(s: Services, body: dict[str, Any]) -> dict[str, str]:
-    """The owner's name for the greeting, kept only in the local database (decision 52)."""
-    name = " ".join(str(body.get("name", "")).split())[:40]
-    s.store.set_setting(coach.NAME_KEY, name)
-    s.audit.record("settings", "Your name", "Saved" if name else "Cleared")
-    return _profile(s)
-
-
 def _coach(s: Services, *, write: bool) -> dict[str, Any]:
     """The Dashboard: facts from code, and the message kept for today and this mood. GET is
     quick, with the plain wording until the model's is kept; POST has the model write it."""
@@ -869,9 +1114,10 @@ def _coach(s: Services, *, write: bool) -> dict[str, Any]:
         report=report,
         plan=plan,
         now=datetime.now(SYDNEY),
-        name=plan["identity"]["name"] or s.store.setting(coach.NAME_KEY, ""),
+        name=plan["identity"]["name"] or "",  # the Profile's Name line (decision 65)
         last_plan=s.signals.last,
     )
+    facts["week"] = _week(s, plan)
     raw = s.store.setting(coach.CACHE_KEY, "")
     kept: dict[str, Any] | None = json.loads(raw) if raw else None
     # Only the model's words are kept: the plain ones are tried again next time.
@@ -890,6 +1136,27 @@ def _coach(s: Services, *, write: bool) -> dict[str, Any]:
         kept = {"key": coach.cache_key(facts), "message": message, "profileVersion": n}
         s.store.set_setting(coach.CACHE_KEY, json.dumps(kept))
     return facts | {"message": _dated_message(message, kept, n), "pending": False}
+
+
+def _week(s: Services, plan: dict[str, Any]) -> dict[str, Any] | None:
+    """The week rail (decision 63), from profile.md v2's weekly buy and this week's Binance buys;
+    None before the Profile is v2."""
+    if not plan["markdown"]:
+        return None
+    today = tax.today_sydney()
+    try:
+        portfolio = (s.portfolio or live_portfolio)()
+        coins = ledger.coins_seen(s.store, set(tax.held_of(portfolio)))
+        fx_transport = httpx.MockTransport(demo.fx) if _demo() else None
+        with httpx.Client(timeout=TIMEOUT_SECONDS, transport=fx_transport) as fx:
+            fills = ledger.fills(s.binance, fx, coins, coach_week.start_ms(today), today)
+        buys: list[tuple[date, Decimal]] | None = [(f.day, f.aud) for f in fills if f.buy]
+    except (BinanceError, httpx.HTTPError, LookupError, ValueError):
+        buys = None  # the rail still shows the plan; nothing is marked done or missed
+    rail = coach_week.week(profile_v2.values(plan["markdown"])["dca"], buys, today)
+    raw = s.store.setting("dca_plan", "")
+    book_plan = json.loads(raw) if raw else None
+    return coach_week.with_book(rail, book_plan, s.store.dca_orders(), QUOTE)
 
 
 def _dated_message(message: dict[str, Any], kept: dict[str, Any] | None, n: int) -> dict[str, Any]:

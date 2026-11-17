@@ -9,29 +9,34 @@ The agreed features, by app and audience; the agent adds a row when you approve 
 
 ## `desk`
 
-Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 52: [features/01-52.md](features/01-52.md).
+Both pages follow [design-system.md](design-system.md) 18 to 22. Features 1 to 52: [features/01-52.md](features/01-52.md); 54 to 72: [features/53-72.md](features/53-72.md).
 
 | # | Feature | Status | PR |
 |---|---|---|---|
-| 54 | Settings page: the AI section switches between the API key and the Claude subscription, with the fallback; Sign in with Claude and a pasted key, saved to `.env` (decisions 50, 51) | Done | |
-| 55 | Coach Dashboard (decision 52): greeting and mood with a short message, deposit coach against the monthly cap, today's key points, seven agents with placeholder replies; today's widgets moved to a Portfolio page | Done | |
-| 56 | Profile page (decision 52; was Plan): replaced by feature 61 | Dropped: rebuilt as feature 61 | |
-| 57 | Tax tab on Portfolio (decision 54): lots by coin with the 12-month countdown, this year's realised gains and losses, holdings under water before 30 June; a warning on the sell form | Done | |
-| 58 | Drift card on Portfolio (decision 55): each target against now, and a link that prefills an order back toward target | Done | |
-| 59 | Journal (decision 56): every filled order, its source and result, rule checks, setup and mistake tags, a 30-day score | Done | |
-| 60 | Telegram morning summary from Settings (decision 57) | Done | |
-| 61 | Profile as an Investment Policy Statement (decision 58): ten typed cards with "Not set", a top strip, versions with history, compare and restore, Markdown import and export, locks, live rule checks and a scorecard, the command bar's diff to accept, edit or reject, a what-if simulator and Riley's allocation review | Done | |
-| 62 | Pre-trade check (decision 58): a buy or smart trade breaking a set Profile rule shows a red banner and needs "Place anyway (logged)" | Done | |
-| 63 | Dashboard: a refresh button, the five-person agent team (decision 59), the weekly recap with past recaps, and Out of date marks | Done | |
-| 64 | Settings shows the provider and model in use, providers as cards with their own status; Portfolio's allocation legend as coin icons | Done | |
+| 73 | Trade fixes (decision 67): the call first, the steps folded, the levels as a ladder, whole prices from 1,000 | Done | |
+| 74 | Bots page (decision 68): DCA and grid bots on one page, chips by type; the old links open it filtered | Done | |
+| 75 | Trade, actionable only (decision 69): the verdict, what to do, the order and its buttons; reasons folded | Done | |
+| 76 | My agents (decision 70): one versioned file per agent in local/agents/, on a week rota on the Profile | Done | |
+| 77 | trading-agent (decision 71): the trading pot's agent, with swing, position and grid playbooks | Done | |
+| 78 | The DCA book (TODO 11, decision 72): lifelong positions, the week's limits from fill odds, references, average cost, P&L, CSV export | Done | |
+| 79 | Add and Remove funds on the DCA book (decision 72): dca-agent proposes a limit per coin; the desk checks the plan | Done | One Opus call per analysis or chat message |
+| 80 | DCA book around dca-agent (decision 72): a chat that proposes checked actions, positions against targets, live P&L | Done | One Opus call per chat message |
+| 81 | The trading pot (decision 73, [plan-trade.md](plan-trade.md) phase 1): POT- ledger, TRD- references, scan and chat proposals sized and checked by the desk | Done | One Opus call per scan or chat message |
+| 82 | New trade by hand (decision 73): entry, stop and target sized live (POST /pot/preview), rule breaks named, a ladder and the numbers | Done | |
+| 83 | The scheduler (decision 74): wakes each agent at its time and brings proposals to Telegram with one-use buttons; My agents shows jobs | Done | One Opus call a day for the scan |
+| 84 | trading-agent's analysis in New trade (decision 73): a verdict and the levels it fills in, sized and checked by the desk (POST /pot/analyse) | Done | One Opus call per Analyse |
+| 85 | Risk page, run by risk-agent: every Profile limit as a gauge by book, a daily check to Telegram, a weekly review; risk per trade 1% with a dollar cap | Done | One Opus call a week for the review |
+| 86 | Trade page becomes the Trading account (decision 75): money first, coins as cards (GET /pot/coins), trades in tabs, a soft ring-fence | Done | |
+| 87 | DCA book open orders like an exchange's: View, Modify (cancel and replace, linked) and Cancel; Dedupe of same-price orders (owner, 18 Nov 2026) | Done | |
+| 88 | One Orders section on the DCA book: filters, grouping, 24-hour odds, bulk cancel or move, an order panel with chart and history (owner, 18 Nov 2026) | Done | |
+| 89 | Trading account Watchlist: coin cards with a one-word call, a panel with the daily chart and trading-agent's read (owner, 18 Nov 2026) | Done | |
+| 90 | Analyse in New trade sets the whole trade, sized by the 1% rule, marked as the agent's until changed and checked again (owner, 18 Nov 2026) | Done | |
+| 91 | The Trading account's watchlist holds up to 30 coins; the Trade page's lists stay at 10 (owner, 18 Nov 2026) | Done | |
+| 92 | Bots page in three tabs: Accumulation (the DCA book), Opportunities and Grid bots; rebalancing dropped for now, TODO 9 (owner, 18 Nov 2026) | Done | |
 
 ## `api`
 
-Features 7 to 25: [features/01-52.md](features/01-52.md).
-
-| # | Feature | Status | PR |
-|---|---|---|---|
-| 53 | AI provider switch (decision 48): `AI_AUTH_MODE` picks the API key or the owner's Claude subscription (Claude Agent SDK) at each run; the panel and audit log name the source; optional fall back to the key | Done | |
+Features 7 to 25: [features/01-52.md](features/01-52.md); 53: [features/53-72.md](features/53-72.md).
 
 ## Behind every app
 
