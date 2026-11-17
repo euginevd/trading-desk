@@ -1243,6 +1243,7 @@ export default function DcaBookPage() {
           <DcaOpen
             orders={book.orders.filter((o) => isOpen(o) && o.kind === "limit")}
             quote={book.quote}
+            prices={Object.fromEntries(book.positions.map((x) => [x.coin, x.price]))}
             onChanged={(words) => {
               setSaid(words);
               load();

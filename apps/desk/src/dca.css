@@ -631,35 +631,68 @@ td.dcb-id {
   gap: 6px;
 }
 
-/* Open orders: what's waiting, and a line to ask dca-agent to change them. */
-.dco-list {
+/* Open orders, as an exchange lists them: a bar for many at once, then a row per order with
+   View, Modify and Cancel. */
+.dco-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0 0 10px;
+}
+.dco-table td,
+.dco-table th {
+  white-space: nowrap;
+}
+.dco-table td .dcb-coin .tag {
+  margin-left: 6px;
+}
+.dco-table tr.is-picked td {
+  background: var(--down-soft);
+}
+.dco-acts {
+  display: flex;
+  gap: 14px;
+  justify-content: flex-end;
+}
+.dco-edit {
   display: grid;
-  gap: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.dco-dedupe {
+  max-width: 560px;
+}
+.dco-group {
   margin: 0 0 12px;
-  padding: 0;
-  list-style: none;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
 }
-.dco-list li {
+.dco-group legend {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+  font-weight: 600;
+}
+.dco-pick {
   display: grid;
-  grid-template-columns: 100px 150px 70px 170px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto 56px;
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--line);
-}
-.dco-list li .dcb-id {
-  display: inline;
-}
-.dco-list li > :nth-child(3) {
-  text-align: right;
-}
-.dco-ask {
-  align-items: center;
-  margin-bottom: 10px;
+  gap: 10px;
+  padding: 6px 0;
+  cursor: pointer;
 }
 @media (max-width: 720px) {
-  .dco-list li {
-    grid-template-columns: 1fr 1fr;
+  .dco-edit {
+    grid-template-columns: 1fr;
+  }
+  .dco-pick {
+    grid-template-columns: auto minmax(0, 1fr) 56px;
+  }
+  .dco-pick > :nth-child(3) {
+    display: none;
   }
 }
 
@@ -1259,9 +1292,6 @@ td.dcb-id {
   color: var(--accent);
   font: inherit;
   cursor: pointer;
-}
-.dco-by-hand {
-  margin: 0 0 8px;
 }
 
 @media (max-width: 1100px) {
