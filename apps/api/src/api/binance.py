@@ -79,7 +79,13 @@ class Binance:
                 0, "Binance didn't answer. Check the connection and try again."
             ) from error
         ms = round((time.monotonic() - started) * 1000)
-        body: Any = response.json() if response.content else None
+        try:
+            body: Any = response.json() if response.content else None
+        except ValueError:  # an HTML error page from Binance's edge or a proxy
+            body = None
+            if response.status_code == OK:
+                self._audit.record(kind, f"Binance: {label}", "Failed: not JSON")
+                raise BinanceError(0, "Binance sent a reply the desk couldn't read.") from None
         if response.status_code != OK:
             message = (
                 str(cast(dict[str, Any], body).get("msg", "")) if isinstance(body, dict) else ""

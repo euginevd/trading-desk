@@ -77,8 +77,14 @@ class Local(BaseHTTPRequestHandler):
         url = urlsplit(self.path)
         headers = {k.lower(): v for k, v in self.headers.items()}
         refusal = allowed(self.command, headers)
-        length = min(int(headers.get("content-length", "0") or 0), MAX_BODY)
-        body = self.rfile.read(length).decode("utf-8", "replace") if length else ""
+        try:
+            length = int(headers.get("content-length", "0") or 0)
+        except ValueError:
+            length = -1
+        if length < 0 or length > MAX_BODY:
+            refusal = refusal or "The request body is missing its size or too large."
+            self.close_connection = True  # the unread body never reaches the next request
+        body = self.rfile.read(length).decode("utf-8", "replace") if 0 < length <= MAX_BODY else ""
         if refusal:
             reply: dict[str, object] = {
                 "statusCode": 403,
@@ -133,6 +139,8 @@ def watch(stop: threading.Event) -> None:
 
         except (LookupError, BinanceError) as error:
             print(f"watcher: {type(error).__name__}")
+        except Exception as error:  # noqa: BLE001 - stops and exits live here: the watcher must keep running
+            print(f"watcher: unexpected {type(error).__name__}")
 
 
 def agents(stop: threading.Event) -> None:

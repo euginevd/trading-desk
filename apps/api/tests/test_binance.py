@@ -67,6 +67,16 @@ def test_a_refusal_raises_binances_message(tmp_path: Path) -> None:
         binance(httpx.MockTransport(reply), tmp_path / "audit.jsonl").balances()
 
 
+@pytest.mark.parametrize("status", [200, 503])
+def test_a_reply_that_isnt_json_is_a_binance_error(tmp_path: Path, status: int) -> None:
+    # An HTML page from Binance's edge must not escape as a ValueError and stop the watcher.
+    def reply(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, text="<html>Service Unavailable</html>")
+
+    with pytest.raises(BinanceError):
+        binance(httpx.MockTransport(reply), tmp_path / "audit.jsonl").balances()
+
+
 def test_no_answer_is_a_plain_error(tmp_path: Path) -> None:
     def reply(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("down", request=request)

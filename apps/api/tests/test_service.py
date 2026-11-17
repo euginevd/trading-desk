@@ -257,3 +257,23 @@ def test_average_cost_starts_at_the_owners_date(monkeypatch: Any) -> None:
     assert cost_from_ms() == 1_751_292_000_000
     monkeypatch.setenv("DESK_COST_FROM", "not a date")
     assert cost_from_ms() == 1_782_828_000_000
+
+
+def test_a_negative_or_huge_body_size_is_refused_without_waiting() -> None:
+    # A negative Content-Length once read to the end of the stream, holding a thread forever.
+    import socket  # noqa: PLC0415
+    import threading  # noqa: PLC0415
+    from http.server import ThreadingHTTPServer  # noqa: PLC0415
+
+    from api.local import Local  # noqa: PLC0415
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Local)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        for size in ("-1", "999999999"):
+            head = f"POST /health HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: {size}\r\n\r\n"
+            with socket.create_connection(("127.0.0.1", server.server_port), timeout=5) as s:
+                s.sendall(head.encode())
+                assert s.recv(64).split(b" ")[1] == b"403"
+    finally:
+        server.shutdown()
