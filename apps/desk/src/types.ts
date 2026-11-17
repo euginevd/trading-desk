@@ -1635,6 +1635,7 @@ export interface PotPick {
   score: number;
   verdict: "take" | "wait" | "pass";
   confluence: string[];
+  against: string[];
   catalyst: string;
   crowding: string;
   reason: string;

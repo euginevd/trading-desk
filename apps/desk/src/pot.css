@@ -1369,23 +1369,51 @@ dialog.ntf {
 .ntf-nums small {
   color: var(--muted);
 }
-.ntf-checks {
-  display: grid;
-  gap: 4px;
+.ntf-thesis {
   margin: 0 0 10px;
+  color: var(--text);
+  font-size: 14px;
+}
+.ntf-case {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px 16px;
+  margin: 0 0 10px;
+}
+.ntf-case ul {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  margin: 0;
   padding: 0;
   list-style: none;
   font-size: 13px;
 }
-.ntf-checks span {
-  display: inline-block;
-  min-width: 88px;
-  color: var(--muted);
+.ntf-case li {
+  display: flex;
+  gap: 8px;
+  color: var(--body);
 }
-.ntf-why {
-  margin: 0 0 10px;
+.ntf-for li::before {
+  content: "✓";
+  color: var(--up);
+}
+.ntf-against li::before {
+  content: "✕";
+  color: var(--wait);
+}
+.ntf-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 20px;
+  margin: 0 0 12px;
   color: var(--body);
   font-size: 13px;
+}
+.ntf-meta small {
+  margin-right: 4px;
+  color: var(--muted);
+  font-size: 12px;
 }
 .ntf-problem {
   margin: 0 0 10px;
@@ -1394,8 +1422,13 @@ dialog.ntf {
 }
 .ntf-pick footer {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+}
+.ntf-pick header .pot-tag {
+  margin-left: auto;
+}
+.ntf-pick header .ntf-grade {
+  margin-left: 0;
 }
 @media (prefers-reduced-motion: no-preference) {
   .ntf-body {
@@ -1437,6 +1470,9 @@ dialog.ntf {
   }
   .ntf-nums {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .ntf-case {
+    grid-template-columns: minmax(0, 1fr);
   }
   .ntf-steps {
     gap: 10px;

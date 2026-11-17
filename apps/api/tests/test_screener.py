@@ -9,7 +9,7 @@ from api import demo, screener
 from api.audit import Audit
 from api.binance import Binance
 from api.pot import FEE, Pot
-from api.pot_agent import PotAgent
+from api.pot_agent import PotAgent, clip
 from api.store import Store
 from api.trading import Refused, Trading
 
@@ -178,3 +178,11 @@ def test_only_plain_tickers_and_no_stablecoins_join_the_universe() -> None:
     http = httpx.Client(transport=httpx.MockTransport(lambda _r: httpx.Response(200, json=rows)))
     found = screener._crypto(http)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
     assert found == [{"coin": "SOL", "name": "Solana", "capRank": 7}]
+
+
+def test_card_text_is_clipped_at_a_word_never_mid_word() -> None:
+
+    assert clip("Clear: funding 0.01% per 8 hours", 70) == "Clear: funding 0.01% per 8 hours"
+    assert clip("so momentum has broken and this is a deep pullback, again", 40) == (
+        "so momentum has broken and this is a…"
+    )

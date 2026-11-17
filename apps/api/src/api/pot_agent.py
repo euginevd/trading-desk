@@ -30,6 +30,19 @@ MODEL = "claude-opus-5-5"
 VERDICTS = ("take", "wait", "pass")
 
 
+def clip(text: object, limit: int) -> str:
+    """Words up to the limit, never cut mid-word; an ellipsis when something was left out."""
+    words = " ".join(str(text or "").split())
+    if len(words) <= limit:
+        return words
+    return words[: limit - 1].rsplit(" ", 1)[0].rstrip(",;:·-") + "…"
+
+
+def _points(raw: object, most: int) -> list[str]:
+    items = cast(list[Any], raw) if isinstance(raw, list) else []
+    return [p for p in (clip(x, 70) for x in items) if p][:most]
+
+
 def atr(rows: list[list[Any]], days: int = ATR_DAYS) -> Decimal | None:
     """The average true range over the last `days` daily candles."""
     if len(rows) <= days:
@@ -101,7 +114,7 @@ class PotAgent:
             return f"Crowded: funding {rate}% per 8 hours"
         if rate < 0:
             return f"Shorts crowded: funding {rate}%"
-        return "Clear"
+        return f"Clear: funding {rate}% per 8 hours"
 
     def facts(self, only: str | None = None) -> dict[str, Any]:
         """The desk's figures for the model: BTC and every coin, or BTC and `only`."""
@@ -470,6 +483,7 @@ class PotAgent:
             "stop": {"type": "string"},
             "target": {"type": "string"},
             "confluence": {"type": "array", "items": {"type": "string"}},
+            "against": {"type": "array", "items": {"type": "string"}},
             "catalyst": {"type": "string"},
             "crowding": {"type": "string"},
             "reason": {"type": "string"},
@@ -484,6 +498,7 @@ class PotAgent:
             "stop",
             "target",
             "confluence",
+            "against",
             "catalyst",
             "crowding",
             "reason",
@@ -540,9 +555,15 @@ class PotAgent:
             "confluence, nothing against it), B (good) or C (weak), score it 0 to 10, and "
             "give a verdict: take, wait or pass. Keep the screener's entry, stop and target "
             "unless confluence gives a better level by the same rules; the entry stays at or "
-            "under the price now. Order the picks best first, at most four. Crowding: say what "
-            "funding shows. Reason: at most two sentences naming the levels. Line: one "
-            "sentence of at most 25 words on what the scan found.\n\n"
+            "under the price now. Order the picks best first, at most four.\n"
+            "WRITE SHORT: the owner reads this on a card. Figures, not prose; no repeating the "
+            "entry, stop or target (the card shows them). Confluence: two to four points for "
+            "the trade, at most 8 words each (e.g. 'Holding the 20-week SMA', 'Beats BTC: "
+            "+101% vs +4% in 13 weeks'). Against: up to two points, at most 8 words each "
+            "(e.g. 'Deep pullback: under the 10-week'). Catalyst: at most 12 words, or 'None "
+            "in the next two weeks'. Crowding: at most 8 words, from the funding given. "
+            "Reason: the thesis, one sentence of at most 25 words: why it should work and "
+            "what would prove it wrong. Line: at most 15 words.\n\n"
             f"THE STYLE'S RULES:\n{screener.guide_section(self._pot.store, style)}\n\n"
             "MARKET:\n"
             + json.dumps({"regime": seen["regime"], "warnings": seen["warnings"]})
@@ -571,14 +592,15 @@ class PotAgent:
         grade, verdict = item.get("grade"), item.get("verdict")
         pick: dict[str, Any] = {
             "coin": coin,
-            "setup": str(item.get("setup") or found["setup"])[:50],
+            "setup": found["setup"],  # the screener's own name for it, always short
             "grade": grade if grade in ("A", "B", "C") else "C",
             "score": round(min(max(float(item.get("score") or 0), 0.0), 10.0), 1),
             "verdict": verdict if verdict in VERDICTS else "pass",
-            "confluence": [str(x)[:120] for x in cast(list[Any], item.get("confluence") or [])][:5],
-            "catalyst": str(item.get("catalyst") or "")[:240],
-            "crowding": str(item.get("crowding") or found.get("crowding", ""))[:160],
-            "reason": str(item.get("reason") or "")[:400],
+            "confluence": _points(item.get("confluence"), 4),
+            "against": _points(item.get("against"), 2),
+            "catalyst": clip(item.get("catalyst"), 100),
+            "crowding": clip(item.get("crowding") or found.get("crowding"), 70),
+            "reason": clip(item.get("reason"), 220),
             "facts": found["facts"],
             "problem": None,
         }

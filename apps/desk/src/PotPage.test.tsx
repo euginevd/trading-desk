@@ -269,6 +269,7 @@ function serve(reply: PotView, breaksRule = false, setups = true) {
             score: 8.4,
             verdict: "take",
             confluence: ["4h trend up", "yesterday's low"],
+            against: ["Under the 4h high"],
             catalyst: "None found in 48 hours.",
             crowding: "Clear",
             reason: "Swept the Asia low at 137 and closed back above.",
@@ -493,6 +494,7 @@ describe("the trading pot", () => {
     expect(await screen.findByText("One clean Asia sweep on SOL.")).toBeTruthy();
     expect(screen.getByText(/Late in the crypto day/)).toBeTruthy();
     expect(screen.getByText("None found in 48 hours.")).toBeTruthy();
+    expect(screen.getByText("Under the 4h high")).toBeTruthy();
     expect(screen.getByText("2 : 1")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Okay, review SOL" }));
     expect(await screen.findByText(/Day trade · Asia sweep/)).toBeTruthy();

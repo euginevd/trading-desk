@@ -121,16 +121,18 @@ function ScanLines({ screen, judging }: { screen: PotScreen | null; judging: boo
 
 function PickCard({ p, expired, onOkay }: { p: PotPick; expired: boolean; onOkay: () => void }) {
   const sized = !p.problem && p.qty && p.risk;
+  const tone = p.verdict === "take" ? "won" : p.verdict === "wait" ? "live" : "lost";
   return (
     <article className={`ntf-pick is-${p.verdict}${p.problem ? " is-refused" : ""}`}>
       <header>
         <CoinIcon coin={p.coin} />
         <b>{p.coin}</b>
         <span className="ntf-setup">{p.setup}</span>
+        <span className={`pot-tag is-${tone}`}>{VERDICT[p.verdict]}</span>
         <span className={`ntf-grade is-${p.grade}`} title="trading-agent's grade">
           {p.grade}
         </span>
-        <span className="ntf-score num">{p.score.toFixed(1)}/10</span>
+        <span className="ntf-score num">{p.score.toFixed(1)}</span>
       </header>
       <dl className="ntf-nums">
         <div>
@@ -143,7 +145,10 @@ function PickCard({ p, expired, onOkay }: { p: PotPick; expired: boolean; onOkay
         </div>
         <div>
           <dt>Stop loss</dt>
-          <dd className="num down">{px(p.stop)}</dd>
+          <dd className="num down">
+            {px(p.stop)}
+            {p.stopPct && <small> · {p.stopPct}%</small>}
+          </dd>
         </div>
         <div>
           <dt>Reward : risk</dt>
@@ -161,32 +166,35 @@ function PickCard({ p, expired, onOkay }: { p: PotPick; expired: boolean; onOkay
           </dd>
         </div>
       </dl>
-      <ul className="ntf-checks">
-        <li>
-          <span>Confluence</span>
-          {p.confluence.length ? p.confluence.join(" · ") : "—"}
-        </li>
-        <li>
-          <span>Catalyst</span>
-          {p.catalyst || "—"}
-        </li>
-        <li>
-          <span>Crowding</span>
-          {p.crowding || "—"}
-        </li>
-      </ul>
-      {p.reason && <p className="ntf-why">{p.reason}</p>}
+      {p.reason && <p className="ntf-thesis">{p.reason}</p>}
+      <div className="ntf-case">
+        <ul className="ntf-for" aria-label="For">
+          {p.confluence.map((x) => (
+            <li key={x}>{x}</li>
+          ))}
+        </ul>
+        {p.against.length > 0 && (
+          <ul className="ntf-against" aria-label="Against">
+            {p.against.map((x) => (
+              <li key={x}>{x}</li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <p className="ntf-meta">
+        <span>
+          <small>Catalyst</small> {p.catalyst || "—"}
+        </span>
+        <span>
+          <small>Crowding</small> {p.crowding || "—"}
+        </span>
+      </p>
       {p.problem && (
         <p className="ntf-problem" role="note">
           The desk won't place it: {p.problem}
         </p>
       )}
       <footer>
-        <span
-          className={`pot-tag is-${p.verdict === "take" ? "won" : p.verdict === "wait" ? "live" : "lost"}`}
-        >
-          {VERDICT[p.verdict]}
-        </span>
         <button
           type="button"
           className="btn btn-accent"
