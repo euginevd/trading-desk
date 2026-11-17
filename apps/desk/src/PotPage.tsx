@@ -539,7 +539,11 @@ export default function PotPage() {
         setPending(null);
         setBuilding(null);
         setFlow(false);
-        setSaid(`${t.ref} placed: the entry waits on Binance at ${px(t.entry)}.`);
+        setSaid(
+          market
+            ? `${t.ref} placed: bought at market, about ${px(t.entry)}.`
+            : `${t.ref} placed: the entry waits on Binance at ${px(t.entry)}.`,
+        );
         load();
       },
       (e: unknown) => {

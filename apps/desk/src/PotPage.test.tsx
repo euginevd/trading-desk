@@ -179,6 +179,7 @@ function serve(reply: PotView, breaksRule = false, setups = true) {
     }
     if (path === "/pot/trades/stop") return json(trade({ stop: "135.5" }));
     if (path === "/pot/trades/reduce") return json(trade({ qty: "0.0369" }));
+    if (path === "/pot/trades/add") return json(trade({ qty: "0.11" }));
     if (path === "/pot/trades/note")
       return json(
         trade({
@@ -457,6 +458,27 @@ describe("the trading pot", () => {
       ref: "TRD-SOL-26W47-1",
       pct: "50",
     });
+  });
+
+  it("adds to a trade only after a confirm, then clears the amount", async () => {
+    const fetch = serve(pot());
+    render(<PotPage />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" }),
+    );
+    const amount = screen.getByRole("textbox", { name: "TRD-SOL-26W47-1 USDC to add" });
+    fireEvent.change(amount, { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add at market" }));
+    expect(sent(fetch, "/pot/trades/add")).toHaveLength(0); // asks first
+    expect(screen.getByText(/more SOL at market now/)).toBeTruthy();
+    const confirm = screen.getAllByRole("button", { name: "Add at market" });
+    fireEvent.click(confirm[confirm.length - 1] as HTMLElement);
+    await waitFor(() => expect(sent(fetch, "/pot/trades/add")).toHaveLength(1));
+    expect(JSON.parse(String(sent(fetch, "/pot/trades/add")[0]?.[1]?.body))).toEqual({
+      ref: "TRD-SOL-26W47-1",
+      usdc: "5",
+    });
+    await waitFor(() => expect(amount).toHaveProperty("value", "")); // a second click can't buy again
   });
 
   it("scans when asked", async () => {

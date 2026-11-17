@@ -172,13 +172,22 @@ class DeskStyle(IStrategy):
             return False
         key = f"{pair}|{entry_tag}"
         asked: dict[str, dict[str, Any]] = self.__dict__.setdefault("_asked", {})
-        if key not in asked:  # one question a setup, however many candles it stays on
-            asked[key] = self._ask_agent(url, pair, plan, rate)
-            line = {"at": current_time.isoformat(), "pair": pair, "style": self.style}
-            line |= {"setup": plan[0], "entry": plan[1], "stop": plan[2], "target": plan[3]}
-            with VERDICTS.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(line | asked[key]) + "\n")
-        return asked[key].get("verdict") == "take"
+        if key in asked:  # one question a setup, however many candles it stays on
+            return asked[key].get("verdict") == "take"
+        day = current_time.date().isoformat()
+        calls: dict[str, int] = self.__dict__.setdefault("_calls", {})
+        if calls.get(day, 0) >= int(os.environ.get("DESK_AGENT_MAX_PER_DAY", "20")):
+            log.warning("trading-agent's daily cap reached: %s not asked, not entered", pair)
+            return False
+        calls[day] = calls.get(day, 0) + 1
+        said = self._ask_agent(url, pair, plan, rate)
+        line = {"at": current_time.isoformat(), "pair": pair, "style": self.style}
+        line |= {"setup": plan[0], "entry": plan[1], "stop": plan[2], "target": plan[3]}
+        with VERDICTS.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(line | said) + "\n")
+        if said.get("verdict") != "error":  # an outage is asked again on the next candle
+            asked[key] = said
+        return said.get("verdict") == "take"
 
     def _ask_agent(
         self, url: str, pair: str, plan: tuple[str, float, float, float], rate: float

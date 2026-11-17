@@ -68,6 +68,7 @@ services:
       DESK_QUOTE: USDC
       # Each entry asks trading-agent first; only a take goes ahead (agent_verdicts.jsonl).
       DESK_AGENT_URL: http://api:8000/pot/judge-one
+      DESK_AGENT_MAX_PER_DAY: ${DESK_AGENT_MAX_PER_DAY:-20} # trading-agent calls a day, at most
     command: >-
       trade --config /freqtrade/config/paper.json
       ${PAPER_AI:+--config /freqtrade/config/$PAPER_AI}

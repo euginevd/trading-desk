@@ -14,10 +14,12 @@ import {
   notePotTrade,
   reducePotTrade,
 } from "./api";
+import { ApiError } from "./api";
 import { errorOf } from "./format";
+import { RuleBreakBanner } from "./RuleMarks";
 import CoinIcon from "./CoinIcon";
 import { dated, dollars, qty, when } from "./dcaFormat";
-import type { PotTrade } from "./types";
+import type { PotTrade, RuleBreak } from "./types";
 
 // A price as Binance has it: every decimal the pair uses, at least two.
 export function px(value: string | number | null | undefined): string {
@@ -53,7 +55,15 @@ const STATE: Record<PotTrade["orders"][number]["status"], string> = {
 };
 const NOTE = { desk: "Desk", thesis: "Thesis", you: "You" } as const;
 const PARTS = [25, 50, 75] as const;
-type Ask = "close" | "cancel" | "now" | { reduce: number } | null;
+type Ask = "close" | "cancel" | "now" | { reduce: number } | { add: string } | null;
+type Step = {
+  text: string;
+  button: string;
+  danger?: boolean;
+  run: (override: boolean) => Promise<PotTrade>;
+  said: (t: PotTrade) => string;
+  stay: boolean;
+};
 
 export default function PotPanel({
   trade,
@@ -73,6 +83,8 @@ export default function PotPanel({
   const [ask, setAsk] = useState<Ask>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A buy that breaks a set Profile rule (decision 78): named, and confirmed past or kept.
+  const [breaks, setBreaks] = useState<RuleBreak[] | null>(null);
   const changed = useRef(false);
   useEffect(() => {
     dialog.current?.showModal?.();
@@ -97,16 +109,66 @@ export default function PotPanel({
       (next) => {
         setBusy(false);
         setAsk(null);
+        setBreaks(null);
+        setMore("");
         setShown({ ...next, now: next.now ?? t.now });
         changed.current = true;
         if (!stay) onChanged(said(next));
       },
       (e: unknown) => {
         setBusy(false);
+        if (e instanceof ApiError && e.ruleBreaks.length > 0) {
+          setBreaks(e.ruleBreaks);
+          return;
+        }
         setError(errorOf(e, "That didn't go through."));
       },
     );
   };
+  // Each step that sells or buys at market asks first.
+  const stepOf = (a: Exclude<Ask, null>): Step => {
+    if (a === "close")
+      return {
+        text: `Sell all ${t.coin} in ${t.ref} at market now? Its stop and target are cancelled first.`,
+        button: "Close at market",
+        danger: true,
+        run: () => closePotTrade(t.ref),
+        said: (x) => `${x.ref} closed at market.`,
+        stay: false,
+      };
+    if (a === "cancel")
+      return {
+        text: `Cancel the entry of ${t.ref}? Nothing has filled yet.`,
+        button: "Cancel the entry",
+        run: () => cancelPotTrade(t.ref),
+        said: (x) => `${x.ref} cancelled.`,
+        stay: false,
+      };
+    if (a === "now")
+      return {
+        text: `Cancel the limit at ${px(t.entry)} and buy now at market (about ${px(t.now)})? It's re-sized so risk stays within 1%, and refused if reward to risk falls under the style's minimum.`,
+        button: "Buy at market",
+        run: (o) => enterPotTradeNow(t.ref, o),
+        said: (x) => `${x.ref}: bought at market.`,
+        stay: true,
+      };
+    if ("add" in a)
+      return {
+        text: `Buy ${dollars(a.add)} more ${t.coin} at market now (about ${px(t.now)})? The stop and target are replaced to cover it all.`,
+        button: "Add at market",
+        run: (o) => addToPotTrade(t.ref, a.add, o),
+        said: (x) => `${x.ref}: added at market.`,
+        stay: true,
+      };
+    return {
+      text: `Sell ${a.reduce}% of ${t.coin} at market now? The stop and target go back on the rest.`,
+      button: `Sell ${a.reduce}%`,
+      run: () => reducePotTrade(t.ref, a.reduce),
+      said: (x) => `${x.ref}: sold ${a.reduce}%.`,
+      stay: true,
+    };
+  };
+  const step = ask ? stepOf(ask) : null;
   // However it closes, the page reads the trade again if anything changed here.
   const finish = () => {
     if (changed.current) onChanged("");
@@ -261,13 +323,10 @@ export default function PotPanel({
             <form
               className="pnl-row"
               onSubmit={(e) =>
-                submit(e, () =>
-                  act(
-                    () => addToPotTrade(t.ref, more),
-                    (x) => `${x.ref}: added at market.`,
-                    true,
-                  ),
-                )
+                submit(e, () => {
+                  setBreaks(null);
+                  setAsk({ add: more });
+                })
               }
             >
               <label>
@@ -314,52 +373,27 @@ export default function PotPanel({
         </section>
       )}
 
-      {ask && (
+      {step && breaks && (
+        <RuleBreakBanner
+          breaks={breaks}
+          sending={busy}
+          onKeep={() => {
+            setBreaks(null);
+            setAsk(null);
+          }}
+          onOverride={() => act(() => step.run(true), step.said, step.stay)}
+        />
+      )}
+      {step && !breaks && (
         <div className="alert" role="alert">
-          <span>
-            {ask === "close"
-              ? `Sell all ${t.coin} in ${t.ref} at market now? Its stop and target are cancelled first.`
-              : ask === "cancel"
-                ? `Cancel the entry of ${t.ref}? Nothing has filled yet.`
-                : ask === "now"
-                  ? `Cancel the limit at ${px(t.entry)} and buy now at market (about ${px(t.now)})? It's re-sized so risk stays within 1%, and refused if reward to risk falls under the style's minimum.`
-                  : `Sell ${ask.reduce}% of ${t.coin} at market now? The stop and target go back on the rest.`}
-          </span>
+          <span>{step.text}</span>
           <button
             type="button"
-            className={`btn btn-small ${ask === "close" ? "btn-danger" : ""}`}
+            className={`btn btn-small ${step.danger ? "btn-danger" : ""}`}
             disabled={busy}
-            onClick={() =>
-              ask === "close"
-                ? act(
-                    () => closePotTrade(t.ref),
-                    (x) => `${x.ref} closed at market.`,
-                  )
-                : ask === "cancel"
-                  ? act(
-                      () => cancelPotTrade(t.ref),
-                      (x) => `${x.ref} cancelled.`,
-                    )
-                  : ask === "now"
-                    ? act(
-                        () => enterPotTradeNow(t.ref),
-                        (x) => `${x.ref}: bought at market.`,
-                        true,
-                      )
-                    : act(
-                        () => reducePotTrade(t.ref, ask.reduce),
-                        (x) => `${x.ref}: sold ${ask.reduce}%.`,
-                        true,
-                      )
-            }
+            onClick={() => act(() => step.run(false), step.said, step.stay)}
           >
-            {ask === "close"
-              ? "Close at market"
-              : ask === "cancel"
-                ? "Cancel the entry"
-                : ask === "now"
-                  ? "Buy at market"
-                  : `Sell ${ask.reduce}%`}
+            {step.button}
           </button>
           <button type="button" className="btn btn-small" onClick={() => setAsk(null)}>
             Keep it

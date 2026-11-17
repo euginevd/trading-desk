@@ -562,7 +562,15 @@ def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
 
 # The Trading account's trades are the owner's own buys too (decision 78); the DCA close-out is
 # not, as it finishes a week the owner already approved.
-BUYS = ("/trades", "/orders", "/orders/ladder", "/dca/orders", "/pot/trades", "/pot/trades/add")
+BUYS = (
+    "/trades",
+    "/orders",
+    "/orders/ladder",
+    "/dca/orders",
+    "/pot/trades",
+    "/pot/trades/add",
+    "/pot/trades/enter-now",
+)
 PRETRADE_RULES = ("monthly_deposit_cap_aud", "per_trade_aud", "max_pct_per_coin")
 
 
@@ -594,7 +602,7 @@ def _pretrade(
         override = body.get("override") is True
         spend = Decimal(str(sized["spend"]))
         return _rule_check(store, audit, str(sized["coin"]), spend, override, portfolio)[0]
-    if path == "/pot/trades/add":
+    if path in ("/pot/trades/add", "/pot/trades/enter-now"):
         return _pretrade_add(desk, body, portfolio)
     spend = _spend_of(path, body)
     if spend is None or not spend.is_finite() or spend <= 0:
@@ -610,11 +618,12 @@ def _pretrade(
 def _pretrade_add(
     desk: Trading, body: dict[str, Any], portfolio: Portfolio
 ) -> dict[str, object] | None:
-    """Adding to a Trading account trade: the account's own money, so no ring-fence warning."""
+    """Adding to a Trading account trade, or entering a waiting one now at market (about its
+    planned spend): the account's own money, so no ring-fence warning."""
     _, store, audit, _ = desk.parts()
     trade = store.pot_trade(str(body.get("ref") or ""))
     try:
-        spend = Decimal(str(body.get("usdc")))
+        spend = Decimal(str(body.get("usdc") or (trade or {}).get("spend")))
     except (InvalidOperation, ValueError):
         return None
     if trade is None or not spend.is_finite() or spend <= 0:

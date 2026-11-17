@@ -259,11 +259,13 @@ class Pot:
                 f"The entry is above the price now ({plain(now)}): a limit buy goes at or under it."
             )
 
-    def _numbers(self, body: dict[str, Any]) -> dict[str, Any]:
+    def _numbers(self, body: dict[str, Any], *, existing: bool = False) -> dict[str, Any]:
         """A trade's prices to Binance's steps, its size by the pot's sizing, and its risk and
-        reward after fees; refuses only what can't be sized at all."""
+        reward after fees; refuses only what can't be sized at all. An existing trade's coin
+        stays tradable even if it has left today's screener universe."""
         coin = str(body.get("coin", "")).upper()
-        self._tradable(coin)
+        if not existing:
+            self._tradable(coin)
         style = self.style_of(body)
         rules = self._rules_of(coin)
         entry = rules.price(number(body.get("entry"), "Entry"))
@@ -347,7 +349,8 @@ class Pot:
     def size(self, body: dict[str, Any]) -> dict[str, Any]:
         """A trade sized and shown; refuses one that breaks a sizing rule."""
         n = self._numbers(body)
-        self._under_now(n["coin"], n["entry"])
+        if body.get("market") is not True:  # a market buy is sized at the price now, whatever it is
+            self._under_now(n["coin"], n["entry"])
         self._limits(n)
         return self._shown(n)
 
@@ -403,19 +406,16 @@ class Pot:
     def _live(self) -> list[dict[str, Any]]:
         return [r for r in self._store.pot_trades() if r["status"] in LIVE]
 
-    def open_risk(self) -> Decimal:
-        total = ZERO
-        for r in self._live():
-            paid = (
-                Decimal(r["fill_quote"]) / Decimal(r["fill_qty"])
-                if Decimal(r["fill_qty"])
-                else None
-            )
-            entry = paid or Decimal(r["entry"])
-            held = Decimal(r["fill_qty"]) or Decimal(r["qty"])
-            stop = Decimal(r["stop"])
-            total += max(held * (entry - stop) + held * (entry + stop) * FEE, ZERO)
-        return total
+    @staticmethod
+    def _risk_of(r: dict[str, Any]) -> Decimal:
+        paid = Decimal(r["fill_quote"]) / Decimal(r["fill_qty"]) if Decimal(r["fill_qty"]) else None
+        entry = paid or Decimal(r["entry"])
+        held = Decimal(r["fill_qty"]) or Decimal(r["qty"])
+        stop = Decimal(r["stop"])
+        return max(held * (entry - stop) + held * (entry + stop) * FEE, ZERO)
+
+    def open_risk(self, leaving_out: str | None = None) -> Decimal:
+        return sum((self._risk_of(r) for r in self._live() if r["ref"] != leaving_out), ZERO)
 
     def month_result(self) -> Decimal:
         start = datetime.fromtimestamp(self._now() / 1000, SYDNEY).replace(
@@ -474,8 +474,9 @@ class Pot:
         self._audit.record("pot", "Ring-fence", said)
         return said
 
-    def check_rules(self, sized: dict[str, Any]) -> None:
-        """The pot's limits on a new trade, on top of its sizing."""
+    def check_rules(self, sized: dict[str, Any], replacing: dict[str, Any] | None = None) -> None:
+        """The pot's limits on a new trade, on top of its sizing. `replacing`: a waiting trade
+        this one takes the place of (enter now), left out of the cash, risk and coin counts."""
         put_in, equity = self._put_in(), self.equity()
         if put_in <= ZERO:
             raise Refused("Put money in the pot first.")
@@ -484,16 +485,19 @@ class Pot:
             raise Refused("The month's 6% loss limit is used: no new trades until the 1st.")
         if equity <= put_in * (HUNDRED - STOP_OUT_PCT) / HUNDRED:
             raise Refused("The pot is down 20% from what was put in: trading stops for a review.")
+        mine = replacing["ref"] if replacing else None
+        others = [r for r in self._live() if r["ref"] != mine]
         spend, risk = Decimal(sized["spend"]), Decimal(sized["risk"])
-        if spend > self.cash():
-            raise Refused(f"The pot has ${self.cash():.2f} free; that trade needs ${spend:.2f}.")
-        if self.open_risk() + risk > equity * MAX_OPEN_RISK_PCT / HUNDRED:
+        free = self.cash() + (Decimal(replacing["spend"]) if replacing else ZERO)
+        if spend > free:
+            raise Refused(f"The pot has ${free:.2f} free; that trade needs ${spend:.2f}.")
+        if self.open_risk(mine) + risk > equity * MAX_OPEN_RISK_PCT / HUNDRED:
             raise Refused("That would put more than 3% of the pot at risk across open trades.")
         if sized["coin"] != "BTC":
-            alts = [r for r in self._live() if r["coin"] != "BTC"]
+            alts = [r for r in others if r["coin"] != "BTC"]
             if len(alts) >= MAX_ALTS:
                 raise Refused("Two alt trades are on already: alts move with BTC.")
-        if any(r["coin"] == sized["coin"] for r in self._live()):
+        if any(r["coin"] == sized["coin"] for r in others):
             raise Refused(f"A {sized['coin']} trade is on already.")
         self._check_desk(spend)
 
@@ -981,26 +985,30 @@ class Pot:
             raise Refused("Only a trade waiting for its entry can enter now.")
         coin = trade["coin"]
         now = self._price_now(coin)
+        style = style_from(trade["setup"])
         n = self._numbers(
             {"coin": coin, "entry": plain(now), "stop": trade["stop"], "target": trade["target"]}
-            | {"style": style_from(trade["setup"])}
+            | {"style": style},
+            existing=True,
         )
         self._limits(n)
-        if n["spend"] > self.cash() + Decimal(trade["spend"]):
-            raise Refused(f"The pot has ${self.cash():.2f} free; that needs ${n['spend']:.2f}.")
-        self._check_desk(n["spend"])
+        shown = self._shown(n)
+        self.check_rules(shown | {"style": style}, replacing=trade)  # every rule a new trade meets
         entry = self._order(f"{trade['ref']}-E")
         symbol = f"{coin}{QUOTE}"
         if entry["order_id"] is not None:
             with contextlib.suppress(BinanceError):  # filled meanwhile: its state says so
                 self._binance.cancel(symbol, int(entry["order_id"]))
             sent = self._binance.order(symbol, int(entry["order_id"]))
-            if binance_state(sent)[1] > ZERO:  # part or all filled at the limit: keep that
+            state, filled = binance_state(sent)
+            if filled > ZERO:  # part or all filled at the limit: keep that
                 self._follow(entry, sent)
                 self._log(trade["ref"], "Enter now stopped: the limit had filled (or part).")
                 return self.trade_view(self._trade(trade["ref"]), now)
+            if state != "cancelled":  # the cancel didn't take: never buy twice
+                self._follow(entry, sent)
+                raise Refused("Binance still has the limit order live. Try again in a moment.")
         self._save_order(entry, {"status": "cancelled"})
-        shown = self._shown(n)
         trade = self._save_trade(
             trade,
             {k: shown[k] for k in ("entry", "qty", "spend", "risk")} | {"status": "placing"},
@@ -1081,7 +1089,10 @@ class Pot:
                 f"{plain(Decimal(trade['fill_qty']) - Decimal(trade['exit_qty']))} at an "
                 f"average of {plain(round(average, 8))}. R stays measured on the first risk.",
             )
-        self._exit(trade)
+        # A sync may have put the old size's stop back while the add went unanswered: take it
+        # off, so the new stop and target cover everything held.
+        self._pull_exit(trade)
+        self._exit(self._trade(trade["ref"]))
 
     def _buy(
         self, trade: dict[str, Any], role: str, tag: str, spend: Decimal, qty: Decimal
@@ -1128,7 +1139,8 @@ class Pot:
         held = Decimal(trade["fill_qty"]) - Decimal(trade["exit_qty"])
         qty = rules.amount(held * pct / HUNDRED)
         now = self._price_now(trade["coin"])
-        if qty * now < rules.min_notional or (held - qty) * now < rules.min_notional:
+        kept_at_stop = (held - qty) * Decimal(trade["stop"])  # as _rest measures what's kept
+        if qty * now < rules.min_notional or kept_at_stop < rules.min_notional:
             raise Refused(
                 f"Both the part sold and the part kept must be over Binance's smallest order of "
                 f"{rules.min_notional}. Close it at market instead."
@@ -1150,6 +1162,16 @@ class Pot:
         now = self._price_now(trade["coin"])
         if target <= now or target <= Decimal(trade["entry"]):
             raise Refused(f"A target goes above the price ({plain(now)}) and the entry.")
+        if trade["status"] == "waiting":  # not filled yet: the style's reward to risk still holds
+            n = self._numbers(
+                {"coin": trade["coin"], "entry": trade["entry"], "stop": trade["stop"]}
+                | {"target": plain(target)},
+                existing=True,
+            )
+            style = screener.STYLES.get(str(style_from(trade["setup"]) or ""))
+            if style is not None:
+                n["minRr"] = Decimal(str(style.min_rr))
+            self._rr_rule(n)
         old = trade["target"]
         if trade["status"] == "open":
             self._pull_exit(trade)

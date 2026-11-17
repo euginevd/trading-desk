@@ -41,13 +41,13 @@ ORIGINS = {"http://127.0.0.1:5173", "http://localhost:5173"} | {
     for o in os.environ.get("DESK_ORIGINS", "").split(",")
     if o.strip().startswith(("http://127.0.0.1:", "http://localhost:"))  # local pages only
 }
-# DESK_HOSTS: other containers of this compose project that may call the api by its service
-# name (the paper bot asking trading-agent, apps/backtest); never a public name.
-HOSTS = (
-    {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
-    | {o.split("://", 1)[1] for o in ORIGINS}
-    | {h.strip() for h in os.environ.get("DESK_HOSTS", "").split(",") if h.strip() == f"api:{PORT}"}
-)
+HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"} | {o.split("://", 1)[1] for o in ORIGINS}
+# DESK_HOSTS: the paper bot (apps/backtest) may call the api by its compose service name, and
+# only to ask trading-agent about a setup: that route sizes and places nothing. No other name
+# or route is opened this way.
+SERVICE = f"api:{PORT}"
+SERVICE_ON = SERVICE in {h.strip() for h in os.environ.get("DESK_HOSTS", "").split(",")}
+SERVICE_ROUTES = {("POST", "/pot/judge-one")}
 
 
 def load_env(path: Path) -> None:
@@ -66,9 +66,13 @@ def load_env(path: Path) -> None:
             os.environ[name] = value
 
 
-def allowed(method: str, headers: dict[str, str]) -> str | None:
+def allowed(method: str, headers: dict[str, str], path: str = "") -> str | None:
     """Why a request is refused, or None. Changes need JSON from the desk's own page."""
-    if headers.get("host", "") not in HOSTS:
+    host = headers.get("host", "")
+    if host == SERVICE and SERVICE_ON:
+        if (method, path) not in SERVICE_ROUTES or "origin" in headers:
+            return "Unknown host."
+    elif host not in HOSTS:
         return "Unknown host."
     origin = headers.get("origin")
     if origin is not None and origin not in ORIGINS:
@@ -82,7 +86,7 @@ class Local(BaseHTTPRequestHandler):
     def _handle(self) -> None:
         url = urlsplit(self.path)
         headers = {k.lower(): v for k, v in self.headers.items()}
-        refusal = allowed(self.command, headers)
+        refusal = allowed(self.command, headers, url.path)
         try:
             length = int(headers.get("content-length", "0") or 0)
         except ValueError:

@@ -631,3 +631,47 @@ def test_a_target_moves_and_you_can_add_a_note(pot: Pot) -> None:
     }
     with pytest.raises(Refused, match="Type the note"):
         pot.note({"ref": trade["ref"], "text": " "})
+
+
+def test_enter_now_never_buys_while_the_limit_is_still_live(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The review's blocker: a cancel that didn't take must not be followed by a market buy."""
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    waiting = pot.place(SOL | {"target": "260"})
+
+    def lost(*_a: object, **_k: object) -> None:
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(pot.binance, "cancel", lost)
+    with pytest.raises(Refused, match="still has the limit order live"):
+        pot.enter_now(waiting["ref"])
+    assert by_tag(f"{waiting['ref']}-E")["status"] == "NEW"
+    tags = {o.get("clientOrderId") for o in demo.EXCHANGE.orders.values()}
+    assert f"{waiting['ref']}-EM" not in tags  # no second buy
+    assert pot.view()["trades"][0]["status"] == "waiting"
+
+
+def test_enter_now_meets_every_rule_a_new_trade_does(pot: Pot) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    waiting = pot.place(SOL | {"target": "260"})
+    pot._regime = ("bear", "BTC under its 200-day")  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(Refused, match="Bear regime"):
+        pot.enter_now(waiting["ref"])
+    assert by_tag(f"{waiting['ref']}-E")["status"] == "NEW"  # refused: nothing touched
+
+
+def test_a_market_buy_is_not_refused_when_the_price_dips(pot: Pot) -> None:
+    """The desk sends the price it last read; a tick lower now must not refuse a market buy."""
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    body = SOL | {"entry": "213", "target": "280"}  # SOL is 212.40 in the demo
+    with pytest.raises(Refused, match="above the price now"):
+        pot.size(body)
+    assert pot.size(body | {"market": True})["entry"] == "213"
+
+
+def test_a_waiting_trade_target_keeps_the_style_reward(pot: Pot) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    waiting = pot.place(SOL | {"target": "230"})
+    with pytest.raises(Refused, match="the rules need 2"):
+        pot.move_target({"ref": waiting["ref"], "target": "213"})

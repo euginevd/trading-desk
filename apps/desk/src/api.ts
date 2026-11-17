@@ -363,8 +363,8 @@ export const cancelPotTrade = (ref: string) =>
 export const movePotStop = (ref: string, stop: string) =>
   call<PotTrade>("POST", "/pot/trades/stop", { ref, stop });
 export const closePotTrade = (ref: string) => call<PotTrade>("POST", "/pot/trades/close", { ref });
-export const enterPotTradeNow = (ref: string) =>
-  call<PotTrade>("POST", "/pot/trades/enter-now", { ref });
+export const enterPotTradeNow = (ref: string, override = false) =>
+  call<PotTrade>("POST", "/pot/trades/enter-now", { ref, ...(override ? { override } : {}) });
 export const addToPotTrade = (ref: string, usdc: string, override = false) =>
   call<PotTrade>("POST", "/pot/trades/add", { ref, usdc, ...(override ? { override } : {}) });
 export const reducePotTrade = (ref: string, pct: number) =>
