@@ -56,7 +56,7 @@ In full, with other read-only sources: [threat-model/boundaries.md](threat-model
 - **TB4** `api` to Anthropic, by API key or subscription (decision 48): figures, position and Profile, never keys or ids; replies schema-checked.
 - **TB5** `api` to CoinGecko: tickers, never amounts; logos checked for host, type and size.
 - **TB6** `api` to Telegram: the token only in the URL, never logged; messages, never keys, to the chat linked by code (decision 57); its one-use buttons place orders (decision 74, R12).
-- **TB7** Freqtrade containers (apps/backtest, third-party image, no keys) to `api`: by the service name `api:8000` (DESK_HOSTS), which the api accepts for `POST /pot/judge-one` only and never with a browser Origin; that route asks trading-agent and sizes or places nothing (decision 84). Every other route refuses that name.
+- **TB7** Freqtrade to `api`: one route; it places nothing (decision 84).
 
 ## Top risks
 
@@ -69,8 +69,8 @@ STRIDE: Spoofing, Tampering, Repudiation, Information disclosure, Denial of serv
 | R3 | A compromised package or image | T | A03, LLM03 | Medium | Pinned week-old versions, Dependabot, Trivy on push, PR and weekly | Code, Build, Operate |
 | R4 | A secret committed | I | A07 | Medium | `.env` git-ignored; pre-push scan; push protection | Code |
 | R5 | A key leaks via code, a log, the browser, a prompt or the agent | I, E | A02, A07 | High | Binance's trades spot only, from the owner's address; keys only in `.env`, never logged or sent on; Settings takes one once, never returning it (decisions 51, 57); the agent never reads one | Code, Operate |
-| R6 | An order the owner didn't mean: a bug, a double submit, a bot overbuying, or a resent timed-out order | T, E | API6 | High | A confirm for every order and bot (bots start off); per-order and daily limits (zero until set) and the kill switch, in code; a client id per order, recorded before sending and looked up after a timeout; a bot pauses on a Binance error; market orders only to sell or for DCA book buys such as the close-out, within the same limits (decisions 18, 37 to 43, 47, 72) | Code, Test, Operate |
-| R7 | A searched page steers the plan (prompt injection), or the model is wrong | T | LLM01, LLM09 | Medium | The AI only advises (spec 10): nothing it calls trades; levels come from code, its JSON is schema-checked per call and held to the owner's risk rules (decisions 16, 46) | Code, Test |
+| R6 | An order the owner didn't mean: a bug, a double submit, a bot overbuying, or a resent timed-out order | T, E | API6 | High | A confirm for each order and bot (off at first); per-order and daily limits (zero until set) and the kill switch, in code; a client id per order, recorded first, looked up after a timeout; a limit confirmed cancelled before a market buy replaces it; bots pause on a Binance error (decisions 18, 37 to 43, 47, 72, 84) | Code, Test, Operate |
+| R7 | A searched page steers the plan (prompt injection), or the model is wrong | T | LLM01, LLM09 | Medium | The AI only advises (spec 10): nothing it calls trades; levels from code; its JSON schema-checked and held to the owner's risk rules (decisions 16, 46) | Code, Test |
 | R8 | The AI runs up the bill | D | LLM10 | Medium | A cache, scheduled runs fixed in code, the monthly cap checked before each call, a Console limit (costs 6) | Code, Operate |
 | R9 | An action can't be traced | R | A09 | Medium | The add-only audit log | Code |
 | R10 | Outside text runs as markup | T | A05 | Low | Fixed-shape parsing; React escapes text; a content security policy *(planned)* | Code |
