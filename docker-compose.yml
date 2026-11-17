@@ -20,6 +20,9 @@ services:
       - ./local:/app/local # SQLite and the audit log stay on your disk
       - ./.env:/app/.env # read at start; the Settings page writes the AI credentials back
     restart: unless-stopped
+    # No Linux capabilities and no privilege gain: both run as non-root and need neither.
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
 
   desk:
     build:
@@ -31,3 +34,6 @@ services:
       api:
         condition: service_healthy
     restart: unless-stopped
+    # No Linux capabilities and no privilege gain: both run as non-root and need neither.
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
