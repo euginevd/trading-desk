@@ -19,7 +19,8 @@ import DcaChat from "./DcaChat";
 import PositionDrawer from "./DcaPosition";
 import { Live } from "./Figures";
 import DcaFunds from "./DcaFunds";
-import DcaOpen, { CancelDialog, OrderPanel } from "./DcaOpen";
+import DcaOrderDrawer from "./DcaOrderDrawer";
+import DcaOrders, { CancelDialog } from "./DcaOrders";
 import {
   SOURCE,
   dated,
@@ -820,7 +821,6 @@ const saveMore = (open: boolean) => saveFlag(MORE_KEY, open);
 
 // ---------------------------------------------------------------- the page
 
-type Filter = "all" | "trims" | string;
 const HIDE_KEY = "desk.dca.hideCancelled";
 // Cancelled with nothing bought: of no interest once it's off Binance.
 const gone = (o: DcaOrder) => o.status === "cancelled" && Number(o.filledQty) === 0;
@@ -829,7 +829,6 @@ export default function DcaBookPage() {
   const [book, setBook] = useState<DcaBook | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
-  const [filter, setFilter] = useState<Filter>("all");
   const [sheet, setSheetState] = useState<Sheet | null>(null);
   const [sheetKey, setSheetKey] = useState(0);
   const setSheet = (next: Sheet | null) => {
@@ -924,10 +923,6 @@ export default function DcaBookPage() {
   const pnl = Number(t.pnl);
   const bought = book.orders.some((o) => Number(o.filledQty) > 0);
   const backed = new Set(book.orders.filter((o) => o.source === "buy-back").map((o) => o.link));
-  const shown = book.orders.filter(
-    (o) =>
-      filter === "all" || (filter === "trims" ? o.link || o.source === "trim" : o.coin === filter),
-  );
   const runCheck = (fix: boolean) => {
     setChecking(true);
     (fix ? fixDca() : checkDca()).then(
@@ -1275,69 +1270,50 @@ export default function DcaBookPage() {
           />
         )}
 
-        {book.orders.some((o) => isOpen(o) && o.kind === "limit") && (
-          <DcaOpen
-            orders={book.orders.filter((o) => isOpen(o) && o.kind === "limit")}
-            quote={book.quote}
-            prices={Object.fromEntries(book.positions.map((x) => [x.coin, x.price]))}
-            onChanged={(words) => {
-              setSaid(words);
-              load();
-            }}
-          />
-        )}
+        <DcaOrders
+          book={book}
+          onChanged={(words) => {
+            setSaid(words);
+            load();
+          }}
+          onBuyBack={(o) =>
+            setSheet({
+              kind: "buy",
+              coin: o.coin,
+              source: "buy-back",
+              link: o.ref,
+              spend: String(Math.floor(Number(o.filledQuote) * 100) / 100),
+            })
+          }
+          tools={
+            <>
+              <button
+                type="button"
+                className="link"
+                disabled={!book.orders.length}
+                onClick={exportCsv}
+              >
+                Export CSV
+              </button>
+              <button
+                type="button"
+                className="link"
+                disabled={checking}
+                onClick={() => runCheck(false)}
+              >
+                {checking ? "Checking Binance…" : "Check against Binance"}
+              </button>
+            </>
+          }
+          below={
+            checked && <Checked found={checked} busy={checking} onFix={() => runCheck(true)} />
+          }
+        />
 
         <button type="button" className="dcb-more" aria-expanded={more} onClick={toggleMore}>
-          {more ? "Show less" : "Show more: every order, the 3-year plan, Check against Binance"}
+          {more ? "Show less" : "Show more: the 3-year plan"}
         </button>
-        {more && (
-          <>
-            <Ticks book={book} />
-            <section className="dcb-section" aria-labelledby="dcb-orders-title">
-              <div className="dcb-section-head">
-                <h2 id="dcb-orders-title">Every order</h2>
-                <div className="dcb-filters" role="group" aria-label="Show">
-                  {["all", ...book.positions.map((x) => x.coin), "trims"].map((f) => (
-                    <button
-                      key={f}
-                      type="button"
-                      aria-pressed={filter === f}
-                      onClick={() => setFilter(f)}
-                    >
-                      {f === "all" ? "All" : f === "trims" ? "Trims" : f}
-                    </button>
-                  ))}
-                  <label className="dcb-hide-toggle">
-                    <input type="checkbox" checked={hideCancelled} onChange={toggleHide} />
-                    Hide cancelled
-                  </label>
-                  <button
-                    type="button"
-                    className="link"
-                    disabled={!book.orders.length}
-                    onClick={exportCsv}
-                  >
-                    Export CSV
-                  </button>
-                  <button
-                    type="button"
-                    className="link"
-                    disabled={checking}
-                    onClick={() => runCheck(false)}
-                  >
-                    {checking ? "Checking Binance…" : "Check against Binance"}
-                  </button>
-                </div>
-              </div>
-              {checked && <Checked found={checked} busy={checking} onFix={() => runCheck(true)} />}
-              {shown.length === 0 ? (
-                <p className="muted">No orders here yet.</p>
-              ) : (
-                renderOrders(shown, "Every order")
-              )}
-            </section>
-          </>
-        )}
+        {more && <Ticks book={book} />}
 
         {openCoin && (
           <PositionDrawer
@@ -1369,16 +1345,14 @@ export default function DcaBookPage() {
           (() => {
             const o = book.orders.find((x) => x.ref === viewing.ref);
             return o ? (
-              <OrderPanel
+              <DcaOrderDrawer
                 key={`${o.ref}-${viewing.edit ? "e" : "v"}`}
                 order={o}
-                others={book.orders.filter(
-                  (x) => x.coin === o.coin && x.ref !== o.ref && isOpen(x) && x.kind === "limit",
-                )}
-                quote={book.quote}
+                book={book}
                 editing={viewing.edit}
                 onClose={() => setViewing(null)}
                 onCancel={() => setCancelling(o)}
+                onOpen={(ref) => setViewing({ ref, edit: false })}
                 onDone={(words) => {
                   setViewing(null);
                   setSaid(words);
