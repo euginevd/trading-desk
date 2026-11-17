@@ -20,9 +20,18 @@ import { dated, day, dollars, qty, when } from "./dcaFormat";
 import { Live } from "./Figures";
 import PotChat, { usePotChat } from "./PotChat";
 import PotNewTrade from "./PotNewTrade";
+import NewTradeFlow from "./NewTradeFlow";
 import PotPanel, { px, rWord, rr, tone } from "./PotPanel";
 import { RuleBreakBanner } from "./RuleMarks";
-import type { PotAction, PotCheck, PotProposal, PotTrade, PotView, RuleBreak } from "./types";
+import type {
+  PotAction,
+  PotCheck,
+  PotProposal,
+  PotStyleKey,
+  PotTrade,
+  PotView,
+  RuleBreak,
+} from "./types";
 import "./pot.css";
 
 // Dollars without empty cents: $1, $0.81, $10.
@@ -73,7 +82,10 @@ type Pending = {
   spend: string;
   risk: string;
   proposal?: string;
+  style?: PotStyleKey;
+  expires?: number;
 };
+const STYLE_NAME = { scalp: "Scalp", day: "Day trade", swing: "Swing", position: "Position" };
 const pendingOf = (a: PotAction): Pending => ({
   coin: a.coin ?? "",
   setup: a.setup ?? "",
@@ -385,6 +397,8 @@ export default function PotPage() {
   const [checking, setChecking] = useState(false);
   // null: closed; "": New trade on its first coin; a coin: opened from that coin's card.
   const [building, setBuilding] = useState<string | null>(null);
+  // New trade by style (NewTradeFlow): open or not.
+  const [flow, setFlow] = useState(false);
   // Bumped after a scan, so the watchlist reads its coins again.
   const [coinsVersion, setCoinsVersion] = useState(0);
   const review = useRef<HTMLDialogElement>(null);
@@ -501,6 +515,7 @@ export default function PotPage() {
       setup: pending.setup,
       reason: pending.reason,
       ...(pending.proposal ? { proposal: pending.proposal } : {}),
+      ...(pending.style ? { style: pending.style, expires: pending.expires } : {}),
       ...(override ? { override: true } : {}),
     }).then(
       (t) => {
@@ -508,6 +523,7 @@ export default function PotPage() {
         review.current?.close?.();
         setPending(null);
         setBuilding(null);
+        setFlow(false);
         setSaid(`${t.ref} placed: the entry waits on Binance at ${px(t.entry)}.`);
         load();
       },
@@ -652,7 +668,7 @@ export default function PotPage() {
                 <button type="button" className="btn" disabled={scanning} onClick={scan}>
                   {scanning ? "Scanning…" : "Scan now"}
                 </button>
-                <button type="button" className="btn btn-accent" onClick={() => setBuilding("")}>
+                <button type="button" className="btn btn-accent" onClick={() => setFlow(true)}>
                   New trade
                 </button>
               </div>
@@ -908,6 +924,20 @@ export default function PotPage() {
         />
       )}
 
+      {flow && (
+        <NewTradeFlow
+          onClose={() => setFlow(false)}
+          onHand={() => {
+            setFlow(false);
+            setBuilding("");
+          }}
+          onReview={(t) => {
+            setPlaceError(null);
+            setPending(t);
+          }}
+        />
+      )}
+
       {building !== null && (
         <PotNewTrade
           coins={pot.coins}
@@ -943,6 +973,14 @@ export default function PotPage() {
         {pending && (
           <>
             <h2 id="pot-review-title">Place the {pending.coin} trade?</h2>
+            {pending.style && (
+              <p className="muted">
+                {STYLE_NAME[pending.style]} · {pending.setup}
+                {pending.expires
+                  ? ` · good until ${new Date(pending.expires).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" })}`
+                  : ""}
+              </p>
+            )}
             <ul className="pot-rv" aria-label="The trade's orders">
               <li>
                 <span className="pot-tag is-live">Entry</span>

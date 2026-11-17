@@ -216,6 +216,74 @@ function serve(reply: PotView, breaksRule = false) {
         },
         regime: { state: "neutral", words: "" },
       });
+    if (path === "/pot/styles")
+      return json({
+        regime: { state: "bull", words: "BTC above its 200-day" },
+        styles: [
+          ["scalp", "Scalp", "5 to 60 minutes"],
+          ["day", "Day trade", "1 to 12 hours"],
+          ["swing", "Swing", "2 days to 3 weeks"],
+          ["position", "Position", "3 weeks to 6 months"],
+        ].map(([key, name, line]) => ({
+          key,
+          name,
+          line,
+          hold: line,
+          riskPct: "1",
+          minRr: "2",
+          expirySeconds: 3600,
+          allowed: true,
+          note: "",
+        })),
+      });
+    if (path === "/pot/screen")
+      return json({
+        style: "day",
+        name: "Day trade",
+        regime: { state: "bull", words: "" },
+        allowed: true,
+        note: "",
+        riskPct: "0.5",
+        warnings: [],
+        counts: { listed: 100, onBinance: 82, liquid: 31, setups: 3 },
+        shortlist: [{ coin: "SOL", setup: "Asia sweep", score: 7 }],
+        expires: Date.now() + 3_600_000,
+      });
+    if (path === "/pot/judge")
+      return json({
+        style: "day",
+        name: "Day trade",
+        regime: { state: "bull", words: "" },
+        allowed: true,
+        note: "",
+        riskPct: "0.5",
+        warnings: ["Late in the crypto day: a day trade must close by the 11am close."],
+        counts: { listed: 100, onBinance: 82, liquid: 31, setups: 3 },
+        line: "One clean Asia sweep on SOL.",
+        expires: Date.now() + 3_600_000,
+        picks: [
+          {
+            coin: "SOL",
+            setup: "Asia sweep",
+            grade: "A",
+            score: 8.4,
+            verdict: "take",
+            confluence: ["4h trend up", "yesterday's low"],
+            catalyst: "None found in 48 hours.",
+            crowding: "Clear",
+            reason: "Swept the Asia low at 137 and closed back above.",
+            problem: null,
+            entry: "137",
+            stop: "134",
+            target: "143.2",
+            qty: "0.036",
+            spend: "4.93",
+            risk: "0.12",
+            rr: "2",
+            stopPct: "2.2",
+          },
+        ],
+      });
     if (path === "/pot/agent")
       return json({ reply: "No setup today: SOL hasn't held its 20-day.", actions: [], said: [] });
     return json({ error: "Not found." }, 404);
@@ -372,6 +440,7 @@ describe("the trading pot", () => {
     const fetch = serve(pot({ proposals: [], trades: [] }));
     render(<PotPage />);
     fireEvent.click(await screen.findByRole("button", { name: "New trade" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Set one up yourself →" }));
     fireEvent.click(screen.getByRole("radio", { name: "SOL" }));
     const entry = screen.getByRole("textbox", { name: "Entry price" });
     await waitFor(() => expect(entry).toHaveProperty("value", "138.02"));
@@ -416,10 +485,30 @@ describe("the trading pot", () => {
     expect(placed.reason).toMatch(/^Held its 50-day twice on falling volume\. Review by /);
   });
 
+  it("New trade scans a style and places the picked trade at that style's risk", async () => {
+    const fetch = serve(pot({ proposals: [], trades: [] }));
+    render(<PotPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "New trade" }));
+    fireEvent.click(await screen.findByRole("button", { name: /^Day trade/ }));
+    expect(await screen.findByText("One clean Asia sweep on SOL.")).toBeTruthy();
+    expect(screen.getByText(/Late in the crypto day/)).toBeTruthy();
+    expect(screen.getByText("None found in 48 hours.")).toBeTruthy();
+    expect(screen.getByText("2 : 1")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Okay, review SOL" }));
+    expect(await screen.findByText(/Day trade · Asia sweep/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Place the trade" }));
+    await waitFor(() => expect(sent(fetch, "/pot/trades")).toHaveLength(1));
+    const placed = JSON.parse(String(sent(fetch, "/pot/trades")[0]?.[1]?.body));
+    expect(placed.style).toBe("day");
+    expect(placed.entry).toBe("137");
+    expect(typeof placed.expires).toBe("number");
+  });
+
   it("fills New trade from trading-agent's analysis, by the rules", async () => {
     const fetch = serve(pot({ proposals: [], trades: [] }));
     render(<PotPage />);
     fireEvent.click(await screen.findByRole("button", { name: "New trade" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Set one up yourself →" }));
     fireEvent.click(screen.getByRole("radio", { name: "SOL" }));
     fireEvent.click(await screen.findByRole("button", { name: "Analyse SOL" }));
     expect(await screen.findByText("SOL pulled back to its 20-day in an up trend.")).toBeTruthy();

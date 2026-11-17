@@ -1108,3 +1108,338 @@ dialog.acc-drawer .dcb-drawer-figures b {
   margin: 6px 0 0;
   font-size: 12px;
 }
+
+/* New trade by style (NewTradeFlow.tsx): a stepper, four style cards, the scan's lines ticking
+   off as each stage finishes, and the picks as cards with their numbers and checks. */
+
+dialog.ntf {
+  width: min(880px, 100vw);
+}
+.ntf-steps {
+  display: flex;
+  gap: 18px;
+  margin: 4px 0 20px;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 13px;
+}
+.ntf-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ntf-dot {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--line-2);
+  border-radius: 999px;
+  font-size: 11px;
+  transition:
+    background 200ms var(--ease),
+    border-color 200ms var(--ease),
+    color 200ms var(--ease);
+}
+.ntf-steps .is-on {
+  color: var(--text);
+}
+.ntf-steps .is-on .ntf-dot {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.ntf-steps .is-done .ntf-dot {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.ntf-body > section > .muted:first-child {
+  margin-top: 0;
+}
+.ntf-styles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0 18px;
+}
+.ntf-style {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-panel);
+  background: var(--layer-1);
+  box-shadow: var(--sheen);
+  color: var(--body);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms var(--ease),
+    transform 160ms var(--ease),
+    background 160ms var(--ease);
+}
+.ntf-style b {
+  color: var(--text);
+  font-size: 17px;
+}
+.ntf-style small {
+  color: var(--muted);
+}
+.ntf-style em {
+  color: var(--wait);
+  font-size: 12px;
+  font-style: normal;
+}
+.ntf-style em.is-off {
+  color: var(--down);
+}
+.ntf-style:hover:not(:disabled) {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  transform: translateY(-2px);
+}
+.ntf-style:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.ntf-style:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.ntf-hand {
+  font-size: 13px;
+}
+.ntf-h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 14px;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 500;
+}
+.ntf-scan {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+.ntf-scan li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--body);
+}
+.ntf-tick {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 11px;
+}
+.ntf-scan .is-busy {
+  color: var(--muted);
+}
+.ntf-scan .is-busy .ntf-tick {
+  border: 2px solid var(--line-2);
+  border-top-color: var(--accent);
+  background: transparent;
+}
+.ntf-off {
+  color: var(--muted);
+}
+.ntf-pick-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.ntf-pick-head p {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  color: var(--text);
+}
+.ntf-clock {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid var(--accent-line);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ntf-clock.is-out {
+  border-color: var(--down-line);
+  color: var(--down);
+}
+.ntf-warn {
+  margin: 10px 0 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: var(--wait-soft);
+  color: var(--wait);
+  font-size: 13px;
+}
+.ntf-picks {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+.ntf-pick {
+  padding: 16px 18px;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-panel);
+  background: var(--layer-1);
+  box-shadow: var(--sheen);
+}
+.ntf-pick.is-take {
+  border-color: var(--accent-line);
+}
+.ntf-pick.is-refused {
+  opacity: 0.75;
+}
+.ntf-pick header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.ntf-pick header b {
+  color: var(--text);
+  font-size: 16px;
+}
+.ntf-setup {
+  color: var(--muted);
+  font-size: 13px;
+}
+.ntf-grade {
+  margin-left: auto;
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--layer-3);
+  color: var(--text);
+  font-weight: 600;
+}
+.ntf-grade.is-A {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.ntf-grade.is-C {
+  background: var(--down-soft);
+  color: var(--down);
+}
+.ntf-score {
+  color: var(--muted);
+  font-size: 13px;
+}
+.ntf-nums {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.ntf-nums div {
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--layer-1);
+}
+.ntf-nums dt {
+  color: var(--muted);
+  font-size: 11px;
+}
+.ntf-nums dd {
+  margin: 2px 0 0;
+  color: var(--text);
+}
+.ntf-nums small {
+  color: var(--muted);
+}
+.ntf-checks {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.ntf-checks span {
+  display: inline-block;
+  min-width: 88px;
+  color: var(--muted);
+}
+.ntf-why {
+  margin: 0 0 10px;
+  color: var(--body);
+  font-size: 13px;
+}
+.ntf-problem {
+  margin: 0 0 10px;
+  color: var(--down);
+  font-size: 13px;
+}
+.ntf-pick footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ntf-body {
+    animation: ntf-in 240ms var(--ease);
+  }
+  .ntf-scan li {
+    animation: ntf-in 260ms var(--ease) both;
+  }
+  .ntf-scan .is-busy .ntf-tick {
+    animation: ntf-spin 800ms linear infinite;
+  }
+  .ntf-picks > * {
+    animation: ntf-in 280ms var(--ease) both;
+  }
+  .ntf-picks > :nth-child(2) {
+    animation-delay: 60ms;
+  }
+  .ntf-picks > :nth-child(3) {
+    animation-delay: 120ms;
+  }
+  .ntf-picks > :nth-child(4) {
+    animation-delay: 180ms;
+  }
+  @keyframes ntf-in {
+    from {
+      transform: translateY(8px);
+      opacity: 0;
+    }
+  }
+  @keyframes ntf-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+}
+@media (max-width: 760px) {
+  .ntf-styles {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ntf-nums {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .ntf-steps {
+    gap: 10px;
+    font-size: 12px;
+  }
+}

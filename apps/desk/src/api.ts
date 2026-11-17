@@ -4,7 +4,11 @@ import type {
   PotCheck,
   PotAnalysis,
   RiskBoard,
+  PotJudge,
   PotPreview,
+  PotScreen,
+  PotStyleKey,
+  PotStyles,
   PotTrade,
   PotTradeRequest,
   PotView,
@@ -359,6 +363,9 @@ export const movePotStop = (ref: string, stop: string) =>
   call<PotTrade>("POST", "/pot/trades/stop", { ref, stop });
 export const closePotTrade = (ref: string) => call<PotTrade>("POST", "/pot/trades/close", { ref });
 export const scanPot = () => call<PotView>("POST", "/pot/scan");
+export const getPotStyles = () => call<PotStyles>("GET", "/pot/styles");
+export const screenPot = (style: PotStyleKey) => call<PotScreen>("POST", "/pot/screen", { style });
+export const judgePot = (style: PotStyleKey) => call<PotJudge>("POST", "/pot/judge", { style });
 export const dismissPotProposal = (id: string) =>
   call<PotView>("POST", "/pot/proposals/dismiss", { id });
 export const potAgent = (message: string, history: { who: string; text: string }[]) =>

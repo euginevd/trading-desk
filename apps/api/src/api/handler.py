@@ -845,7 +845,13 @@ def _pot_agent(s: Services, body: dict[str, Any] | None, job: str = "chat") -> d
     def run(agent: PotAgent) -> dict[str, Any]:
         if body is None:
             return agent.scan()
-        return agent.analyse(body) if job == "analyse" else agent.chat(body)
+        jobs: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
+            "analyse": agent.analyse,
+            "styles": lambda _b: agent.styles(),
+            "screen": agent.screen,
+            "judge": agent.judge,
+        }
+        return jobs.get(job, agent.chat)(body)
 
     if _demo():
         return run(PotAgent(pot, s.signals))
@@ -1062,6 +1068,9 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("PUT", "/my-agents/schedule"): lambda s, _q, b: _schedule_on(s, b),
     ("POST", "/pot/agent"): lambda s, _q, b: _pot_agent(s, b),
     ("POST", "/pot/analyse"): lambda s, _q, b: _pot_agent(s, b, "analyse"),
+    ("GET", "/pot/styles"): lambda s, _q, _b: _pot_agent(s, {}, "styles"),
+    ("POST", "/pot/screen"): lambda s, _q, b: _pot_agent(s, b, "screen"),
+    ("POST", "/pot/judge"): lambda s, _q, b: _pot_agent(s, b, "judge"),
     ("POST", "/dca/agent"): lambda s, _q, b: _funds(s).agent(b),
     ("GET", "/dca/funds/odds"): lambda s, q, _b: _funds(s).odds(
         str(q.get("coin", "")), q.get("price"), str(q.get("side", "add"))

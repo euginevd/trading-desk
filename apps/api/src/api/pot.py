@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from api import my_agents
+from api import my_agents, screener
 from api.binance import BinanceError, Filters, plain
 from api.dca_book import binance_state
 from api.locks import locked
@@ -179,6 +179,22 @@ class Pot:
         named = [c.strip().upper() for c in found.group(1).split(",")]
         return [c for c in named if c.isalnum() and len(c) <= 10] or list(COINS)  # noqa: PLR2004
 
+    def _tradable(self, coin: str) -> None:
+        """trading-agent's own coins, or any coin New trade's screener found today."""
+        if coin not in self.coins() and coin not in screener.tradable(self._store):
+            raise Refused(f"{coin or 'That coin'} isn't one trading-agent trades.")
+
+    @staticmethod
+    def style_of(body: dict[str, Any]) -> screener.Style | None:
+        """The trading style a trade is sized by; none for a trade by hand or a scan's."""
+        key = body.get("style")
+        if key in (None, ""):
+            return None
+        style = screener.STYLES.get(str(key))
+        if style is None:
+            raise Refused("Pick scalp, day, swing or position.")
+        return style
+
     # Money in and out.
 
     @locked
@@ -242,8 +258,8 @@ class Pot:
         """A trade's prices to Binance's steps, its size by the pot's sizing, and its risk and
         reward after fees; refuses only what can't be sized at all."""
         coin = str(body.get("coin", "")).upper()
-        if coin not in self.coins():
-            raise Refused(f"{coin or 'That coin'} isn't one trading-agent trades.")
+        self._tradable(coin)
+        style = self.style_of(body)
         rules = self._rules_of(coin)
         entry = rules.price(number(body.get("entry"), "Entry"))
         stop = rules.price(number(body.get("stop"), "Stop"))
@@ -254,6 +270,9 @@ class Pot:
         if equity <= ZERO:
             raise Refused("Put money in the pot first.")
         allowed = self.allowed(equity)
+        if style is not None:  # each style risks its own share (trading-styles.md, section 2)
+            self._regime_rule({"style": style.key})
+            allowed *= Decimal(str(screener.risk_factor(style, self.regime()[0])))
         if config["mode"] == "test":
             qty = rules.amount(Decimal(config["fixed"]) / entry)
             if qty * entry < Decimal(config["fixed"]):
@@ -277,6 +296,8 @@ class Pot:
             "reward": reward,
             "allowed": allowed,
             "equity": equity,
+            "style": style.key if style else None,
+            "minRr": Decimal(str(style.min_rr)) if style else MIN_RR,
         }
 
     @staticmethod
@@ -292,6 +313,7 @@ class Pot:
             "risk": _cents(n["risk"]),
             "stopPct": str(((entry - n["stop"]) / entry * HUNDRED).quantize(Decimal("0.1"))),
             "rr": str((n["reward"] / n["risk"]).quantize(Decimal("0.1"))),
+            "style": n.get("style"),
         }
 
     @classmethod
@@ -312,9 +334,11 @@ class Pot:
 
     @staticmethod
     def _rr_rule(n: dict[str, Any]) -> None:
-        rr = n["reward"] / n["risk"]
-        if rr < MIN_RR:
-            raise Refused(f"Reward to risk is {rr:.1f} : 1 after fees; the rules need 2 : 1.")
+        rr, least = n["reward"] / n["risk"], n.get("minRr", MIN_RR)
+        if rr < least:
+            raise Refused(
+                f"Reward to risk is {rr:.1f} : 1 after fees; the rules need {least:g} : 1."
+            )
 
     def size(self, body: dict[str, Any]) -> dict[str, Any]:
         """A trade sized and shown; refuses one that breaks a sizing rule."""
@@ -327,8 +351,7 @@ class Pot:
         """A trade typed by hand, before it's placed: the price now, its numbers, and every rule
         it breaks (not just the first), so the page can draw it as it's typed."""
         coin = str(body.get("coin", "")).upper()
-        if coin not in self.coins():
-            raise Refused(f"{coin or 'That coin'} isn't one trading-agent trades.")
+        self._tradable(coin)
         now = self.prices([coin]).get(coin)
         rules = self._rules_of(coin)
         out: dict[str, Any] = {
@@ -452,9 +475,7 @@ class Pot:
         put_in, equity = self._put_in(), self.equity()
         if put_in <= ZERO:
             raise Refused("Put money in the pot first.")
-        state, _ = self.regime()
-        if state == "bear":
-            raise Refused("BTC is in a Bear regime: no new longs until it turns.")
+        self._regime_rule(sized)
         if self.month_result() <= -put_in * MONTH_LOSS_PCT / HUNDRED:
             raise Refused("The month's 6% loss limit is used: no new trades until the 1st.")
         if equity <= put_in * (HUNDRED - STOP_OUT_PCT) / HUNDRED:
@@ -471,6 +492,17 @@ class Pot:
         if any(r["coin"] == sized["coin"] for r in self._live()):
             raise Refused(f"A {sized['coin']} trade is on already.")
         self._check_desk(spend)
+
+    def _regime_rule(self, sized: dict[str, Any]) -> None:
+        """No new longs in a Bear regime; a style may need more (position: Bull only)."""
+        state, _ = self.regime()
+        if state == "bear":
+            raise Refused("BTC is in a Bear regime: no new longs until it turns.")
+        style = screener.STYLES.get(str(sized.get("style") or ""))
+        if style is not None:
+            allowed, _, why = screener.gate(style, state)
+            if not allowed:
+                raise Refused(why)
 
     def _check_desk(self, spend: Decimal) -> None:
         settings = self._desk.settings()
@@ -496,11 +528,18 @@ class Pot:
 
     @locked
     def place(self, body: dict[str, Any]) -> dict[str, Any]:
+        expires = body.get("expires")
+        if isinstance(expires, int) and self._now() > expires:
+            raise Refused("That proposal has expired: the price has moved on. Scan again.")
         sized = self.size(body)
         self.check_rules(sized)
-        setup = str(body.get("setup") or "By hand").strip()[:60]
+        setup = str(body.get("setup") or "By hand").strip()
+        style = self.style_of(body)
+        if style is not None:
+            setup = f"{style.name} - {setup}"
+        setup = setup[:60]
         if not SETUP.fullmatch(setup):
-            setup = "By hand"
+            setup = f"{style.name} - by hand" if style else "By hand"
         reason = str(body.get("reason") or "").strip()[:400]
         state, _ = self.regime()
         now = self._now()

@@ -1586,4 +1586,77 @@ export interface PotTradeRequest {
   reason: string;
   proposal?: string;
   override?: boolean; // past a broken Profile rule, logged (decision 78)
+  style?: PotStyleKey; // sized at the style's risk (local/guides/trading-styles.md)
+  expires?: number; // a style's proposal is refused after this (ms)
+}
+
+// New trade by style: the styles, the screener's shortlist, and trading-agent's picks.
+export type PotStyleKey = "scalp" | "day" | "swing" | "position";
+export type PotRegime = { state: "bull" | "neutral" | "bear" | null; words: string };
+export interface PotStyle {
+  key: PotStyleKey;
+  name: string;
+  line: string;
+  hold: string;
+  riskPct: string;
+  minRr: string;
+  expirySeconds: number;
+  allowed: boolean;
+  note: string;
+}
+export interface PotStyles {
+  regime: PotRegime;
+  styles: PotStyle[];
+}
+export interface PotScreenCounts {
+  listed: number;
+  onBinance: number;
+  liquid: number;
+  setups: number;
+}
+export interface PotScreen {
+  style: PotStyleKey;
+  name: string;
+  regime: PotRegime;
+  allowed: boolean;
+  note: string;
+  riskPct: string;
+  warnings: string[];
+  counts: PotScreenCounts;
+  shortlist: { coin: string; setup: string; score: number }[];
+  expires: number;
+  source?: string;
+}
+export interface PotPick {
+  coin: string;
+  setup: string;
+  grade: "A" | "B" | "C";
+  score: number;
+  verdict: "take" | "wait" | "pass";
+  confluence: string[];
+  catalyst: string;
+  crowding: string;
+  reason: string;
+  problem: string | null;
+  entry: string;
+  stop: string;
+  target: string;
+  qty?: string;
+  spend?: string;
+  risk?: string;
+  rr?: string;
+  stopPct?: string;
+}
+export interface PotJudge {
+  style: PotStyleKey;
+  name: string;
+  regime: PotRegime;
+  allowed: boolean;
+  note: string;
+  riskPct: string;
+  warnings: string[];
+  counts: PotScreenCounts;
+  line: string;
+  picks: PotPick[];
+  expires: number;
 }
