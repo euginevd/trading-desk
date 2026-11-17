@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { amendDcaOrder, cancelDcaOrder, fundsOdds, getMarket } from "./api";
 import { BotChart, type Level } from "./BotKit";
 import CoinIcon from "./CoinIcon";
-import { SOURCE, limit, qty as fmtQty, two, when } from "./dcaFormat";
+import { SOURCE, amountOf, isOpen, limit, qty as fmtQty, two, when } from "./dcaFormat";
 import type { DcaOrder, Market } from "./types";
 
 const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
@@ -254,7 +254,7 @@ async function cancelAll(list: DcaOrder[]): Promise<{ done: number; error: strin
 
 const cancelledWords = (n: number) => `${n} open ${n === 1 ? "order" : "orders"} cancelled.`;
 
-function CancelDialog({
+export function CancelDialog({
   list,
   quote,
   onKeep,
@@ -397,8 +397,9 @@ function DedupeDialog({
 }
 
 // One order on its coin's hourly chart: the price now, this limit and the coin's other open
-// limits; Modify changes its price and amount (as USDC or quantity, kept in step).
-function OrderPanel({
+// limits; Modify changes its price and amount (as USDC or quantity, kept in step). A filled or
+// cancelled order opens read-only, at the price it filled at.
+export function OrderPanel({
   order,
   others,
   quote,
@@ -433,11 +434,19 @@ function OrderPanel({
   }, [order.coin, quote]);
 
   const buy = order.side === "buy";
+  const live = isOpen(order) && order.kind === "limit";
   const now = Number(market?.price ?? 0);
-  const at = Number(editing ? price : order.price);
+  const at = Number(editing ? price : live ? order.price : (order.avgPrice ?? order.price));
   const off = away(at, now);
-  const reaching =
-    off === null
+  const filled = Number(order.filledQuote) > 0;
+  const since = off === null ? "" : `; the price is ${pct(-off)} from there now`;
+  const reaching = !live
+    ? filled
+      ? `${order.status === "cancelled" ? "Part filled" : "Filled"}: $${two(order.filledQuote)} at ${limit(order.avgPrice)}${since}.`
+      : order.status === "cancelled"
+        ? "Cancelled before anything filled."
+        : "Market order, being placed."
+    : off === null
       ? ""
       : buy
         ? off < 0
@@ -516,21 +525,23 @@ function OrderPanel({
           candles={market.candles}
           levels={levels}
           height={260}
-          label={`${order.coin} hourly candles with ${order.ref} and the coin's other open limits`}
+          label={`${order.coin} hourly candles with ${order.ref}${live ? " and the coin's other open limits" : ""}`}
         />
       ) : (
         <div className="skeleton" style={{ height: 260 }} />
       )}
       <div className="kv">
-        <span className="muted">Price now · limit</span>
+        <span className="muted">Price now · {live ? "limit" : "this order"}</span>
         <span className="num">
-          {limit(market?.price ?? null)} · {limit(order.price)}
+          {limit(market?.price ?? null)} ·{" "}
+          {order.kind === "market" && !order.avgPrice ? "market" : limit(at)}
         </span>
       </div>
       <div className="kv">
         <span className="muted">Amount · quantity</span>
         <span className="num">
-          ${two(left(order))} {quote} · {fmtQty(qtyOf(order).toFixed(8))} {order.coin}
+          ${two(live ? left(order) : amountOf(order))} {quote} ·{" "}
+          {fmtQty(filled ? order.filledQty : qtyOf(order).toFixed(8))} {order.coin}
         </span>
       </div>
       <div className="kv">
@@ -606,30 +617,32 @@ function OrderPanel({
           {error}
         </p>
       )}
-      <div className="dca-nav">
-        <button className="btn btn-danger-quiet" type="button" onClick={onCancel}>
-          Cancel order
-        </button>
-        {editing ? (
-          <div className="row-actions" style={{ width: "auto" }}>
-            <button className="btn" type="button" onClick={() => setEditing(false)}>
-              Back
-            </button>
-            <button
-              className="btn btn-accent"
-              type="button"
-              disabled={busy || !changed || !(Number(price) > 0) || !(Number(usdc) > 0)}
-              onClick={save}
-            >
-              {busy ? "Changing…" : "Save changes"}
-            </button>
-          </div>
-        ) : (
-          <button className="btn btn-accent" type="button" onClick={() => setEditing(true)}>
-            Modify
+      {live && (
+        <div className="dca-nav">
+          <button className="btn btn-danger-quiet" type="button" onClick={onCancel}>
+            Cancel order
           </button>
-        )}
-      </div>
+          {editing ? (
+            <div className="row-actions" style={{ width: "auto" }}>
+              <button className="btn" type="button" onClick={() => setEditing(false)}>
+                Back
+              </button>
+              <button
+                className="btn btn-accent"
+                type="button"
+                disabled={busy || !changed || !(Number(price) > 0) || !(Number(usdc) > 0)}
+                onClick={save}
+              >
+                {busy ? "Changing…" : "Save changes"}
+              </button>
+            </div>
+          ) : (
+            <button className="btn btn-accent" type="button" onClick={() => setEditing(true)}>
+              Modify
+            </button>
+          )}
+        </div>
+      )}
     </dialog>
   );
 }

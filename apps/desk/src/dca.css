@@ -1597,3 +1597,15 @@ dialog:has(.dcr) {
   position: static;
   margin: 0 0 0 6px;
 }
+
+/* Every order: Hide cancelled, and the note of how many are hidden. */
+.dcb-hide-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.dcb-hidden-note {
+  margin: 8px 0 0;
+}

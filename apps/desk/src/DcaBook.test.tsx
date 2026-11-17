@@ -395,7 +395,8 @@ describe("DCA book page", () => {
   it("modifies an open order's price and amount, linked to the one it replaces", async () => {
     const fetch = serve(book());
     render(<DcaBookPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Modify DCA-BTC-26W47-1" }));
+    const open = await screen.findByRole("table", { name: "Open orders" });
+    fireEvent.click(within(open).getByRole("button", { name: "Modify DCA-BTC-26W47-1" }));
     fireEvent.change(screen.getByLabelText("Limit price"), { target: { value: "63500.37" } });
     fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "40" } });
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
@@ -413,20 +414,42 @@ describe("DCA book page", () => {
   it("asks before cancelling, and says what happens to the reference and the money", async () => {
     const fetch = serve(book());
     render(<DcaBookPage />);
-    fireEvent.click(await screen.findByRole("button", { name: "Cancel DCA-BTC-26W47-1" }));
+    const open = await screen.findByRole("table", { name: "Open orders" });
+    fireEvent.click(within(open).getByRole("button", { name: "Cancel DCA-BTC-26W47-1" }));
     const ask = screen.getByRole("dialog", { name: /^Cancel DCA-BTC-26W47-1/ });
     expect(ask.textContent).toContain("$49.79 USDC is free to spend again");
     expect(ask.textContent).toContain("never reused");
     expect(ask.textContent).toContain("isn't bought at market by Monday's close-out");
     fireEvent.click(within(ask).getByRole("button", { name: "Keep order" }));
     expect(sent(fetch, "/dca/orders/cancel")).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: "Cancel DCA-BTC-26W47-1" }));
+    fireEvent.click(within(open).getByRole("button", { name: "Cancel DCA-BTC-26W47-1" }));
     fireEvent.click(screen.getByRole("button", { name: "Cancel order" }));
     await waitFor(() => expect(sent(fetch, "/dca/orders/cancel")).toHaveLength(1));
     expect(JSON.parse(String(sent(fetch, "/dca/orders/cancel")[0]?.[1]?.body))).toEqual({
       ref: "DCA-BTC-26W47-1",
     });
     expect(await screen.findByText("1 open order cancelled.")).toBeTruthy();
+  });
+
+  it("hides cancelled orders in Every order, and opens any order on its chart", async () => {
+    window.localStorage.setItem("desk.dcaBook.more", "1");
+    const dropped = order({ ref: "DCA-SOL-26W47-1", coin: "SOL", status: "cancelled" });
+    serve(book({ orders: [dropped, order({}), filledEth] }));
+    render(<DcaBookPage />);
+    const every = await screen.findByRole("table", { name: "Every order" });
+    expect(within(every).queryByText("DCA-SOL-26W47-1")).toBeNull();
+    expect(screen.getByText(/1 cancelled order hidden/)).toBeTruthy();
+    // A filled order opens read-only: no Modify, no Cancel.
+    fireEvent.click(within(every).getByRole("button", { name: "View DCA-ETH-26W47-1" }));
+    const panel = screen.getByRole("dialog", { name: /ETH\/USDC/ });
+    expect(panel.textContent).toContain("Filled: $19.85 at 1,772.37");
+    expect(within(panel).queryByRole("button", { name: "Modify" })).toBeNull();
+    expect(within(every).queryByRole("button", { name: "Modify DCA-ETH-26W47-1" })).toBeNull();
+    expect(within(every).getByRole("button", { name: "Modify DCA-BTC-26W47-1" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("checkbox", { name: "Hide cancelled" }));
+    expect(within(every).getByText("DCA-SOL-26W47-1")).toBeTruthy();
+    expect(window.localStorage.getItem("desk.dca.hideCancelled")).toBe("0");
+    window.localStorage.clear();
   });
 
   it("dedupes only what's ticked, keeping the oldest at each price", async () => {

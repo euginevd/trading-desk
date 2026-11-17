@@ -4,7 +4,6 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
-  cancelDcaOrder,
   checkDca,
   dcaOdds,
   fixDca,
@@ -20,7 +19,7 @@ import DcaChat from "./DcaChat";
 import PositionDrawer from "./DcaPosition";
 import { Live } from "./Figures";
 import DcaFunds from "./DcaFunds";
-import DcaOpen from "./DcaOpen";
+import DcaOpen, { CancelDialog, OrderPanel } from "./DcaOpen";
 import {
   SOURCE,
   dated,
@@ -801,11 +800,12 @@ function mixOf(book: DcaBook) {
 // closed.
 const MORE_KEY = "desk.dcaBook.more";
 const CHAT_KEY = "desk.dcaBook.chat";
-function readFlag(key: string): boolean {
+function readFlag(key: string, fallback = false): boolean {
   try {
-    return window.localStorage.getItem(key) === "1";
+    const kept = window.localStorage.getItem(key);
+    return kept === null ? fallback : kept === "1";
   } catch {
-    return false;
+    return fallback;
   }
 }
 function saveFlag(key: string, open: boolean) {
@@ -821,6 +821,9 @@ const saveMore = (open: boolean) => saveFlag(MORE_KEY, open);
 // ---------------------------------------------------------------- the page
 
 type Filter = "all" | "trims" | string;
+const HIDE_KEY = "desk.dca.hideCancelled";
+// Cancelled with nothing bought: of no interest once it's off Binance.
+const gone = (o: DcaOrder) => o.status === "cancelled" && Number(o.filledQty) === 0;
 
 export default function DcaBookPage() {
   const [book, setBook] = useState<DcaBook | null>(null);
@@ -842,7 +845,13 @@ export default function DcaBookPage() {
     return asked === "add" || asked === "remove" ? asked : null;
   });
   const [cancelling, setCancelling] = useState<DcaOrder | null>(null);
-  const cancelDialog = useRef<HTMLDialogElement>(null);
+  const [viewing, setViewing] = useState<{ ref: string; edit: boolean } | null>(null);
+  const [hideCancelled, setHideCancelled] = useState(() => readFlag(HIDE_KEY, true));
+  const toggleHide = () =>
+    setHideCancelled((h) => {
+      saveFlag(HIDE_KEY, !h);
+      return !h;
+    });
   const planning = window.location.hash.includes("?plan");
   const asked = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
   const chatting = asked.has("chat");
@@ -871,10 +880,6 @@ export default function DcaBookPage() {
     }, 30_000);
     return () => window.clearInterval(tick);
   }, [load]);
-  useEffect(() => {
-    if (cancelling) cancelDialog.current?.showModal?.();
-    else cancelDialog.current?.close?.();
-  }, [cancelling]);
 
   if (error && !book) {
     return (
@@ -943,83 +948,126 @@ export default function DcaBookPage() {
       return !m;
     });
   };
-  const renderOrders = (list: DcaOrder[], label: string) => (
-    <div className="dcb-scroll">
-      <table className="dcb-table" aria-label={label}>
-        <thead>
-          <tr>
-            <th>Reference</th>
-            <th>Placed</th>
-            <th>Coin</th>
-            <th>Source</th>
-            <th className="r">Price</th>
-            <th className="r">Quantity</th>
-            <th className="r">{book.quote}</th>
-            <th className="r dcb-hide">Fee</th>
-            <th>State</th>
-            <th>
-              <span className="visually-hidden">Action</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.map((o) => {
-            const sold = o.side === "sell";
-            return (
-              <tr key={o.ref}>
-                <td className="dcb-id">
-                  {o.ref}
-                  {o.link && <small> for {o.link}</small>}
-                </td>
-                <td className="num">{day(o.created)}</td>
-                <td>
-                  <Coin coin={o.coin} />
-                </td>
-                <td>
-                  <span className={`dcb-src is-${o.source}`}>{SOURCE[o.source]}</span>
-                </td>
-                <td className="r num">
-                  {o.avgPrice ? limit(o.avgPrice) : o.kind === "market" ? "Market" : limit(o.price)}
-                </td>
-                <td className={`r num ${sold ? "down" : ""}`}>
-                  {sold ? "−" : ""}
-                  {qty(Number(o.filledQty) > 0 ? o.filledQty : o.qty)}
-                </td>
-                <td className="r num">{two(amountOf(o))}</td>
-                <td className="r num muted dcb-hide">{two(o.fee)}</td>
-                <td>
-                  <span className={`dcb-tag is-${o.status}`}>{STATUS[o.status]}</span>
-                </td>
-                <td className="r">
-                  {isOpen(o) ? (
-                    <button type="button" className="link" onClick={() => setCancelling(o)}>
-                      Cancel
-                    </button>
-                  ) : o.source === "trim" && o.status === "filled" && !backed.has(o.ref) ? (
-                    <button
-                      type="button"
-                      className="link"
-                      onClick={() =>
-                        setSheet({
-                          kind: "buy",
-                          coin: o.coin,
-                          source: "buy-back",
-                          link: o.ref,
-                          spend: String(Math.floor(Number(o.filledQuote) * 100) / 100),
-                        })
-                      }
-                    >
-                      Buy back
-                    </button>
-                  ) : null}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
+  const renderOrders = (all: DcaOrder[], label: string) => {
+    const list = hideCancelled ? all.filter((o) => !gone(o)) : all;
+    const hidden = all.length - list.length;
+    return (
+      <>
+        {list.length > 0 && (
+          <div className="dcb-scroll">
+            <table className="dcb-table" aria-label={label}>
+              <thead>
+                <tr>
+                  <th>Reference</th>
+                  <th>Placed</th>
+                  <th>Coin</th>
+                  <th>Source</th>
+                  <th className="r">Price</th>
+                  <th className="r">Quantity</th>
+                  <th className="r">{book.quote}</th>
+                  <th className="r dcb-hide">Fee</th>
+                  <th>State</th>
+                  <th>
+                    <span className="visually-hidden">Action</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((o) => {
+                  const sold = o.side === "sell";
+                  return (
+                    <tr key={o.ref}>
+                      <td className="dcb-id">
+                        {o.ref}
+                        {o.link && <small> for {o.link}</small>}
+                      </td>
+                      <td className="num">{day(o.created)}</td>
+                      <td>
+                        <Coin coin={o.coin} />
+                      </td>
+                      <td>
+                        <span className={`dcb-src is-${o.source}`}>{SOURCE[o.source]}</span>
+                      </td>
+                      <td className="r num">
+                        {o.avgPrice
+                          ? limit(o.avgPrice)
+                          : o.kind === "market"
+                            ? "Market"
+                            : limit(o.price)}
+                      </td>
+                      <td className={`r num ${sold ? "down" : ""}`}>
+                        {sold ? "−" : ""}
+                        {qty(Number(o.filledQty) > 0 ? o.filledQty : o.qty)}
+                      </td>
+                      <td className="r num">{two(amountOf(o))}</td>
+                      <td className="r num muted dcb-hide">{two(o.fee)}</td>
+                      <td>
+                        <span className={`dcb-tag is-${o.status}`}>{STATUS[o.status]}</span>
+                      </td>
+                      <td className="r dco-acts">
+                        <button
+                          type="button"
+                          className="link"
+                          aria-label={`View ${o.ref}`}
+                          onClick={() => setViewing({ ref: o.ref, edit: false })}
+                        >
+                          View
+                        </button>
+                        {isOpen(o) && o.kind === "limit" && (
+                          <button
+                            type="button"
+                            className="link"
+                            aria-label={`Modify ${o.ref}`}
+                            onClick={() => setViewing({ ref: o.ref, edit: true })}
+                          >
+                            Modify
+                          </button>
+                        )}
+                        {isOpen(o) ? (
+                          <button
+                            type="button"
+                            className="link danger"
+                            aria-label={`Cancel ${o.ref}`}
+                            onClick={() => setCancelling(o)}
+                          >
+                            Cancel
+                          </button>
+                        ) : o.source === "trim" && o.status === "filled" && !backed.has(o.ref) ? (
+                          <button
+                            type="button"
+                            className="link"
+                            onClick={() =>
+                              setSheet({
+                                kind: "buy",
+                                coin: o.coin,
+                                source: "buy-back",
+                                link: o.ref,
+                                spend: String(Math.floor(Number(o.filledQuote) * 100) / 100),
+                              })
+                            }
+                          >
+                            Buy back
+                          </button>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {hidden > 0 && (
+          <p className="muted dcb-hidden-note">
+            {hidden} cancelled {hidden === 1 ? "order" : "orders"} hidden.{" "}
+            <button type="button" className="link" onClick={toggleHide}>
+              Show
+            </button>
+          </p>
+        )}
+      </>
+    );
+  };
   const exportCsv = () => {
     const blob = new Blob([toCsv(book.orders, book.quote)], { type: "text/csv" });
     const a = document.createElement("a");
@@ -1028,18 +1076,6 @@ export default function DcaBookPage() {
     a.click();
     URL.revokeObjectURL(a.href);
   };
-  const doCancel = (o: DcaOrder) =>
-    cancelDcaOrder(o.ref).then(
-      () => {
-        setCancelling(null);
-        setSaid(`${o.ref} cancelled.`);
-        load();
-      },
-      (e: unknown) => {
-        setCancelling(null);
-        setSaid(errorOf(e, "It wasn't cancelled."));
-      },
-    );
 
   return (
     <main className={`wrap dcb${chatOpen ? " has-chat" : ""}`}>
@@ -1271,6 +1307,10 @@ export default function DcaBookPage() {
                       {f === "all" ? "All" : f === "trims" ? "Trims" : f}
                     </button>
                   ))}
+                  <label className="dcb-hide-toggle">
+                    <input type="checkbox" checked={hideCancelled} onChange={toggleHide} />
+                    Hide cancelled
+                  </label>
                   <button
                     type="button"
                     className="link"
@@ -1325,30 +1365,41 @@ export default function DcaBookPage() {
             }}
           />
         )}
-        <dialog
-          ref={cancelDialog}
-          aria-labelledby="dcb-cancel-title"
-          onClose={() => setCancelling(null)}
-        >
-          {cancelling && (
-            <>
-              <h2 id="dcb-cancel-title">Cancel {cancelling.ref}?</h2>
-              <p>It comes off Binance straight away; anything already filled stays in the book.</p>
-              <div className="dlg-btns">
-                <button className="btn" type="button" onClick={() => setCancelling(null)}>
-                  Keep order
-                </button>
-                <button
-                  className="btn btn-danger"
-                  type="button"
-                  onClick={() => void doCancel(cancelling)}
-                >
-                  Cancel order
-                </button>
-              </div>
-            </>
-          )}
-        </dialog>
+        {viewing &&
+          (() => {
+            const o = book.orders.find((x) => x.ref === viewing.ref);
+            return o ? (
+              <OrderPanel
+                key={`${o.ref}-${viewing.edit ? "e" : "v"}`}
+                order={o}
+                others={book.orders.filter(
+                  (x) => x.coin === o.coin && x.ref !== o.ref && isOpen(x) && x.kind === "limit",
+                )}
+                quote={book.quote}
+                editing={viewing.edit}
+                onClose={() => setViewing(null)}
+                onCancel={() => setCancelling(o)}
+                onDone={(words) => {
+                  setViewing(null);
+                  setSaid(words);
+                  load();
+                }}
+              />
+            ) : null;
+          })()}
+        {cancelling && (
+          <CancelDialog
+            list={[cancelling]}
+            quote={book.quote}
+            onKeep={() => setCancelling(null)}
+            onDone={(words) => {
+              setCancelling(null);
+              setViewing(null);
+              setSaid(words);
+              load();
+            }}
+          />
+        )}
       </div>
       <DcaChat
         hasOpen={book.orders.some((o) => isOpen(o) && o.kind === "limit")}
