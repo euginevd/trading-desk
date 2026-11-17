@@ -1,0 +1,540 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Teal Console Mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,460;6..72,500&display=swap">
+<style>
+/* Layout: the desk floats in a rounded frame over a deep ink field; a rail of its own on the left,
+   the page's sentence, one strip of holdings, then the holdings table beside targets and money in.
+   Notes for approval sit under the frame. */
+:root {
+  /* Surfaces: ink-blue, lifted in light rather than lined */
+  --field: #05080a;
+  --frame: #0a1013;
+  --layer-1: rgba(255, 255, 255, 0.035);
+  --layer-2: rgba(255, 255, 255, 0.06);
+  --layer-3: rgba(255, 255, 255, 0.09);
+  --edge: rgba(255, 255, 255, 0.07);
+  --edge-2: rgba(255, 255, 255, 0.12);
+  /* Ink */
+  --text: #ecf1f3;
+  --body: #c3ccd1;
+  --muted: #8d9ba3;
+  /* One accent, and gains, losses, caution */
+  --teal: #50d2c1;
+  --teal-ink: #04110f;
+  --teal-soft: rgba(80, 210, 193, 0.12);
+  --up: #2ebd85;
+  --down: #f0616d;
+  --wait: #e8b04b;
+  --up-soft: rgba(46, 189, 133, 0.13);
+  --wait-soft: rgba(232, 176, 75, 0.13);
+  /* Depth: a top-edge light and a soft lift, no glows */
+  --sheen: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --lift: 0 24px 48px -28px rgba(0, 0, 0, 0.85);
+  /* Type: Inter for figures and controls, Newsreader for the sentence */
+  --ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --serif: Newsreader, Georgia, "Times New Roman", serif;
+  /* One scale: 11 axes only, 12 labels, 14 body and tables, 16 headings, 24 figures, 34 the sentence */
+  --t-axis: 11px;
+  --t-label: 12px;
+  --t-body: 14px;
+  --t-head: 16px;
+  --t-figure: 24px;
+  --t-sentence: 34px;
+  /* Radius by role: frame, panel, control, pill */
+  --r-frame: 28px;
+  --r-panel: 18px;
+  --r-ctl: 10px;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(90% 60% at 50% -10%, rgba(80, 210, 193, 0.07), transparent 60%),
+    radial-gradient(60% 50% at 100% 100%, rgba(78, 168, 255, 0.04), transparent 60%),
+    var(--field);
+  color: var(--text);
+  font: var(--t-body) / 1.5 var(--ui);
+  font-feature-settings: "tnum" 1, "cv11" 1;
+  -webkit-font-smoothing: antialiased;
+}
+.viewport {
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 56px;
+}
+.scroller { overflow-x: auto; padding: 4px 4px 24px; }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+button { font: inherit; color: inherit; }
+svg { display: block; }
+.ic { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ---- The frame ---- */
+.frame {
+  width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+  border-radius: var(--r-frame);
+  background: linear-gradient(180deg, #0d1418 0%, var(--frame) 40%);
+  border: 1px solid var(--edge);
+  box-shadow: var(--sheen), 0 60px 120px -40px rgba(0, 0, 0, 0.9), 0 0 0 10px rgba(255, 255, 255, 0.012);
+}
+
+/* ---- Rail ---- */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 16px 10px 12px;
+  border-radius: 22px;
+  background: var(--layer-1);
+  border: 1px solid var(--edge);
+  box-shadow: var(--sheen);
+}
+.brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 2px 10px 18px;
+  font: 500 19px/1 var(--serif);
+  letter-spacing: -0.01em;
+}
+.brand-mark {
+  width: 30px; height: 30px; border-radius: 9px;
+  display: grid; place-items: center;
+  background: var(--teal-soft); color: var(--teal);
+  box-shadow: inset 0 0 0 1px rgba(80, 210, 193, 0.18);
+}
+.nav-group { display: grid; gap: 2px; }
+.nav-group + .nav-group { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--edge); }
+.nav a {
+  display: flex; align-items: center; gap: 12px;
+  height: 40px; padding: 0 12px;
+  border-radius: 12px;
+  color: var(--muted); text-decoration: none; font-weight: 500;
+}
+.nav a:hover { background: var(--layer-1); color: var(--text); }
+.nav a[aria-current="page"] { background: var(--layer-3); color: var(--text); box-shadow: var(--sheen); }
+.nav a[aria-current="page"] .ic { color: var(--teal); }
+.nav .count { margin-left: auto; font-size: var(--t-label); color: var(--muted); }
+.rail-foot { margin-top: auto; display: grid; gap: 2px; padding-top: 10px; border-top: 1px solid var(--edge); }
+.conn { display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 12px; color: var(--body); }
+.conn .dot { margin-left: auto; width: 7px; height: 7px; border-radius: 50%; background: var(--up); box-shadow: 0 0 0 3px var(--up-soft); }
+.kill {
+  margin-top: 6px;
+  display: flex; align-items: center; gap: 12px;
+  height: 44px; padding: 0 12px;
+  border-radius: 14px; border: 1px solid var(--edge);
+  background: var(--layer-2); box-shadow: var(--sheen);
+  font-weight: 500;
+}
+.switch { margin-left: auto; width: 34px; height: 20px; border-radius: 999px; background: var(--teal); position: relative; }
+.switch::after { content: ""; position: absolute; top: 3px; right: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--teal-ink); }
+
+/* ---- Main column ---- */
+.main { min-width: 0; display: grid; gap: 16px; align-content: start; }
+.topbar { display: flex; align-items: center; gap: 28px; height: 56px; padding: 0 8px 0 10px; }
+.tick { display: grid; gap: 1px; }
+.tick span { font-size: var(--t-label); color: var(--muted); }
+.tick b { font-weight: 600; font-size: var(--t-body); }
+.tick em { font-style: normal; font-weight: 500; margin-left: 4px; }
+.up { color: var(--up); } .down { color: var(--down); }
+.top-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.total { display: grid; text-align: right; padding: 0 6px; }
+.total b { font-size: 16px; font-weight: 600; }
+.total span { font-size: var(--t-label); color: var(--muted); }
+.pill-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 36px; padding: 0 14px;
+  border-radius: 999px; border: 1px solid var(--edge-2);
+  background: var(--layer-1); box-shadow: var(--sheen);
+  font-weight: 600; cursor: pointer;
+}
+.icon-btn {
+  width: 36px; height: 36px; display: grid; place-items: center;
+  border-radius: 999px; border: 1px solid var(--edge);
+  background: var(--layer-1); color: var(--muted); cursor: pointer;
+}
+.icon-btn:hover { color: var(--text); background: var(--layer-2); }
+
+.page { display: grid; gap: 18px; padding: 6px 10px 10px; }
+.page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.seg {
+  display: inline-flex; gap: 4px; padding: 4px;
+  border-radius: 999px; border: 1px solid var(--edge);
+  background: var(--layer-1);
+}
+.seg button {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 32px; padding: 0 14px;
+  border: 0; border-radius: 999px; background: none;
+  color: var(--muted); font-weight: 500; cursor: pointer;
+}
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { background: var(--teal); color: var(--teal-ink); font-weight: 600; }
+.fetched { display: flex; align-items: center; gap: 10px; font-size: var(--t-label); color: var(--muted); }
+
+.sentence {
+  margin: 4px 0 0;
+  font: 460 var(--t-sentence) / 1.12 var(--serif);
+  font-variant-numeric: lining-nums proportional-nums;
+  letter-spacing: -0.012em;
+  max-width: 28ch;
+  text-wrap: balance;
+}
+.sentence .up { color: var(--up); }
+.lede { margin: 8px 0 0; color: var(--body); font-size: 15px; max-width: 70ch; }
+.lede span { color: var(--muted); }
+
+/* ---- Panels ---- */
+.panel {
+  min-width: 0;
+  border-radius: var(--r-panel);
+  border: 1px solid var(--edge);
+  background: var(--layer-1);
+  box-shadow: var(--sheen), var(--lift);
+  padding: 18px;
+}
+.panel-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.panel h2 { margin: 0; font-size: var(--t-head); font-weight: 600; }
+.panel .note { font-size: var(--t-label); color: var(--muted); }
+
+.strip { display: flex; gap: 4px; height: 44px; }
+.slice {
+  display: flex; align-items: center; gap: 6px; padding: 0 12px;
+  border-radius: 12px; font-size: var(--t-label); font-weight: 600;
+  color: var(--teal-ink); min-width: 0; overflow: hidden; white-space: nowrap;
+}
+.slice small { font-weight: 500; opacity: 0.75; }
+.targets { display: flex; gap: 4px; margin-top: 6px; }
+.targets i { height: 4px; border-radius: 4px; background: var(--edge-2); }
+.strip-key { display: flex; justify-content: space-between; margin-top: 12px; font-size: var(--t-label); color: var(--muted); }
+
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.side-stack { display: grid; gap: 16px; }
+
+/* Pill tabs with icons */
+.tabs { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.tab {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 34px; padding: 0 14px;
+  border-radius: 999px; border: 1px solid var(--edge);
+  background: transparent; color: var(--muted); font-weight: 500; cursor: pointer;
+}
+.tab:hover { color: var(--text); background: var(--layer-1); }
+.tab[aria-selected="true"] { background: var(--layer-3); color: var(--text); border-color: var(--edge-2); box-shadow: var(--sheen); }
+.tab[aria-selected="true"] .ic { color: var(--teal); }
+.tab .badge { min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px; background: var(--layer-3); font-size: var(--t-label); display: grid; place-items: center; color: var(--text); }
+
+table { width: 100%; border-collapse: collapse; }
+th {
+  padding: 12px 12px 10px; text-align: right;
+  font-size: var(--t-label); font-weight: 500; color: var(--muted); white-space: nowrap;
+}
+th:first-child, td:first-child { text-align: left; padding-left: 8px; }
+th.sorted { color: var(--teal); }
+td { padding: 12px; text-align: right; border-top: 1px solid var(--edge); white-space: nowrap; }
+tbody tr { transition: background-color 120ms; }
+tbody tr:hover > td { background: rgba(255, 255, 255, 0.022); }
+td small { display: block; margin-top: 2px; font-size: var(--t-label); color: var(--muted); }
+.coin { display: flex; align-items: center; gap: 12px; }
+.coin-mark {
+  width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: var(--t-axis); font-weight: 700; letter-spacing: 0.02em;
+  background: var(--layer-3); color: var(--body);
+  box-shadow: inset 0 0 0 1px var(--edge);
+}
+.coin b { font-weight: 600; }
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  margin-left: 8px; height: 20px; padding: 0 8px;
+  border-radius: 999px; font-size: var(--t-label); font-weight: 500;
+  background: var(--layer-2); color: var(--body); vertical-align: 1px;
+}
+.pnl-bar { display: block; height: 3px; margin: 6px 0 0 auto; border-radius: 3px; background: var(--up); opacity: 0.8; }
+.pnl-bar.neg { background: var(--down); }
+.add-cost { color: var(--teal); text-decoration: none; font-weight: 500; }
+.acts { display: inline-flex; gap: 4px; opacity: 0; transition: opacity 120ms; }
+tbody tr:hover .acts, tbody tr:focus-within .acts, tbody tr.show-acts .acts { opacity: 1; }
+.act {
+  width: 30px; height: 30px; display: grid; place-items: center;
+  border-radius: 999px; border: 0; background: var(--layer-2); color: var(--body); cursor: pointer;
+}
+.act:hover { background: var(--layer-3); color: var(--text); }
+
+/* Targets */
+.drift { display: grid; gap: 14px; }
+.drift-row { display: grid; grid-template-columns: 44px 1fr 64px; gap: 12px; align-items: center; }
+.drift-row b { font-weight: 600; }
+.drift-row span:last-child { text-align: right; font-size: var(--t-label); }
+.track { position: relative; height: 8px; border-radius: 8px; background: var(--layer-3); }
+.track .band { position: absolute; top: 0; bottom: 0; border-radius: 8px; background: rgba(80, 210, 193, 0.14); }
+.track .fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 8px; background: var(--teal); }
+.track .fill.over { background: var(--wait); }
+.track .mark { position: absolute; top: -3px; width: 2px; height: 14px; border-radius: 2px; background: var(--text); }
+.chip-wait { display: inline-block; padding: 2px 8px; border-radius: 999px; background: var(--wait-soft); color: var(--wait); font-weight: 600; }
+.action {
+  margin-top: 16px; width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  height: 40px; border-radius: 12px; border: 0;
+  background: var(--teal); color: var(--teal-ink); font-weight: 600; cursor: pointer;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+.action:hover { background: #66ddcd; }
+
+/* Money in */
+.figure { font-size: var(--t-figure); font-weight: 600; letter-spacing: -0.01em; }
+.figure + p { margin: 2px 0 0; font-size: var(--t-label); color: var(--muted); }
+.months { display: grid; grid-template-columns: repeat(12, 1fr); gap: 5px; align-items: end; height: 70px; margin-top: 16px; }
+.months i { border-radius: 4px 4px 2px 2px; background: var(--layer-3); }
+.months i.on { background: var(--teal); }
+.months-x { display: grid; grid-template-columns: repeat(12, 1fr); gap: 5px; margin-top: 6px; font-size: var(--t-axis); color: var(--muted); text-align: center; }
+.months-x .on { color: var(--text); font-weight: 600; }
+.money-foot { margin: 12px 0 0; font-size: var(--t-label); color: var(--body); }
+.money-foot a { color: var(--teal); text-decoration: none; font-weight: 500; }
+
+/* ---- Notes for approval ---- */
+.notes {
+  width: min(1320px, 100%);
+  margin: 28px auto 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 28px;
+  color: var(--body);
+}
+.notes h3 { margin: 0 0 8px; font: 500 20px/1.25 var(--serif); color: var(--text); }
+.notes ul { margin: 0; padding-left: 18px; display: grid; gap: 6px; }
+.notes code { font-size: 13px; color: var(--text); }
+.scale { display: grid; gap: 6px; }
+.scale div { display: flex; align-items: baseline; gap: 12px; }
+.scale span:first-child { width: 44px; flex: none; color: var(--muted); font-size: var(--t-label); }
+@media (max-width: 900px) { .notes { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-dash" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="2"/><rect x="13" y="4" width="7" height="7" rx="2"/><rect x="4" y="13" width="7" height="7" rx="2"/><rect x="13" y="13" width="7" height="7" rx="2"/></symbol>
+    <symbol id="i-pie" viewBox="0 0 24 24"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5H12z"/><path d="M15 3.8A8.5 8.5 0 0 1 20.2 9H15z"/></symbol>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M6 4h10a2 2 0 0 1 2 2v14H8a2 2 0 0 1-2-2z"/><path d="M6 18a2 2 0 0 1 2-2h10M10 8h5M10 11h4"/></symbol>
+    <symbol id="i-candle" viewBox="0 0 24 24"><path d="M8 3v3M8 16v5M16 5v4M16 17v2"/><rect x="5.5" y="6" width="5" height="10" rx="1.5"/><rect x="13.5" y="9" width="5" height="8" rx="1.5"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3.5l7 2.8v5.6c0 4.2-2.9 7.4-7 8.6-4.1-1.2-7-4.4-7-8.6V6.3z"/><path d="M9 12l2 2 4-4"/></symbol>
+    <symbol id="i-bot" viewBox="0 0 24 24"><rect x="4.5" y="8" width="15" height="11" rx="3.5"/><path d="M12 4v4M9.5 13h.01M14.5 13h.01M9.5 16.2h5"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></symbol>
+    <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/></symbol>
+    <symbol id="i-exchange" viewBox="0 0 24 24"><rect x="3.5" y="6" width="17" height="12" rx="3"/><path d="M3.5 10h17"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M5 7.5h12.5a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h10"/><circle cx="16" cy="13.3" r="1"/></symbol>
+    <symbol id="i-power" viewBox="0 0 24 24"><path d="M12 3.5v7"/><path d="M7.2 6.6a7 7 0 1 0 9.6 0"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="M12 4l8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4M4 16l8 4 8-4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3"/><path d="M19.5 4.5v4h-4"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 24 24"><ellipse cx="9" cy="7" rx="5" ry="2.5"/><path d="M4 7v4c0 1.4 2.2 2.5 5 2.5s5-1.1 5-2.5V7"/><path d="M10 15.5c.6 1.2 2.6 2 5 2 2.8 0 5-1.1 5-2.5V11c0-1.3-1.9-2.4-4.5-2.5"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l2.5 2"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 7h10M9 12h10M9 17h10M5 7h.01M5 12h.01M5 17h.01"/></symbol>
+    <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M6 3.5h12v17l-2.5-1.5-2 1.5-1.5-1.5-1.5 1.5-2-1.5L6 20.5z"/><path d="M9 8h6M9 11.5h6M9 15h3"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 19h16"/><path d="M5 15l4-4 3 3 6-7"/></symbol>
+    <symbol id="i-trade" viewBox="0 0 24 24"><path d="M7 8h11l-3-3M17 16H6l3 3"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="18" cy="12" r="1"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-chev" viewBox="0 0 24 24"><path d="M8 10l4 4 4-4"/></symbol>
+  </defs>
+</svg>
+
+<div class="viewport">
+  <div class="scroller">
+    <div class="frame">
+      <aside class="rail" aria-label="Side panel">
+        <div class="brand">
+          <span class="brand-mark"><svg class="ic" style="width:18px;height:18px"><use href="#i-candle"/></svg></span>
+          trading-desk
+        </div>
+        <nav class="nav" aria-label="Pages">
+          <div class="nav-group">
+            <a href="#"><svg class="ic"><use href="#i-dash"/></svg>Dashboard</a>
+            <a href="#" aria-current="page"><svg class="ic"><use href="#i-pie"/></svg>Portfolio</a>
+            <a href="#"><svg class="ic"><use href="#i-book"/></svg>Journal</a>
+            <a href="#"><svg class="ic"><use href="#i-candle"/></svg>Trade</a>
+            <a href="#"><svg class="ic"><use href="#i-shield"/></svg>Risk <span class="count">1 near</span></a>
+            <a href="#"><svg class="ic"><use href="#i-bot"/></svg>Bots</a>
+          </div>
+          <div class="nav-group">
+            <a href="#"><svg class="ic"><use href="#i-user"/></svg>Profile</a>
+            <a href="#"><svg class="ic"><use href="#i-gear"/></svg>Settings</a>
+          </div>
+        </nav>
+        <div class="rail-foot">
+          <div class="conn"><svg class="ic"><use href="#i-exchange"/></svg>Binance<i class="dot" aria-label="Connected"></i></div>
+          <div class="conn"><svg class="ic"><use href="#i-wallet"/></svg>Wallet<i class="dot" aria-label="Connected"></i></div>
+          <div class="kill"><svg class="ic" style="color:var(--teal)"><use href="#i-power"/></svg>Trading on<span class="switch" aria-hidden="true"></span></div>
+        </div>
+      </aside>
+
+      <div class="main">
+        <header class="topbar">
+          <div class="tick"><span>BTC</span><b>98,420<em class="up">+2.1%</em></b></div>
+          <div class="tick"><span>BTC dominance</span><b>57.1%<em class="up">+2.7</em></b></div>
+          <div class="tick"><span>Market cap</span><b>$2.3T<em class="down">−2.8%</em></b></div>
+          <div class="tick"><span>Fear and Greed</span><b class="down">42 Fear</b></div>
+          <div class="top-right">
+            <div class="total"><b>A$185,037</b><span>≈ ₿1.2757</span></div>
+            <button class="pill-btn" type="button">AUD <svg class="ic"><use href="#i-chev"/></svg></button>
+          </div>
+        </header>
+
+        <main class="page">
+          <div class="page-head">
+            <div class="seg" role="group" aria-label="Which holdings">
+              <button type="button" aria-pressed="true"><svg class="ic"><use href="#i-layers"/></svg>All</button>
+              <button type="button" aria-pressed="false"><svg class="ic"><use href="#i-exchange"/></svg>Binance</button>
+              <button type="button" aria-pressed="false"><svg class="ic"><use href="#i-wallet"/></svg>Wallet</button>
+            </div>
+            <div class="fetched">Demo data. Fetched 2:19 pm, 17 Nov 2026
+              <button class="icon-btn" type="button" aria-label="Fetch again"><svg class="ic"><use href="#i-refresh"/></svg></button>
+            </div>
+          </div>
+
+          <div>
+            <h1 class="sentence">You hold A$185K, <span class="up">A$14K above</span> what it cost.</h1>
+            <p class="lede">Binance A$125K, the wallet A$60K. <span>98.9 τ in the wallet, 1.5 τ of it in baskets to claim.</span></p>
+          </div>
+
+          <section class="panel" aria-label="What you hold">
+            <div class="panel-head"><h2>What you hold</h2><span class="note">Your targets under each coin</span></div>
+            <div class="strip">
+              <div class="slice" style="flex:32;background:#50d2c1">TAO <small>32%</small></div>
+              <div class="slice" style="flex:32;background:#3aa89b">BTC <small>32%</small></div>
+              <div class="slice" style="flex:14;background:#e8b04b">SOL <small>14%</small></div>
+              <div class="slice" style="flex:14;background:#8fa6b2">ETH <small>14%</small></div>
+              <div class="slice" style="flex:8;background:#33454e;color:var(--body)">4 more</div>
+            </div>
+            <div class="targets" aria-hidden="true">
+              <i style="flex:20"></i><i style="flex:40"></i><i style="flex:15"></i><i style="flex:15"></i><i style="flex:10"></i>
+            </div>
+            <div class="strip-key"><span>The largest, TAO, is 32% of what you hold; your target is 20%.</span><span>Coins under 1% share the last slice</span></div>
+          </section>
+
+          <div class="cols">
+            <section class="panel" aria-label="Holdings">
+              <div class="tabs" role="tablist">
+                <button class="tab" role="tab" aria-selected="true"><svg class="ic"><use href="#i-coins"/></svg>Holdings</button>
+                <button class="tab" role="tab" aria-selected="false"><svg class="ic"><use href="#i-clock"/></svg>Open orders <span class="badge">2</span></button>
+                <button class="tab" role="tab" aria-selected="false"><svg class="ic"><use href="#i-list"/></svg>Recent trades</button>
+                <button class="tab" role="tab" aria-selected="false"><svg class="ic"><use href="#i-receipt"/></svg>Tax</button>
+              </div>
+              <table>
+                <thead>
+                  <tr><th>Coin</th><th>Invested</th><th class="sorted">Value ↓</th><th>PnL</th><th>24h</th><th>Avg cost</th><th><span class="visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)">Actions</span></th></tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><span class="coin"><span class="coin-mark">TAO</span><span><b>TAO</b><span class="tag"><svg class="ic" style="width:12px;height:12px"><use href="#i-wallet"/></svg>Wallet</span><small>98.9 · A$608</small></span></span></td>
+                    <td class="muted" style="color:var(--muted)">–</td>
+                    <td>A$60,126</td>
+                    <td style="color:var(--muted)">–</td>
+                    <td class="up">+4.8%</td>
+                    <td><a class="add-cost" href="#">Add cost</a></td>
+                    <td><span class="acts"><button class="act" type="button" aria-label="Chart TAO"><svg class="ic"><use href="#i-chart"/></svg></button><button class="act" type="button" aria-label="Trade TAO"><svg class="ic"><use href="#i-trade"/></svg></button><button class="act" type="button" aria-label="More for TAO"><svg class="ic"><use href="#i-more"/></svg></button></span></td>
+                  </tr>
+                  <tr class="show-acts">
+                    <td><span class="coin"><span class="coin-mark">BTC</span><span><b>BTC</b><small>0.4125 · A$145,051</small></span></span></td>
+                    <td>A$49,365</td>
+                    <td>A$59,834</td>
+                    <td class="up">+A$10,469<small>+21.2%</small><span class="pnl-bar" style="width:62px"></span></td>
+                    <td class="up">+2.1%</td>
+                    <td>A$119,673</td>
+                    <td><span class="acts"><button class="act" type="button" aria-label="Chart BTC"><svg class="ic"><use href="#i-chart"/></svg></button><button class="act" type="button" aria-label="Trade BTC"><svg class="ic"><use href="#i-trade"/></svg></button><button class="act" type="button" aria-label="More for BTC"><svg class="ic"><use href="#i-more"/></svg></button></span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="coin"><span class="coin-mark">SOL</span><span><b>SOL</b><small>85 · A$313</small></span></span></td>
+                    <td>A$22,086</td>
+                    <td>A$26,608</td>
+                    <td class="up">+A$4,522<small>+20.5%</small><span class="pnl-bar" style="width:58px"></span></td>
+                    <td class="up">+3.4%</td>
+                    <td>A$260</td>
+                    <td><span class="acts"><button class="act" type="button" aria-label="Chart SOL"><svg class="ic"><use href="#i-chart"/></svg></button><button class="act" type="button" aria-label="Trade SOL"><svg class="ic"><use href="#i-trade"/></svg></button><button class="act" type="button" aria-label="More for SOL"><svg class="ic"><use href="#i-more"/></svg></button></span></td>
+                  </tr>
+                  <tr>
+                    <td><span class="coin"><span class="coin-mark">ETH</span><span><b>ETH</b><small>5.2 · A$4,879</small></span></span></td>
+                    <td>A$26,670</td>
+                    <td>A$25,371</td>
+                    <td class="down">−A$1,299<small>−4.9%</small><span class="pnl-bar neg" style="width:16px"></span></td>
+                    <td class="down">−1.2%</td>
+                    <td>A$5,129</td>
+                    <td><span class="acts"><button class="act" type="button" aria-label="Chart ETH"><svg class="ic"><use href="#i-chart"/></svg></button><button class="act" type="button" aria-label="Trade ETH"><svg class="ic"><use href="#i-trade"/></svg></button><button class="act" type="button" aria-label="More for ETH"><svg class="ic"><use href="#i-more"/></svg></button></span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </section>
+
+            <div class="side-stack">
+              <section class="panel" aria-label="Against your targets">
+                <div class="panel-head"><h2>Against your targets</h2><span class="chip-wait">1 outside</span></div>
+                <div class="drift">
+                  <div class="drift-row"><b>TAO</b><span class="track"><span class="band" style="left:30%;width:20%"></span><span class="fill over" style="width:64%"></span><span class="mark" style="left:40%"></span></span><span class="down" style="color:var(--wait)">+12 pts</span></div>
+                  <div class="drift-row"><b>BTC</b><span class="track"><span class="band" style="left:70%;width:20%"></span><span class="fill" style="width:64%"></span><span class="mark" style="left:80%"></span></span><span style="color:var(--muted)">−8 pts</span></div>
+                  <div class="drift-row"><b>SOL</b><span class="track"><span class="band" style="left:20%;width:20%"></span><span class="fill" style="width:28%"></span><span class="mark" style="left:30%"></span></span><span style="color:var(--muted)">−1 pt</span></div>
+                </div>
+                <button class="action" type="button"><svg class="ic"><use href="#i-plus"/></svg>Add A$1K to BTC</button>
+              </section>
+
+              <section class="panel" aria-label="Money in">
+                <div class="panel-head"><h2>Money in</h2><span class="note">FY 2026–27</span></div>
+                <div class="figure">A$1.8K</div>
+                <p>for 1,250 USDC, A$1.474 each</p>
+                <div class="months" aria-hidden="true">
+                  <i style="height:6%"></i><i style="height:48%"></i><i style="height:6%"></i><i class="on" style="height:100%"></i><i style="height:6%"></i><i style="height:6%"></i><i style="height:6%"></i><i style="height:6%"></i><i style="height:6%"></i><i style="height:6%"></i><i style="height:6%"></i><i style="height:6%"></i>
+                </div>
+                <div class="months-x"><span>J</span><span>A</span><span>S</span><span class="on">O</span><span>N</span><span>D</span><span>J</span><span>F</span><span>M</span><span>A</span><span>M</span><span>J</span></div>
+                <p class="money-foot">October: A$1.1K from 1 deposit, 1 estimated. <a href="#">See them</a></p>
+              </section>
+            </div>
+          </div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <section class="notes" aria-label="Notes for approval">
+    <div>
+      <h3>What changes</h3>
+      <ul>
+        <li>The desk floats in a rounded frame; the side panel is a rail of its own.</li>
+        <li>Panels sit on soft layers with a top-edge light, instead of hairline boxes.</li>
+        <li>Tabs and filters are pills with a small icon beside the word.</li>
+        <li>Row actions (chart, trade, more) appear as icon buttons on hover or focus; BTC's row shows them.</li>
+        <li>The coin's amount and price share one line under its name, so the Price column goes.</li>
+      </ul>
+    </div>
+    <div>
+      <h3>One set of text sizes</h3>
+      <div class="scale">
+        <div><span>11px</span><span style="font-size:11px">Chart axes and coin initials only</span></div>
+        <div><span>12px</span><span style="font-size:12px">Labels, captions, the line under a figure</span></div>
+        <div><span>14px</span><span style="font-size:14px">Body text and table cells</span></div>
+        <div><span>16px</span><span style="font-size:16px;font-weight:600">Panel headings</span></div>
+        <div><span>24px</span><span style="font-size:24px;font-weight:600">A$1.8K</span></div>
+        <div><span>34px</span><span style="font:460 30px/1.1 var(--serif)">The page's sentence</span></div>
+      </div>
+    </div>
+    <div>
+      <h3>What stays</h3>
+      <ul>
+        <li>Your teal, and green and red only for up and down.</li>
+        <li>The serif sentence each page opens with.</li>
+        <li>Verdicts, and buy and sell, stay words, never icons.</li>
+        <li>Trading account and Bots keep 13px tables, as dense as now.</li>
+        <li>Reading screens get 15px text in a narrower column.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+</body>
+</html>

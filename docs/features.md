@@ -33,6 +33,7 @@ Every page follows [design-system.md](design-system.md) 18 to 22. Features 1 to 
 | 90 | Analyse in New trade sets the whole trade, sized by the 1% rule, marked as the agent's until changed and checked again (owner, 17 Nov 2026) | Done | |
 | 91 | The Trading account's watchlist holds up to 30 coins; the Trade page's lists stay at 10 (owner, 17 Nov 2026) | Done | |
 | 92 | Bots page in three tabs: Accumulation (the DCA book), Opportunities and Grid bots; rebalancing dropped for now, TODO 9 (owner, 17 Nov 2026) | Done | |
+| 93 | The teal floating console: rounded frame, layered panels, pill tabs with icons, icon row actions, one type scale with nothing under 12px to read; reading screens larger, trading screens dense (TODO 14, owner, 17 Nov 2026; [mockup](mockups/console.html)) | Next | |
 
 ## `api`
 
