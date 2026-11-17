@@ -1,4 +1,5 @@
-* text=auto
+# LF everywhere, whatever core.autocrlf says: Prettier and the hooks expect it.
+* text=auto eol=lf
 # Hook scripts run in bash; CRLF breaks them on Windows clones.
 *.sh text eol=lf
 # Lock files are generated: collapsed in PR diffs.
