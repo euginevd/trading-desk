@@ -4,8 +4,10 @@ and checks everything it proposes: the agent names a setup's entry, stop and tar
 sizes it and drops whatever breaks a rule. Nothing is placed without the owner's review."""
 
 import json
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 import httpx
 
@@ -27,6 +29,7 @@ CHAT_LENGTH = 600
 MAX_CHAT = 12
 FUNDING_HOT = Decimal("0.05")  # % per 8 hours: longs crowded
 MODEL = "claude-opus-5-5"
+SYDNEY = ZoneInfo("Australia/Sydney")
 VERDICTS = ("take", "wait", "pass")
 
 
@@ -215,26 +218,6 @@ class PotAgent:
             return None
         return reply
 
-    TRADE: dict[str, Any] = {
-        "type": "object",
-        "properties": {
-            "coin": {"type": "string"},
-            "setup": {"type": "string"},
-            "entry": {"type": "string"},
-            "stop": {"type": "string"},
-            "target": {"type": "string"},
-            "reason": {"type": "string"},
-        },
-        "required": ["coin", "setup", "entry", "stop", "target", "reason"],
-        "additionalProperties": False,
-    }
-    SCAN: dict[str, Any] = {
-        "type": "object",
-        "properties": {"line": {"type": "string"}, "proposals": {"type": "array", "items": TRADE}},
-        "required": ["line", "proposals"],
-        "additionalProperties": False,
-    }
-
     def _sized(self, item: dict[str, Any]) -> dict[str, Any]:
         """A proposed trade, sized and checked by the desk; Refused says why it can't go."""
         sized = self._pot.size(item)
@@ -248,36 +231,27 @@ class PotAgent:
         }
 
     def scan(self) -> dict[str, Any]:
-        """The daily-close scan, on demand: the regime, then any setup, checked and sized."""
-        facts = self.facts()
-        prompt = (
-            "Run your daily-close scan now: the regime first, then any setup in the coins below "
-            "that meets your file's rules. Most days there is none; say so in the line. The line "
-            "is one sentence of at most 25 words. Propose at most three trades, only real "
-            "setups, none in a coin with a trade already on.\n\nDESK FIGURES:\n"
-            + json.dumps(facts, indent=1)
-        )
-        reply = self._ask(prompt, self.SCAN, "Pot: scan")
-        if reply is None:
-            raise Refused("trading-agent couldn't be reached. Try again in a minute.")
+        """The daily-close scan (11:15am Sydney, or Scan now): swing every day and position on
+        Mondays, each through the screener and trading-agent; a take the desk can place
+        becomes a proposal, waiting for the owner on the desk and in Telegram."""
+        pot = self._pot
+        now = pot.now_ms()
+        monday = datetime.fromtimestamp(now / 1000, SYDNEY).weekday() == 0
         found: list[dict[str, Any]] = []
         said: list[str] = []
-        now = self._pot.now_ms()
-        for n, item in enumerate(
-            cast(list[dict[str, Any]], reply.get("proposals") or [])[:MAX_PROPOSALS]
-        ):
-            try:
-                sized = self._sized(item)
-            except Refused as why:
-                said.append(f"{str(item.get('coin', '')).upper()} left out: {why}")
-                continue
-            found.append({"id": f"P{now}{n}", "created": now, **sized})
-        line = str(reply.get("line") or "No setup today.")
-        if said:
-            line = f"{line} {' '.join(said)}"
-        self._pot.set_proposals(found)
-        self._pot.set_last_scan(line)
-        return self._pot.view()
+        for key in ("swing", "position") if monday else ("swing",):
+            seen = self.judge({"style": key})
+            said.append(f"{seen['name']}: {seen['line']}")
+            for n, pick in enumerate(seen["picks"]):
+                if pick["problem"] or pick["verdict"] != "take":
+                    continue
+                kept = {k: v for k, v in pick.items() if k != "facts"}
+                found.append(
+                    kept | {"id": f"P{now}{key[0]}{n}", "created": now, "expires": seen["expires"]}
+                )
+        pot.set_proposals(found[:MAX_PROPOSALS])
+        pot.set_last_scan(" ".join(said)[:600])
+        return pot.view()
 
     ANALYSIS: dict[str, Any] = {
         "type": "object",
@@ -446,7 +420,7 @@ class PotAgent:
                 )
         return {"reply": str(reply.get("reply") or "")[:700], "actions": actions, "said": said}
 
-    # New trade by style (local/guides/trading-styles.md): the screener first, in code, then
+    # New trade by style (local/agents/trading-agent.md): the screener first, in code, then
     # trading-agent on its shortlist only, then the desk sizes and checks each pick.
 
     def styles(self) -> dict[str, Any]:
@@ -564,7 +538,8 @@ class PotAgent:
             "in the next two weeks'. Crowding: at most 8 words, from the funding given. "
             "Reason: the thesis, one sentence of at most 25 words: why it should work and "
             "what would prove it wrong. Line: at most 15 words.\n\n"
-            f"THE STYLE'S RULES:\n{screener.guide_section(self._pot.store, style)}\n\n"
+            f"THE RULES: your file's 'Rules for every style' and '{screener.HEADING[style.key]}' "
+            "sections (what the desk has built), not its 'Not built yet' lists.\n\n"
             "MARKET:\n"
             + json.dumps({"regime": seen["regime"], "warnings": seen["warnings"]})
             + "\n\nSHORTLIST:\n"

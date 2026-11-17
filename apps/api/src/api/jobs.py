@@ -158,6 +158,7 @@ def _setup(desk: Trading, kind: str, arg: str, s: Services) -> str:
         return "Dismissed."
     fields = ("coin", "entry", "stop", "target", "setup", "reason")
     body = {k: p[k] for k in fields} | {"proposal": arg}
+    body |= {k: p[k] for k in ("style", "expires") if p.get(k)}
     # The Profile's pre-trade check, as on the desk (decision 78); no override from a button.
     if _pretrade(desk, "/pot/trades", body, s.portfolio or live_portfolio) is not None:
         return "Not placed: it breaks a Profile rule. Open the Trading account to place it anyway."

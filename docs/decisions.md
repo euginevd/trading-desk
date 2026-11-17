@@ -29,3 +29,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 78. The Ledger mark; a slow ambient drift behind the frame; the Trading account's trades take the Profile pre-trade check. [Record](decisions/from-58.md)
 79. Risk leads with four risks: A$10K on Binance in all, 70%+ of the 2026 coins on the Ledger, TAO's glide path, the backup checks. [Record](decisions/from-58.md)
 80. New trade by style: a screener in code over the top 100 on Binance, trading-agent on the shortlist only; scalp and day trades on test. [Record](decisions/from-58.md)
+81. trading-agent.md is the one strategy record, each style Built and Not built yet; every version kept; the daily scan is swing, plus position on Mondays. [Record](decisions/from-58.md)

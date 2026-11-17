@@ -1,4 +1,4 @@
-// New trade by style (local/guides/trading-styles.md): pick a style, the desk's screener reads
+// New trade by style (local/agents/trading-agent.md): pick a style, the desk's screener reads
 // the 100 most-traded USDC coins on Binance (no AI), trading-agent checks the shortlist's confluence and
 // catalysts, and each pick shows its grade, entry, target, stop and reward to risk, sized by
 // the desk. Okay opens the review, where Approve places the order on Binance.

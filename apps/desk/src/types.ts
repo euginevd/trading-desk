@@ -1586,7 +1586,7 @@ export interface PotTradeRequest {
   reason: string;
   proposal?: string;
   override?: boolean; // past a broken Profile rule, logged (decision 78)
-  style?: PotStyleKey; // sized at the style's risk (local/guides/trading-styles.md)
+  style?: PotStyleKey; // its rules: local/agents/trading-agent.md
   expires?: number; // a style's proposal is refused after this (ms)
 }
 

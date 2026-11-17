@@ -42,7 +42,7 @@ JUDGE_AFTER = 30
 SCAN_HOUR, SCAN_MINUTE = 11, 15
 LIVE = ("placing", "waiting", "open")
 SETUP = re.compile(r"[\w ,.'()-]{1,60}")
-COINS_LINE = re.compile(r"^- Coins:\s*(.+)$", re.MULTILINE)
+COINS_LINE = re.compile(r"^- (?:Fallback c|C)oins:\s*(.+)$", re.MULTILINE)
 
 
 def unknown(error: BinanceError) -> bool:

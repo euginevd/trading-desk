@@ -1,7 +1,8 @@
-"""New trade's screener (local/guides/trading-styles.md): the top 100 coins listed on Binance,
-narrowed by each style's filters, then each style's setups found in code. No model here:
-trading-agent reads only the shortlist (pot_agent.judge), and the desk sizes and checks what
-it proposes. Prices are floats here, for speed; the desk sizes in Decimal from the strings."""
+"""New trade's screener (local/agents/trading-agent.md, each style's section): the 100
+most-traded USDC coins on Binance, narrowed by each style's filters, then each style's setups
+found in code. No model here: trading-agent reads only the shortlist (pot_agent.judge), and the
+desk sizes and checks what it proposes. Prices are floats here, for speed; the desk sizes in
+Decimal from the strings."""
 
 import json
 import math
@@ -22,6 +23,8 @@ from api.market import QUOTE
 SYDNEY = ZoneInfo("Australia/Sydney")
 CG_URL = "https://api.coingecko.com/api/v3/coins/markets"
 UNIVERSE_KEY = "pot_universe"
+# Each style's section heading in local/agents/trading-agent.md, the one file of the rules.
+HEADING = {"scalp": "Scalp", "day": "Day trade", "swing": "Swing", "position": "Position"}
 RISK_PCT = "1"  # every style: 1% of the pot a trade, within its cap (owner, 17 Nov 2026)
 # Binance takes only these in a list of symbols: a ticker in another script (some Binance
 # listings have one) would refuse the whole request.
@@ -801,24 +804,6 @@ def last_screen(style_key: str, now_ms: int) -> dict[str, Any] | None:
     if found and now_ms - found["at"] <= SCREEN_TTL_S * 1000:
         return found
     return None
-
-
-def guide_section(store: Any, style: Style) -> str:
-    """The style's section of local/guides/trading-styles.md, for trading-agent to read."""
-    path = store.profile_md.parent / "guides" / "trading-styles.md"
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError:
-        return ""
-    heading = {"scalp": "## 4.", "day": "## 5.", "swing": "## 6.", "position": "## 7."}[style.key]
-    start = text.find(heading)
-    if start < 0:
-        return ""
-    end = text.find("\n## ", start + 4)
-    shared = text.find("## 3.")
-    shared_end = text.find("\n## ", shared + 4)
-    common = text[shared:shared_end] if shared >= 0 else ""
-    return (common + "\n\n" + text[start : end if end > 0 else None]).strip()[:9000]
 
 
 def now_ms() -> int:

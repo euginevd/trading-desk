@@ -124,6 +124,20 @@ def next_run(schedule: list[dict[str, Any]], now: datetime) -> dict[str, Any] | 
     return None if best is None else {"at": int(best[0].timestamp() * 1000), "label": best[1]}
 
 
+def history(store: Store) -> Path:
+    """`local/agents/history/`: each version of each agent file, as `<slug>.v<n>.md`."""
+    return folder(store) / "history"
+
+
+def _keep(store: Store, slug: str, n: int, text: str) -> None:
+    where = history(store)
+    try:
+        where.mkdir(parents=True, exist_ok=True)
+        (where / f"{slug}.v{n}.md").write_text(text, encoding="utf-8", newline="\n")
+    except OSError:  # a read-only folder: the version number still moves on
+        return
+
+
 def _version(store: Store, slug: str, text: str, now_ms: int) -> tuple[int, int]:
     """The file's version: a new one each time its contents change."""
     digest = hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -133,6 +147,7 @@ def _version(store: Store, slug: str, text: str, now_ms: int) -> tuple[int, int]
         store.set_setting(f"{key}:hash", digest)
         store.set_setting(f"{key}:version", str(n))
         store.set_setting(f"{key}:time", str(now_ms))
+        _keep(store, slug, n, text)
     return int(store.setting(f"{key}:version", "1")), int(store.setting(f"{key}:time", "0"))
 
 
