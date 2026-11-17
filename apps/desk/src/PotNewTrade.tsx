@@ -165,6 +165,11 @@ export default function PotNewTrade({
   const [analyseError, setAnalyseError] = useState<string | null>(null);
   // What trading-agent filled in, to mark each field as its or changed by you.
   const [filled, setFilled] = useState<PotAnalysis["plan"]>(null);
+  // The coin picked now, for answers that arrive after the owner moved on.
+  const picked = useRef(coin);
+  useEffect(() => {
+    picked.current = coin;
+  }, [coin]);
   const setups: string[] =
     setup && !(SETUPS as readonly string[]).includes(setup) ? [...SETUPS, setup] : [...SETUPS];
 
@@ -204,7 +209,7 @@ export default function PotNewTrade({
     analysePotCoin({ coin, ...draft }).then(
       (a) => {
         setAnalysing(false);
-        if (a.coin !== coin) return;
+        if (a.coin !== picked.current) return;
         setAnalysis(a);
         fill(a);
       },
@@ -220,7 +225,7 @@ export default function PotNewTrade({
       (p) => {
         if (!current) return;
         setSeen(p);
-        setEntry(p.now ?? "");
+        setEntry((was) => was || (p.now ?? ""));
         setError(null);
       },
       (e: unknown) => current && setError(errorOf(e, "Binance didn't answer.")),

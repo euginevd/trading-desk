@@ -325,8 +325,15 @@ export const agentChat = (message: string, history: { who: string; text: string 
       history,
     },
   );
-export const amendDcaOrder = (change: { ref: string; price: string; spend?: string }) =>
-  call<DcaOrder>("POST", "/dca/orders/amend", change);
+// spend or qty only when the owner changed it (the api keeps what's left otherwise); raise
+// when a buy's new amount is more than what's left of it.
+export const amendDcaOrder = (change: {
+  ref: string;
+  price: string;
+  spend?: string;
+  qty?: string;
+  raise?: boolean;
+}) => call<DcaOrder>("POST", "/dca/orders/amend", change);
 
 // The trading pot (docs/plan-trade.md).
 export const getPot = () => call<PotView>("GET", "/pot");

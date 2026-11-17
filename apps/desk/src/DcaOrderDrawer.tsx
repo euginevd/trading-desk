@@ -440,16 +440,27 @@ export default function DcaOrderDrawer({
     setQty(v);
     if (Number(price) > 0 && Number(v) > 0) setUsdc((Number(v) * Number(price)).toFixed(2));
   };
+  // A buy keeps its amount as the price moves; a sell keeps its quantity.
   const setFromPrice = (v: string) => {
     setPrice(v);
-    if (Number(v) > 0 && Number(usdc) > 0) setQty((Number(usdc) / Number(v)).toFixed(8));
+    if (!(Number(v) > 0)) return;
+    if (buy && Number(usdc) > 0) setQty((Number(usdc) / Number(v)).toFixed(8));
+    if (!buy && Number(qty) > 0) setUsdc((Number(qty) * Number(v)).toFixed(2));
   };
-  const changed =
-    Number(price) !== Number(order.price) || Math.abs(Number(usdc) - left(order)) >= 0.005;
+  const amountChanged = Math.abs(Number(usdc) - left(order)) >= 0.005;
+  const qtyChanged = Math.abs(Number(qty) - qtyOf(order)) > 1e-9;
+  const changed = Number(price) !== Number(order.price) || (buy ? amountChanged : qtyChanged);
   const save = () => {
     setBusy(true);
     setError("");
-    amendDcaOrder({ ref: order.ref, price, spend: usdc }).then(
+    const amount = buy
+      ? amountChanged
+        ? { spend: usdc, raise: Number(usdc) > left(order) }
+        : {}
+      : qtyChanged
+        ? { qty }
+        : {};
+    amendDcaOrder({ ref: order.ref, price, ...amount }).then(
       (placed) => onDone(`${order.ref} cancelled; now ${placed.ref} at ${limit(placed.price)}.`),
       (e: unknown) => {
         setBusy(false);

@@ -294,3 +294,26 @@ def test_an_open_order_is_changed_and_linked(book: DcaBook) -> None:
     assert old["status"] == "cancelled"
     with pytest.raises(Refused, match="Only an open limit"):
         book.amend({"ref": first["ref"], "price": "94000"})
+
+
+def test_a_refused_change_leaves_the_old_order_working(book: DcaBook, desk: Trading) -> None:
+    first = book.place({"coin": "BTC", "spend": "40", "price": "97000", "source": "weekly"})
+    desk.set_trading(False)
+    with pytest.raises(Refused, match="Trading is off"):
+        book.amend({"ref": first["ref"], "price": "95000"})
+    with pytest.raises(Refused, match="Trading is off"):
+        book.close_out()
+    old = next(o for o in book.view()["orders"] if o["ref"] == first["ref"])
+    assert old["status"] == "open"
+
+
+def test_a_change_spends_no_more_than_is_left_unless_raised(book: DcaBook) -> None:
+    first = book.place({"coin": "BTC", "spend": "40", "price": "97000", "source": "weekly"})
+    capped = book.amend({"ref": first["ref"], "price": "95000", "spend": "80"})
+    assert Decimal(capped["spend"]) <= Decimal(40)
+    raised = book.amend({"ref": capped["ref"], "price": "95000", "spend": "60", "raise": True})
+    assert Decimal(raised["spend"]) > Decimal(40)
+    # Over the per-order limit of 100: refused before anything is cancelled.
+    with pytest.raises(Refused, match="per-order"):
+        book.amend({"ref": raised["ref"], "price": "95000", "spend": "150", "raise": True})
+    assert next(o for o in book.view()["orders"] if o["ref"] == raised["ref"])["status"] == "open"

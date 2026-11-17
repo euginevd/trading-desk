@@ -409,6 +409,7 @@ describe("DCA book page", () => {
       ref: "DCA-BTC-26W47-1",
       price: "63500.37",
       spend: "40",
+      raise: false, // less than what's left: never more than the order had
     });
     expect(
       await screen.findByText("DCA-BTC-26W47-1 cancelled; now DCA-BTC-26W47-2 at 63,837.40."),

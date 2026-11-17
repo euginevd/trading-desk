@@ -3,6 +3,7 @@ placed from the desk only. Each order is a row with its own reference, fills and
 position's average cost holds on a sell, which books realised P&L, and its buy-back lowers it.
 Profit and loss is judged against the money put in, net of what sales took out."""
 
+import contextlib
 import json
 import math
 import re
@@ -370,7 +371,9 @@ class DcaBook:
             n += 1
         return f"DCA-{coin}-{week}-{n}"
 
-    def _check_buy(self, spend: Decimal) -> None:
+    def _check_buy(self, spend: Decimal, credit: Decimal = ZERO) -> None:
+        """The kill switch and both limits. credit: what an order being replaced already counts
+        towards today, so a change is judged on what it adds."""
         settings = self._desk.settings()
         if not settings["tradingOn"]:
             raise Refused("Trading is off. Turn it on in the top bar to trade.")
@@ -379,7 +382,7 @@ class DcaBook:
             raise Refused("Set your per-order and daily limits first.")
         if spend > per_order:
             raise Refused(f"That's over your per-order limit of ${per_order:,.2f}.")
-        if Decimal(settings["spentToday"]) + spend > per_day:
+        if Decimal(settings["spentToday"]) - credit + spend > per_day:
             raise Refused(f"That would take today past your daily limit of ${per_day:,.2f}.")
 
     def _held(self, coin: str) -> Decimal:
@@ -406,7 +409,7 @@ class DcaBook:
         return coin, side, kind, source, link
 
     def _sized(
-        self, body: dict[str, Any], coin: str, side: str, kind: str
+        self, body: dict[str, Any], coin: str, side: str, kind: str, credit: Decimal = ZERO
     ) -> tuple[Decimal | None, Decimal | None, Decimal | None]:
         """Price, quantity and spend, to Binance's steps and inside the desk's limits."""
         rules = self._binance.filters(f"{coin}{QUOTE}")
@@ -429,7 +432,7 @@ class DcaBook:
             spend = qty * price
         if spend < rules.min_notional or (qty is not None and qty <= ZERO):
             raise Refused(smallest)
-        self._check_buy(spend)
+        self._check_buy(spend, credit)
         return price, qty, spend
 
     @locked
@@ -612,11 +615,17 @@ class DcaBook:
                 continue
             if row["status"] not in ("placing", "open"):
                 continue
+            # The kill switch and the limits first: refused, the limit stays working.
+            before = Decimal(row["spend"] or "0") - Decimal(row["executed_quote"])
+            self._check_buy(before, before if self._today(row) else ZERO)
             done = self._cancel(row)
             left = Decimal(done["spend"] or "0") - Decimal(done["executed_quote"])
             symbol = f"{done['coin']}{QUOTE}"
             if left < self._binance.filters(symbol).min_notional:
                 continue
+            from api.pot import Pot  # noqa: PLC0415 - the pot reads the DCA book's prices
+
+            Pot(self._desk).guard(left, "the DCA close-out")
             market = {
                 "ref": self._ref(done["coin"], week),
                 "coin": done["coin"],
@@ -648,19 +657,16 @@ class DcaBook:
     # Changing an open order: the old one is cancelled (its fills kept) and a new one placed
     # under a new reference, linked to it, so the book keeps both.
 
-    @locked
-    def amend(self, body: dict[str, Any]) -> dict[str, Any]:
-        ref = str(body.get("ref", ""))
-        row = self._store.dca_order(ref)
-        if row is None:
-            raise Refused("There's no order with that reference.")
-        if row["status"] not in ("placing", "open") or row["kind"] != "limit":
-            raise Refused("Only an open limit order can be changed.")
-        price = number(body.get("price"), "Price")
-        done = self._cancel(row)
-        whole = Decimal(done["qty"] or "0")
-        if whole > ZERO and Decimal(done["executed_qty"]) >= whole:
-            raise Refused(f"{ref} filled before it could be changed. Nothing new was placed.")
+    def _today(self, row: dict[str, Any]) -> bool:
+        midnight = datetime.fromtimestamp(self._now() / 1000, SYDNEY).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        return int(row["created"]) >= int(midnight.timestamp() * 1000)
+
+    def _replacement(
+        self, row: dict[str, Any], body: dict[str, Any], price: Decimal
+    ) -> tuple[dict[str, Any], Decimal]:
+        """The order that replaces row, and what row already counts towards today."""
         change: dict[str, Any] = {
             "coin": row["coin"],
             "side": row["side"],
@@ -671,11 +677,50 @@ class DcaBook:
             "link": row["link"] if row["source"] == "buy-back" else row["ref"],
         }
         if row["side"] == "buy":
-            left = Decimal(row["spend"] or "0") - Decimal(done["executed_quote"])
-            change["spend"] = body.get("spend") or plain(left)
+            left = Decimal(row["spend"] or "0") - Decimal(row["executed_quote"])
+            asked = body.get("spend")
+            spend = number(asked, "Amount") if asked not in (None, "") else left
+            change["spend"] = plain(spend if body.get("raise") is True else min(spend, left))
+            # its unfilled part counts today until it's cancelled
+            return change, left if self._today(row) else ZERO
+        left = Decimal(row["qty"] or "0") - Decimal(row["executed_qty"])
+        asked = body.get("qty")
+        qty = number(asked, "Quantity") if asked not in (None, "") else left
+        change["qty"] = plain(min(qty, left))
+        return change, ZERO
+
+    @locked
+    def amend(self, body: dict[str, Any]) -> dict[str, Any]:
+        """A new price, and an amount up to what's left of the order unless the owner raises
+        it (raise: true). The replacement is sized and checked against the kill switch and the
+        limits before the old order is cancelled, so a refusal leaves the old order working."""
+        ref = str(body.get("ref", ""))
+        row = self._store.dca_order(ref)
+        if row is None:
+            raise Refused("There's no order with that reference.")
+        if row["status"] not in ("placing", "open") or row["kind"] != "limit":
+            raise Refused("Only an open limit order can be changed.")
+        price = number(body.get("price"), "Price")
+        with contextlib.suppress(BinanceError):
+            self._refresh(row)  # its latest fills, so what's left is current
+        row = self._row(int(row["id"]))
+        if row["status"] not in ("placing", "open"):
+            raise Refused(f"{ref} is {row['status']} now. Nothing was changed.")
+        change, credit = self._replacement(row, body, price)
+        coin, side, kind, _, _ = self._kind(change)
+        self._sized(change, coin, side, kind, credit)  # refuses here, before anything is cancelled
+        done = self._cancel(row)
+        whole = Decimal(done["qty"] or "0")
+        if whole > ZERO and Decimal(done["executed_qty"]) >= whole:
+            raise Refused(f"{ref} filled before it could be changed. Nothing new was placed.")
+        # Anything that filled while it was being cancelled comes off the replacement.
+        if side == "buy":
+            now_left = Decimal(done["spend"] or "0") - Decimal(done["executed_quote"])
+            if body.get("raise") is not True:
+                change["spend"] = plain(min(Decimal(change["spend"]), now_left))
         else:
-            left = Decimal(row["qty"] or "0") - Decimal(done["executed_qty"])
-            change["qty"] = body.get("qty") or plain(left)
+            now_left = Decimal(done["qty"] or "0") - Decimal(done["executed_qty"])
+            change["qty"] = plain(min(Decimal(change["qty"]), now_left))
         try:
             placed = self.place(change)
         except (Refused, BinanceError) as error:

@@ -95,7 +95,7 @@ export const SOURCE: Record<DcaOrder["source"], string> = {
 
 // What each source means, for its tooltip.
 export const SOURCE_WHY: Record<DcaOrder["source"], string> = {
-  weekly: "This week's 600 USDC, as a limit order from the weekly plan",
+  weekly: "This week's plan, as a limit order",
   named: "Extra money you added with Add funds, placed by dca-agent's plan",
   "close-out": "Monday's market buy of what the week's limits didn't fill",
   trim: "Part of the position sold when it ran hot, to buy back lower",

@@ -764,19 +764,19 @@ function MoveDialog({
   const [by, setBy] = useState("-1");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Moved ones drop out, so trying again after a refusal moves only the rest.
+  const [moved_, setMoved] = useState<string[]>([]);
   const n = Number(by);
   const ok = Number.isFinite(n) && n !== 0 && n > -50 && n < 50;
   const go = async () => {
     setBusy(true);
-    let done = 0;
-    for (const o of list) {
+    let done = moved_.length;
+    for (const o of list.filter((x) => !moved_.includes(x.ref))) {
       try {
-        await amendDcaOrder({
-          ref: o.ref,
-          price: moved(Number(o.price), n),
-          spend: left(o).toFixed(2),
-        });
+        // No amount: the api keeps what's left of each order.
+        await amendDcaOrder({ ref: o.ref, price: moved(Number(o.price), n) });
         done += 1;
+        setMoved((m) => [...m, o.ref]);
       } catch (e) {
         setBusy(false);
         setError(`${done ? `${done} moved. Then ` : ""}${o.ref}: ${errorOf(e, "not moved.")}`);

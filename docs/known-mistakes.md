@@ -65,6 +65,8 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 29b. Binance order ids are unique per pair only: key them `PAIR:id`.
 29c. Bot names are public: link a Telegram chat only by a one-time code.
 29d. The pre-trade check first missed smart trades, which go as a bot switched on: list every route that sends a buy before adding a check.
+29e. Changing an order cancelled it before checking the replacement, so a refusal (trading off, a limit) left nothing working: size and check the new order first, then cancel. The Monday close-out's market buy also skipped the kill switch: every route that buys goes through the same check.
+29f. Real figures from the owner's plan and account (the weekly amount, the account's balance) went into public docs: write "the weekly plan" or "the account's balance"; the amounts stay in `local/`.
 
 ## SQLite
 
