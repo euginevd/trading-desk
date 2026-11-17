@@ -16,6 +16,8 @@ services:
       DESK_ORIGINS: http://127.0.0.1:${DESK_PORT:-5180},http://localhost:${DESK_PORT:-5180}
       # The Settings page saves the Claude API key and sign-in token here (decision 51).
       DESK_ENV_FILE: /app/.env
+      # The paper bot (below) may call the api by its service name to ask trading-agent.
+      DESK_HOSTS: api:8000
     volumes:
       - ./local:/app/local # SQLite and the audit log stay on your disk
       - ./.env:/app/.env # read at start; the Settings page writes the AI credentials back
@@ -37,3 +39,38 @@ services:
     # No Linux capabilities and no privilege gain: both run as non-root and need neither.
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+
+  # Backtests and paper trading of the desk's styles (apps/backtest), on demand only:
+  #   bash apps/backtest/run.sh swing        (or scalp, day, position, swing-ai, all)
+  #   PAPER_STRATEGY=DeskSwingAI PAPER_AI=ai-swing.json docker compose --profile paper up -d paper
+  # The strategies call the desk's own screener (mounted read-only), so they test the same
+  # rules New trade uses. No keys: Binance's public candles only; nothing is ever placed.
+  backtest: &freqtrade
+    image: freqtradeorg/freqtrade:2026.10_freqai # the latest release, with FreqAI's models
+    profiles: [backtest]
+    environment:
+      PYTHONPATH: /desk
+      DESK_QUOTE: USDT
+    volumes:
+      - ./local/backtest:/freqtrade/user_data # candles, results and the paper bot's database
+      - ./apps/backtest/strategies:/freqtrade/user_data/strategies:ro
+      - ./apps/backtest/config:/freqtrade/config:ro
+      - ./apps/backtest/report.py:/freqtrade/report.py:ro
+      - ./apps/api/src:/desk:ro
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  paper:
+    <<: *freqtrade
+    profiles: [paper]
+    environment:
+      PYTHONPATH: /desk
+      DESK_QUOTE: USDC
+      # Each entry asks trading-agent first; only a take goes ahead (agent_verdicts.jsonl).
+      DESK_AGENT_URL: http://api:8000/pot/judge-one
+      DESK_AGENT_MAX_PER_DAY: ${DESK_AGENT_MAX_PER_DAY:-20} # trading-agent calls a day, at most
+    command: >-
+      trade --config /freqtrade/config/paper.json
+      ${PAPER_AI:+--config /freqtrade/config/$PAPER_AI}
+      --strategy ${PAPER_STRATEGY:-DeskSwing} --dry-run
+    restart: unless-stopped

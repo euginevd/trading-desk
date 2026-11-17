@@ -1330,7 +1330,7 @@ export interface DcaAction {
 // The trading pot (docs/plan-trade.md): its own book, run by trading-agent.
 export interface PotOrder {
   ref: string;
-  role: "entry" | "exit" | "close";
+  role: "entry" | "exit" | "close" | "add";
   kind: "limit" | "oco" | "market";
   price: string | null;
   stop: string | null;
@@ -1364,6 +1364,9 @@ export interface PotTrade {
   filled: number | null;
   closed: number | null;
   note: string | null;
+  style: PotStyleKey | null;
+  // The trade's log: the desk's own events with their numbers, the thesis, and yours.
+  notes: { kind: "desk" | "thesis" | "you"; text: string; created: number }[];
   orders: PotOrder[];
 }
 
@@ -1400,9 +1403,53 @@ export interface AccountCoin {
 }
 
 // risk-agent's board (GET /risk-board): every limit from the desk's figures.
+// The four big risks (decision 79): each a board row with a rank and the page's detail.
+export interface RiskExchange {
+  totalAud: string;
+  capAud: string;
+  dcaAud: string;
+  stablesAud: string;
+  otherAud: string;
+  moveAud: string;
+  moves: { coin: string; aud: string; qty: string; leaves: string }[];
+  afterAud: string;
+}
+export interface RiskCold {
+  setUp: boolean;
+  sharePct: string;
+  coins: { coin: string; ledgerAud: string; binanceAud: string; pct: string }[];
+}
+export interface RiskTao {
+  valueAud: string;
+  costAud: string | null;
+  pnlAud: string | null;
+  cryptoAud: string;
+  otherAud: string;
+  weeklyAud: string;
+  targetPct: string;
+  by: string;
+  weeks: number;
+  reach: number | null;
+  onTrack: boolean;
+  thesisAt: number | null;
+  thesisDue: boolean;
+}
+export interface RiskBackup {
+  items: {
+    key: string;
+    label: string;
+    at: number | null;
+    due: number | null;
+    state: "ok" | "due" | "no";
+  }[];
+}
+
 export interface RiskLimit {
   key: string;
-  area: "Trading pot" | "DCA book" | "Deposits" | "Portfolio";
+  area: "Trading pot" | "DCA book" | "Deposits" | "Portfolio" | "Big";
+  rank?: number;
+  short?: string;
+  detail?: RiskExchange | RiskCold | RiskTao | RiskBackup;
   name: string;
   value: string;
   warn: string | null;
@@ -1542,4 +1589,112 @@ export interface PotTradeRequest {
   reason: string;
   proposal?: string;
   override?: boolean; // past a broken Profile rule, logged (decision 78)
+  style?: PotStyleKey; // its rules: local/agents/trading-agent.md
+  market?: boolean; // buy now at market instead of a limit at the entry
+  expires?: number; // a style's proposal is refused after this (ms)
+}
+
+// New trade by style: the styles, the screener's shortlist, and trading-agent's picks.
+export type PotStyleKey = "scalp" | "day" | "swing" | "position";
+export type PotRegime = { state: "bull" | "neutral" | "bear" | null; words: string };
+export interface PotStyle {
+  key: PotStyleKey;
+  name: string;
+  line: string;
+  hold: string;
+  riskPct: string;
+  minRr: string;
+  expirySeconds: number;
+  allowed: boolean;
+  note: string;
+}
+export interface PotStyles {
+  regime: PotRegime;
+  styles: PotStyle[];
+}
+export interface PotScreenCounts {
+  listed: number;
+  onBinance: number;
+  liquid: number;
+  setups: number;
+}
+export interface PotScreen {
+  style: PotStyleKey;
+  name: string;
+  regime: PotRegime;
+  allowed: boolean;
+  note: string;
+  riskPct: string;
+  warnings: string[];
+  counts: PotScreenCounts;
+  shortlist: { coin: string; setup: string; score: number }[];
+  // On an empty scan: the coins closest to a setup and what's missing, and any block on all.
+  misses: { coin: string; why: string }[];
+  block: string;
+  expires: number;
+  quote?: string;
+  source?: string;
+}
+// The odds check (api/odds.py): the style's rule re-run on the coin's past candles, and the
+// plan simulated from them, each against break-even after fees.
+export type PotLean =
+  "strong yes" | "leans yes" | "coin flip" | "leans no" | "strong no" | "unclear";
+export interface PotOdds {
+  needed: number;
+  horizon: string;
+  lean: PotLean;
+  line: string;
+  sim: {
+    paths: number;
+    target: number;
+    stop: number;
+    open: number;
+    unfilled: number;
+    share: number | null;
+    lean: PotLean;
+  } | null;
+  past: {
+    signals: number;
+    target: number;
+    stop: number;
+    open: number;
+    span: string;
+    share: number | null;
+    lean: PotLean;
+  } | null;
+}
+export interface PotPick {
+  odds?: PotOdds | null;
+  coin: string;
+  setup: string;
+  grade: "A" | "B" | "C";
+  score: number;
+  verdict: "take" | "wait" | "pass";
+  confluence: string[];
+  against: string[];
+  catalyst: string;
+  crowding: string;
+  reason: string;
+  problem: string | null;
+  entry: string;
+  stop: string;
+  target: string;
+  qty?: string;
+  spend?: string;
+  risk?: string;
+  rr?: string;
+  stopPct?: string;
+}
+export interface PotJudge {
+  style: PotStyleKey;
+  name: string;
+  regime: PotRegime;
+  allowed: boolean;
+  note: string;
+  riskPct: string;
+  warnings: string[];
+  counts: PotScreenCounts;
+  line: string;
+  picks: PotPick[];
+  expires: number;
 }

@@ -1,12 +1,25 @@
 // One trade of the pot in a panel from the right (docs/plan-trade.md): where it stands, its
-// figures, every Binance order it has had, and what can be done to it: cancel an unfilled
-// entry, move the stop toward profit, or close at market. Closes on Esc, a click outside, Done.
-import { useEffect, useRef, useState } from "react";
-import { cancelPotTrade, closePotTrade, movePotStop } from "./api";
+// figures, what can be done to it, its log, and every Binance order it has had. A waiting
+// entry can be cancelled or bought now at market; an open trade can have its stop or target
+// moved, be added to (only in profit) or reduced, or be closed at market. Every change is
+// logged with its numbers, beside your own notes. Closes on Esc, a click outside, Done.
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import {
+  addToPotTrade,
+  cancelPotTrade,
+  closePotTrade,
+  enterPotTradeNow,
+  movePotStop,
+  movePotTarget,
+  notePotTrade,
+  reducePotTrade,
+} from "./api";
+import { ApiError } from "./api";
 import { errorOf } from "./format";
+import { RuleBreakBanner } from "./RuleMarks";
 import CoinIcon from "./CoinIcon";
-import { dated, dollars, qty } from "./dcaFormat";
-import type { PotTrade } from "./types";
+import { dated, dollars, qty, when } from "./dcaFormat";
+import type { PotTrade, RuleBreak } from "./types";
 
 // A price as Binance has it: every decimal the pair uses, at least two.
 export function px(value: string | number | null | undefined): string {
@@ -31,13 +44,25 @@ export const rr = (t: { entry: string; stop: string; target: string }) => {
 const ROLE: Record<PotTrade["orders"][number]["role"], string> = {
   entry: "Entry, limit buy",
   exit: "Exit, OCO: stop and target as one",
-  close: "Close, market sell",
+  close: "Sell at market",
+  add: "Add, market buy",
 };
 const STATE: Record<PotTrade["orders"][number]["status"], string> = {
   placing: "Placing",
   open: "On Binance",
   filled: "Filled",
   cancelled: "Cancelled",
+};
+const NOTE = { desk: "Desk", thesis: "Thesis", you: "You" } as const;
+const PARTS = [25, 50, 75] as const;
+type Ask = "close" | "cancel" | "now" | { reduce: number } | { add: string } | null;
+type Step = {
+  text: string;
+  button: string;
+  danger?: boolean;
+  run: (override: boolean) => Promise<PotTrade>;
+  said: (t: PotTrade) => string;
+  stay: boolean;
 };
 
 export default function PotPanel({
@@ -51,104 +76,384 @@ export default function PotPanel({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [stop, setStop] = useState(trade.stop);
-  const [ask, setAsk] = useState<"close" | "cancel" | null>(null);
+  const [target, setTarget] = useState(trade.target);
+  const [more, setMore] = useState("");
+  const [note, setNote] = useState("");
+  const [shown, setShown] = useState(trade);
+  const [ask, setAsk] = useState<Ask>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A buy that breaks a set Profile rule (decision 78): named, and confirmed past or kept.
+  const [breaks, setBreaks] = useState<RuleBreak[] | null>(null);
+  const changed = useRef(false);
   useEffect(() => {
     dialog.current?.showModal?.();
   }, []);
 
-  const open = trade.status === "open";
-  const waiting = trade.status === "waiting" || trade.status === "placing";
-  const n = Number(trade.result ?? 0);
-  const higher = Number(stop) > Number(trade.stop) && Number(stop) < Number(trade.now ?? Infinity);
+  const t = shown;
+  const open = t.status === "open";
+  const waiting = t.status === "waiting" || t.status === "placing";
+  const live = open || waiting;
+  const n = Number(t.result ?? 0);
+  const now = Number(t.now ?? NaN);
+  const higher =
+    Number(stop) > Number(t.stop) && Number(stop) < (Number.isNaN(now) ? Infinity : now);
+  const newTarget = Number(target) !== Number(t.target) && Number(target) > (now || 0);
+  const inProfit = open && t.fillPrice !== null && now > Number(t.fillPrice);
 
-  const act = (run: () => Promise<PotTrade>, said: (t: PotTrade) => string) => {
+  // An action that stays in the panel: the log and figures update in place.
+  const act = (run: () => Promise<PotTrade>, said: (t: PotTrade) => string, stay = false) => {
     setBusy(true);
     setError(null);
     run().then(
-      (t) => {
+      (next) => {
         setBusy(false);
         setAsk(null);
-        onChanged(said(t));
+        setBreaks(null);
+        setMore("");
+        setShown({ ...next, now: next.now ?? t.now });
+        changed.current = true;
+        if (!stay) onChanged(said(next));
       },
       (e: unknown) => {
         setBusy(false);
+        if (e instanceof ApiError && e.ruleBreaks.length > 0) {
+          setBreaks(e.ruleBreaks);
+          return;
+        }
         setError(errorOf(e, "That didn't go through."));
       },
     );
   };
+  // Each step that sells or buys at market asks first.
+  const stepOf = (a: Exclude<Ask, null>): Step => {
+    if (a === "close")
+      return {
+        text: `Sell all ${t.coin} in ${t.ref} at market now? Its stop and target are cancelled first.`,
+        button: "Close at market",
+        danger: true,
+        run: () => closePotTrade(t.ref),
+        said: (x) => `${x.ref} closed at market.`,
+        stay: false,
+      };
+    if (a === "cancel")
+      return {
+        text: `Cancel the entry of ${t.ref}? Nothing has filled yet.`,
+        button: "Cancel the entry",
+        run: () => cancelPotTrade(t.ref),
+        said: (x) => `${x.ref} cancelled.`,
+        stay: false,
+      };
+    if (a === "now")
+      return {
+        text: `Cancel the limit at ${px(t.entry)} and buy now at market (about ${px(t.now)})? It's re-sized so risk stays within 1%, and refused if reward to risk falls under the style's minimum.`,
+        button: "Buy at market",
+        run: (o) => enterPotTradeNow(t.ref, o),
+        said: (x) => `${x.ref}: bought at market.`,
+        stay: true,
+      };
+    if ("add" in a)
+      return {
+        text: `Buy ${dollars(a.add)} more ${t.coin} at market now (about ${px(t.now)})? The stop and target are replaced to cover it all.`,
+        button: "Add at market",
+        run: (o) => addToPotTrade(t.ref, a.add, o),
+        said: (x) => `${x.ref}: added at market.`,
+        stay: true,
+      };
+    return {
+      text: `Sell ${a.reduce}% of ${t.coin} at market now? The stop and target go back on the rest.`,
+      button: `Sell ${a.reduce}%`,
+      run: () => reducePotTrade(t.ref, a.reduce),
+      said: (x) => `${x.ref}: sold ${a.reduce}%.`,
+      stay: true,
+    };
+  };
+  const step = ask ? stepOf(ask) : null;
+  // However it closes, the page reads the trade again if anything changed here.
+  const finish = () => {
+    if (changed.current) onChanged("");
+    onClose();
+  };
+  const submit = (e: FormEvent, go: () => void) => {
+    e.preventDefault();
+    go();
+  };
 
   return (
-    <dialog ref={dialog} className="dcb-drawer" aria-labelledby="pot-panel-title" onClose={onClose}>
+    <dialog
+      ref={dialog}
+      className="dcb-drawer pnl"
+      aria-labelledby="pot-panel-title"
+      onClose={finish}
+    >
       <header className="dcb-drawer-head">
         <h2 id="pot-panel-title">
           <span className="dcb-coin">
-            <CoinIcon coin={trade.coin} />
-            {trade.coin}, {trade.setup}
+            <CoinIcon coin={t.coin} />
+            {t.coin}, {t.setup}
           </span>
         </h2>
         <small className="dcb-id">
-          {trade.ref}, opened {dated(trade.created, true)}
-          {trade.regime ? `, ${trade.regime} market` : ""}
+          {t.ref}, opened {dated(t.created, true)}
+          {t.regime ? `, ${t.regime} market` : ""}
         </small>
-        <button type="button" className="link dcb-drawer-close" onClick={onClose}>
+        <button
+          type="button"
+          className="link dcb-drawer-close"
+          onClick={() => dialog.current?.close()}
+        >
           Close
         </button>
       </header>
       <div className="dcb-drawer-figures">
         <div>
           <small>Now</small>
-          <b className="num">{px(trade.now)}</b>
+          <b className="num">{px(t.now)}</b>
         </div>
         <div>
-          <small>{trade.status === "closed" ? "Result" : "Result so far"}</small>
+          <small>{t.status === "closed" ? "Result" : "Result so far"}</small>
           <b className={`num ${tone(n)}`}>
-            {waiting ? "Entry waiting" : rWord(trade.r)}
-            {!waiting && trade.result !== null && (
-              <span className="dcb-drawer-pct"> {dollars(trade.result, true)}</span>
+            {waiting ? "Entry waiting" : rWord(t.r)}
+            {!waiting && t.result !== null && (
+              <span className="dcb-drawer-pct"> {dollars(t.result, true)}</span>
             )}
           </b>
         </div>
       </div>
       <dl className="dcb-drawer-facts">
         <div>
-          <dt>Entry, stop, target</dt>
+          <dt>{t.fillPrice ? "Paid, stop, target" : "Entry, stop, target"}</dt>
           <dd className="num">
-            {px(trade.fillPrice ?? trade.entry)}, <span className="down">{px(trade.stop)}</span>,{" "}
-            <span className="up">{px(trade.target)}</span>
+            {px(t.fillPrice ?? t.entry)}, <span className="down">{px(t.stop)}</span>,{" "}
+            <span className="up">{px(t.target)}</span>
           </dd>
         </div>
         <div>
           <dt>Size</dt>
           <dd className="num">
-            {dollars(trade.spend)}{" "}
+            {dollars(t.spend)}{" "}
             <span className="muted">
-              ({qty(trade.qty)} {trade.coin})
+              ({qty(t.qty)} {t.coin})
             </span>
           </dd>
         </div>
         <div>
-          <dt>At risk</dt>
-          <dd className="num">{dollars(trade.risk)}</dd>
+          <dt>At risk (1R)</dt>
+          <dd className="num">{dollars(t.risk)}</dd>
         </div>
         <div>
           <dt>Reward to risk</dt>
-          <dd className="num">{rr(trade)} : 1</dd>
+          <dd className="num">{rr(t)} : 1</dd>
         </div>
         <div>
           <dt>Fees</dt>
-          <dd className="num">{dollars(trade.fees)}</dd>
+          <dd className="num">{dollars(t.fees)}</dd>
         </div>
         <div>
           <dt>Rules</dt>
-          <dd>{trade.rulesKept ? "All kept" : "One broken"}</dd>
+          <dd>{t.rulesKept ? "All kept" : "One broken"}</dd>
         </div>
       </dl>
+      {t.reason && (
+        <p className="pnl-thesis">
+          <small>Thesis</small> {t.reason}
+        </p>
+      )}
+      {t.note && <p className="dcb-warn">{t.note}</p>}
+
+      {live && (
+        <section className="pnl-manage" aria-label="Manage the trade">
+          {open && (
+            <form
+              className="pnl-row"
+              onSubmit={(e) =>
+                submit(e, () =>
+                  act(
+                    () => movePotStop(t.ref, stop),
+                    (x) => `${x.ref}: stop moved to ${px(x.stop)}.`,
+                    true,
+                  ),
+                )
+              }
+            >
+              <label>
+                <span>Stop</span>
+                <input
+                  className="dcb-num"
+                  inputMode="decimal"
+                  value={stop}
+                  onChange={(e) => setStop(e.target.value)}
+                  aria-label={`${t.ref} new stop`}
+                />
+              </label>
+              <button type="submit" className="btn btn-small" disabled={!higher || busy}>
+                Move stop
+              </button>
+              <small className="muted">Only up: above {px(t.stop)}, under the price.</small>
+            </form>
+          )}
+          <form
+            className="pnl-row"
+            onSubmit={(e) =>
+              submit(e, () =>
+                act(
+                  () => movePotTarget(t.ref, target),
+                  (x) => `${x.ref}: target moved to ${px(x.target)}.`,
+                  true,
+                ),
+              )
+            }
+          >
+            <label>
+              <span>Target</span>
+              <input
+                className="dcb-num"
+                inputMode="decimal"
+                value={target}
+                onChange={(e) => setTarget(e.target.value)}
+                aria-label={`${t.ref} new target`}
+              />
+            </label>
+            <button type="submit" className="btn btn-small" disabled={!newTarget || busy}>
+              Move target
+            </button>
+            <small className="muted">Above the price now.</small>
+          </form>
+          {open && (
+            <form
+              className="pnl-row"
+              onSubmit={(e) =>
+                submit(e, () => {
+                  setBreaks(null);
+                  setAsk({ add: more });
+                })
+              }
+            >
+              <label>
+                <span>Add</span>
+                <input
+                  className="dcb-num"
+                  inputMode="decimal"
+                  placeholder="USDC"
+                  value={more}
+                  onChange={(e) => setMore(e.target.value)}
+                  aria-label={`${t.ref} USDC to add`}
+                />
+              </label>
+              <button
+                type="submit"
+                className="btn btn-small"
+                disabled={!inProfit || !(Number(more) > 0) || busy}
+              >
+                Add at market
+              </button>
+              <small className="muted">
+                {inProfit
+                  ? "Risk to the stop stays within 1%."
+                  : "Only while in profit: no averaging down."}
+              </small>
+            </form>
+          )}
+          {open && (
+            <div className="pnl-row" role="group" aria-label="Reduce">
+              <span className="pnl-label">Reduce</span>
+              {PARTS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  className="btn btn-small"
+                  disabled={busy}
+                  onClick={() => setAsk({ reduce: p })}
+                >
+                  Sell {p}%
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {step && breaks && (
+        <RuleBreakBanner
+          breaks={breaks}
+          sending={busy}
+          onKeep={() => {
+            setBreaks(null);
+            setAsk(null);
+          }}
+          onOverride={() => act(() => step.run(true), step.said, step.stay)}
+        />
+      )}
+      {step && !breaks && (
+        <div className="alert" role="alert">
+          <span>{step.text}</span>
+          <button
+            type="button"
+            className={`btn btn-small ${step.danger ? "btn-danger" : ""}`}
+            disabled={busy}
+            onClick={() => act(() => step.run(false), step.said, step.stay)}
+          >
+            {step.button}
+          </button>
+          <button type="button" className="btn btn-small" onClick={() => setAsk(null)}>
+            Keep it
+          </button>
+        </div>
+      )}
+      {error && (
+        <p className="error-text" role="alert">
+          {error}
+        </p>
+      )}
+
+      <h3 className="dcb-drawer-sub">Log</h3>
+      {t.notes.filter((x) => x.kind !== "thesis").length === 0 ? (
+        <p className="muted">Nothing logged yet.</p>
+      ) : (
+        <ol className="pnl-log">
+          {t.notes
+            .filter((x) => x.kind !== "thesis")
+            .map((x, i) => (
+              <li key={`${x.created}-${i}`} className={`is-${x.kind}`}>
+                <small>
+                  {when(x.created)} · {NOTE[x.kind]}
+                </small>
+                <span>{x.text}</span>
+              </li>
+            ))}
+        </ol>
+      )}
+      <form
+        className="pnl-note"
+        onSubmit={(e) =>
+          submit(e, () =>
+            act(
+              () =>
+                notePotTrade(t.ref, note).then((x) => {
+                  setNote("");
+                  return x;
+                }),
+              () => "",
+              true,
+            ),
+          )
+        }
+      >
+        <input
+          value={note}
+          maxLength={400}
+          placeholder="Add a note: what you see, what you'd do differently…"
+          onChange={(e) => setNote(e.target.value)}
+          aria-label={`${t.ref} note`}
+        />
+        <button type="submit" className="btn btn-small" disabled={!note.trim() || busy}>
+          Add note
+        </button>
+      </form>
 
       <h3 className="dcb-drawer-sub">Orders</h3>
       <div className="dcb-scroll">
-        <table className="dcb-table" aria-label={`${trade.ref} orders`}>
+        <table className="dcb-table" aria-label={`${t.ref} orders`}>
           <thead>
             <tr>
               <th>Binance tag</th>
@@ -158,10 +463,12 @@ export default function PotPanel({
             </tr>
           </thead>
           <tbody>
-            {trade.orders.map((o) => (
+            {t.orders.map((o) => (
               <tr key={o.ref}>
                 <td className="dcb-id">{o.ref}</td>
-                <td>{ROLE[o.role]}</td>
+                <td>
+                  {o.role === "entry" && o.kind === "market" ? "Entry, market buy" : ROLE[o.role]}
+                </td>
                 <td className="r num">
                   {o.kind === "oco"
                     ? `${px(o.stop)} / ${px(o.price)}`
@@ -177,74 +484,6 @@ export default function PotPanel({
           </tbody>
         </table>
       </div>
-      {trade.reason && <p className="muted pot-why">Why: {trade.reason}</p>}
-      {trade.note && <p className="dcb-warn">{trade.note}</p>}
-
-      {open && (
-        <form
-          className="pot-stop"
-          onSubmit={(e) => {
-            e.preventDefault();
-            act(
-              () => movePotStop(trade.ref, stop),
-              (t) => `${t.ref}: stop moved to ${px(t.stop)}.`,
-            );
-          }}
-        >
-          <label>
-            <span>New stop</span>
-            <input
-              className="dcb-num"
-              inputMode="decimal"
-              value={stop}
-              onChange={(e) => setStop(e.target.value)}
-              aria-label={`${trade.ref} new stop`}
-            />
-          </label>
-          <button type="submit" className="btn" disabled={!higher || busy}>
-            Move stop
-          </button>
-          <small className="muted">
-            Only toward profit: above {px(trade.stop)}, below the price now.
-          </small>
-        </form>
-      )}
-
-      {ask && (
-        <div className="alert" role="alert">
-          <span>
-            {ask === "close"
-              ? `Sell all ${trade.coin} in ${trade.ref} at market now? Its stop and target are cancelled first.`
-              : `Cancel the entry of ${trade.ref}? Nothing has filled yet.`}
-          </span>
-          <button
-            type="button"
-            className={`btn btn-small ${ask === "close" ? "btn-danger" : ""}`}
-            disabled={busy}
-            onClick={() =>
-              ask === "close"
-                ? act(
-                    () => closePotTrade(trade.ref),
-                    (t) => `${t.ref} closed at market.`,
-                  )
-                : act(
-                    () => cancelPotTrade(trade.ref),
-                    (t) => `${t.ref} cancelled.`,
-                  )
-            }
-          >
-            {ask === "close" ? "Close at market" : "Cancel the entry"}
-          </button>
-          <button type="button" className="btn btn-small" onClick={() => setAsk(null)}>
-            Keep it
-          </button>
-        </div>
-      )}
-      {error && (
-        <p className="error-text" role="alert">
-          {error}
-        </p>
-      )}
 
       <div className="dlg-btns">
         {open && (
@@ -253,11 +492,16 @@ export default function PotPanel({
           </button>
         )}
         {waiting && (
-          <button type="button" className="btn pot-left" onClick={() => setAsk("cancel")}>
-            Cancel entry
-          </button>
+          <>
+            <button type="button" className="btn pot-left" onClick={() => setAsk("cancel")}>
+              Cancel entry
+            </button>
+            <button type="button" className="btn" onClick={() => setAsk("now")}>
+              Enter now at market
+            </button>
+          </>
         )}
-        <button type="button" className="btn btn-accent" onClick={onClose}>
+        <button type="button" className="btn btn-accent" onClick={() => dialog.current?.close()}>
           Done
         </button>
       </div>

@@ -92,6 +92,11 @@ def test_listing_versions_each_change(tmp_path: Path) -> None:
     assert my_agents.listing(store)["agents"][0]["version"] == 1
     (where / "weekly-buyer.md").write_text(SAMPLE + "\n- Buy.\n", encoding="utf-8")
     assert my_agents.listing(store)["agents"][0]["version"] == 2
+    # Each version's text is kept, so an earlier one can be read or restored.
+    kept = my_agents.history(store)
+    assert (kept / "weekly-buyer.v1.md").read_text(encoding="utf-8") == SAMPLE
+    assert (kept / "weekly-buyer.v2.md").read_text(encoding="utf-8").endswith("- Buy.\n")
+    assert [a["slug"] for a in my_agents.listing(store)["agents"]] == ["weekly-buyer"]
 
 
 def test_file_reads_only_a_listed_agent(tmp_path: Path) -> None:

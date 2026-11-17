@@ -36,6 +36,7 @@ from api import (
     profile_v2,
     rebalance,
     risk,
+    risk_big,
     schedule,
     tax,
     telegram,
@@ -504,6 +505,11 @@ POT_ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/pot/trades/cancel"): lambda desk, _q, b: Pot(desk).cancel(b.get("ref")),
     ("POST", "/pot/trades/stop"): lambda desk, _q, b: Pot(desk).move_stop(b),
     ("POST", "/pot/trades/close"): lambda desk, _q, b: Pot(desk).close(b.get("ref")),
+    ("POST", "/pot/trades/enter-now"): lambda desk, _q, b: Pot(desk).enter_now(b.get("ref")),
+    ("POST", "/pot/trades/add"): lambda desk, _q, b: Pot(desk).add(b),
+    ("POST", "/pot/trades/reduce"): lambda desk, _q, b: Pot(desk).reduce(b),
+    ("POST", "/pot/trades/target"): lambda desk, _q, b: Pot(desk).move_target(b),
+    ("POST", "/pot/trades/note"): lambda desk, _q, b: Pot(desk).note(b),
     ("POST", "/pot/proposals/dismiss"): lambda desk, _q, b: Pot(desk).dismiss(b),
     ("GET", "/pot/check"): lambda desk, _q, _b: Pot(desk).check(),
     ("GET", "/pot/coins"): lambda desk, _q, _b: account_coins.snapshot(Pot(desk)),
@@ -556,7 +562,15 @@ def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
 
 # The Trading account's trades are the owner's own buys too (decision 78); the DCA close-out is
 # not, as it finishes a week the owner already approved.
-BUYS = ("/trades", "/orders", "/orders/ladder", "/dca/orders", "/pot/trades")
+BUYS = (
+    "/trades",
+    "/orders",
+    "/orders/ladder",
+    "/dca/orders",
+    "/pot/trades",
+    "/pot/trades/add",
+    "/pot/trades/enter-now",
+)
 PRETRADE_RULES = ("monthly_deposit_cap_aud", "per_trade_aud", "max_pct_per_coin")
 
 
@@ -588,6 +602,8 @@ def _pretrade(
         override = body.get("override") is True
         spend = Decimal(str(sized["spend"]))
         return _rule_check(store, audit, str(sized["coin"]), spend, override, portfolio)[0]
+    if path in ("/pot/trades/add", "/pot/trades/enter-now"):
+        return _pretrade_add(desk, body, portfolio)
     spend = _spend_of(path, body)
     if spend is None or not spend.is_finite() or spend <= 0:
         return None
@@ -597,6 +613,23 @@ def _pretrade(
         Pot(desk).guard(spend)
     coin = symbol.removesuffix(QUOTE)
     return _rule_check(store, audit, coin, spend, body.get("override") is True, portfolio)[0]
+
+
+def _pretrade_add(
+    desk: Trading, body: dict[str, Any], portfolio: Portfolio
+) -> dict[str, object] | None:
+    """Adding to a Trading account trade, or entering a waiting one now at market (about its
+    planned spend): the account's own money, so no ring-fence warning."""
+    _, store, audit, _ = desk.parts()
+    trade = store.pot_trade(str(body.get("ref") or ""))
+    try:
+        spend = Decimal(str(body.get("usdc") or (trade or {}).get("spend")))
+    except (InvalidOperation, ValueError):
+        return None
+    if trade is None or not spend.is_finite() or spend <= 0:
+        return None
+    override = body.get("override") is True
+    return _rule_check(store, audit, str(trade["coin"]), spend, override, portfolio)[0]
 
 
 def _rule_check(  # noqa: PLR0913, PLR0917 - each is a separate fact about the buy
@@ -759,11 +792,27 @@ def risk_board(s: Services, now: datetime | None = None) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     missing: list[str] = []
     book = DcaBook(desk)
+    read_once: dict[str, Any] = {}
+
+    def portfolio() -> dict[str, Any]:
+        if "p" not in read_once:
+            read_once["p"] = (s.portfolio or live_portfolio)()
+        return cast(dict[str, Any], read_once["p"])
+
     sources: list[tuple[str, Callable[[], list[dict[str, Any]]]]] = [
         ("the trading pot", lambda: risk.pot_limits(Pot(desk).view())),
         ("the DCA book", lambda: risk.dca_limits(book.view(), len(book.open_weekly()), now)),
         ("deposits", lambda: risk.deposit_limits(_coach(s, write=False)["deposits"])),
-        ("the portfolio", lambda: risk.portfolio_limits((s.portfolio or live_portfolio)())),
+        ("the portfolio", lambda: risk.portfolio_limits(portfolio())),
+        (
+            "custody and TAO",
+            lambda: risk_big.big_four(
+                portfolio(),
+                book.plan(),
+                risk_big.checks_of(s.store),
+                int(now.timestamp() * 1000),
+            ),
+        ),
     ]
     for name, read in sources:
         try:
@@ -773,7 +822,7 @@ def risk_board(s: Services, now: datetime | None = None) -> dict[str, Any]:
             s.audit.record("risk", f"Board: {name}", f"Not read: {type(error).__name__}")
     plan = schedule.view(s.store, now)
     return {
-        "sentence": risk.sentence(rows),
+        "sentence": risk_big.lead(rows) or risk.sentence(rows),
         "limits": rows,
         "missing": missing,
         "review": risk.last_review(s.store),
@@ -788,6 +837,16 @@ def risk_model(s: Services) -> str:
     none: dict[str, Any] = {}
     mine = next((a for a in listing if a["slug"] == risk.AGENT), none)
     return str(cast(dict[str, Any], mine.get("model") or {}).get("id") or "")
+
+
+def _risk_mark(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    """A backup check done today, or TAO's thesis still holding: the date only."""
+    try:
+        risk_big.mark(s.store, body.get("key"), int(datetime.now(SYDNEY).timestamp() * 1000))
+    except ValueError as error:
+        raise Refused(str(error)) from None
+    s.audit.record("risk", "Checked", str(body.get("key")))
+    return risk_board(s)
 
 
 def _risk_review(s: Services) -> dict[str, Any]:
@@ -818,7 +877,14 @@ def _pot_agent(s: Services, body: dict[str, Any] | None, job: str = "chat") -> d
     def run(agent: PotAgent) -> dict[str, Any]:
         if body is None:
             return agent.scan()
-        return agent.analyse(body) if job == "analyse" else agent.chat(body)
+        jobs: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
+            "analyse": agent.analyse,
+            "styles": lambda _b: agent.styles(),
+            "screen": agent.screen,
+            "judge": agent.judge,
+            "judge-one": agent.judge_one,
+        }
+        return jobs.get(job, agent.chat)(body)
 
     if _demo():
         return run(PotAgent(pot, s.signals))
@@ -1030,10 +1096,15 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("POST", "/pot/scan"): lambda s, _q, _b: _pot_agent(s, None),
     ("GET", "/risk-board"): lambda s, _q, _b: risk_board(s),
     ("POST", "/risk-board/review"): lambda s, _q, _b: _risk_review(s),
+    ("POST", "/risk-board/check"): lambda s, _q, b: _risk_mark(s, b),
     ("GET", "/my-agents/schedule"): lambda s, _q, _b: schedule.view(s.store, datetime.now(SYDNEY)),
     ("PUT", "/my-agents/schedule"): lambda s, _q, b: _schedule_on(s, b),
     ("POST", "/pot/agent"): lambda s, _q, b: _pot_agent(s, b),
     ("POST", "/pot/analyse"): lambda s, _q, b: _pot_agent(s, b, "analyse"),
+    ("GET", "/pot/styles"): lambda s, _q, _b: _pot_agent(s, {}, "styles"),
+    ("POST", "/pot/screen"): lambda s, _q, b: _pot_agent(s, b, "screen"),
+    ("POST", "/pot/judge"): lambda s, _q, b: _pot_agent(s, b, "judge"),
+    ("POST", "/pot/judge-one"): lambda s, _q, b: _pot_agent(s, b, "judge-one"),
     ("POST", "/dca/agent"): lambda s, _q, b: _funds(s).agent(b),
     ("GET", "/dca/funds/odds"): lambda s, q, _b: _funds(s).odds(
         str(q.get("coin", "")), q.get("price"), str(q.get("side", "add"))

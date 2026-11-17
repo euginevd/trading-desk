@@ -158,7 +158,7 @@ describe("the Dashboard", () => {
     expect(strip.textContent).toContain("A$1.8K of room, 14 days left in November.");
   });
 
-  it("shows a month over the cap in red, with by how much", async () => {
+  it("marks a month over the cap quietly, with by how much", async () => {
     coach = {
       ...down,
       pending: false,

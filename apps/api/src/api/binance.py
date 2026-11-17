@@ -5,6 +5,7 @@ import hmac
 import json
 import time
 from collections.abc import Callable
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any, cast
@@ -131,6 +132,46 @@ class Binance:
     def klines(self, symbol: str, interval: str, limit: int) -> list[list[Any]]:
         query = urlencode({"symbol": symbol, "interval": interval, "limit": str(limit)})
         return list(self._get("/api/v3/klines", query, f"candles {symbol} {interval}"))
+
+    def klines_many(
+        self, symbols: list[str], interval: str, limit: int
+    ) -> dict[str, list[list[Any]]]:
+        """Candles for many pairs at once (New trade's screener): a few at a time, one line in
+        the audit log for the lot rather than one a pair. A pair that fails is left out."""
+
+        def one(symbol: str) -> tuple[str, list[list[Any]] | None]:
+            query = urlencode({"symbol": symbol, "interval": interval, "limit": str(limit)})
+            try:
+                response = self._client.request("GET", f"/api/v3/klines?{query}")
+                if response.status_code != OK:
+                    return symbol, None
+                return symbol, list(response.json())
+            except (httpx.HTTPError, ValueError):
+                return symbol, None
+
+        started = time.monotonic()
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            found = dict(pool.map(one, symbols))
+        rows = {s: r for s, r in found.items() if r}
+        ms = round((time.monotonic() - started) * 1000)
+        missed = len(symbols) - len(rows)
+        self._audit.record(
+            "exchange",
+            f"Binance: candles {interval} for {len(symbols)} pairs",
+            f"OK, {ms} ms" + (f", {missed} missed" if missed else ""),
+        )
+        return rows
+
+    def books(self, symbols: list[str]) -> dict[str, tuple[Decimal, Decimal]]:
+        """Best bid and ask for each pair, in one call."""
+        if not symbols:
+            return {}
+        query = urlencode({"symbols": json.dumps(symbols, separators=(",", ":"))})
+        rows = self._get("/api/v3/ticker/bookTicker", query, "best bids and asks")
+        return {
+            str(r["symbol"]): (Decimal(str(r["bidPrice"])), Decimal(str(r["askPrice"])))
+            for r in rows
+        }
 
     def klines_since(self, symbol: str, interval: str, start_ms: int) -> list[list[Any]]:
         """Every candle from start_ms to now, a thousand a call (the DCA book's fill odds)."""

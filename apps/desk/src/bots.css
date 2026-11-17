@@ -24,24 +24,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px 6px;
-  border-bottom: 1px solid var(--line);
-}
-.bots-tabs [role="tab"] {
-  padding: 10px 12px;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
-  background: none;
-  color: var(--muted);
-  font: inherit;
-  font-size: 15px;
-  font-weight: 500;
-  cursor: pointer;
-}
-.bots-tabs [role="tab"][aria-selected="true"] {
-  color: var(--text);
-  border-bottom-color: var(--accent);
+  gap: 8px;
 }
 .bots-tabs .create-menu > .btn-accent {
   height: 30px;
@@ -203,26 +186,9 @@
   padding-top: 18px;
   padding-bottom: 0;
 }
-.botsh-tabs a:first-child {
-  margin-left: -16px;
-}
 .botsh-tabs + main.wrap,
 .botsh-tabs + .wrap {
   padding-top: 20px;
-}
-.botsh-tabs a {
-  padding: 10px 16px;
-  border-bottom: 2px solid transparent;
-  color: var(--muted);
-  font-weight: 500;
-  text-decoration: none;
-}
-.botsh-tabs a:hover {
-  color: var(--text);
-}
-.botsh-tabs a[aria-current="page"] {
-  border-bottom-color: var(--accent);
-  color: var(--text);
 }
 .botsh-budget {
   margin: 0 0 14px;

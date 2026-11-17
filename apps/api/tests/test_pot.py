@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 import pytest
-from api import demo
+from api import demo, screener
 from api.audit import Audit
 from api.binance import Binance, BinanceError
 from api.handler import handler
@@ -210,21 +210,54 @@ class Fake:
         return self.reply, Decimal(0), "fake"
 
 
-def test_a_scan_keeps_only_what_the_rules_allow(pot: Pot) -> None:
-    reply = {
-        "line": "Neutral: one pullback.",
-        "proposals": [
-            SOL | {"reason": "Back at its 20-day."},
-            SOL
-            | {"coin": "ETH", "entry": "3200", "stop": "2700", "target": "4500", "reason": "Wide."},
-        ],
+def test_the_daily_scan_proposes_only_swing_takes_the_desk_can_place(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    shortlist: list[dict[str, Any]] = [
+        {"coin": c, "setup": "Trend pullback", "facts": {}, "crowding": "Clear"}
+        | {"entry": "200", "stop": "190", "target": "230"}
+        for c in ("SOL", "ETH")
+    ]
+    seen: dict[str, Any] = {
+        "style": "swing",
+        "name": "Swing",
+        "regime": {"state": "neutral", "words": ""},
+        "warnings": [],
+        "counts": {"listed": 3, "onBinance": 3, "liquid": 3, "setups": 2},
+        "allowed": True,
+        "note": "",
+        "riskPct": "1",
+        "shortlist": shortlist,
     }
+
+    def last(*_a: object) -> dict[str, Any]:
+        return seen
+
+    monkeypatch.setattr(screener, "last_screen", last)
+    pick = {
+        "coin": "SOL",
+        "setup": "Trend pullback",
+        "grade": "B",
+        "score": 7,
+        "verdict": "take",
+        "entry": "200",
+        "stop": "190",
+        "target": "230",
+        "confluence": ["Back at its 20-day"],
+        "against": [],
+        "catalyst": "None in two weeks",
+        "crowding": "Clear",
+        "reason": "Back at its 20-day in an uptrend; wrong under 190.",
+    }
+    reply = {"line": "One pullback.", "picks": [pick, pick | {"coin": "ETH", "verdict": "wait"}]}
     view = PotAgent(pot, Fake(reply)).scan()  # type: ignore[arg-type]
-    assert [p["coin"] for p in view["proposals"]] == ["SOL"]
-    assert view["proposals"][0]["spend"] == "10.00"
-    assert "ETH left out" in view["lastScan"]["line"]
-    placed = pot.place(SOL | {"proposal": view["proposals"][0]["id"]})
-    assert placed["status"] == "waiting"
+    assert [p["coin"] for p in view["proposals"]] == ["SOL"]  # a wait is not proposed
+    proposal = view["proposals"][0]
+    assert proposal["style"] == "swing"
+    assert "facts" not in proposal
+    assert view["lastScan"]["line"].startswith("Swing: One pullback.")
+    placed = pot.place(SOL | {"proposal": proposal["id"], "style": "swing"})
+    assert placed["setup"] == "Swing - Pullback"
     assert pot.view()["proposals"] == []
 
 
@@ -270,7 +303,7 @@ def test_the_chat_checks_its_actions(pot: Pot) -> None:
     assert said["actions"][0]["stop"] == "205"
     assert len(said["said"]) == 2
     with pytest.raises(Refused, match="couldn't be reached"):
-        PotAgent(pot, None).scan()
+        PotAgent(pot, None).chat({"message": "hello", "history": []})
 
 
 def test_the_routes(desk: Trading) -> None:
@@ -523,3 +556,122 @@ def test_the_account_watchlist_holds_more_than_the_trade_pages_ten(pot: Pot) -> 
     assert found["max"] == ACCOUNT_MAX > MAX_COINS
     assert cap({"name": ACCOUNT_LIST}) == ACCOUNT_MAX
     assert cap({"name": "Portfolio"}) == MAX_COINS
+
+
+def test_a_market_entry_is_sized_at_the_price_now_and_logged(pot: Pot) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    placed = pot.place(SOL | {"target": "260", "market": True})
+    assert placed["status"] == "open"  # the demo fills a market buy at once
+    assert placed["entry"] == "212.4"  # SOL is 212.40 in the demo
+    notes = [n["text"] for n in placed["notes"]]
+    assert notes[0].startswith("Placed: market buy, about")
+    assert notes[1].startswith("Filled ")
+    with pytest.raises(Refused, match="the rules need 2"):
+        pot.place(SOL | {"coin": "ETH", "entry": "3300", "stop": "3200", "target": "3400"})
+
+
+def test_enter_now_swaps_a_waiting_limit_for_a_market_buy(pot: Pot) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    waiting = pot.place(SOL | {"target": "230"})
+    with pytest.raises(Refused, match="Reward to risk"):  # 212.40 against a 190 stop: under 2R
+        pot.enter_now(waiting["ref"])
+    assert pot.view()["trades"][0]["status"] == "waiting"  # refused: nothing touched
+    pot.move_target({"ref": waiting["ref"], "target": "260"})
+    entered = pot.enter_now(waiting["ref"])
+    assert entered["status"] == "open"
+    assert entered["entry"] == "212.4"
+    assert any(n["text"].startswith("Enter now at market") for n in entered["notes"])
+    assert by_tag(f"{waiting['ref']}-E")["status"] == "CANCELED"
+
+
+def test_adding_only_in_profit_and_within_the_risk(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    trade = opened(pot)
+    added = pot.add({"ref": trade["ref"], "usdc": "10"})
+    assert Decimal(added["qty"]) > Decimal(trade["qty"])
+    exits = [o for o in added["orders"] if o["role"] == "exit"]
+    assert exits[-1]["qty"] == added["qty"]  # the stop and target cover the whole position
+    assert any(n["text"].startswith("Added ") for n in added["notes"])
+    with pytest.raises(Refused, match="over the"):
+        pot.add({"ref": trade["ref"], "usdc": "15"})
+    monkeypatch.setitem(demo.PRICES, "SOLUSDT", ("195.00", "0"))
+    with pytest.raises(Refused, match="No averaging down"):
+        pot.add({"ref": trade["ref"], "usdc": "5"})
+
+
+def test_reducing_sells_part_and_keeps_the_rest_protected(pot: Pot) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    trade = opened(pot)
+    pot.add({"ref": trade["ref"], "usdc": "10"})
+    reduced = pot.reduce({"ref": trade["ref"], "pct": "50"})
+    assert reduced["status"] == "open"
+    held = Decimal(reduced["qty"]) - Decimal(
+        str(pot.store.pot_trade(trade["ref"])["exit_qty"])  # type: ignore[index]
+    )
+    live = [o for o in reduced["orders"] if o["role"] == "exit" and o["status"] == "open"]
+    assert Decimal(live[-1]["qty"]) == held
+    assert any(n["text"].startswith("Sold ") for n in reduced["notes"])
+    with pytest.raises(Refused, match="close it at market"):
+        pot.reduce({"ref": trade["ref"], "pct": "100"})
+
+
+def test_a_target_moves_and_you_can_add_a_note(pot: Pot) -> None:
+    trade = opened(pot)
+    moved = pot.move_target({"ref": trade["ref"], "target": "250"})
+    assert moved["target"] == "250"
+    with pytest.raises(Refused, match="above the price"):
+        pot.move_target({"ref": trade["ref"], "target": "205"})
+    noted = pot.note({"ref": trade["ref"], "text": "  Held the 20-day   twice. "})
+    assert noted["notes"][-1] == {
+        "kind": "you",
+        "text": "Held the 20-day twice.",
+        "created": noted["notes"][-1]["created"],
+    }
+    with pytest.raises(Refused, match="Type the note"):
+        pot.note({"ref": trade["ref"], "text": " "})
+
+
+def test_enter_now_never_buys_while_the_limit_is_still_live(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The review's blocker: a cancel that didn't take must not be followed by a market buy."""
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    waiting = pot.place(SOL | {"target": "260"})
+
+    def lost(*_a: object, **_k: object) -> None:
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(pot.binance, "cancel", lost)
+    with pytest.raises(Refused, match="still has the limit order live"):
+        pot.enter_now(waiting["ref"])
+    assert by_tag(f"{waiting['ref']}-E")["status"] == "NEW"
+    tags = {o.get("clientOrderId") for o in demo.EXCHANGE.orders.values()}
+    assert f"{waiting['ref']}-EM" not in tags  # no second buy
+    assert pot.view()["trades"][0]["status"] == "waiting"
+
+
+def test_enter_now_meets_every_rule_a_new_trade_does(pot: Pot) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    waiting = pot.place(SOL | {"target": "260"})
+    pot._regime = ("bear", "BTC under its 200-day")  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(Refused, match="Bear regime"):
+        pot.enter_now(waiting["ref"])
+    assert by_tag(f"{waiting['ref']}-E")["status"] == "NEW"  # refused: nothing touched
+
+
+def test_a_market_buy_is_not_refused_when_the_price_dips(pot: Pot) -> None:
+    """The desk sends the price it last read; a tick lower now must not refuse a market buy."""
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    body = SOL | {"entry": "213", "target": "280"}  # SOL is 212.40 in the demo
+    with pytest.raises(Refused, match="above the price now"):
+        pot.size(body)
+    assert pot.size(body | {"market": True})["entry"] == "213"
+
+
+def test_a_waiting_trade_target_keeps_the_style_reward(pot: Pot) -> None:
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    waiting = pot.place(SOL | {"target": "230"})
+    with pytest.raises(Refused, match="the rules need 2"):
+        pot.move_target({"ref": waiting["ref"], "target": "213"})

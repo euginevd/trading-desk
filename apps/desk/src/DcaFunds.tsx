@@ -53,16 +53,19 @@ function splitWords(rows: Row[], quote: string): string {
 export default function DcaFunds({
   side: first,
   quote,
+  weekly,
   onClose,
   onPlaced,
 }: {
   side: Side;
   quote: string;
+  /** The week's amount: the same window, filled in, its buys kept as the weekly plan's. */
+  weekly?: string;
   onClose: () => void;
   onPlaced: (said: string) => void;
 }) {
-  const [side, setSide] = useState<Side>(first);
-  const [amount, setAmount] = useState("");
+  const [side, setSide] = useState<Side>(weekly ? "add" : first);
+  const [amount, setAmount] = useState(weekly ?? "");
   const [plan, setPlan] = useState<FundsPlan | null>(null);
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState<"analyse" | "chat" | "place" | null>(null);
@@ -169,7 +172,13 @@ export default function DcaFunds({
                 price: r.price,
                 source: "trim",
               }
-            : { coin: r.coin, spend: r.usdc, price: r.price, source: "named", override },
+            : {
+                coin: r.coin,
+                spend: r.usdc,
+                price: r.price,
+                source: weekly ? "weekly" : "named",
+                override,
+              },
         );
         next[i] = { ...r, result: placed.ref };
       } catch (e) {
@@ -193,8 +202,8 @@ export default function DcaFunds({
   return (
     <section className="dcf" aria-labelledby="dcf-title">
       <div className="dcf-head">
-        <h2 id="dcf-title">{selling ? "Remove funds" : "Add funds"}</h2>
-        <div className="dcb-seg" role="group" aria-label="Add or remove">
+        <h2 id="dcf-title">{weekly ? "Weekly DCA" : selling ? "Remove funds" : "Add funds"}</h2>
+        <div className="dcb-seg" role="group" aria-label="Add or remove" hidden={Boolean(weekly)}>
           {(["add", "remove"] as const).map((s) => (
             <button
               key={s}
@@ -224,7 +233,9 @@ export default function DcaFunds({
         }}
       >
         <label className="dcf-amount">
-          <span>{selling ? "Amount to take out" : "Amount to put in"}</span>
+          <span>
+            {weekly ? "This week's amount" : selling ? "Amount to take out" : "Amount to put in"}
+          </span>
           <span className="dcf-unit">
             <input
               inputMode="decimal"

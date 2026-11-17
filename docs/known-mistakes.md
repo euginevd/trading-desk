@@ -12,11 +12,13 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 6. In CloudShell, `!word` is history expansion (`!starts_with` dropped a check): write ``== `false` `` instead.
 7. The repo is public: never copy the owner's real balances, costs, deposits, addresses or emails into tests, demo data, mockups or docs; real data lives only in git-ignored `local/` and `.env`.
 8. Run `bash .lefthook/pre-push-scan.sh </dev/null` by hand: without a terminal it waits on stdin and hangs.
-9. Don't write Python or TypeScript edits through a bash heredoc: backslash escapes arrive mangled. Use the Edit or Write tool.
+9. Don't write Python or TypeScript edits through a bash heredoc: backslash escapes arrive mangled, and an apostrophe in the body can break the parse. Use the Edit or Write tool; a bare `cat > file` with no heredoc waits on stdin and hangs.
 10. Before deleting CSS rules no source names, grep for classes built in template strings (`` `on-${side}` ``, `is-${tone}`), and read the whole list, not a `head`.
 11. Before naming a new CSS class, grep the stylesheets for it: a new `tr-call` took the coin list's existing styles.
 12. Docker Compose v5 on Windows refuses its bake build ("--allow=fs.read"): `docker build -f apps/<app>/Dockerfile -t trading-desk-<app> .`, then `docker compose up -d --no-build`.
 13. A saved Profile version keeps its typed fields: after a parser change, profile.md needs a real edit or new version.
+13a. Git Bash rewrites container paths in `docker compose run` and `exec` arguments (`/tmp/x` became `C:/.../Temp/x`): prefix the command with `MSYS_NO_PATHCONV=1`.
+13b. Freqtrade: FreqAI backtests refuse an open-ended `--timerange`, and `download-data --days` only adds candles newer than those kept: give an end date, and run it again with `--prepend` for older history.
 13a. A cloud session's git config can name Claude as author (rule 29): commit with `git -c user.name=… -c user.email=…` from the last human commit, and check `git log -1 --format=%an` before pushing.
 
 ## CI
@@ -42,6 +44,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 25. axe flags text caught mid fade-in: run accessibility checks with `reducedMotion: "reduce"`.
 25a. A Google Fonts link breaks code-standards 27 and the CSP: install the font from npm (`@fontsource/<font>`) and import it in `main.tsx`.
 25b. Headless Chrome on Windows lays out at 500px at least: check phone layouts at `--window-size=500,…`, not 390.
+25c. A full-height panel inside the frame took only the frame's margin off `100vh`, so every page scrolled 30px: subtract margin, padding and border (`calc(100vh - 58px)`).
 25d. The api refuses a change that isn't JSON, so a bodiless POST failed: `call` in `api.ts` sends `{}`; test by clicking the button, not only `curl -d '{}'`.
 26. Slicing `styles.css` from a block's comment to the file's end drops rules appended after it: slice to the next block's comment, then check the rest.
 
@@ -59,13 +62,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 ## Binance
 
-29. Binance refuses the agent's cloud container (HTTP 451): test against recorded replies; the owner makes the first live run.
-29a. A timed-out order call was treated as not placed: keep the row "placing", look it up by client id, and record a market sale before sending (decision 47).
-29b. Binance order ids are unique per pair only: key them `PAIR:id`.
-29c. Bot names are public: link a Telegram chat only by a one-time code.
-29d. The pre-trade check first missed smart trades: list every route that sends a buy before adding a check.
-29e. Changing an order cancelled it before checking the replacement: check the new order first, then cancel. Every route that buys, the Monday close-out included, goes through the kill switch and limits.
-29f. Real plan and account figures went into public docs: write "the weekly plan" or "the account's balance"; amounts stay in `local/`.
+29 to 29g, on orders, ids, Telegram and the pre-trade check: [known-mistakes/binance.md](known-mistakes/binance.md).
 
 ## SQLite
 

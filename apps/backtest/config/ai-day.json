@@ -1,0 +1,44 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "freqaimodel": "LightGBMClassifier",
+  "freqai": {
+    "enabled": true,
+    "identifier": "desk-day",
+    "purge_old_models": 2,
+    "train_period_days": 60,
+    "backtest_period_days": 14,
+    "live_retrain_hours": 24,
+    "expiration_hours": 0,
+    "continual_learning": false,
+    "feature_parameters": {
+      "include_timeframes": [
+        "15m",
+        "1h",
+        "4h"
+      ],
+      "include_corr_pairlist": [],
+      "label_period_candles": 48,
+      "include_shifted_candles": 2,
+      "indicator_periods_candles": [
+        10,
+        20,
+        50
+      ],
+      "DI_threshold": 0.9,
+      "weight_factor": 0.9,
+      "principal_component_analysis": false,
+      "use_SVM_to_remove_outliers": true,
+      "plot_feature_importances": 0
+    },
+    "data_split_parameters": {
+      "test_size": 0.25,
+      "shuffle": false
+    },
+    "model_training_parameters": {
+      "n_estimators": 300,
+      "learning_rate": 0.05,
+      "num_leaves": 15,
+      "verbosity": -1
+    }
+  }
+}

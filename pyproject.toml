@@ -35,7 +35,8 @@ max-complexity = 10
 
 [tool.pyright]
 include = ["apps"]
-exclude = ["**/node_modules", "**/.venv"]
+# The Freqtrade strategies run in Freqtrade's own image (apps/backtest); ruff still lints them.
+exclude = ["**/node_modules", "**/.venv", "apps/backtest/strategies"]
 typeCheckingMode = "strict"
 pythonVersion = "3.13"
 venvPath = "."

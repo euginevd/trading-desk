@@ -4,12 +4,14 @@ and checks everything it proposes: the agent names a setup's entry, stop and tar
 sizes it and drops whatever breaks a rule. Nothing is placed without the owner's review."""
 
 import json
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 import httpx
 
-from api import my_agents
+from api import my_agents, screener
 from api.advisor import futures
 from api.ai_signal import MODELS, SignalError, Signals
 from api.binance import BinanceError, plain
@@ -27,6 +29,21 @@ CHAT_LENGTH = 600
 MAX_CHAT = 12
 FUNDING_HOT = Decimal("0.05")  # % per 8 hours: longs crowded
 MODEL = "claude-opus-5-5"
+SYDNEY = ZoneInfo("Australia/Sydney")
+VERDICTS = ("take", "wait", "pass")
+
+
+def clip(text: object, limit: int) -> str:
+    """Words up to the limit, never cut mid-word; an ellipsis when something was left out."""
+    words = " ".join(str(text or "").split())
+    if len(words) <= limit:
+        return words
+    return words[: limit - 1].rsplit(" ", 1)[0].rstrip(",;:·-") + "…"
+
+
+def _points(raw: object, most: int) -> list[str]:
+    items = cast(list[Any], raw) if isinstance(raw, list) else []
+    return [p for p in (clip(x, 70) for x in items) if p][:most]
 
 
 def atr(rows: list[list[Any]], days: int = ATR_DAYS) -> Decimal | None:
@@ -100,7 +117,7 @@ class PotAgent:
             return f"Crowded: funding {rate}% per 8 hours"
         if rate < 0:
             return f"Shorts crowded: funding {rate}%"
-        return "Clear"
+        return f"Clear: funding {rate}% per 8 hours"
 
     def facts(self, only: str | None = None) -> dict[str, Any]:
         """The desk's figures for the model: BTC and every coin, or BTC and `only`."""
@@ -165,7 +182,13 @@ class PotAgent:
             "never invent a price or level."
         )
 
-    def _ask(self, prompt: str, shape: dict[str, Any], label: str) -> dict[str, Any] | None:
+    def _ask(
+        self,
+        prompt: str,
+        shape: dict[str, Any],
+        label: str,
+        style: screener.Style | None = None,
+    ) -> dict[str, Any] | None:
         if self._signals is None:
             return None
         store = self._pot.store
@@ -184,31 +207,16 @@ class PotAgent:
         )
         try:
             reply, _cost, _name = self._signals.step(
-                system, prompt, shape, label, model=model if model in MODELS else MODEL, searches=0
+                system,
+                prompt,
+                shape,
+                label,
+                model=style.model if style else model if model in MODELS else MODEL,
+                searches=style.searches if style else 0,
             )
         except SignalError:
             return None
         return reply
-
-    TRADE: dict[str, Any] = {
-        "type": "object",
-        "properties": {
-            "coin": {"type": "string"},
-            "setup": {"type": "string"},
-            "entry": {"type": "string"},
-            "stop": {"type": "string"},
-            "target": {"type": "string"},
-            "reason": {"type": "string"},
-        },
-        "required": ["coin", "setup", "entry", "stop", "target", "reason"],
-        "additionalProperties": False,
-    }
-    SCAN: dict[str, Any] = {
-        "type": "object",
-        "properties": {"line": {"type": "string"}, "proposals": {"type": "array", "items": TRADE}},
-        "required": ["line", "proposals"],
-        "additionalProperties": False,
-    }
 
     def _sized(self, item: dict[str, Any]) -> dict[str, Any]:
         """A proposed trade, sized and checked by the desk; Refused says why it can't go."""
@@ -223,36 +231,32 @@ class PotAgent:
         }
 
     def scan(self) -> dict[str, Any]:
-        """The daily-close scan, on demand: the regime, then any setup, checked and sized."""
-        facts = self.facts()
-        prompt = (
-            "Run your daily-close scan now: the regime first, then any setup in the coins below "
-            "that meets your file's rules. Most days there is none; say so in the line. The line "
-            "is one sentence of at most 25 words. Propose at most three trades, only real "
-            "setups, none in a coin with a trade already on.\n\nDESK FIGURES:\n"
-            + json.dumps(facts, indent=1)
-        )
-        reply = self._ask(prompt, self.SCAN, "Pot: scan")
-        if reply is None:
-            raise Refused("trading-agent couldn't be reached. Try again in a minute.")
+        """The daily-close scan (11:15am Sydney, or Scan now): swing every day and position on
+        Mondays, each through the screener and trading-agent; a take the desk can place
+        becomes a proposal, waiting for the owner on the desk and in Telegram."""
+        pot = self._pot
+        now = pot.now_ms()
+        monday = datetime.fromtimestamp(now / 1000, SYDNEY).weekday() == 0
         found: list[dict[str, Any]] = []
         said: list[str] = []
-        now = self._pot.now_ms()
-        for n, item in enumerate(
-            cast(list[dict[str, Any]], reply.get("proposals") or [])[:MAX_PROPOSALS]
-        ):
-            try:
-                sized = self._sized(item)
-            except Refused as why:
-                said.append(f"{str(item.get('coin', '')).upper()} left out: {why}")
-                continue
-            found.append({"id": f"P{now}{n}", "created": now, **sized})
-        line = str(reply.get("line") or "No setup today.")
-        if said:
-            line = f"{line} {' '.join(said)}"
-        self._pot.set_proposals(found)
-        self._pot.set_last_scan(line)
-        return self._pot.view()
+        for key in ("swing", "position") if monday else ("swing",):
+            seen = self.judge({"style": key})
+            misses = cast(list[dict[str, str]], seen.get("misses") or [])
+            closest = "; ".join(f"{m['coin']} {m['why']}" for m in misses)
+            said.append(
+                f"{seen['name']}: {seen['line']}"
+                + (f" Closest: {closest}." if closest and not seen["picks"] else "")
+            )
+            for n, pick in enumerate(seen["picks"]):
+                if pick["problem"] or pick["verdict"] != "take":
+                    continue
+                kept = {k: v for k, v in pick.items() if k != "facts"}
+                found.append(
+                    kept | {"id": f"P{now}{key[0]}{n}", "created": now, "expires": seen["expires"]}
+                )
+        pot.set_proposals(found[:MAX_PROPOSALS])
+        pot.set_last_scan(" ".join(said)[:600])
+        return pot.view()
 
     ANALYSIS: dict[str, Any] = {
         "type": "object",
@@ -420,3 +424,251 @@ class PotAgent:
                     f"Left out {item.get('type')} {item.get('ref') or item.get('coin')}: {why}"
                 )
         return {"reply": str(reply.get("reply") or "")[:700], "actions": actions, "said": said}
+
+    # New trade by style (local/agents/trading-agent.md): the screener first, in code, then
+    # trading-agent on its shortlist only, then the desk sizes and checks each pick.
+
+    def styles(self) -> dict[str, Any]:
+        return screener.styles_view(self._pot.regime())
+
+    def screen(self, body: dict[str, Any]) -> dict[str, Any]:
+        """The style's screen: no model, a few seconds; kept briefly for judge."""
+        pot = self._pot
+        try:
+            return screener.screen(
+                str(body.get("style") or ""),
+                binance=pot.binance,
+                store=pot.store,
+                http=self._client,
+                regime=pot.regime(),
+                fallback=pot.coins(),
+                now_ms=pot.now_ms(),
+                crowding=self._crowding,
+            )
+        except ValueError as error:
+            raise Refused(str(error)) from error
+        except BinanceError as error:
+            raise Refused(f"Binance didn't answer the screen: {error.message}") from error
+
+    PICK: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "coin": {"type": "string"},
+            "setup": {"type": "string"},
+            "grade": {"type": "string", "enum": ["A", "B", "C"]},
+            "score": {"type": "number"},
+            "verdict": {"type": "string", "enum": ["take", "wait", "pass"]},
+            "entry": {"type": "string"},
+            "stop": {"type": "string"},
+            "target": {"type": "string"},
+            "confluence": {"type": "array", "items": {"type": "string"}},
+            "against": {"type": "array", "items": {"type": "string"}},
+            "catalyst": {"type": "string"},
+            "crowding": {"type": "string"},
+            "reason": {"type": "string"},
+        },
+        "required": [
+            "coin",
+            "setup",
+            "grade",
+            "score",
+            "verdict",
+            "entry",
+            "stop",
+            "target",
+            "confluence",
+            "against",
+            "catalyst",
+            "crowding",
+            "reason",
+        ],
+        "additionalProperties": False,
+    }
+    JUDGE: dict[str, Any] = {
+        "type": "object",
+        "properties": {"line": {"type": "string"}, "picks": {"type": "array", "items": PICK}},
+        "required": ["line", "picks"],
+        "additionalProperties": False,
+    }
+
+    def judge(self, body: dict[str, Any]) -> dict[str, Any]:
+        """trading-agent on the style's shortlist: confluence, catalysts online, a grade and
+        the levels; then each pick sized by the desk at the style's risk."""
+        key = str(body.get("style") or "")
+        style = screener.STYLES.get(key)
+        if style is None:
+            raise Refused("Pick scalp, day, swing or position.")
+        pot = self._pot
+        seen = screener.last_screen(key, pot.now_ms()) or self.screen(body)
+        keys = ("style", "name", "regime", "warnings", "counts", "allowed", "misses", "block")
+        out = {k: seen.get(k) for k in keys}
+        out |= {"note": seen["note"], "riskPct": seen["riskPct"], "picks": [], "line": ""}
+        out["expires"] = pot.now_ms() + style.expiry_s * 1000
+        if not seen["allowed"] or not seen["shortlist"]:
+            out["line"] = (
+                seen["note"]
+                if not seen["allowed"]
+                else f"No {style.name.lower()} setups right now."
+            )
+            return out
+        reply = self._ask(self._judge_prompt(style, seen), self.JUDGE, f"Pot: {key} picks", style)
+        if reply is None:
+            raise Refused("trading-agent couldn't be reached. Try again in a minute.")
+        out["line"] = str(reply.get("line") or "")[:300]
+        out["picks"] = self._checked_picks(style, seen, reply)
+        return out
+
+    def judge_one(self, body: dict[str, Any]) -> dict[str, Any]:
+        """trading-agent on one setup the paper bot found (apps/backtest): New trade's prompt
+        and rules, for one coin. Nothing is sized or placed; the bot trades only a take."""
+        key = str(body.get("style") or "")
+        style = screener.STYLES.get(key)
+        if style is None:
+            raise Refused("Pick scalp, day, swing or position.")
+        coin = str(body.get("coin") or "").upper()
+        if not screener.PLAIN.fullmatch(coin):
+            raise Refused("Name the coin.")
+        levels = {k: str(body.get(k) or "") for k in ("entry", "stop", "target")}
+        try:
+            entry, stop, target = (float(levels[k]) for k in ("entry", "stop", "target"))
+        except ValueError as error:
+            raise Refused("Give the entry, stop and target as numbers.") from error
+        if not 0 < stop < entry < target:
+            raise Refused("The stop goes under the entry and the target over it.")
+        found: dict[str, Any] = {
+            "coin": coin,
+            "setup": clip(body.get("setup"), 60),
+            **levels,
+            "stopPct": f"{(entry - stop) / entry * 100:.2f}",
+            "facts": {"price": str(body.get("price") or levels["entry"])},
+        }
+        # The desk's own screen gives the facts (trend, levels, strength against BTC) and the
+        # odds when it finds the same coin; without them the model would guess at the trend.
+        seen_now: dict[str, Any]
+        try:
+            seen_now = screener.last_screen(key, self._pot.now_ms()) or self.screen({"style": key})
+        except Refused:  # Binance didn't answer: judge on the levels and the web
+            seen_now = {"shortlist": cast(list[dict[str, Any]], [])}
+        listed = cast(list[dict[str, Any]], seen_now["shortlist"])
+        mine = next((f for f in listed if f["coin"] == coin), None)
+        if mine:
+            found["facts"] = mine["facts"]
+        else:
+            found["facts"]["note"] = "Not on the desk's shortlist now: judge from the web"
+        found["crowding"] = self._crowding(coin)
+        found["odds"] = screener.odds_for(key, coin, **levels)
+        state, words = self._pot.regime()
+        seen = {
+            "regime": {"state": state, "words": words},
+            "warnings": screener.timing(style, self._pot.now_ms()),
+            "shortlist": [found],
+        }
+        reply = self._ask(
+            self._judge_prompt(style, seen), self.JUDGE, f"Paper: {key} {coin}", style
+        )
+        if reply is None:
+            raise Refused("trading-agent couldn't be reached. Try again in a minute.")
+        picks = cast(list[dict[str, Any]], reply.get("picks") or [])
+        item = next((p for p in picks if str(p.get("coin") or "").upper() == coin), None)
+        if item is None:
+            return {
+                "coin": coin,
+                "verdict": "pass",
+                "grade": "C",
+                "reason": clip(reply.get("line"), 220),
+            }
+        verdict, grade = item.get("verdict"), item.get("grade")
+        return {
+            "coin": coin,
+            "verdict": verdict if verdict in VERDICTS else "pass",
+            "grade": grade if grade in ("A", "B", "C") else "C",
+            "score": round(min(max(float(item.get("score") or 0), 0.0), 10.0), 1),
+            "reason": clip(item.get("reason"), 220),
+            "confluence": _points(item.get("confluence"), 4),
+            "against": _points(item.get("against"), 2),
+            "catalyst": clip(item.get("catalyst"), 100),
+        }
+
+    def _judge_prompt(self, style: screener.Style, seen: dict[str, Any]) -> str:
+        searching = (
+            f"You may run up to {style.searches} web searches: look for catalysts due within "
+            f"the hold ({style.hold}): token unlocks, listings or delistings, upgrades, "
+            "hacks, and high-impact US events (CPI, jobs, the Fed). Name what you found and "
+            "its date, or say none found."
+            if style.searches
+            else "No web search for this style: judge catalysts from the facts only."
+        )
+        return (
+            f"New trade, {style.name} style ({style.line}). The desk's screener found these "
+            "setups among the top 100 coins on Binance, by the rules below. For each, check "
+            "confluence (how many separate reasons line up at the entry: levels, trend, volume, "
+            f"strength against BTC), then catalysts. {searching} Grade each A (strong "
+            "confluence, nothing against it), B (good) or C (weak), score it 0 to 10, and "
+            "give a verdict: take, wait or pass. Keep the screener's entry, stop and target "
+            "unless confluence gives a better level by the same rules; the entry stays at or "
+            "under the price now. Order the picks best first, at most four.\n"
+            "WRITE SHORT: the owner reads this on a card. Figures, not prose; no repeating the "
+            "entry, stop or target (the card shows them). Confluence: two to four points for "
+            "the trade, at most 8 words each (e.g. 'Holding the 20-week SMA', 'Beats BTC: "
+            "+101% vs +4% in 13 weeks'). Against: up to two points, at most 8 words each "
+            "(e.g. 'Deep pullback: under the 10-week'). Catalyst: at most 12 words, or 'None "
+            "in the next two weeks'. Crowding: at most 8 words, from the funding given. "
+            "Reason: the thesis, one sentence of at most 25 words: why it should work and "
+            "what would prove it wrong. Line: at most 15 words.\n"
+            "ODDS: each setup carries the desk's odds check, in code: 'past' is this rule "
+            "re-run on the coin's own past candles, 'sim' is paths drawn from them; 'needed' is "
+            "the share of decided trades the target must win to break even, and 'lean' the "
+            "verdict. A coin flip or a lean no is a point against; a strong no is a reason to "
+            "wait or pass. Don't repeat its numbers (the card shows them).\n\n"
+            f"THE RULES: your file's 'Rules for every style' and '{screener.HEADING[style.key]}' "
+            "sections (what the desk has built), not its 'Not built yet' lists.\n\n"
+            "MARKET:\n"
+            + json.dumps({"regime": seen["regime"], "warnings": seen["warnings"]})
+            + "\n\nSHORTLIST:\n"
+            + json.dumps(seen["shortlist"], indent=1)
+        )
+
+    def _checked_picks(
+        self, style: screener.Style, seen: dict[str, Any], reply: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        """Only coins on the shortlist, each sized by the desk at the style's risk; a pick the
+        rules refuse stays in the list with the reason, so the owner sees why."""
+        listed = {c["coin"]: c for c in seen["shortlist"]}
+        picks: list[dict[str, Any]] = []
+        for item in cast(list[dict[str, Any]], reply.get("picks") or [])[:4]:
+            coin = str(item.get("coin") or "").upper()
+            if coin not in listed or any(p["coin"] == coin for p in picks):
+                continue
+            picks.append(self._checked_pick(style, item, listed[coin]))
+        return picks
+
+    def _checked_pick(
+        self, style: screener.Style, item: dict[str, Any], found: dict[str, Any]
+    ) -> dict[str, Any]:
+        coin = found["coin"]
+        grade, verdict = item.get("grade"), item.get("verdict")
+        pick: dict[str, Any] = {
+            "coin": coin,
+            "setup": found["setup"],  # the screener's own name for it, always short
+            "grade": grade if grade in ("A", "B", "C") else "C",
+            "score": round(min(max(float(item.get("score") or 0), 0.0), 10.0), 1),
+            "verdict": verdict if verdict in VERDICTS else "pass",
+            "confluence": _points(item.get("confluence"), 4),
+            "against": _points(item.get("against"), 2),
+            "catalyst": clip(item.get("catalyst"), 100),
+            "crowding": clip(item.get("crowding") or found.get("crowding"), 70),
+            "reason": clip(item.get("reason"), 220),
+            "facts": found["facts"],
+            "problem": None,
+        }
+        levels = {k: str(item.get(k) or found[k]) for k in ("entry", "stop", "target")}
+        same = all(levels[k] == found[k] for k in levels)
+        pick["odds"] = found.get("odds") if same else screener.odds_for(style.key, coin, **levels)
+        try:
+            sized = self._pot.size({"coin": coin, "style": style.key, **levels})
+            self._pot.check_rules(sized)
+        except Refused as why:
+            pick |= levels | {"problem": str(why)}
+        else:
+            pick |= sized
+        return pick

@@ -296,9 +296,6 @@
 .port-ledger {
   border-top: 1px solid var(--line);
 }
-.port-tabs {
-  border-bottom: 1px solid var(--line);
-}
 .port-ledger table tfoot th,
 .port-ledger table tfoot td {
   border: 0;

@@ -184,7 +184,7 @@
   font-weight: 400;
 }
 .dash-deposits-bar {
-  height: 6px;
+  height: 4px;
   border-radius: 3px;
   background: var(--line);
   overflow: hidden;
@@ -201,16 +201,13 @@
 .dash-deposits.is-full .dash-deposits-words {
   color: var(--accent);
 }
+/* Over the cap reads quietly: the strip stays neutral, only the figure and the bar turn red. */
 .dash-deposits.is-over .dash-deposits-bar span {
   background: var(--down);
+  opacity: 0.6;
 }
-.dash-deposits.is-over .dash-deposits-words,
 .dash-deposits.is-over b {
   color: var(--down);
-}
-.dash-deposits.is-over {
-  border-color: var(--down-soft);
-  background: var(--down-soft);
 }
 @media (max-width: 720px) {
   .dash-deposits {

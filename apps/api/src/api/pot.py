@@ -13,7 +13,7 @@ from decimal import Decimal
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from api import my_agents
+from api import my_agents, screener
 from api.binance import BinanceError, Filters, plain
 from api.dca_book import binance_state
 from api.locks import locked
@@ -42,7 +42,7 @@ JUDGE_AFTER = 30
 SCAN_HOUR, SCAN_MINUTE = 11, 15
 LIVE = ("placing", "waiting", "open")
 SETUP = re.compile(r"[\w ,.'()-]{1,60}")
-COINS_LINE = re.compile(r"^- Coins:\s*(.+)$", re.MULTILINE)
+COINS_LINE = re.compile(r"^- (?:Fallback c|C)oins:\s*(.+)$", re.MULTILINE)
 
 
 def unknown(error: BinanceError) -> bool:
@@ -98,6 +98,11 @@ def trade_result(row: dict[str, Any], now: Decimal | None) -> Decimal | None:
 def r_of(row: dict[str, Any], result: Decimal | None) -> Decimal | None:
     risk = Decimal(row["risk"])
     return (result / risk).quantize(Decimal("0.01")) if result is not None and risk else None
+
+
+def style_from(setup: str) -> str | None:
+    """A trade's style, from its setup's name (`Position - Pullback to the 20-week`)."""
+    return next((s.key for s in screener.STYLES.values() if setup.startswith(f"{s.name} - ")), None)
 
 
 def _cents(value: Decimal) -> str:
@@ -179,6 +184,22 @@ class Pot:
         named = [c.strip().upper() for c in found.group(1).split(",")]
         return [c for c in named if c.isalnum() and len(c) <= 10] or list(COINS)  # noqa: PLR2004
 
+    def _tradable(self, coin: str) -> None:
+        """trading-agent's own coins, or any coin New trade's screener found today."""
+        if coin not in self.coins() and coin not in screener.tradable(self._store):
+            raise Refused(f"{coin or 'That coin'} isn't one trading-agent trades.")
+
+    @staticmethod
+    def style_of(body: dict[str, Any]) -> screener.Style | None:
+        """The trading style a trade is sized by; none for a trade by hand or a scan's."""
+        key = body.get("style")
+        if key in (None, ""):
+            return None
+        style = screener.STYLES.get(str(key))
+        if style is None:
+            raise Refused("Pick scalp, day, swing or position.")
+        return style
+
     # Money in and out.
 
     @locked
@@ -238,12 +259,14 @@ class Pot:
                 f"The entry is above the price now ({plain(now)}): a limit buy goes at or under it."
             )
 
-    def _numbers(self, body: dict[str, Any]) -> dict[str, Any]:
+    def _numbers(self, body: dict[str, Any], *, existing: bool = False) -> dict[str, Any]:
         """A trade's prices to Binance's steps, its size by the pot's sizing, and its risk and
-        reward after fees; refuses only what can't be sized at all."""
+        reward after fees; refuses only what can't be sized at all. An existing trade's coin
+        stays tradable even if it has left today's screener universe."""
         coin = str(body.get("coin", "")).upper()
-        if coin not in self.coins():
-            raise Refused(f"{coin or 'That coin'} isn't one trading-agent trades.")
+        if not existing:
+            self._tradable(coin)
+        style = self.style_of(body)
         rules = self._rules_of(coin)
         entry = rules.price(number(body.get("entry"), "Entry"))
         stop = rules.price(number(body.get("stop"), "Stop"))
@@ -254,6 +277,8 @@ class Pot:
         if equity <= ZERO:
             raise Refused("Put money in the pot first.")
         allowed = self.allowed(equity)
+        if style is not None:  # every style risks the same 1%; none opens a long in Bear
+            self._regime_rule({"style": style.key})
         if config["mode"] == "test":
             qty = rules.amount(Decimal(config["fixed"]) / entry)
             if qty * entry < Decimal(config["fixed"]):
@@ -277,6 +302,8 @@ class Pot:
             "reward": reward,
             "allowed": allowed,
             "equity": equity,
+            "style": style.key if style else None,
+            "minRr": Decimal(str(style.min_rr)) if style else MIN_RR,
         }
 
     @staticmethod
@@ -292,6 +319,7 @@ class Pot:
             "risk": _cents(n["risk"]),
             "stopPct": str(((entry - n["stop"]) / entry * HUNDRED).quantize(Decimal("0.1"))),
             "rr": str((n["reward"] / n["risk"]).quantize(Decimal("0.1"))),
+            "style": n.get("style"),
         }
 
     @classmethod
@@ -312,14 +340,17 @@ class Pot:
 
     @staticmethod
     def _rr_rule(n: dict[str, Any]) -> None:
-        rr = n["reward"] / n["risk"]
-        if rr < MIN_RR:
-            raise Refused(f"Reward to risk is {rr:.1f} : 1 after fees; the rules need 2 : 1.")
+        rr, least = n["reward"] / n["risk"], n.get("minRr", MIN_RR)
+        if rr < least:
+            raise Refused(
+                f"Reward to risk is {rr:.1f} : 1 after fees; the rules need {least:g} : 1."
+            )
 
     def size(self, body: dict[str, Any]) -> dict[str, Any]:
         """A trade sized and shown; refuses one that breaks a sizing rule."""
         n = self._numbers(body)
-        self._under_now(n["coin"], n["entry"])
+        if body.get("market") is not True:  # a market buy is sized at the price now, whatever it is
+            self._under_now(n["coin"], n["entry"])
         self._limits(n)
         return self._shown(n)
 
@@ -327,8 +358,7 @@ class Pot:
         """A trade typed by hand, before it's placed: the price now, its numbers, and every rule
         it breaks (not just the first), so the page can draw it as it's typed."""
         coin = str(body.get("coin", "")).upper()
-        if coin not in self.coins():
-            raise Refused(f"{coin or 'That coin'} isn't one trading-agent trades.")
+        self._tradable(coin)
         now = self.prices([coin]).get(coin)
         rules = self._rules_of(coin)
         out: dict[str, Any] = {
@@ -376,19 +406,16 @@ class Pot:
     def _live(self) -> list[dict[str, Any]]:
         return [r for r in self._store.pot_trades() if r["status"] in LIVE]
 
-    def open_risk(self) -> Decimal:
-        total = ZERO
-        for r in self._live():
-            paid = (
-                Decimal(r["fill_quote"]) / Decimal(r["fill_qty"])
-                if Decimal(r["fill_qty"])
-                else None
-            )
-            entry = paid or Decimal(r["entry"])
-            held = Decimal(r["fill_qty"]) or Decimal(r["qty"])
-            stop = Decimal(r["stop"])
-            total += max(held * (entry - stop) + held * (entry + stop) * FEE, ZERO)
-        return total
+    @staticmethod
+    def _risk_of(r: dict[str, Any]) -> Decimal:
+        paid = Decimal(r["fill_quote"]) / Decimal(r["fill_qty"]) if Decimal(r["fill_qty"]) else None
+        entry = paid or Decimal(r["entry"])
+        held = Decimal(r["fill_qty"]) or Decimal(r["qty"])
+        stop = Decimal(r["stop"])
+        return max(held * (entry - stop) + held * (entry + stop) * FEE, ZERO)
+
+    def open_risk(self, leaving_out: str | None = None) -> Decimal:
+        return sum((self._risk_of(r) for r in self._live() if r["ref"] != leaving_out), ZERO)
 
     def month_result(self) -> Decimal:
         start = datetime.fromtimestamp(self._now() / 1000, SYDNEY).replace(
@@ -447,30 +474,43 @@ class Pot:
         self._audit.record("pot", "Ring-fence", said)
         return said
 
-    def check_rules(self, sized: dict[str, Any]) -> None:
-        """The pot's limits on a new trade, on top of its sizing."""
+    def check_rules(self, sized: dict[str, Any], replacing: dict[str, Any] | None = None) -> None:
+        """The pot's limits on a new trade, on top of its sizing. `replacing`: a waiting trade
+        this one takes the place of (enter now), left out of the cash, risk and coin counts."""
         put_in, equity = self._put_in(), self.equity()
         if put_in <= ZERO:
             raise Refused("Put money in the pot first.")
-        state, _ = self.regime()
-        if state == "bear":
-            raise Refused("BTC is in a Bear regime: no new longs until it turns.")
+        self._regime_rule(sized)
         if self.month_result() <= -put_in * MONTH_LOSS_PCT / HUNDRED:
             raise Refused("The month's 6% loss limit is used: no new trades until the 1st.")
         if equity <= put_in * (HUNDRED - STOP_OUT_PCT) / HUNDRED:
             raise Refused("The pot is down 20% from what was put in: trading stops for a review.")
+        mine = replacing["ref"] if replacing else None
+        others = [r for r in self._live() if r["ref"] != mine]
         spend, risk = Decimal(sized["spend"]), Decimal(sized["risk"])
-        if spend > self.cash():
-            raise Refused(f"The pot has ${self.cash():.2f} free; that trade needs ${spend:.2f}.")
-        if self.open_risk() + risk > equity * MAX_OPEN_RISK_PCT / HUNDRED:
+        free = self.cash() + (Decimal(replacing["spend"]) if replacing else ZERO)
+        if spend > free:
+            raise Refused(f"The pot has ${free:.2f} free; that trade needs ${spend:.2f}.")
+        if self.open_risk(mine) + risk > equity * MAX_OPEN_RISK_PCT / HUNDRED:
             raise Refused("That would put more than 3% of the pot at risk across open trades.")
         if sized["coin"] != "BTC":
-            alts = [r for r in self._live() if r["coin"] != "BTC"]
+            alts = [r for r in others if r["coin"] != "BTC"]
             if len(alts) >= MAX_ALTS:
                 raise Refused("Two alt trades are on already: alts move with BTC.")
-        if any(r["coin"] == sized["coin"] for r in self._live()):
+        if any(r["coin"] == sized["coin"] for r in others):
             raise Refused(f"A {sized['coin']} trade is on already.")
         self._check_desk(spend)
+
+    def _regime_rule(self, sized: dict[str, Any]) -> None:
+        """No new longs in a Bear regime; a style may need more (position: Bull only)."""
+        state, _ = self.regime()
+        if state == "bear":
+            raise Refused("BTC is in a Bear regime: no new longs until it turns.")
+        style = screener.STYLES.get(str(sized.get("style") or ""))
+        if style is not None:
+            allowed, why = screener.gate(style, state)
+            if not allowed:
+                raise Refused(why)
 
     def _check_desk(self, spend: Decimal) -> None:
         settings = self._desk.settings()
@@ -496,11 +536,25 @@ class Pot:
 
     @locked
     def place(self, body: dict[str, Any]) -> dict[str, Any]:
+        expires = body.get("expires")
+        if isinstance(expires, int) and self._now() > expires:
+            raise Refused("That proposal has expired: the price has moved on. Scan again.")
+        market = body.get("market") is True
+        if market:  # sized at the price now; the style's reward to risk must still hold
+            coin = str(body.get("coin", "")).upper()
+            now = self.prices([coin]).get(coin)
+            if now is None:
+                raise Refused(f"There's no {coin}/{QUOTE} price on Binance.")
+            body = {**body, "entry": plain(now)}
         sized = self.size(body)
         self.check_rules(sized)
-        setup = str(body.get("setup") or "By hand").strip()[:60]
+        setup = str(body.get("setup") or "By hand").strip()
+        style = self.style_of(body)
+        if style is not None:
+            setup = f"{style.name} - {setup}"
+        setup = setup[:60]
         if not SETUP.fullmatch(setup):
-            setup = "By hand"
+            setup = f"{style.name} - by hand" if style else "By hand"
         reason = str(body.get("reason") or "").strip()[:400]
         state, _ = self.regime()
         now = self._now()
@@ -518,7 +572,7 @@ class Pot:
             "ref": f"{trade['ref']}-E",
             "trade_ref": trade["ref"],
             "role": "entry",
-            "kind": "limit",
+            "kind": "market" if market else "limit",
             "side": "buy",
             "price": sized["entry"],
             "stop": None,
@@ -528,13 +582,23 @@ class Pot:
         }
         self._store.add_pot_order(order)
         self._drop_proposal(str(body.get("proposal") or ""))
+        how = "market buy, about" if market else "limit buy"
+        self._log(
+            trade["ref"],
+            f"Placed: {how} {sized['qty']} at {sized['entry']}; stop {sized['stop']}, target "
+            f"{sized['target']}; {sized['risk']} {QUOTE} at risk, {sized['rr']} : 1 after fees.",
+        )
+        if reason:
+            self._log(trade["ref"], reason, "thesis")
         saved = self._order(order["ref"])
         try:
-            sent = self._binance.buy_limit(
-                f"{sized['coin']}{QUOTE}",
-                Decimal(sized["qty"]),
-                Decimal(sized["entry"]),
-                order["ref"],
+            symbol = f"{sized['coin']}{QUOTE}"
+            sent = (
+                self._binance.buy_market(symbol, Decimal(sized["spend"]), order["ref"])
+                if market
+                else self._binance.buy_limit(
+                    symbol, Decimal(sized["qty"]), Decimal(sized["entry"]), order["ref"]
+                )
             )
         except BinanceError as error:
             if not unknown(error):  # refused: never placed
@@ -607,7 +671,7 @@ class Pot:
         fee, in_coin = (ZERO, ZERO)
         if executed > ZERO and order_id:
             fee, in_coin = self._fees(trade["coin"], int(order_id))
-        if order["role"] != "entry":  # on a sell, coin paid as a fee is a cost; on a buy it
+        if order["side"] != "buy":  # on a sell, coin paid as a fee is a cost; on a buy it
             fee += in_coin * quote / executed if executed else ZERO  # is held less, not a fee
         self._save_order(order, changes | {"fee_usd": plain(fee)})
         fees = Decimal(trade["fees_usd"]) + fee
@@ -626,7 +690,16 @@ class Pot:
                     "filled": self._now(),
                 },
             )
+            paid = quote / executed
+            slip = (paid / Decimal(trade["entry"]) - 1) * HUNDRED
+            self._log(
+                trade["ref"],
+                f"Filled {plain(held)} at {plain(round(paid, 8))} ({slip:+.2f}% from the planned "
+                f"{trade['entry']}); fees {fee:.4f} {QUOTE}.",
+            )
             self._exit(trade)
+        elif order["role"] == "add":
+            self._added(trade, executed, in_coin, quote, fees)
         else:  # a close at market
             self._close(trade, executed, quote, fees, "market")
 
@@ -647,13 +720,28 @@ class Pot:
         }
         trade = self._save_trade(trade, sold)
         if self._rest(trade) > ZERO:  # sold nothing, or only part: the rest stays protected
+            if qty > ZERO:
+                self._log(
+                    trade["ref"],
+                    f"Sold {plain(qty)} at {plain(round(quote / qty, 8))} ({kind}); "
+                    f"{plain(self._rest(trade))} still held.",
+                )
             note = "Part sold; " if qty > ZERO else "Nothing sold; "
             self._save_trade(trade, {"note": note + "its stop and target go back on the rest."})
             self._audit.record("pot", f"{trade['ref']}: {kind} sold {plain(qty)}", "rest kept")
             return
         self._save_trade(trade, {"status": "closed", "exit_kind": kind, "closed": self._now()})
-        result = trade_result(self._trade(trade["ref"]), None)
+        closed = self._trade(trade["ref"])
+        result = trade_result(closed, None)
         self._audit.record("pot", f"{trade['ref']}: closed at {kind}", f"{result} {QUOTE}")
+        r = r_of(closed, result)
+        at = plain(round(quote / qty, 8)) if qty else "-"
+        self._log(
+            trade["ref"],
+            f"Closed at {kind}: sold {plain(qty)} at {at}; "
+            f"{_cents(result or ZERO)} {QUOTE} after fees"
+            + (f", {plain(r)}R." if r is not None else "."),
+        )
 
     def _exit_ref(self, trade_ref: str) -> str:
         made = [
@@ -822,6 +910,7 @@ class Pot:
         self._audit.record(
             "pot", f"{trade['ref']}: entry cancelled", self._trade(trade["ref"])["status"]
         )
+        self._log(trade["ref"], "Entry cancelled.")
         return self.trade_view(self._trade(trade["ref"]), None)
 
     def _pull_exit(self, trade: dict[str, Any]) -> None:
@@ -855,9 +944,11 @@ class Pot:
         if stop >= now:
             raise Refused(f"A stop at or above the price ({plain(now)}) would sell straight away.")
         self._pull_exit(trade)
+        old = trade["stop"]
         trade = self._save_trade(trade, {"stop": plain(stop)})
         self._exit(trade)
         self._audit.record("pot", f"{trade['ref']}: stop moved", plain(stop))
+        self._log(trade["ref"], f"Stop moved from {old} to {plain(stop)}.")
         return self.trade_view(self._trade(trade["ref"]), now)
 
     @locked
@@ -870,6 +961,229 @@ class Pot:
         qty = self._rules_of(trade["coin"]).amount(
             Decimal(trade["fill_qty"]) - Decimal(trade["exit_qty"])
         )
+        self._sell(trade, qty)
+        return self.trade_view(self._trade(trade["ref"]), None)
+
+    def _price_now(self, coin: str) -> Decimal:
+        now = self.prices([coin]).get(coin)
+        if now is None:
+            raise Refused(f"There's no {coin}/{QUOTE} price on Binance.")
+        return now
+
+    def _next_ref(self, trade_ref: str, tag: str) -> str:
+        made = [o for o in self._store.pot_orders() if o["trade_ref"] == trade_ref]
+        n = 1 + sum(1 for o in made if o["ref"].startswith(f"{trade_ref}-{tag}"))
+        return f"{trade_ref}-{tag}{n}"
+
+    @locked
+    def enter_now(self, ref: object) -> dict[str, Any]:
+        """A waiting entry bought now at market instead: re-sized at the price now so risk
+        stays within the rule, and refused (nothing touched) if reward to risk no longer
+        holds; then the limit is cancelled and a market buy goes in."""
+        trade = self._trade(str(ref or ""))
+        if trade["status"] != "waiting":
+            raise Refused("Only a trade waiting for its entry can enter now.")
+        coin = trade["coin"]
+        now = self._price_now(coin)
+        style = style_from(trade["setup"])
+        n = self._numbers(
+            {"coin": coin, "entry": plain(now), "stop": trade["stop"], "target": trade["target"]}
+            | {"style": style},
+            existing=True,
+        )
+        self._limits(n)
+        shown = self._shown(n)
+        self.check_rules(shown | {"style": style}, replacing=trade)  # every rule a new trade meets
+        entry = self._order(f"{trade['ref']}-E")
+        symbol = f"{coin}{QUOTE}"
+        if entry["order_id"] is not None:
+            with contextlib.suppress(BinanceError):  # filled meanwhile: its state says so
+                self._binance.cancel(symbol, int(entry["order_id"]))
+            sent = self._binance.order(symbol, int(entry["order_id"]))
+            state, filled = binance_state(sent)
+            if filled > ZERO:  # part or all filled at the limit: keep that
+                self._follow(entry, sent)
+                self._log(trade["ref"], "Enter now stopped: the limit had filled (or part).")
+                return self.trade_view(self._trade(trade["ref"]), now)
+            if state != "cancelled":  # the cancel didn't take: never buy twice
+                self._follow(entry, sent)
+                raise Refused("Binance still has the limit order live. Try again in a moment.")
+        self._save_order(entry, {"status": "cancelled"})
+        trade = self._save_trade(
+            trade,
+            {k: shown[k] for k in ("entry", "qty", "spend", "risk")} | {"status": "placing"},
+        )
+        self._log(
+            trade["ref"],
+            f"Enter now at market: about {shown['qty']} at {shown['entry']} instead of the limit "
+            f"at {entry['price']}; {shown['risk']} {QUOTE} at risk, {shown['rr']} : 1.",
+        )
+        self._buy(trade, "entry", "E", Decimal(shown["spend"]), Decimal(shown["qty"]))
+        return self.trade_view(self._trade(trade["ref"]), now)
+
+    @locked
+    def add(self, body: dict[str, Any]) -> dict[str, Any]:
+        """More of an open trade at market: only while it's in profit (never averaging down),
+        and only if the whole position's risk to its stop stays within the rule."""
+        trade = self._trade(str(body.get("ref") or ""))
+        if trade["status"] != "open":
+            raise Refused("Only an open trade can be added to.")
+        coin, stop = trade["coin"], Decimal(trade["stop"])
+        now = self._price_now(coin)
+        held = Decimal(trade["fill_qty"]) - Decimal(trade["exit_qty"])
+        cost = Decimal(trade["fill_quote"]) / Decimal(trade["fill_qty"])
+        if now <= cost:
+            raise Refused(
+                f"Only a trade in profit can be added to: {coin} is at {plain(now)}, at or under "
+                f"its average entry of {plain(round(cost, 8))}. No averaging down."
+            )
+        rules = self._rules_of(coin)
+        qty = rules.amount(number(body.get("usdc"), "The amount") / now)
+        spend = qty * now
+        if qty <= ZERO or spend < rules.min_notional:
+            raise Refused(f"That's under Binance's smallest order of {rules.min_notional}.")
+        total = held + qty
+        average = (held * cost + spend) / total
+        risk = max(total * (average - stop) + total * (average + stop) * FEE, ZERO)
+        equity = self.equity()
+        allowed = self.allowed(equity)
+        if risk > allowed * Decimal("1.0001"):
+            raise Refused(
+                f"That would put ${risk:.2f} at risk to the stop at {trade['stop']}, over the "
+                f"${allowed:.2f} a trade allows. Raise the stop first, or add less."
+            )
+        if total * now > equity * MAX_POSITION_PCT / HUNDRED:
+            raise Refused("That would make the position more than 25% of the pot.")
+        if spend > self.cash():
+            raise Refused(f"The pot has ${self.cash():.2f} free; that needs ${spend:.2f}.")
+        mine = max(held * (cost - stop) + held * (cost + stop) * FEE, ZERO)
+        if self.open_risk() - mine + risk > equity * MAX_OPEN_RISK_PCT / HUNDRED:
+            raise Refused("That would put more than 3% of the pot at risk across open trades.")
+        self._check_desk(spend)
+        self._pull_exit(trade)
+        self._buy(self._trade(trade["ref"]), "add", "A", spend, qty)
+        return self.trade_view(self._trade(trade["ref"]), now)
+
+    def _added(
+        self,
+        trade: dict[str, Any],
+        executed: Decimal,
+        in_coin: Decimal,
+        quote: Decimal,
+        fees: Decimal,
+    ) -> None:
+        if executed > ZERO:
+            got = self._rules_of(trade["coin"]).amount(executed - in_coin)
+            trade = self._save_trade(
+                trade,
+                {
+                    "fill_qty": plain(Decimal(trade["fill_qty"]) + got),
+                    "fill_quote": plain(Decimal(trade["fill_quote"]) + quote),
+                    "fees_usd": plain(fees),
+                },
+            )
+            average = Decimal(trade["fill_quote"]) / Decimal(trade["fill_qty"])
+            self._log(
+                trade["ref"],
+                f"Added {plain(got)} at {plain(round(quote / executed, 8))}; now holds "
+                f"{plain(Decimal(trade['fill_qty']) - Decimal(trade['exit_qty']))} at an "
+                f"average of {plain(round(average, 8))}. R stays measured on the first risk.",
+            )
+        # A sync may have put the old size's stop back while the add went unanswered: take it
+        # off, so the new stop and target cover everything held.
+        self._pull_exit(trade)
+        self._exit(self._trade(trade["ref"]))
+
+    def _buy(
+        self, trade: dict[str, Any], role: str, tag: str, spend: Decimal, qty: Decimal
+    ) -> None:
+        """A market buy for the trade (an entry now, or an add), tagged with its reference."""
+        order: dict[str, Any] = {
+            "ref": self._next_ref(trade["ref"], tag) if role == "add" else f"{trade['ref']}-EM",
+            "trade_ref": trade["ref"],
+            "role": role,
+            "kind": "market",
+            "side": "buy",
+            "price": None,
+            "stop": None,
+            "qty": plain(qty),
+            "spend": _cents(spend),
+            "created": self._now(),
+        }
+        self._store.add_pot_order(order)
+        saved = self._order(order["ref"])
+        try:
+            sent = self._binance.buy_market(f"{trade['coin']}{QUOTE}", spend, order["ref"])
+        except BinanceError as error:
+            if not unknown(error):  # refused: nothing bought
+                self._save_order(saved, {"status": "cancelled"})
+                if role == "add":
+                    self._exit(self._trade(trade["ref"]))
+                else:
+                    self._save_trade(
+                        self._trade(trade["ref"]), {"status": "cancelled", "note": error.message}
+                    )
+            raise
+        self._follow(saved, sent)
+
+    @locked
+    def reduce(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Part of an open trade sold at market; its stop and target go back on the rest."""
+        trade = self._trade(str(body.get("ref") or ""))
+        if trade["status"] != "open":
+            raise Refused("Only an open trade can be reduced.")
+        pct = number(body.get("pct"), "The share to sell")
+        if pct >= HUNDRED:
+            raise Refused("To sell it all, close it at market.")
+        rules = self._rules_of(trade["coin"])
+        held = Decimal(trade["fill_qty"]) - Decimal(trade["exit_qty"])
+        qty = rules.amount(held * pct / HUNDRED)
+        now = self._price_now(trade["coin"])
+        kept_at_stop = (held - qty) * Decimal(trade["stop"])  # as _rest measures what's kept
+        if qty * now < rules.min_notional or kept_at_stop < rules.min_notional:
+            raise Refused(
+                f"Both the part sold and the part kept must be over Binance's smallest order of "
+                f"{rules.min_notional}. Close it at market instead."
+            )
+        self._pull_exit(trade)
+        self._sell(self._trade(trade["ref"]), qty)
+        after = self._trade(trade["ref"])
+        if after["status"] == "open" and not self._live_exit(after["ref"]):
+            self._exit(after)
+        return self.trade_view(self._trade(trade["ref"]), now)
+
+    @locked
+    def move_target(self, body: dict[str, Any]) -> dict[str, Any]:
+        """A new target above the price: the OCO is replaced."""
+        trade = self._trade(str(body.get("ref") or ""))
+        if trade["status"] not in ("open", "waiting"):
+            raise Refused("Only a live trade's target can move.")
+        target = self._rules_of(trade["coin"]).price(number(body.get("target"), "Target"))
+        now = self._price_now(trade["coin"])
+        if target <= now or target <= Decimal(trade["entry"]):
+            raise Refused(f"A target goes above the price ({plain(now)}) and the entry.")
+        if trade["status"] == "waiting":  # not filled yet: the style's reward to risk still holds
+            n = self._numbers(
+                {"coin": trade["coin"], "entry": trade["entry"], "stop": trade["stop"]}
+                | {"target": plain(target)},
+                existing=True,
+            )
+            style = screener.STYLES.get(str(style_from(trade["setup"]) or ""))
+            if style is not None:
+                n["minRr"] = Decimal(str(style.min_rr))
+            self._rr_rule(n)
+        old = trade["target"]
+        if trade["status"] == "open":
+            self._pull_exit(trade)
+        trade = self._save_trade(trade, {"target": plain(target)})
+        if trade["status"] == "open":
+            self._exit(trade)
+        self._audit.record("pot", f"{trade['ref']}: target moved", plain(target))
+        self._log(trade["ref"], f"Target moved from {old} to {plain(target)}.")
+        return self.trade_view(self._trade(trade["ref"]), now)
+
+    def _sell(self, trade: dict[str, Any], qty: Decimal) -> None:
+        """A market sell of `qty` for the trade, its exits already taken off."""
         closes = [o for o in self._store.pot_orders() if o["trade_ref"] == trade["ref"]]
         n = 1 + sum(1 for o in closes if o["role"] == "close")
         order: dict[str, Any] = {
@@ -894,7 +1208,6 @@ class Pot:
                 self._exit(self._trade(trade["ref"]))
             raise
         self._follow(saved, sent)
-        return self.trade_view(self._trade(trade["ref"]), None)
 
     # Proposals from trading-agent: kept until placed or dismissed.
 
@@ -957,6 +1270,8 @@ class Pot:
             "filled": row["filled"],
             "closed": row["closed"],
             "note": row["note"],
+            "style": style_from(row["setup"]),
+            "notes": self._store.pot_notes(row["ref"]),
             "orders": [order_view(o) for o in orders],
         }
 
@@ -988,6 +1303,18 @@ class Pot:
             "drawdownPct": plain(deepest.quantize(Decimal("0.1"))),
             "judgeAfter": JUDGE_AFTER,
         }
+
+    def _log(self, ref: str, text: str, kind: str = "desk") -> None:
+        self._store.add_pot_note(ref, kind, text[:400], self._now())
+
+    def note(self, body: dict[str, Any]) -> dict[str, Any]:
+        """Your own note on a trade, kept in its log beside the desk's."""
+        trade = self._trade(str(body.get("ref") or ""))
+        text = " ".join(str(body.get("text") or "").split())[:400]
+        if not text:
+            raise Refused("Type the note first.")
+        self._log(trade["ref"], text, "you")
+        return self.trade_view(self._trade(trade["ref"]), None)
 
     def view(self) -> dict[str, Any]:
         found = self.book_view()

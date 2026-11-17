@@ -18,12 +18,14 @@ export default function BotsHome({ tab }: { tab: BotsTab }) {
   return (
     <>
       <nav className="botsh-tabs wrap" aria-label="Bots">
-        {TABS.map(([key, name, href, Icon]) => (
-          <a key={key} href={href} aria-current={tab === key ? "page" : undefined}>
-            <Icon />
-            {name}
-          </a>
-        ))}
+        <div className="track">
+          {TABS.map(([key, name, href, Icon]) => (
+            <a key={key} href={href} aria-current={tab === key ? "page" : undefined}>
+              <Icon />
+              {name}
+            </a>
+          ))}
+        </div>
       </nav>
       {tab === "accumulate" ? (
         <DcaBookPage />

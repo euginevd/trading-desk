@@ -192,10 +192,12 @@ h2 {
 .app.folded {
   grid-template-columns: 64px minmax(0, 1fr);
 }
+/* The frame's margin, padding and border (14 + 14 + 1 each side) come off the window's height, so
+   a page that fits never scrolls. */
 .side {
   position: sticky;
-  top: 14px;
-  height: calc(100vh - 28px);
+  top: 29px;
+  height: calc(100vh - 58px);
   display: flex;
   flex-direction: column;
   background: var(--layer-1);
@@ -549,8 +551,12 @@ button.tick:hover b {
   gap: 10px;
   padding: 4px 10px;
   border-radius: 10px;
+  border: 0;
+  background: none;
   color: var(--muted);
-  text-decoration: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .head-total:hover {
   background: var(--panel-2);
@@ -567,6 +573,18 @@ button.tick:hover b {
 .head-total small {
   font-size: 12px;
   color: var(--muted);
+}
+/* Each click shows the next currency: the figures slide in, so the change reads as an answer. */
+@media (prefers-reduced-motion: no-preference) {
+  .head-total-figures {
+    animation: total-in 0.22s ease-out;
+  }
+  @keyframes total-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
 }
 .pill {
   display: inline-flex;
@@ -746,32 +764,6 @@ a.btn:where(:not(.btn-accent)) {
   padding: 6px 0;
 }
 
-.tabs {
-  display: flex;
-  gap: 2px;
-  border-bottom: 1px solid var(--line);
-  padding: 0 8px;
-  overflow-x: auto;
-}
-.tabs button {
-  background: none;
-  border: 0;
-  padding: 12px 12px 11px;
-  color: var(--muted);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  white-space: nowrap;
-  transition:
-    color 120ms var(--ease),
-    border-color 200ms var(--ease);
-}
-.tabs button:hover {
-  color: var(--text);
-}
-.tabs button[aria-selected="true"] {
-  color: var(--text);
-  border-bottom-color: var(--accent);
-}
 .scroll {
   overflow-x: auto;
 }
@@ -880,14 +872,6 @@ td.r {
   border: 0;
   background: var(--bg);
   color-scheme: dark; /* dark while TradingView loads */
-}
-.views {
-  display: flex;
-  gap: 2px;
-  margin-right: 10px;
-  padding: 2px;
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
 }
 
 .seg {
@@ -1130,24 +1114,6 @@ dialog p {
   max-width: 100%;
   margin: 0 0 12px;
   overflow-x: auto;
-}
-.source-filter button {
-  height: 30px;
-  padding: 0 14px;
-  border: 0;
-  border-radius: 5px;
-  background: none;
-  color: var(--muted);
-  font-weight: 500;
-  white-space: nowrap;
-  cursor: pointer;
-}
-.source-filter button:hover {
-  color: var(--text);
-}
-.source-filter button[aria-pressed="true"] {
-  background: var(--accent-soft);
-  color: var(--accent);
 }
 
 /* An average cost from only part of the holding: a quiet dotted underline, detail on hover. */
@@ -1602,15 +1568,6 @@ tfoot td {
   grid-template-columns: none;
   margin-bottom: 12px;
 }
-.seg.bot-filter button {
-  height: 30px;
-  padding: 0 16px;
-  font-weight: 500;
-}
-.seg.bot-filter button.on {
-  background: var(--panel-2);
-  color: var(--text);
-}
 .bot-table td {
   vertical-align: top;
 }
@@ -1822,40 +1779,6 @@ tfoot td {
 }
 .st-sell {
   margin-bottom: 14px;
-}
-
-/* The currency toggle, top right: it sets the Dashboard's currency and the header total's. */
-.currency-toggle {
-  position: relative;
-  flex: none;
-  margin-left: 14px;
-}
-.currency-btn {
-  height: 30px;
-  padding: 0 10px;
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
-  background: var(--panel);
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.currency-btn span {
-  color: var(--muted);
-  font-size: 11px;
-}
-.currency-list {
-  right: 0;
-  left: auto;
-  min-width: 96px;
-}
-.currency-list button[aria-checked="true"] {
-  color: var(--accent);
-}
-.currency-list button:disabled {
-  color: var(--dim);
-  cursor: default;
 }
 
 /* Dashboard widgets open a details panel (decision 42). */
@@ -2623,90 +2546,87 @@ button.jtag {
   font-size: 14px;
 }
 
-/* Pills (decision 77): every tab row is a row of pills, each with its icon beside the word. */
+/* Tab rows and filters (decisions 77 and 80): one rounded track, the chosen one filled in the
+   accent, on every page: page tabs, view tabs and filters alike. A row with other controls (the
+   Bots page's new-bot menus, the Bots header) wraps only its tabs in `.track`. */
 .tabs,
-.bots-tabs,
-.botsh-tabs.wrap,
-.acc-tabs {
-  gap: 6px;
-  border-bottom: 0;
-}
-.tabs {
-  margin-bottom: 10px;
-  padding: 0;
-}
-.tabs button,
-.bots-tabs [role="tab"],
-.botsh-tabs a,
-.acc-tabs button {
+.acc-tabs,
+.track,
+.views,
+.seg.bot-filter {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  height: 36px;
-  margin: 0;
-  padding: 0 14px;
-  border: 1px solid var(--edge);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 14px;
-  font-weight: 500;
-  white-space: nowrap;
-  text-decoration: none;
-  transition:
-    color 120ms var(--ease),
-    background-color 120ms var(--ease),
-    border-color 120ms var(--ease);
-}
-.botsh-tabs a:first-child {
-  margin-left: 0;
-}
-.tabs button:hover,
-.bots-tabs [role="tab"]:hover,
-.botsh-tabs a:hover,
-.acc-tabs button:hover {
-  background: var(--layer-1);
-  color: var(--text);
-}
-.tabs button[aria-selected="true"],
-.bots-tabs [role="tab"][aria-selected="true"],
-.botsh-tabs a[aria-current="page"],
-.acc-tabs button.is-on {
-  border-color: var(--edge-2);
-  background: var(--layer-3);
-  color: var(--text);
-  box-shadow: var(--sheen);
-}
-.tabs button[aria-selected="true"] svg,
-.botsh-tabs a[aria-current="page"] svg {
-  color: var(--accent);
-}
-
-/* Segmented filters (decision 77): one rounded track, the chosen one filled in the accent. */
-.views,
-.pf-tabs {
+  width: fit-content;
+  max-width: 100%;
   gap: 4px;
+  margin: 0 0 12px;
   padding: 4px;
   border: 1px solid var(--edge);
   border-radius: 999px;
   background: var(--layer-1);
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-.source-filter button,
-.pf-page .pf-tabs button {
+.bots-tabs .track,
+.botsh-tabs .track {
+  margin-bottom: 0;
+}
+.tabs button,
+.acc-tabs button,
+.track > button,
+.track > a,
+.views button,
+.seg.bot-filter button {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   height: 34px;
   min-height: 0;
+  margin: 0;
   padding: 0 14px;
+  border: 0;
   border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color 120ms var(--ease),
+    background-color 160ms var(--ease);
 }
-.source-filter button[aria-pressed="true"],
-.pf-page .pf-tabs button[aria-selected="true"] {
+.tabs button:hover,
+.acc-tabs button:hover,
+.track > button:hover,
+.track > a:hover,
+.views button:hover,
+.seg.bot-filter button:hover {
+  background: var(--layer-2);
+  color: var(--text);
+}
+.tabs button[aria-selected="true"],
+.acc-tabs button.is-on,
+.track > [aria-selected="true"],
+.track > [aria-current="page"],
+.views button[aria-pressed="true"],
+.seg.bot-filter button.on,
+.seg.bot-filter button[aria-selected="true"] {
   background: var(--accent);
   color: var(--accent-ink);
-  box-shadow: none;
   font-weight: 600;
+  box-shadow: none;
+}
+.tabs button[aria-selected="true"] svg,
+.track > [aria-current="page"] svg,
+.views button[aria-pressed="true"] svg {
+  color: var(--accent-ink);
+}
+.acc-tabs button.is-on .acc-n {
+  background: rgba(4, 17, 15, 0.16);
+  color: var(--accent-ink);
 }
 
 /* Panels (decision 77): the sections a page is made of float as layers, not hairline bands. */
@@ -2733,9 +2653,6 @@ button.jtag {
 }
 .port-ledger {
   padding-top: 14px;
-}
-.port-tabs {
-  border-bottom: 0;
 }
 
 /* The band above the frame (decision 77): what scrolls past the top bar hides under the field. */

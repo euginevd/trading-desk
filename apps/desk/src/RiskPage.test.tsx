@@ -47,7 +47,8 @@ const board = (b: Partial<RiskBoard> = {}): RiskBoard => ({
 });
 
 function serve(first: RiskBoard) {
-  const fetch = vi.fn((url: string) => {
+  const fetch = vi.fn((url: string, init?: RequestInit) => {
+    void init; // read back from mock.calls
     const path = url.replace(/^\/api/, "");
     const reply =
       path === "/risk-board/review"
@@ -86,6 +87,100 @@ describe("the risk page", () => {
       within(screen.getByRole("region", { name: "Deposits" })).getByText("All kept"),
     ).toBeTruthy();
     expect(screen.queryByRole("region", { name: "Portfolio" })).toBeNull(); // no rows, no section
+  });
+
+  it("leads with the four big risks, the first not kept open, the everyday limits folded", async () => {
+    const big = (r: Partial<RiskLimit>) =>
+      row({ area: "Big", warn: null, owner: "you, on Risk", words: "", ...r });
+    const fetch = serve(
+      board({
+        sentence: "A$2,000 over your Binance limit.",
+        limits: [
+          row({}),
+          big({
+            key: "big-exchange",
+            rank: 1,
+            name: "Money on Binance",
+            value: "12000",
+            limit: "10000",
+            figure: "A$12,000",
+            of: "A$10,000",
+            state: "broken",
+            detail: {
+              totalAud: "12000",
+              capAud: "10000",
+              dcaAud: "9000",
+              stablesAud: "3000",
+              otherAud: "0",
+              moveAud: "2000",
+              moves: [{ coin: "BTC", aud: "2000", qty: "0.0200", leaves: "7000" }],
+              afterAud: "10000",
+            },
+          }),
+          big({
+            key: "big-tao",
+            rank: 3,
+            name: "TAO's share of crypto",
+            value: "70",
+            limit: "60",
+            figure: "70%",
+            of: "60% by 31 Dec 2027",
+            state: "near",
+            detail: {
+              valueAud: "10500",
+              costAud: "15000",
+              pnlAud: "-4500",
+              cryptoAud: "15000",
+              otherAud: "4500",
+              weeklyAud: "600",
+              targetPct: "60",
+              by: "31 Dec 2027",
+              weeks: 5,
+              reach: 1_798_000_000_000,
+              onTrack: true,
+              thesisAt: null,
+              thesisDue: true,
+            },
+          }),
+          big({
+            key: "big-backup",
+            rank: 4,
+            name: "Ledger backup",
+            value: "50",
+            limit: "100",
+            figure: "2 of 4",
+            of: "checks current",
+            state: "near",
+            detail: {
+              items: [
+                { key: "seed", label: "Seed backed up", at: 1, due: 2, state: "ok" },
+                { key: "place", label: "Backup in place", at: 1, due: 2, state: "due" },
+              ],
+            },
+          }),
+        ],
+      }),
+    );
+    render(<RiskPage />);
+    const four = await screen.findByRole("list", { name: "The four big risks" });
+    expect(within(four).getByText("Over")).toBeTruthy();
+    // The first one not kept opens: the month's move to the Ledger.
+    expect(screen.getByRole("table", { name: "Move to the Ledger" })).toBeTruthy();
+    // TAO: the what-if follows the slider, and the sale is never proposed.
+    fireEvent.change(screen.getByRole("slider", { name: "Share of TAO to sell" }), {
+      target: { value: "40" },
+    });
+    expect(screen.getByText("A$4,200")).toBeTruthy(); // 40% of A$10,500 sold
+    expect(screen.getByText("−A$1,800")).toBeTruthy(); // 40% of the loss realised
+    expect(screen.getByText(/The desk never proposes this sale/)).toBeTruthy();
+    // A backup check keeps today's date only.
+    fireEvent.click(screen.getByRole("button", { name: "Backup in place: done today" }));
+    await waitFor(() =>
+      expect(fetch.mock.calls.some(([u]) => String(u) === "/api/risk-board/check")).toBe(true),
+    );
+    const call = fetch.mock.calls.find(([u]) => String(u) === "/api/risk-board/check");
+    expect(JSON.parse(String(call?.[1]?.body))).toEqual({ key: "place" });
+    expect(screen.getByText(/Everyday limits/)).toBeTruthy();
   });
 
   it("names a book it couldn't read rather than calling it kept", async () => {

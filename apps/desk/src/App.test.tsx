@@ -377,25 +377,26 @@ describe("portfolio page", () => {
     window.location.hash = "";
   });
 
-  it("switches the whole Dashboard between AUD, USD, INR and BTC, and remembers it", async () => {
+  it("cycles the whole Dashboard through AUD, USD, INR and BTC from the header total, and remembers it", async () => {
     window.localStorage.removeItem("desk.currency");
     serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
     render(<App />);
     await screen.findAllByText("BNB");
-    const pick = (code: string) => {
-      fireEvent.click(screen.getByRole("button", { name: /^Currency:/ }));
-      fireEvent.click(screen.getByRole("menuitemradio", { name: code }));
-    };
-    pick("USD");
+    // Each click on the header total shows the next currency, round from AUD.
+    const next = () => fireEvent.click(screen.getByRole("button", { name: /^Total value in / }));
+    expect(screen.queryByRole("menu", { name: "Currency" })).toBeNull();
+    next();
     expect(screen.getAllByText("$42,585")[0]).toBeTruthy();
     expect(screen.queryByText(/ at 1.4738 AUD/)).toBeNull();
     const hero = screen.getByRole("region", { name: "What you hold" });
     expect(hero.querySelector("h2")?.textContent).toBe("You hold $43K, $130 above what it cost.");
-    pick("INR");
+    next();
     expect(screen.getAllByText("₹35,86,083")[0]).toBeTruthy(); // 42,585 at 84.21, Indian grouping
-    pick("BTC");
+    next();
     expect(screen.getAllByText("₿0.4259").length).toBeGreaterThan(0); // 42,585 at 0.00001
     expect(window.localStorage.getItem("desk.currency")).toBe("BTC");
+    next();
+    expect(window.localStorage.getItem("desk.currency")).toBe("AUD");
     window.localStorage.removeItem("desk.currency");
   });
 

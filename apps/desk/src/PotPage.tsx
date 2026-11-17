@@ -9,6 +9,7 @@ import {
   dismissPotProposal,
   getPot,
   placePotTrade,
+  previewPotTrade,
   putInPot,
   scanPot,
 } from "./api";
@@ -20,9 +21,20 @@ import { dated, day, dollars, qty, when } from "./dcaFormat";
 import { Live } from "./Figures";
 import PotChat, { usePotChat } from "./PotChat";
 import PotNewTrade from "./PotNewTrade";
+import NewTradeFlow, { OddsLine } from "./NewTradeFlow";
 import PotPanel, { px, rWord, rr, tone } from "./PotPanel";
 import { RuleBreakBanner } from "./RuleMarks";
-import type { PotAction, PotCheck, PotProposal, PotTrade, PotView, RuleBreak } from "./types";
+import type {
+  PotAction,
+  PotCheck,
+  PotOdds,
+  PotProposal,
+  PotStyleKey,
+  PotTrade,
+  PotPreview,
+  PotView,
+  RuleBreak,
+} from "./types";
 import "./pot.css";
 
 // Dollars without empty cents: $1, $0.81, $10.
@@ -73,7 +85,12 @@ type Pending = {
   spend: string;
   risk: string;
   proposal?: string;
+  style?: PotStyleKey;
+  expires?: number;
+  verdict?: "take" | "wait" | "pass";
+  odds?: PotOdds | null;
 };
+const STYLE_NAME = { scalp: "Scalp", day: "Day trade", swing: "Swing", position: "Position" };
 const pendingOf = (a: PotAction): Pending => ({
   coin: a.coin ?? "",
   setup: a.setup ?? "",
@@ -376,6 +393,10 @@ export default function PotPage() {
   const [pending, setPending] = useState<Pending | null>(null);
   const [placing, setPlacing] = useState(false);
   const [placeError, setPlaceError] = useState<string | null>(null);
+  // Market now instead of the limit: the desk's sizing at the price now, and its problems.
+  const [atMarket, setAtMarket] = useState<
+    "loading" | { now: string; trade: PotPreview["trade"]; problems: string[] } | null
+  >(null);
   // The Profile rules a trade breaks, for the trade under review only (decision 78).
   const [ruleHold, setRuleHold] = useState<{ of: Pending; breaks: RuleBreak[] } | null>(null);
   const breaks = ruleHold && ruleHold.of === pending ? ruleHold.breaks : null;
@@ -385,6 +406,8 @@ export default function PotPage() {
   const [checking, setChecking] = useState(false);
   // null: closed; "": New trade on its first coin; a coin: opened from that coin's card.
   const [building, setBuilding] = useState<string | null>(null);
+  // New trade by style (NewTradeFlow): open or not.
+  const [flow, setFlow] = useState(false);
   // Bumped after a scan, so the watchlist reads its coins again.
   const [coinsVersion, setCoinsVersion] = useState(0);
   const review = useRef<HTMLDialogElement>(null);
@@ -409,6 +432,11 @@ export default function PotPage() {
   useEffect(() => {
     if (pending) review.current?.showModal?.();
   }, [pending]);
+  useEffect(() => {
+    if (!said) return;
+    const fade = window.setTimeout(() => setSaid(null), 6000);
+    return () => window.clearTimeout(fade);
+  }, [said]);
 
   const openChat = (on: boolean) => {
     setChatOpen(on);
@@ -501,6 +529,8 @@ export default function PotPage() {
       setup: pending.setup,
       reason: pending.reason,
       ...(pending.proposal ? { proposal: pending.proposal } : {}),
+      ...(pending.style ? { style: pending.style, expires: pending.expires } : {}),
+      ...(market ? { market: true, entry: market.now } : {}),
       ...(override ? { override: true } : {}),
     }).then(
       (t) => {
@@ -508,7 +538,12 @@ export default function PotPage() {
         review.current?.close?.();
         setPending(null);
         setBuilding(null);
-        setSaid(`${t.ref} placed: the entry waits on Binance at ${px(t.entry)}.`);
+        setFlow(false);
+        setSaid(
+          market
+            ? `${t.ref} placed: bought at market, about ${px(t.entry)}.`
+            : `${t.ref} placed: the entry waits on Binance at ${px(t.entry)}.`,
+        );
         load();
       },
       (e: unknown) => {
@@ -542,28 +577,48 @@ export default function PotPage() {
     a.click();
     URL.revokeObjectURL(a.href);
   };
-  const reward = pending
-    ? (Number(pending.target) - Number(pending.entry)) * Number(pending.qty)
-    : 0;
+  const market = atMarket && atMarket !== "loading" ? atMarket : null;
+  const shown =
+    pending && market?.trade
+      ? {
+          ...pending,
+          entry: market.trade.entry,
+          qty: market.trade.qty,
+          spend: market.trade.spend,
+          risk: market.trade.risk,
+        }
+      : pending;
+  const reward = shown ? (Number(shown.target) - Number(shown.entry)) * Number(shown.qty) : 0;
+  const marketBlocked =
+    atMarket === "loading" || (market !== null && (!market.trade || market.problems.length > 0));
+  const chooseMarket = (on: boolean) => {
+    setPlaceError(null);
+    if (!on || !pending) {
+      setAtMarket(null);
+      return;
+    }
+    setAtMarket("loading");
+    const { coin, stop, target, style } = pending;
+    previewPotTrade({ coin })
+      .then((seen) =>
+        previewPotTrade({ coin, entry: seen.now ?? "", stop, target, ...(style ? { style } : {}) }),
+      )
+      .then(
+        (seen) => setAtMarket({ now: seen.now ?? "", trade: seen.trade, problems: seen.problems }),
+        (e: unknown) => {
+          setAtMarket(null);
+          setPlaceError(errorOf(e, "The price now couldn't be read."));
+        },
+      );
+  };
 
   return (
     <main className={`wrap dcb pot${chatOpen ? " has-chat" : ""}`}>
       <div className="dcb-main">
-        <div className="dcb-top">
-          <div>
-            <h1 className="dcb-headline acc-title">Trading account</h1>
-            <p className="acc-said">
-              {putIn <= 0
-                ? "Put money in to start; it's kept apart from the DCA book."
-                : pot.proposals.length > 0
-                  ? `${pot.proposals.length} ${pot.proposals.length === 1 ? "setup is" : "setups are"} waiting for you.`
-                  : on.length === 0
-                    ? "No trades on: trading-agent waits for its setup."
-                    : `${on.length} ${on.length === 1 ? "trade" : "trades"} on${result !== 0 ? `, ${result > 0 ? "up" : "down"} ${dollars(Math.abs(result))} from trading` : ""}.`}
-            </p>
-          </div>
-          {putIn > 0 && (
-            <dl className="dcb-totals">
+        <h1 className="visually-hidden">Trading account</h1>
+        {putIn > 0 ? (
+          <section className="acc-head" aria-label="The account">
+            <dl className="acc-money">
               <div>
                 <dt>Available</dt>
                 <dd className="num">
@@ -582,23 +637,38 @@ export default function PotPage() {
               </div>
               <div>
                 <dt>This month</dt>
-                <dd
-                  className={`num dcb-pnl ${monthUsd > 0 ? "is-up" : monthUsd < 0 ? "is-down" : ""}`}
-                >
+                <dd className={`num ${monthUsd > 0 ? "up" : monthUsd < 0 ? "down" : ""}`}>
                   {dollars(monthUsd, true)} <span className="pot-of">{rWord(String(monthR))}</span>
                 </dd>
               </div>
             </dl>
-          )}
-        </div>
-
-        {putIn > 0 && (
-          <p className="acc-risk muted num">
-            Risk a trade <b>{dollars(pot.allowedRisk ?? "0")}</b> ({pot.config.riskPct}%
-            {pot.config.maxRisk ? `, at most ${cash(pot.config.maxRisk)}` : ""}), sized from the
-            stop. Open risk <b>{dollars(pot.openRisk)}</b> of {dollars(openLimit)}. Month's loss{" "}
-            <b>{dollars(used)}</b> of {dollars(pot.monthLimit)}.
-          </p>
+            <div className="acc-sub">
+              <p className="acc-said">
+                {pot.proposals.length > 0
+                  ? `${pot.proposals.length} ${pot.proposals.length === 1 ? "setup is" : "setups are"} waiting for you.`
+                  : on.length === 0
+                    ? "No trades on: trading-agent waits for its setup."
+                    : `${on.length} ${on.length === 1 ? "trade" : "trades"} on${result !== 0 ? `, ${result > 0 ? "up" : "down"} ${dollars(Math.abs(result))} from trading` : ""}.`}
+              </p>
+              <ul className="acc-chips num" aria-label="The risk rules">
+                <li title="Sized from the stop">
+                  Risk a trade <b>{dollars(pot.allowedRisk ?? "0")}</b>
+                  <small>
+                    {pot.config.riskPct}%
+                    {pot.config.maxRisk ? `, at most ${cash(pot.config.maxRisk)}` : ""}
+                  </small>
+                </li>
+                <li>
+                  Open risk <b>{dollars(pot.openRisk)}</b> <small>of {dollars(openLimit)}</small>
+                </li>
+                <li>
+                  Month's loss <b>{dollars(used)}</b> <small>of {dollars(pot.monthLimit)}</small>
+                </li>
+              </ul>
+            </div>
+          </section>
+        ) : (
+          <p className="acc-said">Put money in to start; it's kept apart from the DCA book.</p>
         )}
 
         {short > 0 && (
@@ -626,40 +696,33 @@ export default function PotPage() {
           </section>
         ) : (
           <>
-            <div className="pot-regime acc-market" aria-label="The market today">
-              <div className={`pot-state is-${pot.regime.state ?? "none"}`}>
-                <small>Market</small>
-                <b>{pot.regime.state ? REGIME[pot.regime.state] : "Unknown"}</b>
-              </div>
-              <div>
-                <small>BTC</small>
-                <span>{pot.regime.words || "—"}</span>
-              </div>
-              <div>
-                <small>
-                  {pot.lastScan ? `Last scan, ${when(pot.lastScan.at)}` : "Last scan"}
-                  {pot.scansOnItsOwn ? `. Next ${when(pot.nextScan)}` : ". Paused"}
-                </small>
-                <span>
-                  {scanning
-                    ? "trading-agent is reading the market and every coin's daily chart. About a minute."
-                    : pot.lastScan
-                      ? pot.lastScan.line
-                      : "Not yet"}
-                </span>
-              </div>
+            <div className="acc-strip" aria-label="The market today">
+              <span className={`acc-regime is-${pot.regime.state ?? "none"}`}>
+                {pot.regime.state ? REGIME[pot.regime.state] : "Unknown"}
+              </span>
+              <span className="acc-btc">BTC {pot.regime.words || "—"}</span>
+              <span
+                className="acc-scan"
+                title={`${pot.lastScan?.line ?? ""}${pot.scansOnItsOwn ? ` Next scan ${when(pot.nextScan)}.` : " Scans paused."}`}
+              >
+                {scanning
+                  ? "Scanning the market…"
+                  : pot.lastScan
+                    ? `${when(pot.lastScan.at)}: ${pot.lastScan.line}`
+                    : "Not scanned yet"}
+              </span>
               <div className="acc-acts">
                 <button type="button" className="btn" disabled={scanning} onClick={scan}>
                   {scanning ? "Scanning…" : "Scan now"}
                 </button>
-                <button type="button" className="btn btn-accent" onClick={() => setBuilding("")}>
+                <button type="button" className="btn btn-accent" onClick={() => setFlow(true)}>
                   New trade
                 </button>
               </div>
             </div>
 
             {said && (
-              <p className="muted" role="status">
+              <p className="acc-toast" role="status">
                 {said}
               </p>
             )}
@@ -908,6 +971,20 @@ export default function PotPage() {
         />
       )}
 
+      {flow && (
+        <NewTradeFlow
+          onClose={() => setFlow(false)}
+          onHand={() => {
+            setFlow(false);
+            setBuilding("");
+          }}
+          onReview={(t) => {
+            setPlaceError(null);
+            setPending(t);
+          }}
+        />
+      )}
+
       {building !== null && (
         <PotNewTrade
           coins={pot.coins}
@@ -938,23 +1015,71 @@ export default function PotPage() {
         onClose={() => {
           setPending(null);
           setPlaceError(null);
+          setAtMarket(null);
         }}
       >
-        {pending && (
+        {pending && shown && (
           <>
             <h2 id="pot-review-title">Place the {pending.coin} trade?</h2>
+            {pending.style && (
+              <p className="muted">
+                {STYLE_NAME[pending.style]} · {pending.setup}
+                {pending.expires
+                  ? ` · good until ${new Date(pending.expires).toLocaleString("en-AU", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}`
+                  : ""}
+              </p>
+            )}
+            {pending.verdict && pending.verdict !== "take" && (
+              <p className="ntf-warn" role="note">
+                trading-agent says {pending.verdict === "wait" ? "wait" : "pass"} on this one. Its
+                reason is below; you can still place it.
+              </p>
+            )}
+            {pending.odds && <OddsLine odds={pending.odds} />}
+            <div className="pot-rv-how" role="radiogroup" aria-label="How to enter">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={atMarket === null}
+                className={`pnt-chip${atMarket === null ? " is-on" : ""}`}
+                onClick={() => chooseMarket(false)}
+              >
+                Limit at {px(pending.entry)}
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={atMarket !== null}
+                className={`pnt-chip${atMarket !== null ? " is-on" : ""}`}
+                onClick={() => chooseMarket(true)}
+              >
+                {atMarket === "loading"
+                  ? "Market now…"
+                  : market
+                    ? `Market now, about ${px(market.now)}`
+                    : "Market now"}
+              </button>
+            </div>
+            {market && market.problems.length > 0 && (
+              <ul className="error-text pot-rv-problems" role="alert">
+                {market.problems.map((x) => (
+                  <li key={x}>{x}</li>
+                ))}
+              </ul>
+            )}
             <ul className="pot-rv" aria-label="The trade's orders">
               <li>
                 <span className="pot-tag is-live">Entry</span>
                 <span>
-                  <b>{pending.coin}</b> limit buy {px(pending.entry)}
+                  <b>{pending.coin}</b> {market ? "market buy, about" : "limit buy"}{" "}
+                  {px(shown.entry)}
                 </span>
-                <span className="num">{dollars(pending.spend)}</span>
+                <span className="num">{dollars(shown.spend)}</span>
               </li>
               <li>
                 <span className="pot-tag is-lost">Stop</span>
-                <span>sell all at {px(pending.stop)}</span>
-                <span className="num down">{dollars(-Number(pending.risk))}</span>
+                <span>sell all at {px(shown.stop)}</span>
+                <span className="num down">{dollars(-Number(shown.risk))}</span>
               </li>
               <li>
                 <span className="pot-tag is-won">Target</span>
@@ -968,7 +1093,7 @@ export default function PotPage() {
               </p>
             )}
             <p className="muted">
-              Reward to risk {rr(pending)} : 1. The entry goes to Binance now, tagged as the trade's
+              Reward to risk {rr(shown)} : 1. The entry goes to Binance now, tagged as the trade's
               reference. Once it fills, the desk places the stop and target there as one OCO order,
               so they hold even if the desk is off.
             </p>
@@ -992,10 +1117,14 @@ export default function PotPage() {
                 <button
                   className="btn btn-accent"
                   type="button"
-                  disabled={placing}
+                  disabled={placing || marketBlocked}
                   onClick={() => place()}
                 >
-                  {placing ? "Placing…" : "Place the trade"}
+                  {placing
+                    ? "Placing…"
+                    : pending.verdict && pending.verdict !== "take"
+                      ? "Place anyway"
+                      : "Place the trade"}
                 </button>
               </div>
             )}

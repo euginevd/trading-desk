@@ -85,9 +85,8 @@ def test_deposits_and_the_portfolio() -> None:
         ],
     }
     rows = by_key(risk.portfolio_limits(portfolio))
-    assert rows["tao-share"]["figure"] == "66.7%"  # stablecoins aren't crypto here
-    assert rows["custody"]["figure"] == "BTC A$6,000"
-    assert rows["custody"]["state"] == "near"  # over A$5K on Binance
+    assert "tao-share" not in rows  # now one of the four big risks (risk_big)
+    assert "custody" not in rows
     assert rows["take-profit"]["state"] == "near"  # US$480K is within 5% of US$500K
     assert rows["take-profit"]["of"] == "US$500,000: move 20% out"
 

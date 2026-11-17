@@ -1,8 +1,10 @@
-// risk-agent's page (local/agents/risk-agent.md): one sentence on how the rules stand, every
-// limit the Profile sets as a gauge (kept, near or broken) grouped by book, and risk-agent's
-// weekly review. The figures are the desk's own; the model only writes the review.
+// risk-agent's page (local/agents/risk-agent.md): one sentence on how the rules stand, the four
+// big risks ranked first (decision 79), then every everyday limit the Profile sets as a gauge
+// (kept, near or broken) grouped by book, and risk-agent's weekly review. The figures are the
+// desk's own; the model only writes the review.
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import { getRiskBoard, writeRiskReview } from "./api";
+import { getRiskBoard, markRisk, writeRiskReview } from "./api";
+import RiskBig from "./RiskBig";
 import { errorOf } from "./format";
 import AgentAvatar from "./AgentIcons";
 import { when } from "./dcaFormat";
@@ -60,6 +62,8 @@ export default function RiskPage() {
   const [board, setBoard] = useState<RiskBoard | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [writing, setWriting] = useState(false);
+  const [marking, setMarking] = useState(false);
+  const [markSaid, setMarkSaid] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -94,9 +98,28 @@ export default function RiskPage() {
     );
   }
 
-  const count = (s: RiskLimit["state"]) => board.limits.filter((r) => r.state === s).length;
+  const bigs = board.limits
+    .filter((r) => r.area === "Big")
+    .sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0));
+  const everyday = board.limits.filter((r) => r.area !== "Big");
+  const count = (s: RiskLimit["state"]) => bigs.filter((r) => r.state === s).length;
   const broken = count("broken");
   const near = count("near");
+  const daily = (s: RiskLimit["state"]) => everyday.filter((r) => r.state === s).length;
+  const mark = (key: string) => {
+    setMarking(true);
+    setMarkSaid(null);
+    markRisk(key).then(
+      (b) => {
+        setBoard(b);
+        setMarking(false);
+      },
+      (e: unknown) => {
+        setMarking(false);
+        setMarkSaid(errorOf(e, "That wasn't saved. Try again."));
+      },
+    );
+  };
   const check = board.jobs.find((j) => j.key === "risk-check");
   const write = () => {
     setWriting(true);
@@ -129,7 +152,7 @@ export default function RiskPage() {
             </p>
           </div>
         </div>
-        <dl className="dcb-totals">
+        <dl className="dcb-totals" aria-label="The four big risks">
           <div>
             <dt>Kept</dt>
             <dd className="num rk-n is-kept">{count("kept")}</dd>
@@ -154,27 +177,43 @@ export default function RiskPage() {
 
       <div className="rk-cols">
         <div className="rk-board">
-          {AREAS.map((area) => {
-            const rows = board.limits.filter((r) => r.area === area);
-            if (!rows.length) return null;
-            return (
-              <section key={area} className="dcb-section" aria-label={area}>
-                <div className="dcb-section-head">
-                  <h2>{area}</h2>
-                  <span className="muted">
-                    {rows.every((r) => r.state === "kept")
-                      ? "All kept"
-                      : `${rows.filter((r) => r.state !== "kept").length} to watch`}
-                  </span>
-                </div>
-                <ul className="rk-rows">
-                  {rows.map((r) => (
-                    <Row key={r.key} row={r} />
-                  ))}
-                </ul>
-              </section>
-            );
-          })}
+          {bigs.length > 0 && <RiskBig rows={bigs} onMark={mark} busy={marking} />}
+          {markSaid && (
+            <p className="error-text" role="alert">
+              {markSaid}
+            </p>
+          )}
+          <details className="rk-everyday" open={bigs.length === 0}>
+            <summary>
+              Everyday limits{" "}
+              <span className="muted">
+                {daily("kept")} kept
+                {daily("near") ? `, ${daily("near")} near` : ""}
+                {daily("broken") ? `, ${daily("broken")} broken` : ""}
+              </span>
+            </summary>
+            {AREAS.map((area) => {
+              const rows = everyday.filter((r) => r.area === area);
+              if (!rows.length) return null;
+              return (
+                <section key={area} className="dcb-section" aria-label={area}>
+                  <div className="dcb-section-head">
+                    <h2>{area}</h2>
+                    <span className="muted">
+                      {rows.every((r) => r.state === "kept")
+                        ? "All kept"
+                        : `${rows.filter((r) => r.state !== "kept").length} to watch`}
+                    </span>
+                  </div>
+                  <ul className="rk-rows">
+                    {rows.map((r) => (
+                      <Row key={r.key} row={r} />
+                    ))}
+                  </ul>
+                </section>
+              );
+            })}
+          </details>
         </div>
 
         <aside className="rk-side" aria-label="risk-agent's review">

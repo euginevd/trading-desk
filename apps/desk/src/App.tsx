@@ -49,6 +49,12 @@ function readCurrency(): Currency {
     return "AUD";
   }
 }
+
+/** The next currency the header total shows: AUD, USD, INR, BTC and round, skipping any without a rate. */
+function nextCurrency(now: Currency, rates: Record<string, string>): Currency {
+  const known = CURRENCIES.filter((c) => c === "USD" || c === now || Boolean(rates[c]));
+  return known[(known.indexOf(now) + 1) % known.length] ?? now;
+}
 const TOTAL_MS = 300_000; // the header's total, every five minutes
 const FOLDED_KEY = "desk.side.folded";
 
@@ -211,10 +217,8 @@ export default function App() {
   const [fearAt, setFearAt] = useState<DOMRect | null>(null);
   const [total, setTotal] = useState<{ usd: string; rates: Record<string, string> } | null>(null);
   const [currency, setCurrency] = useState<Currency>(readCurrency);
-  const [currencyMenu, setCurrencyMenu] = useState(false);
   const pickCurrency = (code: Currency) => {
     setCurrency(code);
-    setCurrencyMenu(false);
     try {
       window.localStorage.setItem(CURRENCY_KEY, code);
     } catch {
@@ -452,14 +456,15 @@ export default function App() {
           <FearPanel at={fearAt} onClose={() => setFearAt(null)} />
           <div className="spacer" />
           {total && (
-            <a
+            <button
+              type="button"
               className="head-total num"
-              href="#/portfolio"
-              aria-label="Total value"
-              title="Your Portfolio"
+              aria-label={`Total value in ${currency}: show in ${nextCurrency(currency, total.rates)}`}
+              title="Click for the next currency"
+              onClick={() => pickCurrency(nextCurrency(currency, total.rates))}
             >
               <WalletIcon />
-              <span>
+              <span key={currency} className="head-total-figures">
                 <b>{money(currency, total.rates).whole(total.usd)}</b>
                 <small>
                   ≈{" "}
@@ -468,39 +473,8 @@ export default function App() {
                     : money("BTC", total.rates).whole(total.usd)}
                 </small>
               </span>
-            </a>
-          )}
-          <div className="currency-toggle">
-            <button
-              type="button"
-              className="currency-btn"
-              aria-haspopup="menu"
-              aria-expanded={currencyMenu}
-              aria-label={`Currency: ${currency}`}
-              onClick={() => setCurrencyMenu(!currencyMenu)}
-            >
-              {currency} <span aria-hidden="true">▾</span>
             </button>
-            {currencyMenu && (
-              <div className="create-list currency-list" role="menu" aria-label="Currency">
-                {CURRENCIES.map((code) => {
-                  const known = code === "USD" || Boolean(total?.rates[code]);
-                  return (
-                    <button
-                      key={code}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={currency === code}
-                      disabled={!known}
-                      onClick={() => pickCurrency(code)}
-                    >
-                      {code}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          )}
         </header>
         {page === "trade" ? (
           <PotPage />

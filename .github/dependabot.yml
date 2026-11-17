@@ -32,6 +32,12 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@eslint/js"
         update-types: ["version-update:semver-major"]
+  # The Freqtrade image in docker-compose.yml (apps/backtest); its strategy interface can change
+  # between releases, so check a backtest still runs before merging the bump.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule: { interval: weekly }
+    cooldown: { default-days: 7 }
   # Add one entry per ecosystem a new app brings (AGENTS.md rule 10), in the same form. An `ignore` holds
   # back updates that need a person, with the reason beside it. For example:
   # - package-ecosystem: npm

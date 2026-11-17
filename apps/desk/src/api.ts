@@ -4,7 +4,11 @@ import type {
   PotCheck,
   PotAnalysis,
   RiskBoard,
+  PotJudge,
   PotPreview,
+  PotScreen,
+  PotStyleKey,
+  PotStyles,
   PotTrade,
   PotTradeRequest,
   PotView,
@@ -252,6 +256,8 @@ export const getProfileFile = () => call<MarkdownFile>("GET", "/profile/file");
 // risk-agent (local/agents/risk-agent.md).
 export const getRiskBoard = () => call<RiskBoard>("GET", "/risk-board");
 export const writeRiskReview = () => call<RiskBoard>("POST", "/risk-board/review");
+// A backup check done today, or TAO's thesis still holding: the desk keeps the date only.
+export const markRisk = (key: string) => call<RiskBoard>("POST", "/risk-board/check", { key });
 export const getMyAgents = () => call<MyAgentsPage>("GET", "/my-agents");
 export const setAgentsOn = (on: boolean) => call<unknown>("PUT", "/my-agents/schedule", { on });
 export const getMyAgentFile = (slug: string) =>
@@ -343,6 +349,7 @@ export const previewPotTrade = (body: {
   entry?: string;
   stop?: string;
   target?: string;
+  style?: PotStyleKey;
 }) => call<PotPreview>("POST", "/pot/preview", body);
 export const analysePotCoin = (body: {
   coin: string;
@@ -356,7 +363,20 @@ export const cancelPotTrade = (ref: string) =>
 export const movePotStop = (ref: string, stop: string) =>
   call<PotTrade>("POST", "/pot/trades/stop", { ref, stop });
 export const closePotTrade = (ref: string) => call<PotTrade>("POST", "/pot/trades/close", { ref });
+export const enterPotTradeNow = (ref: string, override = false) =>
+  call<PotTrade>("POST", "/pot/trades/enter-now", { ref, ...(override ? { override } : {}) });
+export const addToPotTrade = (ref: string, usdc: string, override = false) =>
+  call<PotTrade>("POST", "/pot/trades/add", { ref, usdc, ...(override ? { override } : {}) });
+export const reducePotTrade = (ref: string, pct: number) =>
+  call<PotTrade>("POST", "/pot/trades/reduce", { ref, pct: String(pct) });
+export const movePotTarget = (ref: string, target: string) =>
+  call<PotTrade>("POST", "/pot/trades/target", { ref, target });
+export const notePotTrade = (ref: string, text: string) =>
+  call<PotTrade>("POST", "/pot/trades/note", { ref, text });
 export const scanPot = () => call<PotView>("POST", "/pot/scan");
+export const getPotStyles = () => call<PotStyles>("GET", "/pot/styles");
+export const screenPot = (style: PotStyleKey) => call<PotScreen>("POST", "/pot/screen", { style });
+export const judgePot = (style: PotStyleKey) => call<PotJudge>("POST", "/pot/judge", { style });
 export const dismissPotProposal = (id: string) =>
   call<PotView>("POST", "/pot/proposals/dismiss", { id });
 export const potAgent = (message: string, history: { who: string; text: string }[]) =>

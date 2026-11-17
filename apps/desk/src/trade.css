@@ -249,13 +249,6 @@
 .tr-block-skeleton {
   height: 220px;
 }
-.tr-tabs {
-  padding: 0;
-  gap: 20px;
-}
-.tr-tabs button {
-  padding: 10px 0;
-}
 
 .tr-who {
   display: flex;

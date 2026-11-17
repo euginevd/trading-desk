@@ -207,6 +207,13 @@ CREATE TABLE IF NOT EXISTS pot_trades (
     closed INTEGER,
     updated INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS pot_notes (
+    id INTEGER PRIMARY KEY,
+    trade_ref TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS pot_orders (
     id INTEGER PRIMARY KEY,
     ref TEXT NOT NULL UNIQUE,
@@ -623,13 +630,29 @@ class Store:
     def save_pot_trade(self, trade: dict[str, Any]) -> None:
         with self._db:
             self._db.execute(
-                "UPDATE pot_trades SET stop = :stop, qty = :qty, status = :status, "
+                "UPDATE pot_trades SET entry = :entry, stop = :stop, target = :target, "
+                "qty = :qty, spend = :spend, risk = :risk, status = :status, "
                 "fill_qty = :fill_qty, fill_quote = :fill_quote, exit_qty = :exit_qty, "
                 "exit_quote = :exit_quote, exit_kind = :exit_kind, fees_usd = :fees_usd, "
                 "rules_kept = :rules_kept, note = :note, filled = :filled, closed = :closed, "
                 "updated = :updated WHERE id = :id",
                 trade,
             )
+
+    def add_pot_note(self, trade_ref: str, kind: str, text: str, created: int) -> None:
+        """A line in a trade's log: the desk's own (each event, with its numbers) or yours."""
+        with self._db:
+            self._db.execute(
+                "INSERT INTO pot_notes (trade_ref, kind, text, created) VALUES (?, ?, ?, ?)",
+                (trade_ref, kind, text, created),
+            )
+
+    def pot_notes(self, trade_ref: str) -> list[dict[str, Any]]:
+        rows = self._db.execute(
+            "SELECT kind, text, created FROM pot_notes WHERE trade_ref = ? ORDER BY created, id",
+            (trade_ref,),
+        )
+        return [dict(r) for r in rows]
 
     def add_pot_order(self, order: dict[str, Any]) -> None:
         with self._db:
