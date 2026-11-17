@@ -24,8 +24,6 @@ HUNDRED = Decimal(100)
 STABLES = ("USDC", "USDT", "FDUSD")
 MAX_OPEN_TRADES = 3  # Profile 5.4.3
 DRIFT_POINTS = Decimal(5)  # Profile 5.3.4: a coin 5 points off its DCA target
-CUSTODY_AUD = Decimal(5000)  # Profile 6.7: a coin over A$5K moves to the Ledger
-TAO_SHARE = Decimal(80)  # Profile 7.1: ~79% of crypto, not to grow from new money
 MILESTONES = (Decimal(500_000), Decimal(750_000), Decimal(1_000_000))  # Profile 6.4, US$
 MILESTONE_NEAR = Decimal(5)  # within 5% of a milestone
 ALERTED_KEY = "risk_alerted"
@@ -282,49 +280,8 @@ def deposit_limits(dep: dict[str, Any]) -> list[dict[str, Any]]:
 
 def portfolio_limits(portfolio: dict[str, Any]) -> list[dict[str, Any]]:
     total = cast(dict[str, Any], portfolio.get("total") or {})
-    rate = _d(total.get("audRate")) or Decimal(1)
-    holdings = cast(list[dict[str, Any]], portfolio.get("holdings") or [])
-    crypto = [h for h in holdings if h.get("asset") not in STABLES and h.get("value")]
-    value = sum((_d(h.get("value")) for h in crypto), ZERO)
     rows: list[dict[str, Any]] = []
     area, owner = "Portfolio", "you, on Portfolio"
-    if value > ZERO:
-        tao = sum((_d(h.get("value")) for h in crypto if h.get("asset") == "TAO"), ZERO)
-        share = tao / value * HUNDRED
-        rows.append(
-            _row(
-                "tao-share",
-                area,
-                "TAO's share of crypto",
-                share,
-                TAO_SHARE,
-                None,
-                figure=_pct(share),
-                of="~79%, no new money",
-                rule="7.1",
-                owner=owner,
-                words="Concentration: new money goes elsewhere, so this falls over time.",
-            )
-        )
-    on_binance = [
-        (str(h["asset"]), _d(h.get("value")) * rate) for h in crypto if h.get("source") == "Binance"
-    ]
-    biggest = max(on_binance, key=lambda x: x[1], default=("", ZERO))
-    rows.append(
-        _row(
-            "custody",
-            area,
-            "Largest coin on Binance",
-            biggest[1],
-            CUSTODY_AUD,
-            None,
-            figure=f"{biggest[0]} {_aud(biggest[1])}" if biggest[0] else "None",
-            of=f"{_aud(CUSTODY_AUD)}: to the Ledger, monthly",
-            rule="6.7",
-            owner=owner,
-            words="Over A$5K, a coin moves to self-custody in the monthly batch.",
-        )
-    )
     usd = _d(total.get("value"))
     nxt = next((m for m in MILESTONES if usd < m), None)
     if nxt is not None and usd > ZERO:
@@ -424,9 +381,11 @@ def review(
     system = my_agents.file(store, AGENT)["markdown"] or "You are risk-agent, a calm risk officer."
     prompt = (
         "Write this week's risk review from the desk's figures below, in your file's format: "
-        "a headline of one sentence; sections for the trading pot, the DCA book, deposits and "
-        "the portfolio, each two or three short sentences naming its figures; and the one "
-        "thing to do this week (or 'Nothing: keep going.'). Use only these figures.\n\n"
+        "a headline of one sentence, on the biggest of the four big risks (area Big: money on "
+        "Binance, the 2026 coins on the Ledger, TAO's share, the Ledger backup) when one isn't "
+        "kept; a first section on those four; then sections for the trading pot, the DCA book, "
+        "deposits and the portfolio, each two or three short sentences naming its figures; and "
+        "the one thing to do this week (or 'Nothing: keep going.'). Use only these figures.\n\n"
         "THE BOARD:\n" + json.dumps(rows, indent=1)
     )
     model = (model_of or (lambda: ""))()

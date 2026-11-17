@@ -222,3 +222,381 @@
     gap: 12px;
   }
 }
+
+/* The four big risks (decision 79, RiskBig.tsx): ranked cards that open for detail; the first
+   one not kept opens by itself. Prefixed rkb-. */
+.rkb {
+  display: grid;
+  gap: 12px;
+  margin: 0 0 18px;
+  padding: 0;
+  list-style: none;
+}
+.rkb-card {
+  border: 1px solid var(--edge);
+  border-radius: var(--r-panel);
+  background: var(--layer-1);
+  box-shadow: var(--sheen);
+  overflow: hidden;
+}
+.rkb-card > summary {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 14px;
+  padding: 16px 20px 24px;
+  list-style: none;
+  cursor: pointer;
+  transition: background-color 160ms var(--ease);
+}
+.rkb-card > summary::-webkit-details-marker {
+  display: none;
+}
+.rkb-card > summary:hover {
+  background: var(--row-hover);
+}
+.rkb-rank {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--layer-2);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.rkb-card.is-broken .rkb-rank {
+  background: var(--down-soft);
+  color: var(--down);
+}
+.rkb-card.is-near .rkb-rank {
+  background: var(--wait-soft);
+  color: var(--wait);
+}
+.rkb-card.is-kept .rkb-rank {
+  background: var(--up-soft);
+  color: var(--up);
+}
+.rkb-title {
+  display: grid;
+  gap: 2px;
+}
+.rkb-title b {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.rkb-title .rk-state {
+  margin-left: 6px;
+  vertical-align: 2px;
+}
+.rkb-title small,
+.rkb-fig small {
+  color: var(--muted);
+  font-size: 13px;
+}
+.rkb-fig {
+  display: grid;
+  gap: 1px;
+  text-align: right;
+}
+.rkb-fig b {
+  color: var(--text);
+  font-size: 20px;
+  font-weight: 600;
+}
+.rkb-meter {
+  grid-column: 2 / -1;
+  position: relative;
+  height: 6px;
+  margin-top: 8px;
+  border-radius: 3px;
+  background: var(--layer-2);
+}
+.rkb-meter i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--w);
+  border-radius: 3px;
+  background: var(--up);
+}
+.rkb-card.is-near .rkb-meter i {
+  background: var(--wait);
+}
+.rkb-card.is-broken .rkb-meter i {
+  background: var(--down);
+  opacity: 0.75;
+}
+.rkb-tick {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+  opacity: 0.7;
+}
+.rkb-tick small {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.rkb-body {
+  padding: 4px 20px 20px 64px;
+  border-top: 1px solid var(--line);
+}
+.rkb-body h3,
+.rkb-panel h4 {
+  margin: 16px 0 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+.rkb-split {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--layer-2);
+}
+.rkb-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.rkb-legend i {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 6px;
+  border-radius: 2px;
+}
+.rkb-move {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--accent-line);
+  border-radius: 14px;
+  background: var(--accent-soft);
+}
+.rkb-move > p {
+  margin: 0 0 6px;
+}
+.rkb-move b {
+  color: var(--text);
+}
+.rkb-note {
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.rkb-empty {
+  margin: 14px 0 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--line-2);
+  border-radius: 14px;
+  color: var(--muted);
+}
+.rkb-figs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 28px;
+  margin-top: 14px;
+}
+.rkb-figs div {
+  display: grid;
+}
+.rkb-figs b {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+}
+.rkb-figs small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.rkb-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin-top: 14px;
+}
+.rkb-panel {
+  padding: 2px 16px 14px;
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  background: var(--layer-1);
+}
+.rkb-glide {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.rkb-glide text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.rkb-target {
+  stroke: var(--accent);
+  stroke-dasharray: 3 4;
+  opacity: 0.6;
+}
+.rkb-path {
+  fill: none;
+  stroke: var(--wait);
+  stroke-width: 2;
+}
+.rkb-now {
+  fill: var(--wait);
+}
+.rkb-goal {
+  fill: var(--accent);
+}
+.rkb-trim {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.rkb-trim b {
+  color: var(--accent);
+}
+.rkb-trim input {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.rkb-out {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+}
+.rkb-out dt {
+  color: var(--muted);
+}
+.rkb-out dd {
+  margin: 0;
+  color: var(--text);
+  text-align: right;
+}
+.rkb-out dd.down {
+  color: var(--down);
+}
+.rkb-thesis {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--wait-soft);
+}
+.rkb-thesis.is-done {
+  background: var(--up-soft);
+}
+.rkb-thesis b {
+  color: var(--text);
+}
+.rkb-btns {
+  display: flex;
+  gap: 8px;
+}
+.rkb-checks {
+  display: grid;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.rkb-checks li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.rkb-checks small {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+}
+.rkb-dot {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+}
+.rkb-dot.is-ok {
+  background: var(--up-soft);
+  color: var(--up);
+}
+.rkb-dot.is-due {
+  background: var(--wait-soft);
+  color: var(--wait);
+}
+.rkb-dot.is-no {
+  background: var(--down-soft);
+  color: var(--down);
+}
+.rkb-never {
+  margin: 12px 0 0;
+  padding-left: 10px;
+  border-left: 2px solid var(--line-2);
+  color: var(--muted);
+  font-size: 13px;
+}
+.rk-everyday > summary {
+  padding: 10px 0;
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .rkb-meter i {
+    transform-origin: left;
+    animation: rkb-grow 600ms var(--ease) both;
+  }
+  .rkb-path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: rkb-draw 900ms var(--ease) 150ms forwards;
+  }
+  @keyframes rkb-grow {
+    from {
+      transform: scaleX(0);
+    }
+  }
+  @keyframes rkb-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+}
+@media (max-width: 720px) {
+  .rkb-card > summary {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+  .rkb-fig {
+    grid-column: 2;
+    text-align: left;
+  }
+  .rkb-body {
+    padding: 4px 16px 18px;
+  }
+  .rkb-pair {
+    grid-template-columns: 1fr;
+  }
+}

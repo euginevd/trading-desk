@@ -30,10 +30,10 @@ risk-agent's file and weekly review lead with the four; alerts stay on a state c
 
 ### 1. The four risks on today's data
 
-- [ ] Money on Binance against A$10K with the month's move; TAO share, glide path, what-if and thesis prompt; backup checks in Settings; the old rows under Everyday limits
-- [ ] Ledger figures from the TAO wallet only, so rule 2 shows "not set up" until phase 2
-- [ ] Profile 6.7, 7.1 and 7.6 proposed through the command bar
-- [ ] Tests: the cap and the move, the glide path weeks, the what-if, a backup check falling due
+- [x] Money on Binance against A$10K with the month's move; TAO share, glide path, what-if and thesis prompt; backup checks on the Risk page itself (not Settings: one place); the old rows under Everyday limits
+- [x] Ledger figures from the TAO wallet only, so rule 2 shows "not set up" until phase 2
+- [ ] Profile 6.7, 7.1 and 7.6: the owner pastes the change into the command bar and Accepts
+- [x] Tests: the cap and the move, the glide path weeks, the what-if, a backup check falling due
 
 ### 2. Ledger balances
 

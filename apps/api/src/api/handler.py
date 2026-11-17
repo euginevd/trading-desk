@@ -36,6 +36,7 @@ from api import (
     profile_v2,
     rebalance,
     risk,
+    risk_big,
     schedule,
     tax,
     telegram,
@@ -759,11 +760,27 @@ def risk_board(s: Services, now: datetime | None = None) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     missing: list[str] = []
     book = DcaBook(desk)
+    read_once: dict[str, Any] = {}
+
+    def portfolio() -> dict[str, Any]:
+        if "p" not in read_once:
+            read_once["p"] = (s.portfolio or live_portfolio)()
+        return cast(dict[str, Any], read_once["p"])
+
     sources: list[tuple[str, Callable[[], list[dict[str, Any]]]]] = [
         ("the trading pot", lambda: risk.pot_limits(Pot(desk).view())),
         ("the DCA book", lambda: risk.dca_limits(book.view(), len(book.open_weekly()), now)),
         ("deposits", lambda: risk.deposit_limits(_coach(s, write=False)["deposits"])),
-        ("the portfolio", lambda: risk.portfolio_limits((s.portfolio or live_portfolio)())),
+        ("the portfolio", lambda: risk.portfolio_limits(portfolio())),
+        (
+            "custody and TAO",
+            lambda: risk_big.big_four(
+                portfolio(),
+                book.plan(),
+                risk_big.checks_of(s.store),
+                int(now.timestamp() * 1000),
+            ),
+        ),
     ]
     for name, read in sources:
         try:
@@ -773,7 +790,7 @@ def risk_board(s: Services, now: datetime | None = None) -> dict[str, Any]:
             s.audit.record("risk", f"Board: {name}", f"Not read: {type(error).__name__}")
     plan = schedule.view(s.store, now)
     return {
-        "sentence": risk.sentence(rows),
+        "sentence": risk_big.lead(rows) or risk.sentence(rows),
         "limits": rows,
         "missing": missing,
         "review": risk.last_review(s.store),
@@ -788,6 +805,16 @@ def risk_model(s: Services) -> str:
     none: dict[str, Any] = {}
     mine = next((a for a in listing if a["slug"] == risk.AGENT), none)
     return str(cast(dict[str, Any], mine.get("model") or {}).get("id") or "")
+
+
+def _risk_mark(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    """A backup check done today, or TAO's thesis still holding: the date only."""
+    try:
+        risk_big.mark(s.store, body.get("key"), int(datetime.now(SYDNEY).timestamp() * 1000))
+    except ValueError as error:
+        raise Refused(str(error)) from None
+    s.audit.record("risk", "Checked", str(body.get("key")))
+    return risk_board(s)
 
 
 def _risk_review(s: Services) -> dict[str, Any]:
@@ -1030,6 +1057,7 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("POST", "/pot/scan"): lambda s, _q, _b: _pot_agent(s, None),
     ("GET", "/risk-board"): lambda s, _q, _b: risk_board(s),
     ("POST", "/risk-board/review"): lambda s, _q, _b: _risk_review(s),
+    ("POST", "/risk-board/check"): lambda s, _q, b: _risk_mark(s, b),
     ("GET", "/my-agents/schedule"): lambda s, _q, _b: schedule.view(s.store, datetime.now(SYDNEY)),
     ("PUT", "/my-agents/schedule"): lambda s, _q, b: _schedule_on(s, b),
     ("POST", "/pot/agent"): lambda s, _q, b: _pot_agent(s, b),

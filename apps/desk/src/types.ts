@@ -1400,9 +1400,53 @@ export interface AccountCoin {
 }
 
 // risk-agent's board (GET /risk-board): every limit from the desk's figures.
+// The four big risks (decision 79): each a board row with a rank and the page's detail.
+export interface RiskExchange {
+  totalAud: string;
+  capAud: string;
+  dcaAud: string;
+  stablesAud: string;
+  otherAud: string;
+  moveAud: string;
+  moves: { coin: string; aud: string; qty: string; leaves: string }[];
+  afterAud: string;
+}
+export interface RiskCold {
+  setUp: boolean;
+  sharePct: string;
+  coins: { coin: string; ledgerAud: string; binanceAud: string; pct: string }[];
+}
+export interface RiskTao {
+  valueAud: string;
+  costAud: string | null;
+  pnlAud: string | null;
+  cryptoAud: string;
+  otherAud: string;
+  weeklyAud: string;
+  targetPct: string;
+  by: string;
+  weeks: number;
+  reach: number | null;
+  onTrack: boolean;
+  thesisAt: number | null;
+  thesisDue: boolean;
+}
+export interface RiskBackup {
+  items: {
+    key: string;
+    label: string;
+    at: number | null;
+    due: number | null;
+    state: "ok" | "due" | "no";
+  }[];
+}
+
 export interface RiskLimit {
   key: string;
-  area: "Trading pot" | "DCA book" | "Deposits" | "Portfolio";
+  area: "Trading pot" | "DCA book" | "Deposits" | "Portfolio" | "Big";
+  rank?: number;
+  short?: string;
+  detail?: RiskExchange | RiskCold | RiskTao | RiskBackup;
   name: string;
   value: string;
   warn: string | null;

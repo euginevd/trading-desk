@@ -24,7 +24,7 @@ Your requirements, features and ideas, numbered, in your own words. In `producti
 20. Test a bot on past prices before switching it on, after 3Commas and TradeZella: the setup shows what it would have done over the last 90 days (fills, result, worst drawdown) from the candles the desk already has.
 21. Replay a trade on the chart from the Journal, after TradeZella: entry, exit and stop on the chart, with my tags and the agent's reasons beside it.
 22. Set up bot rules by typing them, after Public: the Profile command bar's diff and Accept, for rules like "an extra A$50 BTC buy on Fridays when Fear & Greed is under 30".
-23. Rethink the Risk agent around the biggest risks: funds left on Binance instead of cold storage (A$10K at most on the exchange); 70%+ of long-term holds on the Ledger; the Ledger's backup key kept securely; TAO as most of my crypto, in one high-conviction coin, and whether and when to diversify given its P&L. *(Asked 17 Nov 2026; plan and mockup waiting for your approval: [plan-risk.md](docs/plan-risk.md).)*
+23. Rethink the Risk agent around the biggest risks: funds left on Binance instead of cold storage (A$10K at most on the exchange); 70%+ of long-term holds on the Ledger; the Ledger's backup key kept securely; TAO as most of my crypto, in one high-conviction coin, and whether and when to diversify given its P&L. *(Approved 17 Nov 2026. Built: phase 1, the four on the Risk page. Next: Ledger addresses, then risk-agent's file; [plan-risk.md](docs/plan-risk.md).)*
 
 Later, from the project ideas doc, not started until listed above:
 

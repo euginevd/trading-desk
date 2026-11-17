@@ -34,7 +34,7 @@ Every page follows [design-system.md](design-system.md) 18 to 22. Features 1 to 
 | 91 | The Trading account's watchlist holds up to 30 coins; the Trade page's lists stay at 10 (owner, 17 Nov 2026) | Done | |
 | 92 | Bots page in three tabs: Accumulation (the DCA book), Opportunities and Grid bots; rebalancing dropped for now, TODO 9 (owner, 17 Nov 2026) | Done | |
 | 93 | The teal floating console: rounded frame, layered panels, pill tabs with icons, icon row actions, one type scale with nothing under 12px to read; reading screens larger, trading screens dense (TODO 14, owner, 17 Nov 2026; decision 77) | Done | |
-| 94 | Risk page leads with the four big risks: money on Binance (A$10K), 2026 coins on the Ledger (70%+), TAO's share with a glide path and what-if, and the Ledger backup checks (TODO 23, owner, 17 Nov 2026; decision 79) | Next | |
+| 94 | Risk page leads with the four big risks: money on Binance (A$10K), 2026 coins on the Ledger (70%+), TAO's share with a glide path and what-if, and the Ledger backup checks (TODO 23, owner, 17 Nov 2026; decision 79) | Building: phase 1 done, Ledger addresses next | |
 
 ## `api`
 

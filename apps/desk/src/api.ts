@@ -252,6 +252,8 @@ export const getProfileFile = () => call<MarkdownFile>("GET", "/profile/file");
 // risk-agent (local/agents/risk-agent.md).
 export const getRiskBoard = () => call<RiskBoard>("GET", "/risk-board");
 export const writeRiskReview = () => call<RiskBoard>("POST", "/risk-board/review");
+// A backup check done today, or TAO's thesis still holding: the desk keeps the date only.
+export const markRisk = (key: string) => call<RiskBoard>("POST", "/risk-board/check", { key });
 export const getMyAgents = () => call<MyAgentsPage>("GET", "/my-agents");
 export const setAgentsOn = (on: boolean) => call<unknown>("PUT", "/my-agents/schedule", { on });
 export const getMyAgentFile = (slug: string) =>
