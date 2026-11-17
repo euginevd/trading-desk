@@ -152,15 +152,28 @@ function fearMood(value: number): string {
 }
 
 function Logo() {
-  // A rising candle over the desk's edge.
+  // The Ledger mark (decision 78): three rows stepping up to a point, a ledger that grows.
   return (
-    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true">
-      <rect x="0.5" y="0.5" width="25" height="25" rx="7" className="g-panel" />
-      <rect x="7" y="9" width="4" height="8" rx="1" className="g-accent" />
-      <rect x="8.5" y="6" width="1" height="13" className="g-accent" />
-      <rect x="15" y="12" width="4" height="5" rx="1" className="g-accent" opacity=".45" />
-      <rect x="16.5" y="10" width="1" height="9" className="g-accent" opacity=".45" />
-      <rect x="5" y="20" width="16" height="1.5" rx=".75" className="g-text" />
+    <svg width="30" height="30" viewBox="0 0 64 64" aria-hidden="true">
+      <defs>
+        <linearGradient id="logo-ink" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#15212a" />
+          <stop offset="1" stopColor="#0a1013" />
+        </linearGradient>
+      </defs>
+      <rect
+        x="1"
+        y="1"
+        width="62"
+        height="62"
+        rx="18"
+        fill="url(#logo-ink)"
+        stroke="var(--edge-2)"
+      />
+      <rect x="14" y="40" width="36" height="6" rx="3" fill="#2a9d90" />
+      <rect x="14" y="29" width="26" height="6" rx="3" className="g-accent" opacity=".75" />
+      <rect x="14" y="18" width="16" height="6" rx="3" className="g-accent" />
+      <circle cx="47" cy="21" r="4" className="g-text" />
     </svg>
   );
 }

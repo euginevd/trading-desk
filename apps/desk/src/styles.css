@@ -2750,3 +2750,34 @@ body::before {
   overflow-x: auto;
   scrollbar-width: none;
 }
+
+/* Ambient drift (decision 78): two soft glows move behind the frame over a minute, never behind a
+   figure. The only thing that moves on its own; it stops entirely under reduced motion. */
+body {
+  background: transparent;
+}
+body::after {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(32% 32% at 28% 22%, rgba(80, 210, 193, 0.1), transparent 70%),
+    radial-gradient(38% 38% at 76% 78%, rgba(78, 168, 255, 0.07), transparent 70%);
+  animation: desk-drift 60s ease-in-out infinite alternate;
+  will-change: transform;
+}
+@keyframes desk-drift {
+  from {
+    transform: translate3d(-4%, -3%, 0) scale(1);
+  }
+  to {
+    transform: translate3d(4%, 3%, 0) scale(1.06);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    animation: none !important;
+  }
+}

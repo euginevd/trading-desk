@@ -39,13 +39,13 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 
 9. 120ms for hover and press, 200ms for tabs and dialogs. Animate only `transform` and `opacity`, and respect reduced motion.
 9a. A dialog, sheet or menu closes on Esc or a click outside (not a drag from inside), from one handler (`dismiss.ts`); a confirm closed so keeps.
-10. Prices update in place; a change flashes its tint for 400ms at most. Nothing loops or scrolls on its own. The one entrance: a page's lead sentence settles in.
+10. A price change flashes its tint for 400ms at most; a page's sentence settles in once. Only the field's minute-long drift loops (decision 78), never under reduced motion.
 
 ## Components
 
 11. Button (secondary `panel-2`, primary `accent`, buy `up`, sell `down`), Input with a unit, segmented Buy/Sell, Tabs, Table, Tag, Pill, Card, Dialog, Toast and Skeleton. Anything new is built from these and added here once settled.
 12. One primary button per view: Analyse on Trade, Create on a bot page.
-13. Coin mark: the coin's own logo, 24px (decision 25); its letters on `panel-2` when there's none.
+13. Coin mark: the coin's logo, 24px (decision 25), else its letters. The desk's mark: Ledger (decision 78).
 13a. Rule-break banner (red, Place anyway (logged) set apart), an Out of date tag (`wait`), agents' icons as avatars (decisions 58, 70).
 13b. Trading agent, off the menu since decision 73: a numbered timeline and the call (decisions 60, 69).
 13c. Reader: Markdown full page, read-only, in a 760px column (decision 61).

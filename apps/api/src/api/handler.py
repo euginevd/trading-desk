@@ -554,7 +554,9 @@ def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
     return {"source": source, "asset": asset, "averageCost": average}
 
 
-BUYS = ("/trades", "/orders", "/orders/ladder", "/dca/orders")
+# The Trading account's trades are the owner's own buys too (decision 78); the DCA close-out is
+# not, as it finishes a week the owner already approved.
+BUYS = ("/trades", "/orders", "/orders/ladder", "/dca/orders", "/pot/trades")
 PRETRADE_RULES = ("monthly_deposit_cap_aud", "per_trade_aud", "max_pct_per_coin")
 
 
@@ -580,6 +582,12 @@ def _pretrade(
     owner confirms past it, and that override is logged. A 409 names each rule broken."""
     if path not in BUYS:
         return None
+    if path == "/pot/trades":  # sized by the account's own rules first; a refusal there stands
+        sized = Pot(desk).size(body)
+        _, store, audit, _ = desk.parts()
+        override = body.get("override") is True
+        spend = Decimal(str(sized["spend"]))
+        return _rule_check(store, audit, str(sized["coin"]), spend, override, portfolio)[0]
     spend = _spend_of(path, body)
     if spend is None or not spend.is_finite() or spend <= 0:
         return None

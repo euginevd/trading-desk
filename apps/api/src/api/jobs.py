@@ -16,6 +16,8 @@ from api.handler import (  # pyright: ignore[reportPrivateUsage]
     Services,
     _coach,  # pyright: ignore[reportPrivateUsage]
     _pot_agent,  # pyright: ignore[reportPrivateUsage]
+    _pretrade,  # pyright: ignore[reportPrivateUsage]
+    live_portfolio,
     risk_board,
     risk_model,
 )
@@ -146,7 +148,7 @@ def runners(s: Services, now: datetime) -> dict[str, schedule.Runner]:
     }
 
 
-def _setup(desk: Trading, kind: str, arg: str) -> str:
+def _setup(desk: Trading, kind: str, arg: str, s: Services) -> str:
     pot = Pot(desk)
     p = next((x for x in pot.proposals() if x["id"] == arg), None)
     if p is None:
@@ -155,7 +157,11 @@ def _setup(desk: Trading, kind: str, arg: str) -> str:
         pot.dismiss({"id": arg})
         return "Dismissed."
     fields = ("coin", "entry", "stop", "target", "setup", "reason")
-    t = pot.place({k: p[k] for k in fields} | {"proposal": arg})
+    body = {k: p[k] for k in fields} | {"proposal": arg}
+    # The Profile's pre-trade check, as on the desk (decision 78); no override from a button.
+    if _pretrade(desk, "/pot/trades", body, s.portfolio or live_portfolio) is not None:
+        return "Not placed: it breaks a Profile rule. Open the Trading account to place it anyway."
+    t = pot.place(body)
     return f"Placed {t['ref']}: the entry waits on Binance at {t['entry']}."
 
 
@@ -172,7 +178,7 @@ def act(s: Services, item: dict[str, Any], now: datetime) -> str:
     kind, arg = str(item["kind"]), str(item["arg"])
     try:
         if kind in ("pot-place", "pot-dismiss"):
-            return _setup(desk, kind, arg)
+            return _setup(desk, kind, arg, s)
         if kind == "dca-close-out":
             return _close_out(desk, arg, now)
     except (Refused, BinanceError) as error:

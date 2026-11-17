@@ -26,3 +26,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 75. The trading pot is the Trading account: money first, coins as cards, trades in tabs; other buys dipping into its USDC are logged, not blocked. [Record](decisions/from-58.md)
 76. A visual refresh: ink-blue surfaces, a serif for the desk's sentences, a top-edge sheen on raised controls, one settle-in motion. [Record](decisions/from-58.md)
 77. The teal floating console: a rounded frame, layered panels, pill tabs with icons, one type scale with nothing under 12px to read. [Record](decisions/from-58.md)
+78. The Ledger mark; a slow ambient drift behind the frame; the Trading account's trades take the Profile pre-trade check. [Record](decisions/from-58.md)

@@ -1541,4 +1541,5 @@ export interface PotTradeRequest {
   setup: string;
   reason: string;
   proposal?: string;
+  override?: boolean; // past a broken Profile rule, logged (decision 78)
 }

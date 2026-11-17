@@ -107,7 +107,7 @@ const pot = (p: Partial<PotView> = {}): PotView => ({
   ...p,
 });
 
-function serve(reply: PotView) {
+function serve(reply: PotView, breaksRule = false) {
   const fetch = vi.fn((url: string, init?: RequestInit) => {
     void init;
     const path = url.replace(/^\/api/, "");
@@ -155,10 +155,20 @@ function serve(reply: PotView) {
     if (path === "/pot/scan")
       return json({ ...reply, lastScan: { at: NOW, line: "No setup today." } });
     if (path === "/pot/put-in") return json(pot());
-    if (path === "/pot/trades")
+    if (path === "/pot/trades") {
+      const asked = JSON.parse(String(init?.body ?? "{}")) as { override?: boolean };
+      if (breaksRule && !asked.override)
+        return json(
+          {
+            error: "This buy breaks your rule: Per trade.",
+            ruleBreaks: [{ rule: "per_trade_aud", label: "Per trade", message: "A$15 over A$1." }],
+          },
+          409,
+        );
       return json(
         trade({ ref: "TRD-SUI-26W47-1", coin: "SUI", status: "waiting", entry: "3.4172" }),
       );
+    }
     if (path === "/pot/trades/stop") return json(trade({ stop: "135.5" }));
     if (path === "/pot/preview") {
       const body = JSON.parse(String(init?.body)) as Record<string, string>;
@@ -293,6 +303,19 @@ describe("the trading pot", () => {
       reason: "Up trend with higher lows, back to its 20-day.",
       proposal: "p1",
     });
+    expect(await screen.findByText(/TRD-SUI-26W47-1 placed/)).toBeTruthy();
+  });
+
+  it("holds a trade that breaks a Profile rule until it's placed anyway", async () => {
+    const fetch = serve(pot(), true);
+    render(<PotPage />);
+    const card = await screen.findByRole("article", { name: "Proposal: SUI, trend pullback" });
+    fireEvent.click(within(card).getByRole("button", { name: "Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Place the trade" }));
+    expect(await screen.findByText(/Breaks a rule/)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Place anyway (logged)" }));
+    await waitFor(() => expect(sent(fetch, "/pot/trades")).toHaveLength(2));
+    expect(JSON.parse(String(sent(fetch, "/pot/trades")[1]?.[1]?.body)).override).toBe(true);
     expect(await screen.findByText(/TRD-SUI-26W47-1 placed/)).toBeTruthy();
   });
 
