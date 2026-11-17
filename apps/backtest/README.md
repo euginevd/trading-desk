@@ -1,7 +1,7 @@
 # Backtest and paper trading (Freqtrade)
 
 Tests the desk's four styles on years of Binance candles, and paper-trades one live, with
-[Freqtrade](https://www.freqtrade.io) 2026.10 in its own container. It never places an order
+[Freqtrade](https://www.freqtrade.io) 2026.10 (the latest release, with FreqAI) in its own container. It never places an order
 and needs no keys: Binance's public candles only.
 
 ## Run it
@@ -22,10 +22,15 @@ the worst run of losses from a high.
 | Day trade | 15-minute, 4-hour trend | the last year | several minutes |
 | Scalp | 5-minute, 1-hour trend | the last 5 months | several minutes |
 
-Paper trading, one style at a time, on USDC pairs at live prices:
+With FreqAI on top, `bash apps/backtest/run.sh swing-ai` (or `day-ai`, `scalp-ai`):
+see **The AI parts** below. Compare its report with the plain style's.
+
+Paper trading, one style at a time, on USDC pairs at live prices. Every entry asks
+trading-agent first, through the desk (which must be running), and only a take goes ahead:
 
 ```bash
 PAPER_STRATEGY=DeskSwing docker compose --profile paper up -d paper
+PAPER_STRATEGY=DeskSwingAI PAPER_AI=ai-swing.json docker compose --profile paper up -d paper  # with FreqAI too
 docker compose logs -f paper
 docker compose --profile backtest run --rm backtest show-trades --db-url sqlite:////freqtrade/user_data/paper.sqlite
 ```
@@ -44,13 +49,31 @@ by then. After the signal it mirrors the desk:
 - 1% of the pot at risk a trade, at most 10 USDC, the position at most 25% of a 1,000 pot;
   at most 3 trades open, one per coin; 0.1% fees each side; no new trades in a Bear regime.
 
+## The AI parts
+
+- **FreqAI** (`DeskScalpAI`, `DeskDayAI`, `DeskSwingAI`; backtests and paper). A LightGBM
+  model per coin learns from its past candles (RSI, MFI, ADX, rate of change, ATR, distance
+  from the average and relative volume, over 10, 20 and 50 candles, on the style's
+  timeframes) how often a trade of the style's shape won: bought at the close, the stop 1 to 2
+  ATRs under it, the target at the style's reward to risk, within its hold. The desk's rule
+  still finds the setups; a setup goes ahead only when the model gives it a chance of winning
+  5 points over break-even and the candle looks like what it trained on. As the backtest walks
+  forward it retrains on the days before each stretch (swing: 2 years before each month; day:
+  60 days before each fortnight; scalp: 30 days before each week), so it never trains on what
+  it then tests. Position has too few weekly candles a coin to learn from.
+- **trading-agent** (paper only). Before each entry the paper bot asks the desk's
+  trading-agent (POST /pot/judge-one) with New trade's prompt, rules, model and web search,
+  and the desk's own facts and odds for the coin when its screen finds it too. Only a take
+  goes ahead. Each verdict, with its reason, is kept in `local/backtest/agent_verdicts.jsonl`;
+  a setup is asked about once. It can't be backtested: on past dates the model already knows
+  what happened. Each question costs one trading-agent call (Opus for swing and position).
+
 ## What it doesn't
 
 - **The screener's universe filters.** It tests a fixed list of 20 large coins against USDT
   (USDC pairs are too young for years of history), not each day's top 100 by volume. Coins
   that died aren't in it, so results flatter a little (survivorship).
-- **trading-agent's take, wait or pass.** The model can't be replayed on the past; this is the
-  rule alone, before the model's judgement.
+- **trading-agent in backtests** (see above): paper trading only.
 - The desk's monthly loss stop, its two-alts limit, and the scalp spread check.
 - Exits the desk hasn't built: half at the target, trailing stops, time stops. A trade stays
   open until its stop or target, as on the desk.
@@ -59,6 +82,7 @@ by then. After the signal it mirrors the desk:
 
 - `strategies/desk_styles.py`: the four strategies (`DeskScalp`, `DeskDay`, `DeskSwing`,
   `DeskPosition`). Type-checked in Freqtrade's image, not the desk's (pyproject excludes it).
-- `config/backtest.json`: the pairs, the pot and the rules; `config/paper.json` adds USDC.
+- `config/backtest.json`: the pairs, the pot and the rules; `config/paper.json` adds USDC;
+  `config/ai-*.json`: FreqAI for each style.
 - `report.py`: the desk's report in R from Freqtrade's result.
 - `run.sh`: download, backtest, report.

@@ -873,6 +873,7 @@ def _pot_agent(s: Services, body: dict[str, Any] | None, job: str = "chat") -> d
             "styles": lambda _b: agent.styles(),
             "screen": agent.screen,
             "judge": agent.judge,
+            "judge-one": agent.judge_one,
         }
         return jobs.get(job, agent.chat)(body)
 
@@ -1094,6 +1095,7 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("GET", "/pot/styles"): lambda s, _q, _b: _pot_agent(s, {}, "styles"),
     ("POST", "/pot/screen"): lambda s, _q, b: _pot_agent(s, b, "screen"),
     ("POST", "/pot/judge"): lambda s, _q, b: _pot_agent(s, b, "judge"),
+    ("POST", "/pot/judge-one"): lambda s, _q, b: _pot_agent(s, b, "judge-one"),
     ("POST", "/dca/agent"): lambda s, _q, b: _funds(s).agent(b),
     ("GET", "/dca/funds/odds"): lambda s, q, _b: _funds(s).odds(
         str(q.get("coin", "")), q.get("price"), str(q.get("side", "add"))

@@ -41,7 +41,13 @@ ORIGINS = {"http://127.0.0.1:5173", "http://localhost:5173"} | {
     for o in os.environ.get("DESK_ORIGINS", "").split(",")
     if o.strip().startswith(("http://127.0.0.1:", "http://localhost:"))  # local pages only
 }
-HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"} | {o.split("://", 1)[1] for o in ORIGINS}
+# DESK_HOSTS: other containers of this compose project that may call the api by its service
+# name (the paper bot asking trading-agent, apps/backtest); never a public name.
+HOSTS = (
+    {f"127.0.0.1:{PORT}", f"localhost:{PORT}"}
+    | {o.split("://", 1)[1] for o in ORIGINS}
+    | {h.strip() for h in os.environ.get("DESK_HOSTS", "").split(",") if h.strip() == f"api:{PORT}"}
+)
 
 
 def load_env(path: Path) -> None:

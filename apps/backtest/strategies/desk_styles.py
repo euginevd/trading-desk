@@ -8,13 +8,28 @@ What follows the signal mirrors the desk too:
   the target at the style's minimum reward to risk after 0.1% fees each side;
 - 1% of the pot at risk a trade, at most 10 USDC, the position at most 25% of the pot;
 - at most 3 trades open (3% open risk), one per coin; no new trades in a Bear regime.
-Not mirrored: the desk's monthly loss stop, its two-alts limit and the model's take/wait/pass.
+Not mirrored: the desk's monthly loss stop and its two-alts limit.
+
+The AI parts (owner, 17 Nov 2026):
+- FreqAI (the *AI classes): a LightGBM model, retrained as the backtest walks forward, learns
+  from each coin's past candles how often a trade of the style's shape won; a setup goes ahead
+  only when the model's chance of a win clears break-even by 5 points.
+- trading-agent: when DESK_AGENT_URL is set (the paper bot), every entry first asks the desk's
+  trading-agent (POST /pot/judge-one), the same prompt and rules as New trade, and only a
+  "take" goes ahead. Paper trading only: on past dates the model already knows what happened.
 """
 
+import json
+import logging
+import os
 from datetime import datetime
+from pathlib import Path
 from typing import Any, ClassVar
 
+import httpx
+import numpy as np
 import pandas as pd
+import talib.abstract as ta
 from api import screener
 from freqtrade.enums import RunMode
 from freqtrade.persistence import Trade
@@ -24,6 +39,8 @@ FEE = 0.001
 RISK = 0.01  # of the pot, every style (owner, 17 Nov 2026)
 MAX_RISK = 10.0  # USDC
 MAX_SPEND = 0.25  # of the pot
+VERDICTS = Path("/freqtrade/user_data/agent_verdicts.jsonl")
+log = logging.getLogger(__name__)
 TF_MS = {
     "5m": 300_000,
     "15m": 900_000,
@@ -134,6 +151,53 @@ class DeskStyle(IStrategy):
         dataframe["exit_long"] = 0
         return dataframe
 
+    def confirm_trade_entry(  # noqa: PLR0913, PLR0917 - Freqtrade's signature
+        self,
+        pair: str,
+        order_type: str,
+        amount: float,
+        rate: float,
+        time_in_force: str,
+        current_time: datetime,
+        entry_tag: str | None,
+        side: str,
+        **kwargs: Any,
+    ) -> bool:
+        """Paper and live only, when DESK_AGENT_URL is set: trading-agent's verdict first."""
+        url = os.environ.get("DESK_AGENT_URL", "")
+        if not url or self.dp.runmode not in (RunMode.DRY_RUN, RunMode.LIVE):
+            return True
+        plan = plan_of(entry_tag)
+        if not plan:
+            return False
+        key = f"{pair}|{entry_tag}"
+        asked: dict[str, dict[str, Any]] = self.__dict__.setdefault("_asked", {})
+        if key not in asked:  # one question a setup, however many candles it stays on
+            asked[key] = self._ask_agent(url, pair, plan, rate)
+            line = {"at": current_time.isoformat(), "pair": pair, "style": self.style}
+            line |= {"setup": plan[0], "entry": plan[1], "stop": plan[2], "target": plan[3]}
+            with VERDICTS.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(line | asked[key]) + "\n")
+        return asked[key].get("verdict") == "take"
+
+    def _ask_agent(
+        self, url: str, pair: str, plan: tuple[str, float, float, float], rate: float
+    ) -> dict[str, Any]:
+        setup, entry, stop, target = plan
+        coin = pair.split("/", maxsplit=1)[0]
+        body = {"style": self.style, "coin": coin, "setup": setup, "price": rate}
+        body |= {"entry": f"{entry:.10g}", "stop": f"{stop:.10g}", "target": f"{target:.10g}"}
+        try:
+            reply = httpx.post(url, json=body, timeout=300)
+            said = reply.json()
+        except (httpx.HTTPError, ValueError) as error:
+            log.warning("trading-agent unreachable for %s: %s", pair, error)
+            return {"verdict": "error", "reason": str(error)[:200]}
+        if reply.status_code != 200:  # noqa: PLR2004
+            return {"verdict": "error", "reason": str(said.get("error", ""))[:200]}
+        log.info("trading-agent on %s %s: %s", pair, setup, said.get("verdict"))
+        return said
+
     def custom_entry_price(  # noqa: PLR0913, PLR0917 - Freqtrade's signature
         self,
         pair: str,
@@ -232,3 +296,103 @@ class DeskPosition(DeskStyle):
     btc_tf = "1w"
     startup_candle_count = 120
     unfilledtimeout: ClassVar[dict[str, Any]] = {"entry": 14 * 1440, "exit": 10, "unit": "minutes"}
+
+
+def outcomes(df: pd.DataFrame, steps: int, atr_mult: float, rr: float) -> np.ndarray:
+    """The label FreqAI learns: had you bought this candle's close with a stop atr_mult ATRs
+    under it and the target rr times that over it (fees added), did the target come first
+    within steps candles? A candle touching both counts as the stop; too recent: unknown."""
+    close, high, low = (df[c].to_numpy(dtype=float) for c in ("close", "high", "low"))
+    atr = np.asarray(ta.ATR(df, timeperiod=14), dtype=float)
+    stop = close - atr_mult * atr
+    target = close + rr * (close - stop) + close * 2 * FEE
+    n = len(close)
+    never = steps + 1
+    hit_t, hit_s = np.full(n, never), np.full(n, never)
+    for k in range(1, steps + 1):
+        valid = np.arange(n) < n - k
+        ahead_h, ahead_l = np.roll(high, -k), np.roll(low, -k)
+        hit_s[valid & (ahead_l <= stop) & (hit_s == never)] = k
+        hit_t[valid & (ahead_h >= target) & (hit_t == never)] = k
+    label = np.where(hit_t < hit_s, "win", "lose").astype(object)
+    label[np.arange(n) >= n - steps] = np.nan
+    label[np.isnan(atr)] = np.nan
+    return label
+
+
+class DeskAI(DeskStyle):
+    """FreqAI on top of the style's own setups: the rule finds them, the model filters them."""
+
+    atr_mult = 2.0
+    min_win = 0.38  # break-even at 2R is 33%, plus 5 points
+
+    def populate_indicators(
+        self, dataframe: pd.DataFrame, metadata: dict[str, Any]
+    ) -> pd.DataFrame:
+        return self.freqai.start(dataframe, metadata, self)
+
+    def feature_engineering_expand_all(
+        self, dataframe: pd.DataFrame, period: int, metadata: dict[str, Any], **kwargs: Any
+    ) -> pd.DataFrame:
+        dataframe["%-rsi-period"] = ta.RSI(dataframe, timeperiod=period)
+        dataframe["%-mfi-period"] = ta.MFI(dataframe, timeperiod=period)
+        dataframe["%-adx-period"] = ta.ADX(dataframe, timeperiod=period)
+        dataframe["%-roc-period"] = ta.ROC(dataframe, timeperiod=period)
+        dataframe["%-natr-period"] = ta.NATR(dataframe, timeperiod=period)
+        sma = ta.SMA(dataframe, timeperiod=period)
+        dataframe["%-sma-gap-period"] = dataframe["close"] / sma - 1
+        volume = dataframe["volume"]
+        dataframe["%-relvol-period"] = volume / volume.rolling(period).mean()
+        return dataframe
+
+    def feature_engineering_expand_basic(
+        self, dataframe: pd.DataFrame, metadata: dict[str, Any], **kwargs: Any
+    ) -> pd.DataFrame:
+        dataframe["%-pct-change"] = dataframe["close"].pct_change()
+        dataframe["%-range"] = (dataframe["high"] - dataframe["low"]) / dataframe["close"]
+        return dataframe
+
+    def feature_engineering_standard(
+        self, dataframe: pd.DataFrame, metadata: dict[str, Any], **kwargs: Any
+    ) -> pd.DataFrame:
+        dataframe["%-day_of_week"] = dataframe["date"].dt.dayofweek
+        dataframe["%-hour_of_day"] = dataframe["date"].dt.hour
+        return dataframe
+
+    def set_freqai_targets(
+        self, dataframe: pd.DataFrame, metadata: dict[str, Any], **kwargs: Any
+    ) -> pd.DataFrame:
+        self.freqai.class_names = ["lose", "win"]
+        steps = screener.ODDS_PLAN[self.style].steps
+        rr = screener.STYLES[self.style].min_rr
+        dataframe["&s-win"] = outcomes(dataframe, steps, self.atr_mult, rr)
+        return dataframe
+
+    def populate_entry_trend(
+        self, dataframe: pd.DataFrame, metadata: dict[str, Any]
+    ) -> pd.DataFrame:
+        dataframe = super().populate_entry_trend(dataframe, metadata)
+        if "win" not in dataframe or "do_predict" not in dataframe:
+            dataframe["enter_long"] = 0
+            return dataframe
+        keep = (
+            (dataframe["enter_long"] == 1)
+            & (dataframe["do_predict"] == 1)
+            & (dataframe["win"] >= self.min_win)
+        )
+        dataframe["enter_long"] = keep.astype(int)
+        dataframe.loc[~keep, "enter_tag"] = None
+        return dataframe
+
+
+class DeskScalpAI(DeskAI, DeskScalp):
+    atr_mult = 1.0
+    min_win = 0.45  # break-even at 1.5R is 40%, plus 5 points
+
+
+class DeskDayAI(DeskAI, DeskDay):
+    atr_mult = 1.5
+
+
+class DeskSwingAI(DeskAI, DeskSwing):
+    atr_mult = 2.0

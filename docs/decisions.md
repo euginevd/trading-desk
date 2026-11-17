@@ -32,3 +32,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 81. trading-agent.md is the one strategy record, each style Built and Not built yet; every version kept; the daily scan is swing, plus position on Mondays. [Record](decisions/from-58.md)
 82. The odds check: each pick's rule re-run on past candles and simulated from them, a warning not a gate; the record decides once it has 8 decided signals. [Record](decisions/from-58.md)
 83. Freqtrade 2026.10 backtests and paper-trades the styles, calling the desk's own screener rule; it never trades, the desk keeps placing orders. [Record](decisions/from-58.md)
+84. The AI parts: FreqAI filters setups in backtests; trading-agent judges only in paper trading, through a new single-setup endpoint the paper container may call by service name. [Record](decisions/from-58.md)

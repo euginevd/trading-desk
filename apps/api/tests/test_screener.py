@@ -201,3 +201,33 @@ def test_card_text_is_clipped_at_a_word_never_mid_word() -> None:
     assert clip("so momentum has broken and this is a deep pullback, again", 40) == (
         "so momentum has broken and this is a…"
     )
+
+
+def test_the_paper_bot_asks_trading_agent_about_one_setup(pot: Pot) -> None:
+    pick = {
+        "coin": "SOL",
+        "setup": "Trend pullback",
+        "grade": "B",
+        "score": 6.1,
+        "verdict": "wait",
+        "entry": "205",
+        "stop": "195",
+        "target": "226",
+        "confluence": ["Holding the 50-day"],
+        "against": ["Unlock in 5 days"],
+        "catalyst": "SOL unlock 22 Nov.",
+        "crowding": "Clear",
+        "reason": "A pullback in an uptrend, but the unlock lands inside the hold.",
+    }
+    fake = Fake({"line": "Wait for the unlock.", "picks": [pick]})
+    agent = PotAgent(pot, fake)  # type: ignore[arg-type]
+    body = {"style": "swing", "coin": "sol", "setup": "Trend pullback", "price": "210"}
+    said = agent.judge_one(body | {"entry": "205", "stop": "195", "target": "226"})
+    assert said["verdict"] == "wait"
+    assert said["catalyst"] == "SOL unlock 22 Nov."
+    assert '"coin": "SOL"' in str(fake.asked[0]["prompt"])
+    assert fake.asked[0]["model"] == "claude-opus-5-5"
+    with pytest.raises(Refused, match="stop goes under"):
+        agent.judge_one(body | {"entry": "205", "stop": "215", "target": "226"})
+    with pytest.raises(Refused, match="Name the coin"):
+        agent.judge_one(body | {"coin": "SOL/USDT", "entry": "205", "stop": "195", "target": "226"})
