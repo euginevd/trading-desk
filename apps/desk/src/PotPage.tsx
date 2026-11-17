@@ -21,12 +21,13 @@ import { dated, day, dollars, qty, when } from "./dcaFormat";
 import { Live } from "./Figures";
 import PotChat, { usePotChat } from "./PotChat";
 import PotNewTrade from "./PotNewTrade";
-import NewTradeFlow from "./NewTradeFlow";
+import NewTradeFlow, { OddsLine } from "./NewTradeFlow";
 import PotPanel, { px, rWord, rr, tone } from "./PotPanel";
 import { RuleBreakBanner } from "./RuleMarks";
 import type {
   PotAction,
   PotCheck,
+  PotOdds,
   PotProposal,
   PotStyleKey,
   PotTrade,
@@ -87,6 +88,7 @@ type Pending = {
   style?: PotStyleKey;
   expires?: number;
   verdict?: "take" | "wait" | "pass";
+  odds?: PotOdds | null;
 };
 const STYLE_NAME = { scalp: "Scalp", day: "Day trade", swing: "Swing", position: "Position" };
 const pendingOf = (a: PotAction): Pending => ({
@@ -1029,6 +1031,7 @@ export default function PotPage() {
                 reason is below; you can still place it.
               </p>
             )}
+            {pending.odds && <OddsLine odds={pending.odds} />}
             <div className="pot-rv-how" role="radiogroup" aria-label="How to enter">
               <button
                 type="button"

@@ -543,7 +543,12 @@ class PotAgent:
             "(e.g. 'Deep pullback: under the 10-week'). Catalyst: at most 12 words, or 'None "
             "in the next two weeks'. Crowding: at most 8 words, from the funding given. "
             "Reason: the thesis, one sentence of at most 25 words: why it should work and "
-            "what would prove it wrong. Line: at most 15 words.\n\n"
+            "what would prove it wrong. Line: at most 15 words.\n"
+            "ODDS: each setup carries the desk's odds check, in code: 'past' is this rule "
+            "re-run on the coin's own past candles, 'sim' is paths drawn from them; 'needed' is "
+            "the share of decided trades the target must win to break even, and 'lean' the "
+            "verdict. A coin flip or a lean no is a point against; a strong no is a reason to "
+            "wait or pass. Don't repeat its numbers (the card shows them).\n\n"
             f"THE RULES: your file's 'Rules for every style' and '{screener.HEADING[style.key]}' "
             "sections (what the desk has built), not its 'Not built yet' lists.\n\n"
             "MARKET:\n"
@@ -586,6 +591,8 @@ class PotAgent:
             "problem": None,
         }
         levels = {k: str(item.get(k) or found[k]) for k in ("entry", "stop", "target")}
+        same = all(levels[k] == found[k] for k in levels)
+        pick["odds"] = found.get("odds") if same else screener.odds_for(style.key, coin, **levels)
         try:
             sized = self._pot.size({"coin": coin, "style": style.key, **levels})
             self._pot.check_rules(sized)

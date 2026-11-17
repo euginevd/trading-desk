@@ -1763,3 +1763,17 @@ dialog.ntf {
 .ntf-misses li span {
   color: var(--body);
 }
+
+/* The odds check on a pick and in the review: a tag for the lean, the numbers in one line. */
+.ntf-odds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0 0 12px;
+  color: var(--body);
+  font-size: 13px;
+}
+.ntf-odds .pot-tag {
+  flex: none;
+}

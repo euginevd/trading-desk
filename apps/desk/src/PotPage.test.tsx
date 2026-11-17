@@ -301,6 +301,14 @@ function serve(reply: PotView, breaksRule = false, setups = true) {
             risk: "0.12",
             rr: "2",
             stopPct: "2.2",
+            odds: {
+              needed: 34,
+              horizon: "12 hours",
+              lean: "leans no",
+              line: "Rule over the last 10 days: target first 2 of 9 (22%). Needs 34% to break even.",
+              sim: null,
+              past: null,
+            },
           },
         ],
       });
@@ -539,8 +547,10 @@ describe("the trading pot", () => {
     expect(screen.getByText("None found in 48 hours.")).toBeTruthy();
     expect(screen.getByText("Under the 4h high")).toBeTruthy();
     expect(screen.getByText("2 : 1")).toBeTruthy();
+    expect(screen.getByText("Odds lean no")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Okay, review SOL" }));
     expect(await screen.findByText(/Day trade · Asia sweep/)).toBeTruthy();
+    expect(screen.getAllByText(/target first 2 of 9/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole("button", { name: "Place the trade" }));
     await waitFor(() => expect(sent(fetch, "/pot/trades")).toHaveLength(1));
     const placed = JSON.parse(String(sent(fetch, "/pot/trades")[0]?.[1]?.body));

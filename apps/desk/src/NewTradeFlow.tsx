@@ -9,7 +9,16 @@ import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
 import { dollars, qty as qtyWord } from "./dcaFormat";
 import { px } from "./PotPanel";
-import type { PotJudge, PotPick, PotScreen, PotStyle, PotStyleKey, PotStyles } from "./types";
+import type {
+  PotJudge,
+  PotLean,
+  PotOdds,
+  PotPick,
+  PotScreen,
+  PotStyle,
+  PotStyleKey,
+  PotStyles,
+} from "./types";
 
 export type StyleTrade = {
   coin: string;
@@ -24,7 +33,28 @@ export type StyleTrade = {
   style: PotStyleKey;
   expires: number;
   verdict: "take" | "wait" | "pass";
+  odds?: PotOdds | null;
 };
+
+// How the odds read, and the tag's tone: a lean no or a coin flip is a warning, not a block.
+export const LEAN: Record<PotLean, [string, string]> = {
+  "strong yes": ["Strong odds", "won"],
+  "leans yes": ["Odds lean yes", "won"],
+  "coin flip": ["Coin flip", "live"],
+  "leans no": ["Odds lean no", "lost"],
+  "strong no": ["Poor odds", "lost"],
+  unclear: ["Odds unclear", "live"],
+};
+
+export function OddsLine({ odds }: { odds: PotOdds }) {
+  const [word, tone] = LEAN[odds.lean];
+  return (
+    <p className="ntf-odds">
+      <span className={`pot-tag is-${tone}`}>{word}</span>
+      <span>{odds.line}</span>
+    </p>
+  );
+}
 
 type Step = "style" | "scan" | "pick";
 const STEPS = [
@@ -189,6 +219,7 @@ function PickCard({ p, expired, onOkay }: { p: PotPick; expired: boolean; onOkay
           <small>Crowding</small> {p.crowding || "—"}
         </span>
       </p>
+      {p.odds && <OddsLine odds={p.odds} />}
       {p.problem && (
         <p className="ntf-problem" role="note">
           The desk won't place it: {p.problem}
@@ -401,6 +432,7 @@ export default function NewTradeFlow({
                         risk: p.risk ?? "0",
                         style: style.key,
                         verdict: p.verdict,
+                        odds: p.odds ?? null,
                         expires: judge.expires,
                       })
                     }

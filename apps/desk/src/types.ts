@@ -1635,7 +1635,36 @@ export interface PotScreen {
   quote?: string;
   source?: string;
 }
+// The odds check (api/odds.py): the style's rule re-run on the coin's past candles, and the
+// plan simulated from them, each against break-even after fees.
+export type PotLean =
+  "strong yes" | "leans yes" | "coin flip" | "leans no" | "strong no" | "unclear";
+export interface PotOdds {
+  needed: number;
+  horizon: string;
+  lean: PotLean;
+  line: string;
+  sim: {
+    paths: number;
+    target: number;
+    stop: number;
+    open: number;
+    unfilled: number;
+    share: number | null;
+    lean: PotLean;
+  } | null;
+  past: {
+    signals: number;
+    target: number;
+    stop: number;
+    open: number;
+    span: string;
+    share: number | null;
+    lean: PotLean;
+  } | null;
+}
 export interface PotPick {
+  odds?: PotOdds | null;
   coin: string;
   setup: string;
   grade: "A" | "B" | "C";

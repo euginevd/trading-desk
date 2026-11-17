@@ -8,6 +8,7 @@ import json
 import math
 import re
 import time
+from bisect import bisect_right
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -17,6 +18,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
+from api import odds
 from api.binance import Binance, BinanceError
 from api.market import QUOTE
 
@@ -830,6 +832,157 @@ def _positions(style: Style, liquid: list[dict[str, Any]], binance: Binance, now
     return picks, misses, ""
 
 
+# The odds check (api/odds.py): each shortlisted coin's rule re-run on its past candles, and
+# its plan simulated from them. The candles are kept with the screen, so judge's levels can
+# be simulated again without another call to Binance.
+
+
+@dataclass(frozen=True)
+class OddsPlan:
+    steps: int  # candles a trade is given to play out: the style's longest hold
+    slot_ms: int | None  # intraday: draw each candle from the same time of day
+    horizon: str
+    history: int  # candles of the setup's timeframe to re-run the rule on
+
+
+ODDS_PLAN = {
+    "scalp": OddsPlan(12, 300_000, "1 hour", 1000),
+    "day": OddsPlan(48, 900_000, "12 hours", 1000),
+    "swing": OddsPlan(21, None, "3 weeks", 400),
+    "position": OddsPlan(26, None, "6 months", 120),
+}
+_ODDS: dict[str, dict[str, Any]] = {}
+
+
+def _signal(i: int, pick: dict[str, Any] | None) -> list[odds.Signal]:
+    if not pick:
+        return []
+    return [(i, float(pick["entry"]), float(pick["stop"]), float(pick["target"]))]
+
+
+def _trend_ok(rows: Rows) -> bool:
+    c = closes_of(rows)
+    e = ema(c, 50)
+    return bool(e and c[-1] > e)
+
+
+def _intraday_signals(
+    style: Style, coin: str, rows: Rows, bias: Rows, btc: Rows
+) -> list[odds.Signal]:
+    """The scalp or day rule at each past candle, with the trend candles closed by then."""
+    find = _scalp if style.key == "scalp" else _day
+    bias_t = [int(r[6]) for r in bias]
+    btc_t = [int(r[6]) for r in btc]
+    btc_ok: dict[int, bool] = {}
+    out: list[odds.Signal] = []
+    for i in range(60, len(rows) - 1):
+        t = int(rows[i][6])
+        j = bisect_right(btc_t, t)
+        if j not in btc_ok:
+            btc_ok[j] = _trend_ok(btc[:j][-style.bias_n :])
+        b = bias[: bisect_right(bias_t, t)][-style.bias_n :]
+        if not btc_ok[j] or len(b) < 50:  # noqa: PLR2004
+            continue
+        window = rows[max(0, i + 1 - style.setup_n) : i + 1]
+        out += _signal(i, find(coin, window, b, True, style))
+    return out
+
+
+def _change_at(btc: Rows, at: int, n: int) -> float | None:
+    j = bisect_right([int(r[0]) for r in btc], at)
+    return change(closes_of(btc[:j]), n)
+
+
+def _swing_signals(style: Style, coin: str, rows: Rows, btc: Rows) -> list[odds.Signal]:
+    out: list[odds.Signal] = []
+    for i in range(60, len(rows) - 1):
+        window = rows[max(0, i - 199) : i + 1]  # enough for a quarter's levels and the 50-day
+        out += _signal(i, _swing(coin, window, _change_at(btc, int(rows[i][0]), 30), style))
+    return out
+
+
+def _position_signals(style: Style, coin: str, weekly: Rows, btc: Rows) -> list[odds.Signal]:
+    out: list[odds.Signal] = []
+    for i in range(103, len(weekly) - 1):
+        btc_q = _change_at(btc, int(weekly[i][0]), 13)
+        out += _signal(i, _position(coin, [], weekly[: i + 1], btc_q, style))
+    return out
+
+
+def _odds_rows(
+    style: Style, coins: list[str], binance: Binance, btc_daily: Rows, now_ms: int
+) -> tuple[dict[str, Rows], dict[str, Rows], Rows]:
+    """The candles the odds need: the setup's timeframe (longer than the screen's, for
+    intraday), the trend's, and BTC's. Only for the shortlist, so a few calls."""
+    plan = ODDS_PLAN[style.key]
+    symbols = [f"{c}{QUOTE}" for c in {*coins, "BTC"}]
+    if style.key == "swing":
+        return {}, {}, btc_daily
+    tf = "1w" if style.key == "position" else style.setup_tf
+    setup = binance.klines_many(symbols, tf, plan.history)
+    bias = {} if style.key == "position" else binance.klines_many(symbols, style.bias_tf, 200)
+    rows = {s.removesuffix(QUOTE): closed(r, now_ms) for s, r in setup.items()}
+    trend = {s.removesuffix(QUOTE): closed(r, now_ms) for s, r in bias.items()}
+    btc = (trend if style.key != "position" else rows).get("BTC", [])
+    return rows, trend, btc
+
+
+def _odds_context(
+    style: Style,
+    shortlist: list[dict[str, Any]],
+    *,
+    daily: dict[str, Rows],
+    binance: Binance,
+    now_ms: int,
+) -> dict[str, Any]:
+    plan = ODDS_PLAN[style.key]
+    coins = [f["coin"] for f in shortlist]
+    try:
+        rows, trend, btc = _odds_rows(style, coins, binance, daily.get("BTC", []), now_ms)
+    except BinanceError:
+        return {}
+    kept: dict[str, Any] = {}
+    for coin in coins:
+        if style.key == "swing":
+            own = daily.get(coin, [])
+            signals = _swing_signals(style, coin, own, btc)
+        elif style.key == "position":
+            own = rows.get(coin, [])
+            signals = _position_signals(style, coin, own, btc)
+        else:
+            own = rows.get(coin, [])
+            signals = _intraday_signals(style, coin, own, trend.get(coin, []), btc)
+        if len(own) < 30:  # noqa: PLR2004
+            continue
+        record: dict[str, Any] = dict(odds.past(own, signals, plan.steps))
+        record["span"] = odds.span(own, 60 if style.key != "position" else 103)
+        kept[coin] = {"rows": own, "record": record}
+    return kept
+
+
+def odds_for(
+    style_key: str, coin: str, entry: str, stop: str, target: str
+) -> dict[str, Any] | None:
+    """A pick's odds at these levels, from the candles its screen kept; None when they're gone."""
+    plan = ODDS_PLAN.get(style_key)
+    kept = _ODDS.get(style_key, {}).get(coin)
+    if plan is None or kept is None:
+        return None
+    try:
+        e, s, t = float(entry), float(stop), float(target)
+    except ValueError:
+        return None
+    if not 0 < s < e < t:
+        return None
+    need = odds.needed(e, s, t)
+    sim = odds.simulate(kept["rows"], e, s, t, steps=plan.steps, slot_ms=plan.slot_ms)
+    record = dict(kept["record"])
+    record["lean"], record["share"] = odds.lean(
+        record["target"], record["stop"], need, odds.MIN_SIGNALS
+    )
+    return odds.summary(sim, record, need, plan.horizon)
+
+
 def screen(  # noqa: PLR0913 - the screen's parts, each needed
     style_key: str,
     *,
@@ -890,8 +1043,13 @@ def screen(  # noqa: PLR0913 - the screen's parts, each needed
     found.sort(key=lambda f: -f["score"])
     out["counts"]["setups"] = len(found)
     out["shortlist"] = found[: style.shortlist]
+    daily = {c["coin"]: c["daily"] for c in uni["coins"]}
+    _ODDS[style.key] = _odds_context(
+        style, out["shortlist"], daily=daily, binance=binance, now_ms=now_ms
+    )
     for f in out["shortlist"]:
         f["crowding"] = crowding(f["coin"]) if crowding else "Not checked"
+        f["odds"] = odds_for(style.key, f["coin"], f["entry"], f["stop"], f["target"])
     _SCREENS[style.key] = out
     return out
 

@@ -91,6 +91,8 @@ def test_every_style_screens_without_error(pot: Pot) -> None:
         assert seen["counts"]["onBinance"] >= 1  # the demo's BTC, ETH and SOL pairs
         assert len(seen["misses"]) <= 3
         assert all(m["coin"] and m["why"] for m in seen["misses"])
+        for f in seen["shortlist"]:  # each pick carries its odds, or None without the candles
+            assert f["odds"] is None or f["odds"]["lean"] and f["odds"]["line"]
     # CoinGecko isn't reachable in the demo: the fallback list is kept 10 minutes, not all day.
     assert screener._UNIVERSE["day"] == ""  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
     assert screener._UNIVERSE["until"] > NOW * 1000  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
