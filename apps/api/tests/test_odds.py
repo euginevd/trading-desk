@@ -48,7 +48,7 @@ def test_the_simulation_is_seeded_and_adds_up() -> None:
 def test_the_rule_record_counts_one_trade_at_a_time() -> None:
     rows = [bar(i, 100, 101, 99.5, 100) for i in range(10)]
     rows[3] = bar(3, 100, 103, 99.5, 102)  # the target, 102, hit on candle 3
-    signals = [(0, 100.0, 98.0, 102.0), (1, 100.0, 98.0, 102.0), (5, 100.0, 98.0, 102.0)]
+    signals = [(i, 100.0, 98.0, 102.0, "Test") for i in (0, 1, 5)]
     record = odds.past(rows, signals, steps=3)
     # signal 0 wins on candle 3; signal 1 fires while it's open, so it's skipped
     assert record == {"signals": 2, "target": 1, "stop": 0, "open": 1, "unfilled": 0}
@@ -71,3 +71,50 @@ def test_the_summary_prefers_the_rule_record_when_it_has_enough() -> None:
     assert odds.summary(sim, few, 33.3, "12 hours")["lean"] == "coin flip"
     still = record | {"signals": 1, "target": 0, "stop": 0, "open": 1, "lean": "unclear"}
     assert "1 past signal, none hit either" in odds.summary(sim, still, 33.3, "12 hours")["line"]
+
+
+def walk_rows(n: int, step: int, seed: int) -> list[list[Any]]:
+    """A random walk of candles in Binance's shape."""
+    import random  # noqa: PLC0415 - only these tests draw
+
+    rng = random.Random(seed)  # noqa: S311
+    rows: list[list[Any]] = []
+    price = 100.0
+    for i in range(n):
+        o = price
+        price *= 1 + rng.gauss(0.002, 0.04)
+        hi, lo = (
+            max(o, price) * (1 + rng.random() * 0.02),
+            min(o, price) * (1 - rng.random() * 0.02),
+        )
+        rows.append([i * step, o, hi, lo, price, 1000.0, (i + 1) * step - 1, 1000.0 * price])
+    return rows
+
+
+def test_the_bear_rule_is_the_desk_regime() -> None:
+    from decimal import Decimal  # noqa: PLC0415
+
+    from api.pot import regime_of  # noqa: PLC0415
+
+    btc = walk_rows(400, odds.DAY_MS, 3)
+    bear = screener.bear_by(btc)
+    for j in (199, 250, 320, 399):
+        state, _ = regime_of([Decimal(str(r[4])) for r in btc[: j + 1]])
+        assert bear(int(btc[j][6])) == (state == "bear")
+
+
+def test_a_signal_never_reads_a_later_candle() -> None:
+    """The backtest's guarantee: the rule at candle i sees only candles closed by then, so
+    cutting the history after i changes nothing at or before i."""
+    day = odds.DAY_MS
+    coin, btc = walk_rows(400, day, 1), walk_rows(400, day, 2)
+    full = screener.signals("swing", "ETH", coin, bias=[], btc=btc, btc_daily=btc)
+    assert full, "the walk should give the swing rule something to find"
+    assert all(len(s) == 5 and s[4] for s in full)  # each carries its setup's name
+    cut = full[len(full) // 2][0]
+    part = screener.signals(
+        "swing", "ETH", coin[: cut + 1], bias=[], btc=btc[: cut + 1], btc_daily=btc[: cut + 1]
+    )
+    assert part == [s for s in full if s[0] <= cut]
+    later = screener.signals("swing", "ETH", coin, bias=[], btc=btc, btc_daily=btc, start=cut + 1)
+    assert later == [s for s in full if s[0] > cut]

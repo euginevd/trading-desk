@@ -857,7 +857,8 @@ _ODDS: dict[str, dict[str, Any]] = {}
 def _signal(i: int, pick: dict[str, Any] | None) -> list[odds.Signal]:
     if not pick:
         return []
-    return [(i, float(pick["entry"]), float(pick["stop"]), float(pick["target"]))]
+    entry, stop, target = (float(pick[k]) for k in ("entry", "stop", "target"))
+    return [(i, entry, stop, target, str(pick["setup"]))]
 
 
 def _trend_ok(rows: Rows) -> bool:
@@ -866,21 +867,39 @@ def _trend_ok(rows: Rows) -> bool:
     return bool(e and c[-1] > e)
 
 
-def _intraday_signals(
-    style: Style, coin: str, rows: Rows, bias: Rows, btc: Rows
+def bear_by(btc_daily: Rows) -> Callable[[int], bool]:
+    """Whether the regime was Bear at a time: BTC under its 200-day with the 50-day under it,
+    from the daily candles closed by then (the same rule as pot.regime_of)."""
+    closes = closes_of(btc_daily)
+    times = [int(r[6]) for r in btc_daily]
+    bear: list[bool] = []
+    for j in range(len(closes)):
+        fast, slow = sma(closes[: j + 1], 50), sma(closes[: j + 1], 200)
+        bear.append(bool(fast and slow and closes[j] < slow and fast < slow))
+
+    def at(t: int) -> bool:
+        j = bisect_right(times, t)
+        return bear[j - 1] if j else False
+
+    return at
+
+
+def _intraday_signals(  # noqa: PLR0913 - the candles each rule reads
+    style: Style, coin: str, rows: Rows, bias: Rows, btc: Rows, *, start: int
 ) -> list[odds.Signal]:
-    """The scalp or day rule at each past candle, with the trend candles closed by then."""
+    """The scalp or day rule at each candle from start, with the trend candles closed by then."""
     find = _scalp if style.key == "scalp" else _day
     bias_t = [int(r[6]) for r in bias]
     btc_t = [int(r[6]) for r in btc]
     btc_ok: dict[int, bool] = {}
     out: list[odds.Signal] = []
-    for i in range(60, len(rows) - 1):
+    for i in range(max(start, 60), len(rows)):
         t = int(rows[i][6])
         j = bisect_right(btc_t, t)
         if j not in btc_ok:
-            btc_ok[j] = _trend_ok(btc[:j][-style.bias_n :])
-        b = bias[: bisect_right(bias_t, t)][-style.bias_n :]
+            btc_ok[j] = _trend_ok(btc[max(0, j - style.bias_n) : j])
+        k = bisect_right(bias_t, t)
+        b = bias[max(0, k - style.bias_n) : k]
         if not btc_ok[j] or len(b) < 50:  # noqa: PLR2004
             continue
         window = rows[max(0, i + 1 - style.setup_n) : i + 1]
@@ -888,25 +907,60 @@ def _intraday_signals(
     return out
 
 
-def _change_at(btc: Rows, at: int, n: int) -> float | None:
-    j = bisect_right([int(r[0]) for r in btc], at)
-    return change(closes_of(btc[:j]), n)
+def _changes(btc: Rows, n: int) -> Callable[[int], float | None]:
+    times = [int(r[0]) for r in btc]
+    closes = closes_of(btc)
+
+    def at(t: int) -> float | None:
+        j = bisect_right(times, t)
+        return change(closes[max(0, j - n - 1) : j], n)
+
+    return at
 
 
-def _swing_signals(style: Style, coin: str, rows: Rows, btc: Rows) -> list[odds.Signal]:
+def _swing_signals(style: Style, coin: str, rows: Rows, btc: Rows, start: int) -> list[odds.Signal]:
+    month = _changes(btc, 30)
     out: list[odds.Signal] = []
-    for i in range(60, len(rows) - 1):
+    for i in range(max(start, 60), len(rows)):
         window = rows[max(0, i - 199) : i + 1]  # enough for a quarter's levels and the 50-day
-        out += _signal(i, _swing(coin, window, _change_at(btc, int(rows[i][0]), 30), style))
+        out += _signal(i, _swing(coin, window, month(int(rows[i][0])), style))
     return out
 
 
-def _position_signals(style: Style, coin: str, weekly: Rows, btc: Rows) -> list[odds.Signal]:
+def _position_signals(
+    style: Style, coin: str, weekly: Rows, btc: Rows, start: int
+) -> list[odds.Signal]:
+    quarter = _changes(btc, 13)
     out: list[odds.Signal] = []
-    for i in range(103, len(weekly) - 1):
-        btc_q = _change_at(btc, int(weekly[i][0]), 13)
-        out += _signal(i, _position(coin, [], weekly[: i + 1], btc_q, style))
+    for i in range(max(start, 103), len(weekly)):
+        out += _signal(i, _position(coin, [], weekly[: i + 1], quarter(int(weekly[i][0])), style))
     return out
+
+
+def signals(  # noqa: PLR0913 - the candles each style's rule reads
+    style_key: str,
+    coin: str,
+    rows: Rows,
+    *,
+    bias: Rows,
+    btc: Rows,
+    btc_daily: Rows,
+    start: int = 0,
+) -> list[odds.Signal]:
+    """The style's own setup rule at each candle of rows from start: the odds check's record
+    and the Freqtrade backtest (apps/backtest) both read this, so neither is a second copy.
+    rows: the setup's candles (5m, 15m, daily, or weekly for position); bias: the coin's
+    trend candles (1h or 4h; unused for swing and position); btc: BTC's trend candles (1h or
+    4h), its daily for swing, its weekly for position. Not in a Bear regime, as in the desk."""
+    style = STYLES[style_key]
+    if style_key == "swing":
+        found = _swing_signals(style, coin, rows, btc, start)
+    elif style_key == "position":
+        found = _position_signals(style, coin, rows, btc, start)
+    else:
+        found = _intraday_signals(style, coin, rows, bias, btc, start=start)
+    bear = bear_by(btc_daily)
+    return [f for f in found if not bear(int(rows[f[0]][6]))]
 
 
 def _odds_rows(
@@ -943,18 +997,13 @@ def _odds_context(
         return {}
     kept: dict[str, Any] = {}
     for coin in coins:
-        if style.key == "swing":
-            own = daily.get(coin, [])
-            signals = _swing_signals(style, coin, own, btc)
-        elif style.key == "position":
-            own = rows.get(coin, [])
-            signals = _position_signals(style, coin, own, btc)
-        else:
-            own = rows.get(coin, [])
-            signals = _intraday_signals(style, coin, own, trend.get(coin, []), btc)
+        own = daily.get(coin, []) if style.key == "swing" else rows.get(coin, [])
+        found = signals(
+            style.key, coin, own, bias=trend.get(coin, []), btc=btc, btc_daily=daily.get("BTC", [])
+        )
         if len(own) < 30:  # noqa: PLR2004
             continue
-        record: dict[str, Any] = dict(odds.past(own, signals, plan.steps))
+        record: dict[str, Any] = dict(odds.past(own, found, plan.steps))
         record["span"] = odds.span(own, 60 if style.key != "position" else 103)
         kept[coin] = {"rows": own, "record": record}
     return kept

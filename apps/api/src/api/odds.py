@@ -22,7 +22,7 @@ MIN_SIGNALS = 8  # decided past signals needed to call the rule's record
 
 Rows = list[list[Any]]
 Bar = tuple[float, float, float]  # high, low and close, each over the close before
-Signal = tuple[int, float, float, float]  # the signal candle's index, entry, stop, target
+Signal = tuple[int, float, float, float, str]  # its candle's index, entry, stop, target, setup
 
 
 def needed(entry: float, stop: float, target: float) -> float:
@@ -133,7 +133,7 @@ def past(rows: Rows, signals: list[Signal], steps: int) -> dict[str, int]:
     setup that fires on several candles in a row counts once."""
     counts = {"signals": 0, "target": 0, "stop": 0, "open": 0, "unfilled": 0}
     busy_until = -1
-    for i, entry, stop, target in signals:
+    for i, entry, stop, target, _ in signals:
         if i <= busy_until or i + 1 >= len(rows):
             continue
         bars = [(float(r[2]), float(r[3])) for r in rows[i + 1 : i + 1 + steps]]

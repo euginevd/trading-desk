@@ -37,3 +37,34 @@ services:
     # No Linux capabilities and no privilege gain: both run as non-root and need neither.
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
+
+  # Backtests and paper trading of the desk's styles (apps/backtest), on demand only:
+  #   bash apps/backtest/run.sh swing        (or scalp, day, position, all)
+  #   docker compose --profile paper up -d paper
+  # The strategies call the desk's own screener (mounted read-only), so they test the same
+  # rules New trade uses. No keys: Binance's public candles only; nothing is ever placed.
+  backtest: &freqtrade
+    image: freqtradeorg/freqtrade:2026.10
+    profiles: [backtest]
+    environment:
+      PYTHONPATH: /desk
+      DESK_QUOTE: USDT
+    volumes:
+      - ./local/backtest:/freqtrade/user_data # candles, results and the paper bot's database
+      - ./apps/backtest/strategies:/freqtrade/user_data/strategies:ro
+      - ./apps/backtest/config:/freqtrade/config:ro
+      - ./apps/backtest/report.py:/freqtrade/report.py:ro
+      - ./apps/api/src:/desk:ro
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+
+  paper:
+    <<: *freqtrade
+    profiles: [paper]
+    environment:
+      PYTHONPATH: /desk
+      DESK_QUOTE: USDC
+    command: >-
+      trade --config /freqtrade/config/paper.json
+      --strategy ${PAPER_STRATEGY:-DeskSwing} --dry-run
+    restart: unless-stopped

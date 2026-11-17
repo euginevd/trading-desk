@@ -1,0 +1,37 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "add_config_files": [
+    "backtest.json"
+  ],
+  "bot_name": "desk-paper",
+  "stake_currency": "USDC",
+  "db_url": "sqlite:////freqtrade/user_data/paper.sqlite",
+  "exchange": {
+    "name": "binance",
+    "key": "",
+    "secret": "",
+    "pair_whitelist": [
+      "BTC/USDC",
+      "ETH/USDC",
+      "SOL/USDC",
+      "BNB/USDC",
+      "XRP/USDC",
+      "DOGE/USDC",
+      "ADA/USDC",
+      "AVAX/USDC",
+      "LINK/USDC",
+      "DOT/USDC",
+      "LTC/USDC",
+      "NEAR/USDC",
+      "TRX/USDC",
+      "BCH/USDC",
+      "UNI/USDC",
+      "AAVE/USDC",
+      "ATOM/USDC",
+      "SUI/USDC",
+      "APT/USDC",
+      "ARB/USDC"
+    ],
+    "pair_blacklist": []
+  }
+}
