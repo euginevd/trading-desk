@@ -10,7 +10,7 @@ import {
   getProfileVersions,
   restoreProfile,
 } from "./api";
-import { dateTime } from "./format";
+import { errorOf, dateTime } from "./format";
 import { FileNote, Reader, useMarkdownFile } from "./Markdown";
 import Board from "./ProfileBoard";
 import MyAgents from "./MyAgents";
@@ -21,7 +21,6 @@ import "./profile.css";
 import "./myagents.css";
 
 const REFRESH_MS = 60_000; // as the Portfolio page: the TAO reading is reused for a minute
-const message = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 type Tab = "policy" | "agent";
 const TABS: { tab: Tab; label: string }[] = [
@@ -75,7 +74,7 @@ function Policy() {
 
   const fetchPage = useCallback(() => {
     getProfilePage().then(setPage, (e: unknown) =>
-      setError(message(e, "Your Profile couldn't be read.")),
+      setError(errorOf(e, "Your Profile couldn't be read.")),
     );
   }, []);
   // The live figures (TAO, Binance, BTC) read again every minute while the page is in view, and at
@@ -202,7 +201,7 @@ function History({
   const fetchVersions = useCallback(() => {
     getProfileVersions().then(
       (r) => setVersions(r.versions),
-      (e: unknown) => setError(message(e, "The history couldn't be read.")),
+      (e: unknown) => setError(errorOf(e, "The history couldn't be read.")),
     );
   }, []);
   useEffect(() => fetchVersions(), [fetchVersions, current]);
@@ -213,7 +212,7 @@ function History({
       return;
     }
     getProfileVersion(n).then(setOpen, (e: unknown) =>
-      setError(message(e, "That version couldn't be read.")),
+      setError(errorOf(e, "That version couldn't be read.")),
     );
   };
   const restore = (n: number) => {
@@ -227,7 +226,7 @@ function History({
       },
       (e: unknown) => {
         setBusy(false);
-        setError(message(e, "That version couldn't be restored."));
+        setError(errorOf(e, "That version couldn't be restored."));
       },
     );
   };

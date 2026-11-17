@@ -3,6 +3,7 @@
 // stop, entry, target, +1R and the price now, so the trade is seen before the review.
 import { useEffect, useRef, useState } from "react";
 import { analysePotCoin, previewPotTrade } from "./api";
+import { errorOf } from "./format";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
 import { dollars, qty as qtyWord } from "./dcaFormat";
@@ -24,7 +25,6 @@ export type HandTrade = {
 const SETUPS = ["Pullback", "Breakout", "Range low", "Reclaim"] as const;
 const VERDICT = { take: "Take", wait: "Wait", pass: "Pass" } as const;
 const REVIEW_DAYS = [3, 7, 14] as const;
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 const ok = (v: string) => Number(v) > 0 && Number.isFinite(Number(v));
 
 // A price to the pair's step, so a quick pick is a price Binance takes.

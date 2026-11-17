@@ -205,7 +205,9 @@
   flex-wrap: wrap;
 }
 .tr-pair h1 {
+  font-family: var(--font-ui);
   font-size: 18px;
+  font-size-adjust: none;
   font-weight: 600;
   letter-spacing: 0;
 }
@@ -342,11 +344,6 @@
    opens on a click (decision 67). */
 .tr-how {
   margin-top: 16px;
-}
-.tr-how-head {
-  margin: 0 0 8px;
-  font-size: 14px;
-  font-weight: 600;
 }
 .tr-step-toggle {
   padding: 0;
@@ -491,24 +488,7 @@
 }
 
 /* The ticket */
-.tr-ticket {
-  border: 1px solid var(--accent);
-  border-radius: var(--r);
-  background: var(--panel);
-  overflow: hidden;
-}
-.tr-ticket-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  padding: 16px 16px 0;
-  flex-wrap: wrap;
-}
-.tr-stamp {
-  font-size: 11px;
-  color: var(--dim);
-}
+
 .tr-verdict {
   font-size: 30px;
   font-weight: 500;
@@ -524,22 +504,10 @@
   font-size: 18px;
   font-weight: 500;
 }
-.tr-meter {
-  height: 4px;
-  background: var(--line);
-  border-radius: 2px;
-  margin: 12px 16px 0;
-  overflow: hidden;
-}
-.tr-meter i,
 .tr-gbar i {
   display: block;
   height: 100%;
   background: var(--accent);
-}
-.tr-summary {
-  margin: 12px 16px 0;
-  color: var(--body);
 }
 .tr-order {
   display: grid;
@@ -562,13 +530,6 @@
 .tr-order dd {
   margin: 0;
   font-weight: 500;
-}
-.tr-noticket {
-  margin: 14px 16px 0;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background: var(--panel-2);
-  color: var(--body);
 }
 .tr-why {
   padding: 12px 16px 0;
@@ -604,22 +565,12 @@
   margin: 4px 0 0;
   padding-left: 16px;
 }
-.tr-ticket-foot {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 14px 16px 16px;
-  flex-wrap: wrap;
-}
 .tr-ghost {
   background: none;
 }
 .tr-choice {
   font-size: 12px;
   color: var(--muted);
-}
-.tr-stamp-end {
-  margin-left: auto;
 }
 
 /* Questions and answers */
@@ -910,7 +861,6 @@ dialog.tr-sheet p.tr-from {
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .tr-meter i,
   .tr-gbar i,
   .tr-bar-run i {
     transition: width 200ms var(--ease);
@@ -948,9 +898,6 @@ dialog.tr-sheet p.tr-from {
   }
   .tr-order {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .tr-stamp-end {
-    margin-left: 0;
   }
 }
 

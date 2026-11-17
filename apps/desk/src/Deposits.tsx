@@ -63,7 +63,7 @@ export default function Deposits() {
           {km(data.total.aud)}
         </strong>{" "}
         <span className="muted">
-          for {Math.round(Number(data.total.usdc)).toLocaleString("en-AU")} USDC
+          for {usdc(data.total.usdc)} USDC
           {data.total.audPerUsdc && <>, A${Number(data.total.audPerUsdc).toFixed(3)} each</>}
         </span>
       </p>

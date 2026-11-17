@@ -13,8 +13,6 @@
 .pf-title h1 {
   margin: 0;
   font-size: 30px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
 }
 .pf-spacer {
   flex: 1;
@@ -98,37 +96,6 @@
 }
 .pf-pencil:hover {
   color: var(--accent);
-}
-
-.pf-hint {
-  color: var(--dim);
-  font-size: 11px;
-}
-
-.pf-tag {
-  display: inline-flex;
-  gap: 4px;
-  align-items: center;
-  border-radius: 5px;
-  font-size: 11px;
-  padding: 2px 7px;
-  white-space: nowrap;
-}
-.pf-tag.ok {
-  background: var(--up-soft);
-  color: var(--up);
-}
-.pf-tag.warn {
-  background: var(--wait-soft);
-  color: var(--wait);
-}
-.pf-tag.bad {
-  background: var(--down-soft);
-  color: var(--down);
-}
-.pf-tag.dim {
-  background: var(--panel-2);
-  color: var(--muted);
 }
 
 .pf-link {
@@ -230,10 +197,7 @@
 .pf-headline {
   margin: 4px 0 2px;
   font-size: 28px;
-  font-weight: 500;
   line-height: 1.2;
-  letter-spacing: -0.02em;
-  font-variant-numeric: tabular-nums;
 }
 .pf-sub {
   margin: 0;

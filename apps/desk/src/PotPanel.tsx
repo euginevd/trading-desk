@@ -3,11 +3,10 @@
 // entry, move the stop toward profit, or close at market. Closes on Esc, a click outside, Done.
 import { useEffect, useRef, useState } from "react";
 import { cancelPotTrade, closePotTrade, movePotStop } from "./api";
+import { errorOf } from "./format";
 import CoinIcon from "./CoinIcon";
 import { dated, dollars, qty } from "./dcaFormat";
 import type { PotTrade } from "./types";
-
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 // A price as Binance has it: every decimal the pair uses, at least two.
 export function px(value: string | number | null | undefined): string {

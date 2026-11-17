@@ -192,7 +192,8 @@ export interface Level {
   tone: "buy" | "sell" | "tp" | "sl" | "base" | "muted";
 }
 
-function token(name: string, fallback: string): string {
+// A colour token from styles.css, for canvases that cannot read CSS variables.
+export function token(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
 }

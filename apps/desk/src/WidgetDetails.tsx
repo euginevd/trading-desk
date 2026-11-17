@@ -88,13 +88,13 @@ function useLoad<T>(get: () => Promise<T>): { data: T | null; error: string } {
 // 90 days on a line, and the market's size and volume.
 const ZONES: [number, number, string, string][] = [
   [0, 25, "Extreme Fear", "#c0392b"],
-  [25, 45, "Fear", "#f0616d"],
-  [45, 55, "Neutral", "#e8b04b"],
-  [55, 75, "Greed", "#2ebd85"],
+  [25, 45, "Fear", "var(--down)"],
+  [45, 55, "Neutral", "var(--wait)"],
+  [55, 75, "Greed", "var(--up)"],
   [75, 101, "Extreme Greed", "#1e8a5f"],
 ];
 function zone(value: number): string {
-  return ZONES.find(([lo, hi]) => value >= lo && value < hi)?.[3] ?? "#e8b04b";
+  return ZONES.find(([lo, hi]) => value >= lo && value < hi)?.[3] ?? "var(--wait)";
 }
 
 function Gauge({ value, label }: { value: number; label: string }) {

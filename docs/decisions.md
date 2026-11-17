@@ -24,3 +24,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 73. The trading pot is its own book run by trading-agent: POT- rows for money in, a lifelong TRD- reference per trade, stop and target as one OCO. [Record](decisions/from-58.md)
 74. A scheduler (plain code) wakes the agents once per slot and brings proposals to Telegram with one-tap buttons that run the desk's checks. [Record](decisions/from-58.md)
 75. The trading pot is the Trading account: money first, coins as cards, trades in tabs; other buys dipping into its USDC are logged, not blocked. [Record](decisions/from-58.md)
+76. A visual refresh: ink-blue surfaces, a serif for the desk's sentences, a top-edge sheen on raised controls, one settle-in motion. [Record](decisions/from-58.md)

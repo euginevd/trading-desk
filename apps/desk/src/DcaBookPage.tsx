@@ -13,6 +13,7 @@ import {
   setDcaPlan,
   suggestDca,
 } from "./api";
+import { errorOf } from "./format";
 import CoinIcon from "./CoinIcon";
 import OrderReview from "./OrderReview";
 import DcaChat from "./DcaChat";
@@ -47,7 +48,6 @@ import type {
   SellCheck,
 } from "./types";
 
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 const oddsWords = (o: DcaOdds | null) =>
   !o
     ? "—"

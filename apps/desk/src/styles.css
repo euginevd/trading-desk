@@ -1,28 +1,34 @@
 /* design-system.md tokens (decision 15): dark only, after the owner's mockup. */
+/* design-system.md tokens (decision 15, refreshed in decision 76): dark only. Ink-blue surfaces
+   that step up in light, one teal accent, and a serif for the sentences the desk says. */
 :root {
-  --bg: #0a0f12;
-  --bar: #0b1215;
-  --panel: #0f171b;
-  --panel-2: #131d22;
-  --line: #1b272d;
-  --line-2: #24333a;
-  --text: #e6ecef;
-  --muted: #8c9aa3;
-  --dim: #5e6c74;
+  --bg: #070b0d;
+  --bar: #090e11;
+  --panel: #0d1418;
+  --panel-2: #121b20;
+  --line: #172228;
+  --line-2: #213038;
+  --hover-line: #2f434c;
+  --text: #e9eff1;
+  --body: #c2ccd1;
+  --muted: #8b99a2;
+  --dim: #5f6d75;
   --accent: #50d2c1;
   --accent-ink: #04110f;
   --accent-soft: rgba(80, 210, 193, 0.1);
+  --accent-line: rgba(80, 210, 193, 0.35);
   --up: #2ebd85;
   --down: #f0616d;
   --up-soft: rgba(46, 189, 133, 0.12);
   --down-soft: rgba(240, 97, 109, 0.12);
+  --down-line: rgba(240, 97, 109, 0.4);
   --wait: #e8b04b;
   --wait-soft: rgba(232, 176, 75, 0.12);
-  --body: #c3cdd2;
   --buy-ink: #03140d;
   --sell-ink: #1a0507;
   --on-price: #ffffff;
-  --hover-line: #33464f;
+  /* A raised control catches a hairline of light on its top edge; the only depth besides dialogs. */
+  --sheen: inset 0 1px 0 rgba(255, 255, 255, 0.045);
   /* Allocation bar, largest holding first */
   --alloc-1: #50d2c1;
   --alloc-2: #3b8f86;
@@ -32,7 +38,10 @@
   --alloc-6: #2a3a42;
   --r: 10px;
   --ease: cubic-bezier(0.2, 0, 0, 1);
+  --font-ui: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Newsreader Variable", Georgia, "Times New Roman", serif;
   color-scheme: dark;
+  scrollbar-color: var(--line-2) transparent;
 }
 
 * {
@@ -44,22 +53,31 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font:
-    13px/1.45 Inter,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
+  font: 13px/1.45 var(--font-ui);
   font-feature-settings:
     "tnum" 1,
     "cv11" 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: var(--accent-line);
+  color: var(--text);
 }
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
+}
+
+a {
+  color: var(--accent);
+  text-underline-offset: 2px;
 }
 
 :focus-visible {
@@ -69,9 +87,28 @@ select {
 
 h1 {
   font-size: 30px;
-  font-weight: 500;
-  letter-spacing: -0.02em;
   margin: 0;
+}
+
+/* The desk speaks in sentences (design-system 13d to 13h); they and page titles are set in the
+   display serif, sized up to Inter's x-height, with lining figures that sit in proportion. */
+h1,
+.dash-headline,
+.port-headline,
+.bots-headline,
+.jr-headline,
+.dcb-headline,
+.pf-headline,
+.set-headline,
+.dcw-line {
+  font-family: var(--font-display);
+  font-weight: 460;
+  font-optical-sizing: auto;
+  font-size-adjust: 0.52;
+  font-feature-settings: normal;
+  font-variant-numeric: lining-nums proportional-nums;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
 }
 
 h2 {
@@ -196,8 +233,10 @@ h2 {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-weight: 600;
-  font-size: 15px;
+  font-family: var(--font-display);
+  font-weight: 520;
+  font-size: 18px;
+  font-size-adjust: 0.52;
   letter-spacing: -0.01em;
   color: var(--text);
   text-decoration: none;
@@ -235,6 +274,9 @@ h2 {
   text-decoration: none;
   font-weight: 500;
   white-space: nowrap;
+  transition:
+    background-color 120ms var(--ease),
+    color 120ms var(--ease);
 }
 .side-nav a svg {
   flex: none;
@@ -246,29 +288,22 @@ h2 {
 .side-nav a[aria-current="page"] {
   background: var(--accent-soft);
   color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(80, 210, 193, 0.12);
 }
 .side-rule {
   height: 1px;
   margin: 10px 2px;
   background: var(--line);
 }
-.side-label {
-  padding: 2px 11px 6px;
-  font-size: 12px;
-  color: var(--dim);
-}
 .side-status {
   margin-top: auto;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
   padding: 12px 10px 16px;
   border-top: 1px solid var(--line);
 }
 /* Connections as quiet rows (no boxes); the kill switch reads as a switch. */
-.side-status {
-  gap: 2px;
-}
 .side-status .pill {
   position: relative;
   width: 100%;
@@ -299,7 +334,7 @@ h2 {
   border: 1px solid var(--line);
 }
 .side-status .pill.kill[aria-pressed="false"] {
-  border-color: rgba(240, 97, 109, 0.4);
+  border-color: var(--down-line);
   background: var(--down-soft);
 }
 .switch {
@@ -377,8 +412,7 @@ h2 {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.folded .side-word,
-.folded .side-label {
+.folded .side-word {
   display: none;
 }
 .folded .side-head {
@@ -464,8 +498,7 @@ button.tick:hover b {
   color: var(--up);
 }
 .tick-coin {
-  font-size: 10px;
-  letter-spacing: 0.04em;
+  font-size: 11px;
   color: var(--dim);
 }
 .head-total {
@@ -537,12 +570,17 @@ button.pill:hover {
   border-radius: 8px;
   border: 1px solid var(--line-2);
   background: var(--panel-2);
+  box-shadow: var(--sheen);
   cursor: pointer;
   font-weight: 500;
-  transition: transform 120ms var(--ease);
+  transition:
+    transform 120ms var(--ease),
+    border-color 120ms var(--ease),
+    background-color 120ms var(--ease);
 }
 .btn:hover {
   border-color: var(--hover-line);
+  background: #16222a;
 }
 .btn:active {
   transform: scale(0.98);
@@ -554,8 +592,13 @@ button.pill:hover {
 .btn-accent {
   background: var(--accent);
   border-color: var(--accent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
   color: var(--accent-ink);
   font-weight: 600;
+}
+.btn-accent:hover:not(:disabled) {
+  background: #66ddcd;
+  border-color: #66ddcd;
 }
 .btn-small {
   height: 28px;
@@ -585,6 +628,7 @@ button.pill:hover {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r);
+  box-shadow: var(--sheen);
 }
 .head-row {
   display: flex;
@@ -670,6 +714,12 @@ button.pill:hover {
   cursor: pointer;
   border-bottom: 2px solid transparent;
   white-space: nowrap;
+  transition:
+    color 120ms var(--ease),
+    border-color 200ms var(--ease);
+}
+.tabs button:hover {
+  color: var(--text);
 }
 .tabs button[aria-selected="true"] {
   color: var(--text);
@@ -693,6 +743,10 @@ th {
 td {
   padding: 11px 16px;
   border-top: 1px solid var(--line);
+  transition: background-color 120ms var(--ease);
+}
+tbody tr:hover > td {
+  background: rgba(255, 255, 255, 0.018);
 }
 th.r,
 td.r {
@@ -920,8 +974,7 @@ dialog p {
   .side-fold {
     display: none;
   }
-  .folded .side-word,
-  .folded .side-label {
+  .folded .side-word {
     display: revert;
   }
   .folded .side-head {
@@ -1011,8 +1064,7 @@ dialog p {
   margin: 0 0 12px;
   overflow-x: auto;
 }
-.source-filter button,
-.views-small button {
+.source-filter button {
   height: 30px;
   padding: 0 14px;
   border: 0;
@@ -1023,12 +1075,10 @@ dialog p {
   white-space: nowrap;
   cursor: pointer;
 }
-.source-filter button:hover,
-.views-small button:hover {
+.source-filter button:hover {
   color: var(--text);
 }
-.source-filter button[aria-pressed="true"],
-.views-small button[aria-pressed="true"] {
+.source-filter button[aria-pressed="true"] {
   background: var(--accent-soft);
   color: var(--accent);
 }
@@ -1075,16 +1125,7 @@ td.partial {
 }
 
 /* The Dashboard's filter row: the source on the left, the currency on the right. */
-.dash-bar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0 0 12px;
-}
-.dash-bar .source-filter {
-  margin: 0;
-}
+
 .source-filter button:disabled {
   opacity: 0.4;
   cursor: default;
@@ -1919,9 +1960,7 @@ dialog.in-place .detail-head {
 .set-headline {
   margin: 0 0 6px;
   font-size: 30px;
-  font-weight: 500;
   line-height: 1.2;
-  letter-spacing: -0.02em;
 }
 .set-lead {
   margin: 0;
@@ -2225,7 +2264,6 @@ dialog.in-place .detail-head {
   }
 }
 
-.coach-ask button,
 .plan-save button {
   height: 32px;
   padding: 0 12px;
@@ -2345,47 +2383,13 @@ dialog.in-place .detail-head {
   display: grid;
   gap: 12px;
 }
-.journal-top {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-.journal-score {
-  display: grid;
-  grid-template-columns: 160px 1fr;
-  gap: 20px;
-  align-items: center;
-  padding: 16px;
-}
-.journal-score h2,
 .journal-lists h2 {
   margin: 0 0 6px;
   font-size: 13px;
   font-weight: 600;
 }
-.journal-score p,
 .journal-lists p {
   margin: 4px 0;
-}
-.journal-ring {
-  width: 140px;
-  height: 140px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-}
-.journal-ring > div {
-  width: 110px;
-  height: 110px;
-  border-radius: 50%;
-  background: var(--panel);
-  display: grid;
-  place-content: center;
-  text-align: center;
-}
-.journal-ring b {
-  font-size: 28px;
-  font-weight: 500;
 }
 .journal-lists {
   padding: 16px;
@@ -2400,13 +2404,6 @@ dialog.in-place .detail-head {
   color: var(--text);
   border: 1px solid var(--line-2);
   border-radius: 6px;
-}
-.journal-table {
-  padding: 0 0 12px;
-}
-.journal-note {
-  margin: 10px 16px 0;
-  font-size: 12px;
 }
 .jtag {
   display: inline-block;
@@ -2437,12 +2434,8 @@ button.jtag {
   max-width: 320px;
 }
 @media (max-width: 900px) {
-  .tax-tiles,
-  .journal-top {
+  .tax-tiles {
     grid-template-columns: 1fr 1fr;
-  }
-  .journal-score {
-    grid-template-columns: 1fr;
   }
 }
 .tax-lot td {
@@ -2502,4 +2495,42 @@ button.jtag {
 }
 .rule-break-btns .btn-danger {
   margin-left: auto;
+}
+
+/* One moment of motion: a page's sentence settles in as the page opens (design-system 9). */
+@keyframes desk-settle {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+.dash-headline,
+.port-headline,
+.bots-headline,
+.jr-headline,
+.dcb-headline,
+.pf-headline,
+.set-headline {
+  animation: desk-settle 360ms var(--ease) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background: var(--line-2) padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--hover-line) padding-box;
 }

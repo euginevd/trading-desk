@@ -1,12 +1,12 @@
 # Design system
 
-The desk's own look, from the owner's mockup (decision 15): a dark, dense trading screen after Hyperliquid, with one teal accent and figures first. The UI rules every project follows are in `code-standards.md` (25–29).
+The desk's own look, from the owner's mockup (decision 15), refreshed in decision 76: a dark, dense trading screen after Hyperliquid, with one teal accent, figures first, and the desk's sentences set in a serif. The UI rules every project follows are in `code-standards.md` (25–29).
 
 ## Principles
 
 1. Figures first: prices, values and changes are the largest, clearest things on a screen; labels are small and muted.
 2. One accent, teal, for what's interactive, selected or suggested. Green and red mean up and down, buy and sell, and nothing else.
-3. Dense but calm: hairline borders between panels, no shadows, no decoration. A trading screen fills the window; a reading screen sits in a 1320px column.
+3. Dense but calm: hairline borders between panels, surfaces that step up in light, no decoration. A trading screen fills the window; a reading screen sits in a 1320px column.
 4. The AI advises in plain words: a verdict, a confidence and its reasons, never a badge or a sparkle.
 
 ## Tokens
@@ -15,28 +15,29 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 
 | Token | Value | Use |
 |-------|-------|-----|
-| `bg` | `#0A0F12` | Page, and the panels of the Trade page |
-| `bar` | `#0B1215` | Top bar |
-| `panel` | `#0F171B` | Cards, inputs, the selected watchlist row |
-| `panel-2` | `#131D22` | Buttons, coin marks, hovers |
-| `line` / `line-2` | `#1B272D` / `#24333A` | Dividers and card borders / input and button borders |
-| `text` | `#E6ECEF` | Figures, headings, primary text |
-| `muted` | `#8C9AA3` | Labels and secondary text |
-| `dim` | `#5E6C74` | Placeholders, axes and notes; never essential text |
+| `bg` | `#070B0D` | Page, and the panels of the Trade page |
+| `bar` | `#090E11` | Top bar and side panel |
+| `panel` | `#0D1418` | Cards, inputs, the selected watchlist row |
+| `panel-2` | `#121B20` | Buttons, coin marks, hovers |
+| `line` / `line-2` | `#172228` / `#213038` | Dividers and card borders / input and button borders |
+| `text` | `#E9EFF1` | Figures, headings, primary text |
+| `muted` | `#8B99A2` | Labels and secondary text |
+| `dim` | `#5F6D75` | Placeholders, axes and notes; never essential text |
+| `sheen` | 1px white at 4.5%, inset on the top edge | Raised controls and cards |
 | `accent` / `accent-ink` | `#50D2C1` / `#04110F` | Primary action, selection, focus, the suggested level / text on accent |
 | `up` / `down` | `#2EBD85` / `#F0616D` | Gains and buys / losses and sells, each with a 12% tint for tags |
 | `wait` | `#E8B04B` | The Wait verdict and caution states, with a 12% tint |
 
-5. Type: Inter (400, 500, 600, 700) for everything, with tabular figures (`tnum`) on every number. Body 13px, labels 11 to 12px, a pair 18px, page titles and the total 30px at 500 weight and −0.02em.
+5. Type: Inter (400, 500, 600, 700) for figures, labels and controls, with tabular figures (`tnum`) on every number. Newsreader (variable, optical sizes) for `h1` and each page's lead sentence only, at weight 460, −0.012em, `font-size-adjust: 0.52` to match Inter's x-height, lining proportional figures, balanced wrap; one shared rule in `styles.css` lists them. Body 13px, labels 11 to 12px, a pair 18px (Inter), page sentences 28 to 34px.
 6. Space: 4px base. Cards pad 14 to 16px; table cells 11px by 16px; gaps between cards 10px.
 7. Radius: 5px tags, 6 to 8px buttons and inputs, 10px cards and the verdict.
-8. Depth: hairline borders only. No shadows, except a dialog over the page.
+8. Depth: hairline borders and the `sheen` on a raised control's top edge. No drop shadows, except a dialog over the page.
 
 ## Motion
 
 9. 120ms for hover and press, 200ms for tabs and dialogs. Animate only `transform` and `opacity`, and respect reduced motion.
 9a. A dialog, sheet or menu closes on Esc or a click outside (not a drag from inside), from one handler (`dismiss.ts`); a confirm closed so keeps.
-10. Prices update in place; a change flashes its tint for 400ms at most. Nothing loops or scrolls on its own.
+10. Prices update in place; a change flashes its tint for 400ms at most. Nothing loops or scrolls on its own. The one entrance: a page's lead sentence settles in (360ms, 4px) as the page opens.
 
 ## Components
 

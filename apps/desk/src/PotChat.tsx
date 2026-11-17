@@ -3,6 +3,7 @@
 // the desk has already checked; nothing reaches Binance until the owner reviews it.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cancelPotTrade, closePotTrade, movePotStop, placePotTrade, potAgent } from "./api";
+import { errorOf } from "./format";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
 import { dollars } from "./dcaFormat";
@@ -18,7 +19,6 @@ const WORD: Record<PotAction["type"], string> = {
   close: "Close",
   cancel: "Cancel",
 };
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 
 // What one card does, through the same endpoints as the page.
 export async function runAction(a: PotAction): Promise<string> {

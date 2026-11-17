@@ -70,13 +70,6 @@ export const DcaIcon = () => (
   </svg>
 );
 
-export const GridIcon = () => (
-  <svg {...base}>
-    <path d="M3 8h18M3 16h18" strokeDasharray="2 3" />
-    <path d="M3 19l5-7 4 4 4-9 5 6" />
-  </svg>
-);
-
 // Two chevrons pointing left; the folded panel turns them to point right.
 export const CollapseIcon = () => (
   <svg {...base} width={14} height={14} strokeWidth={2.2}>

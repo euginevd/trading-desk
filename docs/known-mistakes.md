@@ -43,6 +43,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 25b. Headless Chrome on Windows lays out at 500px at least: check phone layouts at `--window-size=500,…`, not 390.
 25c. Git Bash's `/c/…` spells the drive `C:` while the project is `c:`, breaking Vitest and `docker compose --build`: run both from `cd "c:/…"`.
 25d. The api refuses a change that isn't JSON, so a bodiless POST failed: `call` in `api.ts` sends `{}`; test by clicking the button, not only `curl -d '{}'`.
+26a. A class no `.tsx` names may still be built in a template (`tr-ch-${tone}`): list the `prefix-${` patterns before pruning CSS.
 26. Slicing `styles.css` from a block's comment to the file's end drops rules appended after it: slice to the next block's comment, then check the rest.
 
 ## Python and Postgres

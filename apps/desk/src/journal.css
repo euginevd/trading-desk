@@ -8,11 +8,8 @@
 .jr-headline {
   margin: 0 0 6px;
   font-size: 32px;
-  font-weight: 500;
   line-height: 1.18;
-  letter-spacing: -0.02em;
   max-width: 34ch;
-  font-variant-numeric: tabular-nums;
 }
 .jr-kept {
   color: var(--accent);

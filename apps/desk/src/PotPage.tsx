@@ -4,6 +4,7 @@
 // stats, the ledger) and, at the foot, the watchlist (AccountWatchlist.tsx).
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { checkPot, dismissPotProposal, getPot, placePotTrade, putInPot, scanPot } from "./api";
+import { errorOf } from "./format";
 import AgentAvatar from "./AgentIcons";
 import AccountWatchlist from "./AccountWatchlist";
 import CoinIcon from "./CoinIcon";
@@ -17,7 +18,6 @@ import "./pot.css";
 
 // Dollars without empty cents: $1, $0.81, $10.
 const cash = (v: string | number) => dollars(v).replace(/\.00$/, "");
-const errorOf = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback);
 const REGIME = { bull: "Bull", neutral: "Neutral", bear: "Bear" } as const;
 const TAB_KEY = "desk.account.tab";
 const TABS = [
