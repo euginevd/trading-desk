@@ -58,6 +58,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 27c. `KeyError` is a `LookupError`: signal missing config with its own class (`MissingKey`).
 27d. `zipfile.BadZipFile` is neither `OSError` nor `ValueError`: catch it by name when reading a file another process may be writing (`backtest.py`).
 27e. Freqtrade calls a strategy's `custom_exit` only with `use_exit_signal = True`: off, the exit never runs and a trade sat 518 days (`DeskExits`).
+27f. A Freqtrade backtest fills a partial exit before it checks the stop on the same candle: run exits with `--timeframe-detail`, and move a stop to break-even only from the candle after the partial fills.
 
 ## Pull requests
 

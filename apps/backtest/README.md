@@ -73,9 +73,13 @@ by then. After the signal it mirrors the desk:
 
 `DeskScalpExits`, `DeskDayExits`, `DeskSwingExits` and `DeskPositionExits` (backtests only)
 take the same setups with the exits trading-agent.md lists as Not built yet, through
-Freqtrade's own callbacks. Each reads closed candles only and exits at the next candle's open;
-the partial is a limit resting at the setup's target, and a candle that also touches the stop
-counts as the stop.
+Freqtrade's own callbacks. Each reads closed candles only and exits at the next candle's open.
+They run on smaller candles inside each one (`--timeframe-detail`: 1-minute for scalp,
+5-minute for day, hourly for swing, daily for position), so a stop and a target hit in one
+candle come in their real order. The partial is a limit resting at the setup's target, not
+offered on a candle the trade is leaving anyway; the stop moves to break-even from the candle
+after it fills. Time stops count closes from the entry's fill and act on that close only. Day
+trades take no entry from 23:45 UTC.
 
 | Style | Exits |
 |---|---|

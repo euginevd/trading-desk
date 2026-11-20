@@ -32,6 +32,7 @@ import pandas as pd
 import talib.abstract as ta
 from api import screener
 from freqtrade.enums import RunMode
+from freqtrade.exchange import timeframe_to_prev_date
 from freqtrade.persistence import Trade
 from freqtrade.strategy import IStrategy, stoploss_from_absolute
 
@@ -311,19 +312,21 @@ class DeskExits(DeskStyle):
     """The style with the exits trading-agent.md lists as Not built yet, built with Freqtrade's
     own callbacks, for backtests only (`run.sh <style>-exits`), to compare with the plain
     style's fixed stop and target. Every check reads closed candles only: in a backtest the
-    callbacks' dataframe ends at the candle before the one trading, and an exit fills at that
-    candle's open; the partial is a resting limit at the setup's target, cancelled by a stop
-    hit on the same candle (a candle touching both counts as the stop, as before).
-    - part: the share sold at the setup's target, then the rest's stop moves to break-even
-      after fees and the fixed target goes;
+    callbacks' dataframe ends at the candle before the one trading, and an exit fills at the
+    next open. run.sh runs these with --timeframe-detail (smaller candles inside each one), so
+    the stop and the partial's target inside a candle come in their real order.
+    - part: the share sold at the setup's target (a resting limit, not offered on a candle the
+      trade is leaving anyway); from the next candle the rest's stop moves to break-even after
+      fees, and the fixed target goes;
     - close_stop_atr: a close under the setup's stop exits, with a hard stop this many ATR
       lower, sized from the hard stop (R is still measured to the setup's stop, so a close
       stop's loss can pass 1R);
     - trail_atr: after the partial, a close this many ATR under the highest close since entry;
     - trail_lows: after the partial, a close under the lowest low of these many candles before;
     - under_sma: after the partial, a close under this SMA of the setup's candles;
-    - time_stop: (candles closed since entry, R) - still under that R by then, exit;
-    - day_close: out by 23:45 UTC (10:45am Sydney in summer), before the daily close."""
+    - time_stop: (candles closed since the entry filled, R) - under that R at that close, exit;
+    - day_close: out by 23:45 UTC (10:45am Sydney in summer), before the daily close, and no
+      new entry from then."""
 
     position_adjustment_enable = True
     max_entry_position_adjustment = 0
@@ -409,7 +412,10 @@ class DeskExits(DeskStyle):
         if not plan:
             return None
         level = self._hard(trade, plan[2])
-        if self.part and trade.nr_of_successful_exits > 0:
+        sold = [o.order_filled_utc for o in trade.select_filled_orders(trade.exit_side)]
+        # Break-even from the candle after the part filled: on its own candle the low may have
+        # come first, so the stop it had still stands there.
+        if self.part and any(t is not None and t < current_time for t in sold):
             level = max(level, trade.open_rate * (1 + FEE) / (1 - FEE))  # break-even after fees
         return stoploss_from_absolute(level, current_rate=current_rate, is_short=False)
 
@@ -442,8 +448,11 @@ class DeskExits(DeskStyle):
         current_exit_profit: float,
         **kwargs: Any,
     ) -> float | tuple[float | None, str | None] | None:
-        """The partial: a share of the position, offered at the target until it fills."""
+        """The partial: a share of the position, offered at the target until it fills, and not
+        on a candle the trade is leaving anyway."""
         if not self.part or trade.nr_of_successful_exits > 0 or trade.has_open_orders:
+            return None
+        if self._exit_reason(trade, current_time):
             return None
         return -trade.stake_amount * self.part, "Partial at target"
 
@@ -471,11 +480,37 @@ class DeskExits(DeskStyle):
         current_profit: float,
         **kwargs: Any,
     ) -> str | None:
+        return self._exit_reason(trade, current_time)
+
+    def confirm_trade_entry(  # noqa: PLR0913, PLR0917 - Freqtrade's signature
+        self,
+        pair: str,
+        order_type: str,
+        amount: float,
+        rate: float,
+        time_in_force: str,
+        current_time: datetime,
+        entry_tag: str | None,
+        side: str,
+        **kwargs: Any,
+    ) -> bool:
+        """No day trade from 23:45 UTC: the day close would take it straight out."""
+        if self.day_close and (current_time.hour, current_time.minute) >= (23, 45):
+            return False
+        return super().confirm_trade_entry(
+            pair, order_type, amount, rate, time_in_force, current_time, entry_tag, side, **kwargs
+        )
+
+    def _exit_reason(self, trade: Trade, current_time: datetime) -> str | None:
+        """Why the trade leaves at this candle's open, from the candles closed since its entry
+        filled (the time stop counts from the fill, not from when the limit was placed)."""
         plan = plan_of(trade.enter_tag)
         if self.day_close and plan and (current_time.hour, current_time.minute) >= (23, 45):
             return "Day close"
-        df = self._closed(pair)
-        since = df[df["date"] >= trade.open_date_utc]
+        bought = [o.order_filled_utc for o in trade.select_filled_orders(trade.entry_side)]
+        start = bought[0] if bought and bought[0] is not None else trade.open_date_utc
+        df = self._closed(trade.pair)
+        since = df[df["date"] >= timeframe_to_prev_date(self.timeframe, start)]
         if not plan or since.empty:
             return None
         close = float(since["close"].iloc[-1])
@@ -483,7 +518,7 @@ class DeskExits(DeskStyle):
         if self.close_stop_atr and close < stop:
             return "Close stop"
         after = self._after_part(df, since) if trade.nr_of_successful_exits > 0 else None
-        if self.time_stop and not after and len(since) >= self.time_stop[0]:
+        if self.time_stop and not after and len(since) == self.time_stop[0]:  # that close only
             needed = trade.open_rate + self.time_stop[1] * (trade.open_rate - stop)
             after = "Time stop" if close < needed else None
         return after
