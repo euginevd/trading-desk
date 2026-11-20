@@ -594,7 +594,7 @@ class Bots:
     @locked
     def delete(self, bot_id: int) -> dict[str, Any]:
         bot = self._idle(bot_id)
-        self._store.delete_bot(bot_id)
+        self._store.delete_bot(bot_id, self._now())
         self._say(bot, "deleted", "OK")
         return self.view()
 

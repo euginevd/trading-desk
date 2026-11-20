@@ -505,3 +505,31 @@ def test_a_deal_stays_open_at_take_profit_while_a_buy_is_still_live(
     view = bots.view()["bots"][0]
     assert (view["deals"], view["closed"]) == ([], 1)
     assert all(o["status"] == "CANCELED" for o in orders("BUY")[1:])
+
+
+def test_deleting_a_bot_keeps_what_it_bought_today_counted(
+    bots: Bots, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 8: a deleted bot is hidden, not erased. Its buys still count against today's limit
+    and the monthly cap, and the ledger still names its fills."""
+    dip(bots, monkeypatch)
+    bots.trading.set_limits("50", "500")
+    bot_id = bots.create(SETTINGS)["bots"][0]["id"]
+    bots.switch(bot_id, on=True, confirmed=True)
+    bots.step()
+    fill(orders("BUY")[0]["orderId"])
+    bots.step()
+    fill(orders("SELL")[0]["orderId"])
+    bots.step()  # take profit: the deal closes and its other buys are cancelled
+    bots.switch(bot_id, on=False, confirmed=False)
+    spent = bots.trading.settings()["spentToday"]
+    assert Decimal(spent) > 0
+    assert bots.delete(bot_id)["bots"] == []
+    assert bots.trading.settings()["spentToday"] == spent
+    store = bots._store  # pyright: ignore[reportPrivateUsage]
+    named = store.order_sources().values()
+    assert any(s.startswith(f"DCA-{bot_id} · D-") for s in named)
+    with pytest.raises(LookupError):
+        store.bot(bot_id)
+    bots.step()  # a deleted bot is never stepped
+    assert bots.create(SETTINGS)["bots"][0]["id"] != bot_id

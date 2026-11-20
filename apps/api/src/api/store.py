@@ -75,7 +75,8 @@ CREATE TABLE IF NOT EXISTS bots (
     note TEXT,
     last_signal INTEGER NOT NULL DEFAULT 0,
     created INTEGER NOT NULL,
-    updated INTEGER NOT NULL
+    updated INTEGER NOT NULL,
+    deleted INTEGER
 );
 CREATE TABLE IF NOT EXISTS bot_deals (
     id INTEGER PRIMARY KEY,
@@ -112,7 +113,8 @@ CREATE TABLE IF NOT EXISTS grids (
     note TEXT,
     started INTEGER,
     created INTEGER NOT NULL,
-    updated INTEGER NOT NULL
+    updated INTEGER NOT NULL,
+    deleted INTEGER
 );
 CREATE TABLE IF NOT EXISTS grid_orders (
     id INTEGER PRIMARY KEY,
@@ -245,6 +247,10 @@ class Store:
         self._db = sqlite3.connect(path, timeout=5)
         self._db.row_factory = sqlite3.Row
         self._db.executescript(SCHEMA)
+        # Added after the first databases were made: a deleted bot or grid is hidden, its
+        # orders kept for today's spend, the monthly cap and the ledger (audit 8).
+        for table in ("bots", "grids"):
+            self._add_column(table, "deleted", "INTEGER")
         # The Markdown made from the Profile on each save, beside the database it came from.
         self.profile_md = path.parent / (
             "profile.md" if path.stem == "desk" else f"{path.stem}-profile.md"
@@ -253,6 +259,12 @@ class Store:
         self.trade_md = path.parent / (
             "trade.md" if path.stem == "desk" else f"{path.stem}-trade.md"
         )
+
+    def _add_column(self, table: str, column: str, kind: str) -> None:
+        names = {str(r["name"]) for r in self._db.execute(f"PRAGMA table_info({table})")}
+        if column not in names:
+            with self._db:
+                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
 
     def close(self) -> None:
         self._db.close()
@@ -401,10 +413,13 @@ class Store:
     # DCA bots (decision 37): each bot, its deals and every order a deal placed.
 
     def bots(self) -> list[dict[str, Any]]:
-        return [dict(r) for r in self._db.execute("SELECT * FROM bots ORDER BY created, id")]
+        rows = self._db.execute("SELECT * FROM bots WHERE deleted IS NULL ORDER BY created, id")
+        return [dict(r) for r in rows]
 
     def bot(self, bot_id: int) -> dict[str, Any]:
-        row = self._db.execute("SELECT * FROM bots WHERE id = ?", (bot_id,)).fetchone()
+        row = self._db.execute(
+            "SELECT * FROM bots WHERE id = ? AND deleted IS NULL", (bot_id,)
+        ).fetchone()
         if row is None:
             raise LookupError(bot_id)
         return dict(row)
@@ -427,15 +442,11 @@ class Store:
             )
         return self.bot(int(bot["id"]))
 
-    def delete_bot(self, bot_id: int) -> None:
+    def delete_bot(self, bot_id: int, now_ms: int) -> None:
+        """Hides the bot; its deals and orders stay, so what it bought still counts against
+        today's limit and the monthly cap, and the ledger still names its fills (audit 8)."""
         with self._db:
-            self._db.execute(
-                "DELETE FROM bot_orders WHERE deal_id IN "
-                "(SELECT id FROM bot_deals WHERE bot_id = ?)",
-                (bot_id,),
-            )
-            self._db.execute("DELETE FROM bot_deals WHERE bot_id = ?", (bot_id,))
-            self._db.execute("DELETE FROM bots WHERE id = ?", (bot_id,))
+            self._db.execute("UPDATE bots SET deleted = ? WHERE id = ?", (now_ms, bot_id))
 
     def deals(self, bot_id: int) -> list[dict[str, Any]]:
         rows = self._db.execute(
@@ -748,10 +759,13 @@ class Store:
     # Grid bots (decision 38): each grid, and every order it wants or placed.
 
     def grids(self) -> list[dict[str, Any]]:
-        return [dict(r) for r in self._db.execute("SELECT * FROM grids ORDER BY created, id")]
+        rows = self._db.execute("SELECT * FROM grids WHERE deleted IS NULL ORDER BY created, id")
+        return [dict(r) for r in rows]
 
     def grid(self, grid_id: int) -> dict[str, Any]:
-        row = self._db.execute("SELECT * FROM grids WHERE id = ?", (grid_id,)).fetchone()
+        row = self._db.execute(
+            "SELECT * FROM grids WHERE id = ? AND deleted IS NULL", (grid_id,)
+        ).fetchone()
         if row is None:
             raise LookupError(grid_id)
         return dict(row)
@@ -774,10 +788,11 @@ class Store:
             )
         return self.grid(int(grid["id"]))
 
-    def delete_grid(self, grid_id: int) -> None:
+    def delete_grid(self, grid_id: int, now_ms: int) -> None:
+        """Hides the grid; its orders stay, for today's limit, the monthly cap and the ledger
+        (audit 8)."""
         with self._db:
-            self._db.execute("DELETE FROM grid_orders WHERE grid_id = ?", (grid_id,))
-            self._db.execute("DELETE FROM grids WHERE id = ?", (grid_id,))
+            self._db.execute("UPDATE grids SET deleted = ? WHERE id = ?", (now_ms, grid_id))
 
     def add_grid_order(self, order: dict[str, Any]) -> int:
         with self._db:

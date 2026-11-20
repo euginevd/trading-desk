@@ -553,10 +553,10 @@ def test_a_new_bot_never_inherits_a_deleted_ones_confirmation(store: Store, audi
     first = store.add_bot("TR-1", "BTCUSDT", "{}", NOW)
     bots.allow_past_rules(first, allowed=True)
     assert bots.rule_hold(D(5000), first) is None  # confirmed past the cap
-    store.delete_bot(first)
+    store.delete_bot(first, NOW)
     second = store.add_bot("DCA-1", "BTCUSDT", "{}", NOW + 1)
-    assert second == first  # SQLite reuses the id
-    assert bots.rule_hold(D(5000), second) is not None  # but not the confirmation
+    assert second != first  # a deleted bot is kept hidden, so its id is never reused (audit 8)
+    assert bots.rule_hold(D(5000), second) is not None  # nor its confirmation
 
 
 def test_a_trading_account_trade_gets_the_same_check(call: Any, store: Store, audit: Audit) -> None:

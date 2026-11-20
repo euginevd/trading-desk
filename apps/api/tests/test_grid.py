@@ -377,3 +377,47 @@ def test_a_grid_lookup_only_sends_again_when_binance_says_it_isnt_there(
     monkeypatch.setattr(grids._binance, "order_by_client", lookup)  # pyright: ignore[reportPrivateUsage]
     grids.step()  # the demo never got it: "Order does not exist" (-2013)
     assert "placing" not in rows(grids, grid_id)
+
+
+def test_deleting_a_grid_keeps_what_it_bought_today_counted(grids: Grids) -> None:
+    """Audit 8: a deleted grid is hidden, not erased: what it bought still counts against
+    today's limit and the monthly cap, and the ledger still names its fills."""
+    grids.trading.set_limits("60", "1000")
+    grid_id = grids.create(SETTINGS)["grids"][0]["id"]
+    grids.switch(grid_id, on=True, confirmed=True)
+    bought = mine("BUY")[0]
+    fill(bought["orderId"])
+    grids.step()
+    grids.switch(grid_id, on=False, confirmed=False)
+    spent = grids.trading.settings()["spentToday"]
+    assert Decimal(spent) > 0
+    assert grids.delete(grid_id)["grids"] == []
+    assert grids.trading.settings()["spentToday"] == spent
+    store = grids._store  # pyright: ignore[reportPrivateUsage]
+    assert store.order_sources()[f"BTCUSDT:{bought['orderId']}"] == f"GRID-{grid_id}"
+    with pytest.raises(LookupError):
+        store.grid(grid_id)
+
+
+def test_a_database_made_before_hidden_deletes_gets_the_column(tmp_path: Path) -> None:
+    """Audit 8: the desk's existing databases have no `deleted` column; opening one adds it."""
+    import sqlite3  # noqa: PLC0415 - only this test builds an old database
+
+    path = tmp_path / "old.sqlite"
+    old = sqlite3.connect(path)
+    old.execute(
+        "CREATE TABLE grids (id INTEGER PRIMARY KEY, name TEXT NOT NULL, symbol TEXT NOT NULL, "
+        "config TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0, note TEXT, started INTEGER, "
+        "created INTEGER NOT NULL, updated INTEGER NOT NULL)"
+    )
+    old.execute(
+        "INSERT INTO grids (name, symbol, config, created, updated) VALUES "
+        "('BTC range', 'BTCUSDT', '{}', 1, 1)"
+    )
+    old.commit()
+    old.close()
+    store = Store(path)
+    assert [g["name"] for g in store.grids()] == ["BTC range"]
+    store.delete_grid(1, 2)
+    assert store.grids() == []
+    store.close()

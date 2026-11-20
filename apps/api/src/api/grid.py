@@ -477,7 +477,7 @@ class Grids:
     @locked
     def delete(self, grid_id: int) -> dict[str, Any]:
         grid = self._idle(grid_id)
-        self._store.delete_grid(grid_id)
+        self._store.delete_grid(grid_id, self._now())
         self._say(grid, "deleted", "OK")
         return self.view()
 
