@@ -686,7 +686,7 @@ function Pages() {
   };
 
   return (
-    <section className="set-section" aria-labelledby="settings-pages">
+    <section className="set-section set-wide" aria-labelledby="settings-pages">
       <CardHead id="settings-pages" title="Pages" />
       <p className="settings-intro muted">
         Choose what shows on your desk. A page that&apos;s off is hidden and its code isn&apos;t
