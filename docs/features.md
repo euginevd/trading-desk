@@ -24,6 +24,7 @@ Every page follows [design-system.md](design-system.md) 18 to 22. Features 1 to 
 | 108 | Exits Binance won't take yet: a stop or target outside its price band is watched by the desk or placed as the stop alone, then placed in full once in range; the Positions row says Desk-watched stop, Stop only or No stop on Binance (owner, 20 Nov 2026; decision 91) | Done | |
 | 109 | Trading account stats by style and setup, with an equity curve in R (owner, 20 Nov 2026) | Done | |
 | 110 | Trade page tidy: the positions ladder labels the price now and the distance to the stop, and the watchlist is compact rows with setups first (owner, 20 Nov 2026) | Done | |
+| 111 | Keep as a holding: an open trade's coins leave the Trading account unsold, the trade booked at the price now and the amount taken out as POT-OUT; open risk up to 6% (owner, 20 Nov 2026; decision 92) | Done | |
 
 ## `api`
 

@@ -1085,6 +1085,26 @@ def test_a_watched_stop_sells_at_market_when_the_price_reaches_it(
     assert by_tag(f"{trade['ref']}-M1")["side"] == "SELL"
 
 
+def test_a_trade_kept_as_a_holding_sells_nothing_and_leaves_the_account(pot: Pot) -> None:
+    trade = opened(pot)
+    cash = Decimal(pot.view()["cash"])
+    orders = len(demo.EXCHANGE.orders)
+    done = pot.keep(trade["ref"])
+    assert (done["status"], done["exitKind"]) == ("closed", "kept")
+    assert len(demo.EXCHANGE.orders) == orders  # no sell sent
+    assert by_tag(f"{trade['ref']}-X1T")["status"] == "CANCELED"  # its exits came off
+    view = pot.view()
+    out = [m for m in view["moves"] if m["kind"] == "out"]
+    assert [m["ref"] for m in out] == ["POT-OUT-1"]
+    # The coins' value now left with them, so cash is what it was while the trade was open.
+    assert Decimal(view["cash"]) == cash
+    assert Decimal(view["openRisk"]) == ZERO
+    pot.sync()  # closed: the desk no longer watches a stop for it
+    assert pot.view()["trades"][0]["status"] == "closed"
+    with pytest.raises(Refused, match="Only an open trade"):
+        pot.keep(trade["ref"])
+
+
 def test_a_stop_on_alone_is_replaced_when_the_stop_moves(
     pot: Pot, monkeypatch: pytest.MonkeyPatch
 ) -> None:

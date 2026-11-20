@@ -39,4 +39,5 @@ To add one: its line here, and its record, in the same form, at the end of the n
 88. Scan now runs all four styles, a card each (take, closest, or nothing near); the daily scan stays swing and position, so its AI cost holds. [Record](decisions/from-58.md)
 89. Each style's Not built yet exits tested in the backtest with Freqtrade's own callbacks, beside the plain style; NostalgiaForInfinity X8 as a benchmark, downloaded at a pinned release, never committed; BTC-only runs. [Record](decisions/from-58.md)
 90. The DCA close-out keeps open limits open unless the owner chooses; every DCA buy counts toward its week, and Buy the rest buys the plan's unplaced share too. [Record](decisions/from-58.md)
-91. Exits Binance won't take yet (a stop over 20% under the price, a target over twice it): the desk watches the stop itself, or places the stop alone, and adds the rest once in range; the Positions row says which. [Record](decisions/from-58.md)
+91. Exits outside Binance's price band: the desk watches the stop or places it alone, then the rest once in range; the Positions row says which. [Record](decisions/from-58.md)
+92. Keep as a holding moves a trade's coins out of the Trading account unsold, with a matching POT-OUT; risk 2% a trade (20 USDC at most), open risk 6%. [Record](decisions/from-58.md)

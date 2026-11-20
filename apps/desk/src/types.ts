@@ -1373,7 +1373,7 @@ export interface PotTrade {
   fillPrice: string | null;
   now: string | null;
   exitPrice: string | null;
-  exitKind: "target" | "stop" | "market" | null;
+  exitKind: "target" | "stop" | "market" | "kept" | null;
   // An open trade's exits on Binance: both, the stop alone (the target is out of Binance's
   // price range for now), held by the desk (Binance takes no stop that far under the price), or none.
   exits?: "both" | "stop" | "desk" | "none" | null;

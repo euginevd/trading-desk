@@ -8,6 +8,7 @@ import {
   addToPotTrade,
   cancelPotTrade,
   closePotTrade,
+  keepPotTrade,
   enterPotTradeNow,
   movePotStop,
   movePotTarget,
@@ -68,7 +69,7 @@ const STATE: Record<PotTrade["orders"][number]["status"], string> = {
 };
 const NOTE = { desk: "Desk", thesis: "Thesis", you: "You" } as const;
 const PARTS = [25, 50, 75] as const;
-type Ask = "close" | "cancel" | "now" | { reduce: number } | { add: string } | null;
+type Ask = "close" | "keep" | "cancel" | "now" | { reduce: number } | { add: string } | null;
 type Step = {
   text: string;
   button: string;
@@ -154,6 +155,14 @@ export default function PotPanel({
         danger: true,
         run: () => closePotTrade(t.ref),
         said: (x) => `${x.ref} closed at market.`,
+        stay: false,
+      };
+    if (a === "keep")
+      return {
+        text: `Keep the ${t.coin} in ${t.ref} as a long-term holding? Nothing is sold. Its stop and target come off, the trade closes in the book at the price now, and that amount leaves the Trading account. It can't be undone.`,
+        button: "Keep as a holding",
+        run: () => keepPotTrade(t.ref),
+        said: (x) => `${x.ref}: kept as a holding, with no stop or target.`,
         stay: false,
       };
     if (a === "cancel")
@@ -515,6 +524,11 @@ export default function PotPanel({
         {open && (
           <button type="button" className="btn btn-danger pot-left" onClick={() => setAsk("close")}>
             Close at market
+          </button>
+        )}
+        {open && (
+          <button type="button" className="btn" onClick={() => setAsk("keep")}>
+            Keep as a holding
           </button>
         )}
         {waiting && (

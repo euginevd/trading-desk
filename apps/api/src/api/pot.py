@@ -34,7 +34,7 @@ DEFAULT_CONFIG = {"mode": "test", "fixed": "10", "riskPct": "1", "maxRisk": ""}
 FEE = Decimal("0.001")  # Binance spot, each side, before any BNB discount
 MIN_RR = Decimal(2)
 MAX_POSITION_PCT = Decimal(25)
-MAX_OPEN_RISK_PCT = Decimal(3)
+MAX_OPEN_RISK_PCT = Decimal(6)  # three trades at 2% (owner, 20 Nov 2026)
 MONTH_LOSS_PCT = Decimal(6)
 STOP_OUT_PCT = Decimal(20)
 MAX_ALTS = 2
@@ -1248,6 +1248,45 @@ class Pot:
         )
         self._sell(trade, qty)
         return self.trade_view(self._trade(trade["ref"]), None)
+
+    @locked
+    def keep(self, ref: object) -> dict[str, Any]:
+        """An open trade's coins kept as a long-term holding: nothing is sold. Its exits come
+        off Binance, the trade closes in the book at the price now, and that amount leaves the
+        account (POT-OUT-n), since the coins are no longer the account's to trade or stop."""
+        trade = self._trade(str(ref or ""))
+        if trade["status"] != "open":
+            raise Refused("Only an open trade can be kept as a holding.")
+        if any(
+            o["trade_ref"] == trade["ref"] and o["status"] == "placing" and o["role"] != "exit"
+            for o in self._store.pot_orders()
+        ):
+            raise Refused("An order for this trade is still unanswered. Try again in a minute.")
+        now = self._price_now(trade["coin"])
+        self._pull_exit(trade)
+        trade = self._trade(trade["ref"])
+        held = Decimal(trade["fill_qty"]) - Decimal(trade["exit_qty"])
+        value = (held * now).quantize(Decimal("0.01"))
+        kept = {
+            "exit_qty": plain(Decimal(trade["exit_qty"]) + held),
+            "exit_quote": plain(Decimal(trade["exit_quote"]) + value),
+            "status": "closed",
+            "exit_kind": "kept",
+            "closed": self._now(),
+            "note": None,
+        }
+        self._save_trade(trade, kept)
+        out = self._store.add_pot_move("out", plain(value), self._now())
+        closed = self._trade(trade["ref"])
+        result = trade_result(closed, None)
+        self._audit.record("pot", f"{trade['ref']}: kept as a holding", f"{out} {value} {QUOTE}")
+        self._log(
+            trade["ref"],
+            f"Kept as a long-term holding, not sold: {plain(held)} {trade['coin']} left the "
+            f"account at {plain(now)} ({out}, {value} {QUOTE}); booked "
+            f"{_cents(result or ZERO)} {QUOTE} after fees. No stop or target any more.",
+        )
+        return self.trade_view(closed, now)
 
     def _price_now(self, coin: str) -> Decimal:
         now = self.prices([coin]).get(coin)

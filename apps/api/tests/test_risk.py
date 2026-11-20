@@ -37,9 +37,9 @@ def test_the_pots_limits_are_kept_near_or_broken() -> None:
         {"status": "open", "coin": "SOL", "risk": "0.9"},
         {"status": "waiting", "coin": "ETH", "risk": "1.2"},
     ]
-    rows = by_key(risk.pot_limits(pot(value="95", openRisk="2.7", monthResult="-5", trades=trades)))
+    rows = by_key(risk.pot_limits(pot(value="95", openRisk="5.4", monthResult="-5", trades=trades)))
     assert rows["pot-trade-risk"]["state"] == "broken"  # 1.2 of 95 is over 1%
-    assert rows["pot-open-risk"]["state"] == "near"  # 2.84%: past 2.55, under 3
+    assert rows["pot-open-risk"]["state"] == "near"  # 5.68%: past 5.1, under 6
     assert rows["pot-trades"]["figure"] == "2, 2 alts"
     assert rows["pot-month"]["state"] == "near"  # 5% lost: past 4.5, under 6
     assert rows["pot-drawdown"]["figure"] == "5.0%"
