@@ -363,8 +363,15 @@ describe("the trading pot", () => {
     expect((await screen.findByRole("heading", { level: 1 })).textContent).toBe("Trading account");
     expect(screen.getByText("1 setup is waiting for you.")).toBeTruthy();
     const money = document.querySelector(".acc-money") as HTMLElement;
-    expect(within(money).getByText("Available")).toBeTruthy();
-    expect(within(money).getByText("In trades")).toBeTruthy();
+    // Each figure once: available and in trades under the value, the trades on under unrealized.
+    const value = within(money).getByText("Value").parentElement as HTMLElement;
+    expect(value.textContent).toMatch(/available · \$[\d.,]+ in trades/);
+    expect(within(money).getByText("1 trade on")).toBeTruthy();
+    // The two limits as gauges, what one trade may lose under the first.
+    const open = within(money).getByText("Open risk").parentElement as HTMLElement;
+    expect(open.textContent).toContain("$1.01 a trade");
+    expect(within(money).getByText("Month's loss")).toBeTruthy();
+    expect(screen.queryByText(/from trading/)).toBeNull();
     // Open trades' result against what they cost, in dollars and percent.
     const unreal = within(money).getByText("Unrealized").parentElement as HTMLElement;
     expect(unreal.textContent).toContain("+$0.19");
@@ -601,10 +608,11 @@ describe("the trading pot", () => {
     expect(cards.textContent).toContain("Scalps wait out the weekend.");
     expect(cards.textContent).toContain("Needs a 4-hour close over 3,200.");
     expect(cards.textContent).toContain("2.4 : 1");
-    // With cards under it, the scan line is only when and how many, not the scan's full line.
-    const line = document.querySelector(".acc-scan") as HTMLElement;
-    expect(line.textContent).toMatch(/: 1 to review, 4 styles checked$/);
-    expect(line.textContent).not.toContain("Scanned.");
+    // A coin near a setup is tagged Near, not Close, which reads as a button.
+    expect(within(cards).getByText("Near")).toBeTruthy();
+    // The strip says only when it scanned: the cards say what each style found.
+    expect(screen.queryByText(/Scanned\.$/)).toBeNull();
+    expect(document.querySelector(".acc-scan")?.textContent).toMatch(/^Scanned /);
     fireEvent.click(within(cards).getByRole("button", { name: "Review" }));
     expect(screen.getByRole("list", { name: "The trade's orders" }).textContent).toContain(
       "limit buy 3.4172",
@@ -646,27 +654,6 @@ describe("the trading pot", () => {
     const cards = await screen.findByRole("list", { name: "Scan by style" });
     expect(cards.textContent).toContain("Nothing near");
     expect(within(cards).queryByRole("button", { name: "Review" })).toBeNull();
-  });
-
-  it("tags a style's closest coin Nearest, never Close", async () => {
-    const styles = [
-      {
-        style: "day",
-        name: "Day trade",
-        line: "One close.",
-        close: { coin: "ETH", why: "Needs a 4-hour close over 3,200." },
-      },
-      { style: "position", name: "Position", line: "No position setups right now." },
-    ];
-    serve(pot({ proposals: [], lastScan: { at: NOW, line: "Scanned.", styles } }));
-    render(<PotPage />);
-    const cards = await screen.findByRole("list", { name: "Scan by style" });
-    const [day] = within(cards).getAllByRole("listitem");
-    expect(within(day as HTMLElement).getByText("Nearest")).toBeTruthy();
-    expect(within(cards).queryByText("Close")).toBeNull();
-    expect(document.querySelector(".acc-scan")?.textContent).toMatch(
-      /: no setups, 2 styles checked$/,
-    );
   });
 
   it("lists the watchlist as rows, coins in a trade or with a setup first", async () => {

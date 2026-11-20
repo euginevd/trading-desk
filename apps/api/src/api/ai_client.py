@@ -21,7 +21,17 @@ from decimal import Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from api.ai_signal import MODEL, MODELS, STEP, Ask, SignalError, Signals, chosen_model
+from api.ai_signal import (
+    EFFORT,
+    EFFORTS,
+    MODEL,
+    MODELS,
+    STEP,
+    Ask,
+    SignalError,
+    Signals,
+    chosen_model,
+)
 from api.audit import Audit
 from api.store import Store
 from api.trading import Refused
@@ -42,6 +52,7 @@ Query = Callable[..., AsyncGenerator[Any]]
 MODE_KEY = "ai_auth_mode"
 FALLBACK_KEY = "ai_fallback"
 MODEL_KEY = "ai_model"
+EFFORT_KEY = "ai_effort"
 
 
 def model(store: Store | None = None) -> str:
@@ -49,6 +60,12 @@ def model(store: Store | None = None) -> str:
     saved = store.setting(MODEL_KEY, "") if store else ""
     chosen = saved or os.environ.get("AI_MODEL", MODEL).strip()
     return chosen if chosen in MODELS else MODEL
+
+
+def effort(store: Store | None = None) -> str:
+    """The Settings page's effort for whichever model is chosen, else medium."""
+    saved = store.setting(EFFORT_KEY, "") if store else ""
+    return saved if saved in EFFORTS else EFFORT
 
 
 def mode(store: Store | None = None) -> str:
@@ -78,6 +95,8 @@ def view(store: Store, signals: Signals) -> dict[str, Any]:
         "tokenSet": bool(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "").strip()),
         "model": model(store),
         "models": [{"id": key, "name": m.name} for key, m in MODELS.items()],
+        "effort": effort(store),
+        "efforts": list(EFFORTS),
         "budget": signals.budget(),
     }
 
@@ -89,12 +108,18 @@ def choose(store: Store, audit: Audit, signals: Signals, body: dict[str, Any]) -
     picked = body.get("model", model(store))
     if picked not in MODELS:
         raise Refused("Choose one of the listed models.")
+    level = body.get("effort", effort(store))
+    if level not in EFFORTS:
+        raise Refused("Choose low, medium, high, xhigh or max effort.")
     store.set_setting(MODEL_KEY, str(picked))
+    store.set_setting(EFFORT_KEY, str(level))
     store.set_setting(MODE_KEY, str(chosen))
     store.set_setting(FALLBACK_KEY, "1" if fallback else "0")
     back = ", falling back to the API key" if fallback and chosen == SUBSCRIPTION else ""
     audit.record(
-        "settings", "AI provider", f"Set to {SOURCE[str(chosen)]}{back}, {MODELS[str(picked)].name}"
+        "settings",
+        "AI provider",
+        f"Set to {SOURCE[str(chosen)]}{back}, {MODELS[str(picked)].name}, {level} effort",
     )
     return view(store, signals)
 
@@ -118,7 +143,11 @@ def switched(api: Callable[[], Ask], subscription: Ask, store: Store | None = No
     return ask
 
 
-def subscription(query: Query | None = None, model: Callable[[], str] = lambda: MODEL) -> Ask:
+def subscription(
+    query: Query | None = None,
+    model: Callable[[], str] = lambda: MODEL,
+    effort: Callable[[], str] = lambda: EFFORT,
+) -> Ask:
     """The plan through the owner's Claude subscription. Costs nothing per call; it counts
     against the plan's usage limits instead."""
 
@@ -131,7 +160,9 @@ def subscription(query: Query | None = None, model: Callable[[], str] = lambda: 
             )
         try:
             chosen = chosen_model(model)
-            run = asyncio.wait_for(_run(query, system, text, shape, token, chosen), TIMEOUT_SECONDS)
+            run = asyncio.wait_for(
+                _run(query, system, text, shape, token, chosen, effort()), TIMEOUT_SECONDS
+            )
             return asyncio.run(run) | {"_model": chosen}, Decimal(0)
         except TimeoutError:
             raise SignalError("Claude took too long through the subscription. Re-run it.") from None
@@ -157,7 +188,13 @@ def _env(token: str, home: str) -> dict[str, str]:
 
 
 async def _run(  # noqa: PLR0913, PLR0917 - the call's parts, each needed
-    query: Query | None, system: str, text: str, shape: dict[str, Any], token: str, model: str
+    query: Query | None,
+    system: str,
+    text: str,
+    shape: dict[str, Any],
+    token: str,
+    model: str,
+    effort: str = EFFORT,
 ) -> dict[str, Any]:
     import claude_agent_sdk as sdk  # noqa: PLC0415 - only loaded for the subscription
 
@@ -174,7 +211,7 @@ async def _run(  # noqa: PLR0913, PLR0917 - the call's parts, each needed
             setting_sources=[],
             strict_mcp_config=True,
             max_turns=searches + 4,
-            effort="medium",
+            effort=cast(Any, effort),  # one of EFFORTS, the SDK's own levels
             output_format={"type": "json_schema", "schema": shape},
             cwd=home,
             env=_env(token, home),

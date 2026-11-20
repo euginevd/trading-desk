@@ -815,40 +815,32 @@ dialog.pnt {
 .acc-month.down {
   color: var(--down);
 }
-.acc-sub {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px 16px;
+.acc-meter {
+  position: relative;
+  display: block;
+  height: 4px;
+  margin: 8px 0 6px;
+  border-radius: 2px;
+  background: var(--layer-2);
+}
+.acc-meter i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--w);
+  border-radius: 2px;
+  background: var(--up);
+  transition: width 0.4s var(--ease);
+}
+.acc-gauge.is-near .acc-meter i {
+  background: var(--wait);
+}
+.acc-gauge.is-full .acc-meter i {
+  background: var(--down);
 }
 .acc-said {
   margin: 0;
   color: var(--body);
   font-size: 15px;
-}
-.acc-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.acc-chips li {
-  padding: 4px 10px;
-  border: 1px solid var(--line-2);
-  border-radius: 999px;
-  color: var(--muted);
-  font-size: 12px;
-}
-.acc-chips b {
-  color: var(--text);
-  font-weight: 600;
-}
-.acc-chips small {
-  margin-left: 4px;
-  font-size: 12px;
 }
 .acc-strip {
   display: flex;
@@ -936,6 +928,9 @@ dialog.pnt {
   }
   .acc-money dd {
     font-size: 20px;
+  }
+  .acc-money > div:first-child {
+    grid-column: 1 / -1;
   }
   .acc-strip {
     flex-wrap: wrap;

@@ -233,6 +233,8 @@ function Ticks({ book }: { book: DcaBook }) {
     if (t.state === "now")
       return setSaid(`${base}: this week, ${two(t.usdc)} ${book.quote} so far.`);
     if (t.state === "missed") return setSaid(`${base}: nothing bought.`);
+    if (t.state === "part")
+      return setSaid(`${base}: ${two(t.usdc)} of ${two(p.weekly)} ${book.quote} bought.`);
     setSaid(`${base}: ${two(t.usdc)} ${book.quote} bought${t.trim ? ", and a trim" : ""}.`);
   };
   return (

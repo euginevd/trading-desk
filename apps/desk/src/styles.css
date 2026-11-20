@@ -2105,6 +2105,17 @@ dialog.in-place .detail-head {
 .settings-option-text .muted {
   font-size: 12px;
 }
+/* Effort, under Model: five pills for whichever model is chosen; the choice fills in accent. */
+.settings-efforts {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.settings-efforts button[aria-checked="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  box-shadow: none;
+}
 .settings-tag {
   padding: 2px 8px;
   border-radius: 5px;

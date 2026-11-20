@@ -122,8 +122,12 @@ export const getTerminal = (symbol: string) =>
   call<Terminal>("GET", `/trade?symbol=${encodeURIComponent(symbol)}`);
 export const getSettings = () => call<Settings>("GET", "/settings");
 export const getAiSettings = () => call<AiSettings>("GET", "/settings/ai");
-export const setAiSettings = (mode: AiMode, fallback: boolean, model: string) =>
-  call<AiSettings>("PUT", "/settings/ai", { mode, fallback, model });
+export const setAiSettings = (
+  mode: AiMode,
+  fallback: boolean,
+  model: string,
+  effort?: string, // left out: the api keeps the current effort
+) => call<AiSettings>("PUT", "/settings/ai", { mode, fallback, model, effort });
 // Credentials go to .env through the api and never come back (decision 51).
 export const saveAiKey = (key: string) => call<AiSettings>("PUT", "/settings/ai/key", { key });
 export const startSignIn = () => call<{ url: string }>("POST", "/settings/ai/signin", {});
@@ -312,7 +316,8 @@ export const placeDcaOrder = (order: DcaOrderRequest) =>
   call<DcaOrder>("POST", "/dca/orders", order);
 export const cancelDcaOrder = (ref: string) =>
   call<DcaOrder>("POST", "/dca/orders/cancel", { ref });
-export const closeOutDca = () => call<{ closed: string[] }>("POST", "/dca/close-out");
+export const closeOutDca = (week: string) =>
+  call<{ closed: string[]; missed: string[] }>("POST", "/dca/close-out", { week });
 // The desk's own plan at once; dca-agent's only when asked.
 export const analyseFunds = (side: "add" | "remove", amount: string, agent = false) =>
   call<FundsPlan>("POST", "/dca/funds/analyse", { side, amount, agent });

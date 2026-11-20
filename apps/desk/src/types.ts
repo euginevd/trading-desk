@@ -727,6 +727,8 @@ export interface AiSettings {
   tokenSet: boolean;
   model: string;
   models: { id: string; name: string }[];
+  effort: string; // how hard the chosen model thinks before answering
+  efforts: string[]; // the levels to pick from: low, medium, high, xhigh, max
   budget: { spent: string; cap: string };
 }
 
@@ -1197,7 +1199,7 @@ export interface DcaTick {
   week: number;
   key: string;
   friday: string;
-  state: "bought" | "missed" | "now";
+  state: "bought" | "part" | "missed" | "now";
   trim: boolean;
   usdc: string;
 }
@@ -1222,10 +1224,26 @@ export interface DcaBook {
     planTotal: string;
     ticks: DcaTick[];
   } | null;
-  week: { key: string; start: number; closeOut: number; orders: DcaOrder[] };
+  week: {
+    key: string;
+    start: number;
+    closeOut: number;
+    orders: DcaOrder[];
+    state: DcaWeekState;
+  };
   next: { key: string; start: number; closeOut: number };
   orders: DcaOrder[];
   priceError: string | null;
+}
+// This week against the plan, whichever button placed its buys (TODO 28).
+export interface DcaWeekState {
+  week: string;
+  planned: string;
+  bought: string;
+  waiting: string;
+  toPlace: string;
+  open: { ref: string; coin: string; price: string | null; left: string }[];
+  toPlaceByCoin: Record<string, string>;
 }
 export interface DcaOdds {
   hit: number;
