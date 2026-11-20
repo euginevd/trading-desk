@@ -1,6 +1,6 @@
 """The desk's measure of a Freqtrade backtest (feature 100): every trade in R, its result over
 what it risked, by setup, exit and year, with the curve and the worst run from a high. Stdlib
-only, so the backtest container's report.py and worker.py import it too (decision 85)."""
+only, so the backtest container's report.py and worker.py import it too (decision 87)."""
 
 import json
 import zipfile

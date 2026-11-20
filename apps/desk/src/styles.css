@@ -2734,3 +2734,87 @@ body::after {
     font-size: 27px;
   }
 }
+
+/* Settings › Pages (decision 85): a row per page or feature, its switch at the right. */
+.feature-rows {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 8px;
+  padding: 0;
+  list-style: none;
+}
+.feature-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  transition:
+    opacity 200ms var(--ease),
+    border-color 200ms var(--ease);
+}
+.feature-row > div {
+  flex: 1;
+  min-width: 0;
+}
+.feature-row strong {
+  color: var(--text);
+  font-weight: 600;
+  margin-right: 6px;
+}
+.feature-row.off {
+  opacity: 0.66;
+}
+.feature-what {
+  display: block;
+  font-size: 12px;
+}
+.feature-keeps {
+  color: var(--wait);
+}
+.settings-tag.is-fixed {
+  background: var(--layer-2);
+  color: var(--dim);
+}
+.feature-switch {
+  display: flex;
+  padding: 6px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  cursor: pointer;
+}
+.feature-switch:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.feature-switch:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+/* A link to a page that's off opened the Dashboard: why, and the way to turn it on. */
+.feature-off {
+  max-width: 1320px;
+  margin: 12px auto 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line-2);
+  border-radius: 12px;
+  background: var(--wait-soft);
+  color: var(--text);
+  font-size: 13px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .feature-off {
+    animation: feature-off-in 240ms var(--ease) both;
+  }
+  .side-nav a {
+    animation: feature-off-in 220ms var(--ease) both;
+  }
+}
+@keyframes feature-off-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}

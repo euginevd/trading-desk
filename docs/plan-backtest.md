@@ -1,6 +1,6 @@
 # Plan: the Backtest page
 
-TODO 25, feature 102, decision 85. Profile: prototype. Mockup: [mockups/backtest.html](mockups/backtest.html).
+TODO 26, feature 103, decision 87. Profile: prototype. Mockup: [mockups/backtest.html](mockups/backtest.html).
 
 ## Design
 

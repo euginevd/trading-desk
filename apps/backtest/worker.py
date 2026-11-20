@@ -1,4 +1,4 @@
-"""Runs the Backtest page's requests (decision 85), one at a time, in the Freqtrade container.
+"""Runs the Backtest page's requests (decision 87), one at a time, in the Freqtrade container.
 
 The api writes `jobs/<id>.request.json`; this checks it again (api/backtest_runs.py), runs the
 same download and backtest commands as run.sh, as argument lists, and writes

@@ -26,6 +26,7 @@ from api import (
     coach_week,
     demo,
     env_file,
+    features,
     journal,
     ledger,
     md_files,
@@ -1121,6 +1122,8 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("GET", "/journal"): lambda s, _q, _b: _journal(s),
     ("PUT", "/journal/tags"): lambda s, _, b: journal.tag(s.store, b),
     ("PUT", "/journal/lists"): lambda s, _, b: journal.set_lists(s.store, b),
+    ("GET", "/settings/features"): lambda s, _q, _b: features.view(s.store),
+    ("PUT", "/settings/features"): lambda s, _, b: features.switch(s.store, b),
     ("GET", "/settings/telegram"): lambda s, _q, _b: telegram.view(s.store),
     ("PUT", "/settings/telegram"): lambda s, _, b: telegram.set_time(s.store, b),
     ("PUT", "/settings/telegram/token"): lambda s, _, b: _telegram_token(s, b),
@@ -1397,7 +1400,7 @@ def _open_route(method: str, path: str) -> dict[str, object] | None:
 def _backtest_route(
     method: str, path: str, params: dict[str, str], event: dict[str, object]
 ) -> dict[str, object] | None:
-    """The Backtest page (decision 85): Freqtrade's results and the worker's queue, no exchange."""
+    """The Backtest page (decision 87): Freqtrade's results and the worker's queue, no exchange."""
     route = backtest.ROUTES.get((method, path))
     if route is None:
         return None

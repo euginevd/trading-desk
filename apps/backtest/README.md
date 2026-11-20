@@ -6,9 +6,10 @@ and needs no keys: Binance's public candles only.
 
 ## Run it
 
-From the desk: the **Backtest** page (http://127.0.0.1:5180/#/backtest) picks the style, AI filter
-and dates, runs them through the `backtest-worker` container (`worker.py`, which starts with
-`docker compose up`) and shows every result kept here, these runs included (decision 85).
+From the desk: the **Backtest** page (http://127.0.0.1:5180/#/backtest) picks a type, one coin
+from the Trade screener's top 100 USDC coins and up to 3 months, runs it through the
+`backtest-worker` container (`worker.py`, which starts with `docker compose up`) and lists only
+the runs started there (decision 87). The terminal runs below don't show on the page.
 
 From the terminal:
 

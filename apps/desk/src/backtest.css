@@ -1,4 +1,4 @@
-/* The Backtest page (decision 85): run bar, progress, tiles, curve, bars and tables. */
+/* The Backtest page (decision 87): run bar, progress, tiles, curve, bars and tables. */
 /* Grid children shrink to the page, so a wide table scrolls in its box, never the page. */
 .bt > *,
 .bt .panel {

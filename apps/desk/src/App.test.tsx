@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import App, { dominanceMove } from "./App";
 import { amount, amountSleek, percent, price, priceSleek, usd, usdShort, usdWhole } from "./format";
 import type { Portfolio, Settings } from "./types";
@@ -123,6 +123,19 @@ const basics: Routes = {
   "GET /tickers": () => [200, { tickers: [{ coin: "BTC", price: "98400", change24h: "2.1" }] }],
 };
 
+// The pages load lazily (decision 85): fetched once up front, so a busy test run doesn't time out
+// waiting for a page's code.
+beforeAll(async () => {
+  await Promise.all([
+    import("./Journal"),
+    import("./BotsHome"),
+    import("./PotPage"),
+    import("./RiskPage"),
+    import("./ProfilePage"),
+    import("./Portfolio"),
+  ]);
+});
+
 afterEach(() => {
   cleanup();
   window.localStorage.removeItem("desk.currency");
@@ -204,6 +217,79 @@ describe("side panel", () => {
     );
     expect(screen.queryByText(/Rebalancing/)).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Expand side panel" }));
+  });
+});
+
+describe("feature flags", () => {
+  it("hides switched-off pages, and a link to one opens the Dashboard saying why", async () => {
+    window.location.hash = "#/journal";
+    serve({
+      ...basics,
+      "GET /portfolio": () => [200, portfolio],
+      "GET /settings/features": () => [200, { flags: { journal: false, risk: false } }],
+    });
+    render(<App />);
+    expect(await screen.findByRole("status")).toHaveProperty(
+      "textContent",
+      "Journal is off, so this opened the Dashboard. Turn it on in Settings",
+    );
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    const links = Array.from(nav.querySelectorAll("a")).map((a) => a.textContent);
+    expect(links).toEqual(["Dashboard", "Portfolio", "Trade", "Bots", "Profile", "Settings"]);
+    expect(within(nav).getByRole("link", { name: "Dashboard" }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+    expect(screen.queryByRole("heading", { level: 1, name: "Journal" })).toBeNull();
+  });
+
+  it("switches a page from Settings and the side panel follows", async () => {
+    window.location.hash = "#/settings";
+    let flags: Record<string, boolean> = {};
+    const fetch = serve({
+      ...basics,
+      "GET /settings/features": () => [200, { flags }],
+      "PUT /settings/features": (init) => {
+        const { id, on } = JSON.parse(String(init?.body)) as { id: string; on: boolean };
+        flags = { ...flags, [id]: on };
+        return [200, { flags }];
+      },
+    });
+    render(<App />);
+    const risk = await screen.findByRole("switch", { name: "Risk page" });
+    expect(risk.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("switch", { name: "Dashboard page" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("switch", { name: "Settings page" })).toHaveProperty("disabled", true);
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(within(nav).getByRole("link", { name: "Risk" })).toBeTruthy();
+
+    fireEvent.click(risk);
+    await waitFor(() => expect(within(nav).queryByRole("link", { name: "Risk" })).toBeNull());
+    expect(screen.getByRole("switch", { name: "Risk page" }).getAttribute("aria-checked")).toBe(
+      "false",
+    );
+    expect(screen.getByText("Your limits are still checked on every order")).toBeTruthy();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/settings/features",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ id: "risk", on: false }) }),
+    );
+
+    fireEvent.click(screen.getByRole("switch", { name: "Risk page" }));
+    expect(await within(nav).findByRole("link", { name: "Risk" })).toBeTruthy();
+  });
+
+  it("says so when a switch isn't saved, and keeps the page as it was", async () => {
+    window.location.hash = "#/settings";
+    serve({
+      ...basics,
+      "GET /settings/features": () => [200, { flags: {} }],
+      "PUT /settings/features": () => [400, { error: "Not saved." }],
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("switch", { name: "Journal page" }));
+    const pages = screen.getByRole("region", { name: "Pages" });
+    expect(await within(pages).findByRole("alert")).toHaveProperty("textContent", "Not saved.");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(within(nav).getByRole("link", { name: "Journal" })).toBeTruthy();
   });
 });
 

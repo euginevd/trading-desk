@@ -1,3 +1,4 @@
+import type { Flags } from "./features";
 import type {
   AccountCoin,
   PotAction,
@@ -226,6 +227,10 @@ export const tagTrade = (key: string, setups: string[], mistakes: string[]) =>
   call<{ setups: string[]; mistakes: string[] }>("PUT", "/journal/tags", { key, setups, mistakes });
 export const setJournalLists = (setups: string[], mistakes: string[]) =>
   call<JournalData["lists"]>("PUT", "/journal/lists", { setups, mistakes });
+// Feature flags (decision 85): only the owner's choices; features.tsx knows the rest.
+export const getFeatures = () => call<{ flags: Flags }>("GET", "/settings/features");
+export const setFeature = (id: string, on: boolean) =>
+  call<{ flags: Flags }>("PUT", "/settings/features", { id, on });
 export const getTelegram = () => call<TelegramSettings>("GET", "/settings/telegram");
 export const setTelegramTime = (time: string) =>
   call<TelegramSettings>("PUT", "/settings/telegram", { time });
@@ -379,7 +384,7 @@ export const notePotTrade = (ref: string, text: string) =>
 export const scanPot = () => call<PotView>("POST", "/pot/scan");
 export const getPotStyles = () => call<PotStyles>("GET", "/pot/styles");
 
-// The Backtest page (decision 85): runs Freqtrade through the worker, reads its results.
+// The Backtest page (decision 87): runs Freqtrade through the worker, reads its results.
 export const getBacktests = () => call<BacktestView>("GET", "/backtest");
 export const getBacktestRun = (id: string) =>
   call<BacktestRun>("GET", `/backtest/run?id=${encodeURIComponent(id)}`);

@@ -56,7 +56,7 @@ In full: [threat-model/boundaries.md](threat-model/boundaries.md).
 - **TB4** `api` to Anthropic, by API key or subscription (decision 48): figures, position and Profile, never keys or ids; replies schema-checked.
 - **TB5** `api` to CoinGecko: tickers, never amounts; logos checked for host, type and size.
 - **TB6** `api` to Telegram: the token only in the URL, never logged; messages, never keys, to the chat linked by code (decision 57); its one-use buttons place orders (decision 74, R12).
-- **TB7** Freqtrade and `api`: one route in, job files out; nothing placed (decisions 84, 85).
+- **TB7** Freqtrade and `api`: one route in, job files out; nothing placed (decisions 84, 87).
 
 ## Top risks
 

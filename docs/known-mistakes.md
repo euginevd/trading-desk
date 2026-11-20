@@ -64,7 +64,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 ## Binance
 
-29 to 29g, on orders, ids, Telegram and the pre-trade check: [known-mistakes/binance.md](known-mistakes/binance.md).
+29 to 29j, on orders, ids, Telegram and the pre-trade check: [known-mistakes/binance.md](known-mistakes/binance.md).
 
 ## SQLite
 

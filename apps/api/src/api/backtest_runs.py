@@ -1,4 +1,4 @@
-"""What a backtest run may be, and the Freqtrade commands for it (decision 85). Stdlib only:
+"""What a backtest run may be, and the Freqtrade commands for it (decision 87). Stdlib only:
 the api checks a request with it before queueing, and the worker (apps/backtest/worker.py)
 checks it again and builds the commands, as an argument list, never a shell string.
 

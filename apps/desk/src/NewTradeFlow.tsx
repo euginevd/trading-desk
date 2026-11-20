@@ -93,7 +93,7 @@ function Stepper({ step }: { step: Step }) {
   );
 }
 
-// A style's newest backtest from the Backtest page (decision 85), as one line on its card.
+// A style's newest backtest from the Backtest page (decision 87), as one line on its card.
 function testedLine(run: BacktestRunLine | undefined): string | null {
   if (!run?.all) return null;
   const days = (run.to - run.from) / 86_400_000;

@@ -375,7 +375,7 @@ class Store:
         )
         pot = self._db.execute(
             "SELECT status, spend, executed_quote FROM pot_orders "
-            "WHERE role = 'entry' AND created >= ?",
+            "WHERE side = 'buy' AND created >= ?",  # entries and adds alike
             (since_ms,),
         )
         potted = sum(

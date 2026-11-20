@@ -1360,7 +1360,7 @@ dialog.ntf {
 .ntf-hand {
   font-size: 13px;
 }
-/* A style's newest backtest (decision 85): red when it lost on average, green when it made. */
+/* A style's newest backtest (decision 87): red when it lost on average, green when it made. */
 .ntf-style small.ntf-tested.down {
   color: var(--down);
 }

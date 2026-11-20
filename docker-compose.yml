@@ -60,7 +60,7 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 
-  # The Backtest page's runs (decision 85): the api queues a checked request in
+  # The Backtest page's runs (decision 87): the api queues a checked request in
   # local/backtest/jobs and this runs it, one at a time. No port, no keys, no Docker socket.
   backtest-worker:
     <<: *freqtrade

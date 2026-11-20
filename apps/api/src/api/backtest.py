@@ -1,4 +1,4 @@
-"""The Backtest page's side of the api (decision 85): the styles and coins to pick from, the
+"""The Backtest page's side of the api (decision 87): the styles and coins to pick from, the
 runs started from the desk, one run in full, and the job queue the backtest worker reads. The
 api never starts a process: it writes a checked request into `local/backtest/jobs`, and the
 worker runs it. Only the desk's own runs are listed, never run.sh's (owner, 20 Nov 2026)."""

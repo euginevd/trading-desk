@@ -1,4 +1,4 @@
-// The Backtest page (docs/plan-backtest.md, decision 85): run a style's Freqtrade backtest from
+// The Backtest page (docs/plan-backtest.md, decision 87): run a style's Freqtrade backtest from
 // the desk and read it in R, after TradingView's Strategy Tester and FreqUI: a run bar, the
 // worker's progress, tiles, the equity curve, the breakdowns, every trade, and the kept runs
 // to open or compare. Nothing here places an order.

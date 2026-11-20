@@ -1699,7 +1699,7 @@ export interface PotJudge {
   expires: number;
 }
 
-// The Backtest page (decision 85): Freqtrade's results in R, and the worker's queue.
+// The Backtest page (decision 87): Freqtrade's results in R, and the worker's queue.
 export type BacktestStyleKey = "scalp" | "day" | "swing" | "position";
 export interface BacktestStyle {
   key: BacktestStyleKey;
