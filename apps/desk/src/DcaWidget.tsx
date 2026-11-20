@@ -119,7 +119,7 @@ export default function DcaWidget({ now: given }: { now?: number }) {
 
   const closeOut = () => {
     setClosing(true);
-    closeOutDca().then(
+    closeOutDca(book?.week.key ?? "").then(
       (r) => {
         const bought = r.closed.length ? `Bought at market: ${r.closed.join(", ")}.` : "";
         const missed = r.missed.length ? ` Not bought: ${r.missed.join(", ")}.` : "";

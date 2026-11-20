@@ -193,7 +193,7 @@ def _setup(desk: Trading, kind: str, arg: str, s: Services) -> str:
 def _close_out(desk: Trading, week: str, now: datetime) -> str:
     if week_of(int(now.timestamp() * 1000))[0] != week:
         return "Too late: the week turned over at 7pm. The DCA book shows what's open."
-    done = DcaBook(desk).close_out()
+    done = DcaBook(desk).close_out(week)
     said = f"Bought at market: {', '.join(done['closed'])}." if done["closed"] else ""
     if done["missed"]:
         said += f" Not bought: {', '.join(done['missed'])}."

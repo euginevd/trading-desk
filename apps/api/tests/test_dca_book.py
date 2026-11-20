@@ -219,6 +219,23 @@ def test_a_refused_coin_never_stops_the_rest_of_the_close_out(book: DcaBook, des
     assert closed["missed"][0].startswith("BTC (That's over your per-order limit")
 
 
+def test_buy_the_rest_keeps_to_the_plan_and_buys_nothing_twice(book: DcaBook) -> None:
+    book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "named"})
+    extra = book.place({"coin": "ETH", "spend": "20", "price": "2900", "source": "named"})
+    assert book.close_out("26W45")["closed"] == ["ETH 19.98", "BTC 40", "SOL 20"]
+    still = next(o for o in book.view()["orders"] if o["ref"] == extra["ref"])
+    assert still["status"] == "open"  # beyond ETH's share of the plan: left open, not bought
+    assert book.close_out("26W45") == {"closed": [], "missed": []}
+
+
+def test_buy_the_rest_only_inside_the_week_it_was_asked_for(book: DcaBook) -> None:
+    with pytest.raises(Refused, match="Too late"):
+        book.close_out("26W44")  # the dialog was opened before the week turned over
+    book._clock = lambda: NOW + 3 * 86_400  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(Refused, match="window opens Fri 13 Nov at 7pm"):
+        book.close_out()  # Tuesday: next week's plan isn't bought early
+
+
 def test_a_week_short_of_its_amount_shows_as_part_bought(book: DcaBook) -> None:
     book.place({"coin": "SOL", "spend": "20", "kind": "market", "source": "named"})
     book._clock = lambda: NOW + 7 * 86_400  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]

@@ -269,6 +269,10 @@ describe("DCA widget", () => {
     expect(sent(fetch, "/dca/close-out")).toHaveLength(0); // the confirm first
     fireEvent.click(screen.getByRole("button", { name: "Buy the rest at market" }));
     await waitFor(() => expect(sent(fetch, "/dca/close-out")).toHaveLength(1));
+    // The week it was shown, so a confirm after 7pm Monday can't buy next week's plan.
+    expect(JSON.parse(String(sent(fetch, "/dca/close-out")[0]?.[1]?.body))).toEqual({
+      week: "26W47",
+    });
     expect(await screen.findByText("Bought at market: BTC 49.79.")).toBeTruthy();
   });
 
