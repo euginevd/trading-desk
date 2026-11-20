@@ -271,3 +271,26 @@ def test_a_paused_grid_with_a_sell_out_refuses_to_open_twice(grids: Grids) -> No
     grids.switch(grid_id, on=False, confirmed=False)  # stop: the sell cancelled
     grids.switch(grid_id, on=True, confirmed=True)  # now it can start again
     assert len(mine("BUY")) == 8
+
+
+def test_a_buy_held_overnight_counts_on_the_day_it_is_sent(grids: Grids) -> None:
+    """Audit 2: a buy held by the daily limit and sent after midnight counts against that
+    day's limit, not the day it was queued (which would let it count on neither)."""
+    grids.trading.set_limits("60", "400")
+    grid_id = grids.create(SETTINGS)["grids"][0]["id"]
+    grids.switch(grid_id, on=True, confirmed=True)  # the opening buys use $389.49 of today's 400
+    first = next(o for o in mine("BUY") if o["price"] == "98420")
+    fill(first["orderId"])
+    grids.step()  # its sell goes on
+    fill(mine("SELL")[0]["orderId"])
+    grids.step()  # the sell's buy-back: $50, but only $10.51 left today, so it waits
+    assert "limit is used up" in grids.view()["grids"][0]["note"]
+    assert len(mine("BUY")) == 7
+
+    tomorrow = NOW + 86_400
+    grids._clock = lambda: tomorrow  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    grids.trading._clock = lambda: tomorrow  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    grids.step()
+    assert len(mine("BUY")) == 8  # sent this morning
+    left = Decimal(grids.trading.settings()["leftToday"])
+    assert left < Decimal(351)  # and counted today: about 350 left, not the full 400

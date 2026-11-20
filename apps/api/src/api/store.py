@@ -850,7 +850,8 @@ class Store:
             self._db.execute(
                 "UPDATE grid_orders SET order_id = :order_id, status = :status, "
                 "executed_qty = :executed_qty, executed_quote = :executed_quote, "
-                "fee_base = :fee_base, profit = :profit, updated = :updated WHERE id = :id",
+                "fee_base = :fee_base, profit = :profit, created = :created, updated = :updated "
+                "WHERE id = :id",
                 order,
             )
 

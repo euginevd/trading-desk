@@ -609,6 +609,9 @@ class Grids:
                     grid = self._store.save_grid(grid | {"note": waiting})
                     self._audit.record("grid", f"Grid {grid['id']} held a buy", waiting)
                 continue
+            # Stamped as sent now: the daily limit and the monthly cap count a buy on the day
+            # it goes out, not the day it was queued (audit 2).
+            row |= {"created": self._now()}
             self._store.save_grid_order(row | {"status": "placing", "updated": self._now()})
             try:
                 if row["side"] == "buy":
