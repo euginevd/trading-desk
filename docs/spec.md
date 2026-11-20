@@ -32,7 +32,7 @@ Template defaults: GitHub Actions, the pre-push scan and the PR security checks.
 
 6. Two apps in one `docker compose` (decisions 4 and 14):
    - `api`: Python. It reads Binance and Taostats, asks Claude, places orders and runs the bots and agents, keeping SQLite and the audit log in `local/`; only it holds a key.
-   - `desk`: React, Vite and TypeScript: Dashboard, Portfolio, Journal, Trading account (Trade), Risk, Bots (Accumulation, Opportunities, Grid bots), Profile (with My agents) and Settings. Settings › Pages switches each page and feature on or off (decision 85): off hides it and skips loading it, and never stops an order, bot, check or agent; Dashboard and Settings are always on; features added later arrive off.
+   - `desk`: React, Vite and TypeScript: Dashboard, Portfolio, Journal, Trading account (Trade), Risk, Bots (Accumulation, Opportunities, Grid bots), Profile (with My agents) and Settings. Settings › Pages hides pages, never stopping orders (decision 85).
    - Keys come from `.env`, put there by the owner (decision 2).
 
 ## Done when
