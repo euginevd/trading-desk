@@ -32,6 +32,8 @@ Your requirements, features and ideas, numbered, in your own words. In `producti
 27. Scan now: show each style's backtest result in red on its card beside a take, once the Backtest page (branch `backtest-page`) is on main. *(Asked 20 Nov 2026; the cards are built, feature 105.)*
 28. The Monday close-out sees the whole week: every open DCA buy from this week, whatever button placed it, plus what's left of the week's amount not yet placed; Keep them open (the default), Buy the rest at market, or Choose per coin on the desk; nothing is cancelled unless I choose. The progress bar shows a week bought, partly bought or not bought by what filled. *(Asked 20 Nov 2026, from the DCA audit. Built: feature 107, decision 90. Done once Monday's close-out message arrives right.)*
 29. Chat with dca-agent on Telegram: I type to the bot ("move ETH and SOL lower, I can wait till Wednesday"), dca-agent answers with revised orders through the DCA book's chat, and each comes back as a button to approve; only my linked chat is read, nothing is placed without a tap, and the tap runs the desk's checks. *(Asked 20 Nov 2026.)*
+30. A notification bell on the desk: exchange alerts like a stop Binance refused or a trade left with no stop show there and go to Telegram, and from Telegram I can resolve them. *(Asked 20 Nov 2026, after the NEAR trade held no stop for two days, decision 91. To decide first: which alerts, and what Resolve may do from Telegram.)*
+31. A minimum of 20 USDC a trade. *(Asked 20 Nov 2026; my lean: refuse a smaller trade, never size it up.)*
 
 Later, from the project ideas doc, not started until listed above:
 

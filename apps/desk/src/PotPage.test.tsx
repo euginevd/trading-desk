@@ -364,16 +364,17 @@ describe("the trading pot", () => {
     expect(screen.getByText("1 setup is waiting for you.")).toBeTruthy();
     const money = document.querySelector(".acc-money") as HTMLElement;
     // Each figure once: available and in trades under the value, the trades on under unrealized.
-    const value = within(money).getByText("Value").parentElement as HTMLElement;
+    // A tile's label is the button that opens its details: the tile is the box around it.
+    const value = within(money).getByText("Value").closest("div") as HTMLElement;
     expect(value.textContent).toMatch(/available · \$[\d.,]+ in trades/);
     expect(within(money).getByText("1 trade on")).toBeTruthy();
     // The two limits as gauges, what one trade may lose under the first.
-    const open = within(money).getByText("Open risk").parentElement as HTMLElement;
+    const open = within(money).getByText("Open risk").closest("div") as HTMLElement;
     expect(open.textContent).toContain("$1.01 a trade");
     expect(within(money).getByText("Month's loss")).toBeTruthy();
     expect(screen.queryByText(/from trading/)).toBeNull();
     // Open trades' result against what they cost, in dollars and percent.
-    const unreal = within(money).getByText("Unrealized").parentElement as HTMLElement;
+    const unreal = within(money).getByText("Unrealized").closest("div") as HTMLElement;
     expect(unreal.textContent).toContain("+$0.19");
     expect(unreal.textContent).toContain("+1.9%");
     expect(within(money).getByText("Realized")).toBeTruthy();
@@ -395,6 +396,12 @@ describe("the trading pot", () => {
     // The row shows how far the coin has moved from its fill, not R.
     const row = screen.getByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" });
     expect(within(row).getByText("+1.9%")).toBeTruthy();
+    // The price now is labelled on the line, and how far it sits above the stop is said.
+    expect(row.querySelector(".pot-now-px")?.textContent).toBe("138.02");
+    expect(within(row).getByText("4.9% to stop")).toBeTruthy();
+    expect(document.getElementById(row.getAttribute("aria-describedby") ?? "")?.textContent).toBe(
+      "Price now 138.02, 4.9% above the stop at 131.20.",
+    );
     fireEvent.click(within(tabs).getByRole("tab", { name: "Ledger" }));
     expect(screen.getByRole("table", { name: "The account's ledger" }).textContent).toContain(
       "POT-IN-1",
@@ -604,13 +611,115 @@ describe("the trading pot", () => {
     expect(cards.textContent).toContain("2.4 : 1");
     // A coin near a setup is tagged Near, not Close, which reads as a button.
     expect(within(cards).getByText("Near")).toBeTruthy();
-    // The strip says only when it scanned: the cards say what each style found.
+    // The scan's card says only when it scanned and what waits: the style cards say what each found.
     expect(screen.queryByText(/Scanned\.$/)).toBeNull();
-    expect(document.querySelector(".acc-scan")?.textContent).toMatch(/^Scanned /);
+    const market = screen.getByRole("list", { name: "The market today" });
+    expect(market.textContent).toMatch(/The scan.* · 1 waiting for review/);
     fireEvent.click(within(cards).getByRole("button", { name: "Review" }));
     expect(screen.getByRole("list", { name: "The trade's orders" }).textContent).toContain(
       "limit buy 3.4172",
     );
+  });
+
+  it("opens the figures behind a tile, and its button goes to the tab that has them all", async () => {
+    serve(pot());
+    render(<PotPage />);
+    const opener = await screen.findByRole("button", { name: "Value: details" });
+    fireEvent.click(opener);
+    const panel = screen.getByRole("heading", { name: "The account's value" }).closest("dialog");
+    expect(panel?.open).toBe(true);
+    expect(panel?.textContent).toContain("Put in$100");
+    expect(panel?.textContent).toContain("Available$90");
+    // Closing gives focus back to the tile that opened it.
+    fireEvent.click(within(panel as HTMLElement).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("heading", { name: "The account's value" })).toBeNull();
+    expect(document.activeElement).toBe(opener);
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole("button", { name: "See the ledger" }));
+    const ledger = screen.getByRole("tab", { name: "Ledger" });
+    expect(ledger.getAttribute("aria-selected")).toBe("true");
+    await waitFor(() => expect(document.activeElement).toBe(ledger));
+  });
+
+  it("shows the market in cards: the regime, BTC against its averages, the mood and the scan", async () => {
+    serve(
+      pot({
+        regime: {
+          state: "neutral",
+          words: "under its 200-day, 50-day above it",
+          btc: "100000",
+          sma50: "96000",
+          sma200: "104000",
+        },
+        scansOnItsOwn: true,
+      }),
+    );
+    const view = render(
+      <PotPage
+        fear={{ value: 42, label: "Fear", yesterday: 40, updated: NOW }}
+        global={{ btcShare: "58.26" }}
+      />,
+    );
+    const market = await screen.findByRole("list", { name: "The market today" });
+    const [regime, btc, mood, scan] = within(market).getAllByRole("listitem");
+    expect(regime?.textContent).toContain("NeutralNew trades allowed");
+    expect(btc?.textContent).toContain("$100,000");
+    expect(btc?.textContent).toContain("4.2% above its 50-day · 3.8% under its 200-day");
+    expect(mood?.textContent).toContain("42 Fear");
+    expect(mood?.textContent).toContain("BTC dominance 58.3%");
+    expect(scan?.textContent).toContain("Neutral. Setup found: SUI.");
+    fireEvent.click(within(market).getByRole("button", { name: "Market regime: details" }));
+    expect(screen.getByRole("heading", { name: "The market regime" })).toBeTruthy();
+    expect(screen.getByText(/In Bear the desk takes no new trades/)).toBeTruthy();
+    // Nothing known yet: a dash, never NaN.
+    view.unmount();
+    serve(pot({ regime: { state: null, words: "" }, lastScan: null }));
+    render(<PotPage />);
+    const bare = await screen.findByRole("list", { name: "The market today" });
+    expect(bare.textContent).not.toContain("NaN");
+    expect(within(bare).getAllByText("—").length).toBeGreaterThanOrEqual(3);
+    expect(bare.textContent).toContain("BTC dominance —");
+    expect(bare.textContent).toContain("Not yet");
+  });
+
+  it("shows a scan's steps as they end, and folds them to one line when asked", async () => {
+    const base = serve(pot({ proposals: [], trades: [] }));
+    const steps = [
+      {
+        style: "scalp",
+        name: "Scalp",
+        state: "done",
+        notes: ["8 coins passed the filters, 2 setups", "trading-agent: 1 take, 1 wait"],
+      },
+      { style: "swing", name: "Swing", state: "failed", notes: ["Binance didn't answer."] },
+    ];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) =>
+        url === "/api/pot/scan/progress"
+          ? Promise.resolve(
+              new Response(
+                JSON.stringify({ running: false, started: NOW, ended: NOW + 42_000, steps }),
+              ),
+            )
+          : base(url, init),
+      ),
+    );
+    render(<PotPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Scan now" }));
+    const panel = await screen.findByRole("region", { name: "Scan steps" });
+    expect(within(panel).getByRole("status").textContent).toBe(
+      "Scan finished: 1 of 2 done, 1 failed",
+    );
+    const rows = within(panel).getAllByRole("listitem");
+    expect(rows[0]?.textContent).toContain("ScalpDone8 coins passed the filters, 2 setups");
+    expect(rows[1]?.textContent).toContain("SwingFailedBinance didn't answer.");
+    fireEvent.click(within(panel).getByRole("button", { name: "Hide steps" }));
+    expect(within(panel).queryAllByRole("listitem")).toHaveLength(0);
+    expect(within(panel).getByRole("status").textContent).toContain("Scan finished");
+    expect(window.localStorage.getItem("desk.pot.steps")).toBe("0");
+    fireEvent.click(within(panel).getByRole("button", { name: "Show steps" }));
+    expect(within(panel).getAllByRole("listitem")).toHaveLength(2);
   });
 
   it("adds up realized P&L from closed trades against what went in, this month under it", async () => {
@@ -628,7 +737,7 @@ describe("the trading pot", () => {
     render(<PotPage />);
     await screen.findByRole("heading", { level: 1 });
     const money = document.querySelector(".acc-money") as HTMLElement;
-    const real = within(money).getByText("Realized").parentElement as HTMLElement;
+    const real = within(money).getByText("Realized").closest("div") as HTMLElement;
     expect(real.textContent).toContain("+$2.00"); // 3 − 1
     expect(real.textContent).toContain("+2.0%"); // of the $100 put in
     expect(real.textContent).toContain("+$3.00 this month");
@@ -648,6 +757,66 @@ describe("the trading pot", () => {
     const cards = await screen.findByRole("list", { name: "Scan by style" });
     expect(cards.textContent).toContain("Nothing near");
     expect(within(cards).queryByRole("button", { name: "Review" })).toBeNull();
+  });
+
+  it("lists the watchlist as rows, coins in a trade or with a setup first", async () => {
+    const base = serve(pot({ proposals: [], trades: [] }));
+    const coin = (name: string, more: object) => ({
+      coin: name,
+      amount: "0",
+      price: "10",
+      value: "0",
+      change24hPct: "0.4",
+      change30dPct: null,
+      spark: ["9", "10"],
+      insight: null,
+      tradable: true,
+      watching: false,
+      inTrade: false,
+      ...more,
+    });
+    const read = (status: string) => ({ trend: "Up trend.", setup: "A read.", status });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) =>
+        url === "/api/pot/coins"
+          ? Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  quote: "USDC",
+                  list: 7,
+                  max: 10,
+                  coins: [
+                    coin("BTC", {}),
+                    coin("ETH", { insight: read("wait") }),
+                    coin("LINK", { insight: read("none") }),
+                    coin("SUI", { insight: read("watch") }),
+                    coin("SOL", { inTrade: true, value: "25" }),
+                  ],
+                }),
+              ),
+            )
+          : base(url, init),
+      ),
+    );
+    render(<PotPage />);
+    const list = await screen.findByRole("list", { name: "Watchlist coins" });
+    const rows = within(list).getAllByRole("button");
+    expect(rows.map((r) => r.querySelector(".dcb-coin")?.textContent)).toEqual([
+      "SOL",
+      "SUI",
+      "ETH",
+      "BTC",
+      "LINK",
+    ]);
+    expect(rows.map((r) => r.querySelector(".acc-act")?.textContent)).toEqual([
+      "In a trade",
+      "Analyse",
+      "Wait",
+      "No setup",
+      "No setup",
+    ]);
+    expect(rows[0]?.textContent).toContain("$25 held");
   });
 
   it("starts an empty pot with money put in", async () => {

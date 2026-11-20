@@ -57,7 +57,7 @@ def candles(lows: list[float], closes: list[float], start: int = 0) -> list[list
 def test_every_style_trades_at_one_percent_except_in_a_bear() -> None:
     view = screener.styles_view(("neutral", "mixed"))
     assert [s["key"] for s in view["styles"]] == ["scalp", "day", "swing", "position"]
-    assert all(s["allowed"] and s["riskPct"] == "1" for s in view["styles"])
+    assert all(s["allowed"] and s["riskPct"] == "2" for s in view["styles"])
     assert all(not screener.gate(s, "bear")[0] for s in screener.STYLES.values())
 
 

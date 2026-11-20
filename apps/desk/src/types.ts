@@ -1349,7 +1349,7 @@ export interface DcaAction {
 export interface PotOrder {
   ref: string;
   role: "entry" | "exit" | "close" | "add";
-  kind: "limit" | "oco" | "market";
+  kind: "limit" | "oco" | "market" | "stop";
   price: string | null;
   stop: string | null;
   qty: string;
@@ -1373,7 +1373,10 @@ export interface PotTrade {
   fillPrice: string | null;
   now: string | null;
   exitPrice: string | null;
-  exitKind: "target" | "stop" | "market" | null;
+  exitKind: "target" | "stop" | "market" | "kept" | null;
+  // An open trade's exits on Binance: both, the stop alone (the target is out of Binance's
+  // price range for now), held by the desk (Binance takes no stop that far under the price), or none.
+  exits?: "both" | "stop" | "desk" | "held" | "none" | null;
   result: string | null;
   r: string | null;
   fees: string;
@@ -1554,6 +1557,17 @@ export interface PotPreview {
   problems: string[];
 }
 
+// A style's or a setup's closed trades, summed (the Stats tab's tables).
+export interface PotStatsRow {
+  name: string;
+  trades: number;
+  wins: number;
+  winRate: string | null;
+  expectancyR: string | null;
+  totalR: string;
+  result: string;
+}
+
 export interface PotView {
   quote: string;
   config: { mode: "test" | "risk"; fixed: string; riskPct: string; maxRisk?: string };
@@ -1569,7 +1583,15 @@ export interface PotView {
   fees: string;
   monthResult: string;
   monthLimit: string;
-  regime: { state: "bull" | "neutral" | "bear" | null; words: string };
+  openRiskLimit?: string; // the most the open trades may risk together
+  // BTC and its 50- and 200-day averages in whole dollars, when Binance answered.
+  regime: {
+    state: "bull" | "neutral" | "bear" | null;
+    words: string;
+    btc?: string;
+    sma50?: string;
+    sma200?: string;
+  };
   nextScan: number;
   // Scan now adds a card per style: its take, or the coin closest to one and what's missing.
   lastScan: { at: number; line: string; styles?: PotScanCard[] } | null;
@@ -1587,9 +1609,23 @@ export interface PotView {
     expectancyR: string | null;
     drawdownPct: string;
     judgeAfter: number;
+    byStyle?: PotStatsRow[];
+    bySetup?: PotStatsRow[];
+    // The equity curve, trade by trade in close order: running totals in R and in USDC.
+    curve?: { closed: number; r: string; cumR: string; cumResult: string }[];
   };
   coins: string[];
   priceError: string | null;
+}
+
+// Scan now as it runs (GET /pot/scan/progress): a row per style, its stage and what it found.
+export type PotScanState =
+  "waiting" | "screening" | "checking odds" | "judging" | "sizing" | "done" | "failed";
+export interface PotScanProgress {
+  running: boolean;
+  started: number | null;
+  ended: number | null;
+  steps: { style: string; name: string; state: PotScanState; notes: string[] }[];
 }
 
 export interface PotAction {

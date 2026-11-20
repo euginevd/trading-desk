@@ -15,3 +15,4 @@ Part of [known-mistakes.md](../known-mistakes.md); the numbers stay as cited.
 29j. An add skipped the pot's month-loss, stop-out and Bear rules a new trade meets: a buy that adds risk meets every rule a new trade does.
 29k. The desk's Buy the rest had no week check while the Telegram button did, so a confirm just after Monday 7pm would buy next week's whole plan: a confirmed order action sends what the dialog showed (the week key) and the api refuses it if that changed, on every path.
 29l. The close-out counted only `weekly` orders while the owner bought the week through Add funds: count a week's buys by `dca_book.WEEK_BUYS`, never by one button's source.
+29m. A stop or target outside Binance's price band (PERCENT_PRICE_BY_SIDE: 0.8 to 2 times the price on NEARUSDC, and it applies to a stop's price too) had the OCO refused every 30 seconds for days: read the band from the pair's rules before sending, and never assume which leg was refused.

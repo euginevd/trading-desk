@@ -40,11 +40,15 @@ CREDITED = (1, 6)  # Binance deposit states: success, and credited but locked
 
 @dataclass(frozen=True)
 class Filters:
-    """A pair's trading rules: amount step, price step and the smallest order in quote."""
+    """A pair's trading rules: amount step, price step, the smallest order in quote, and the
+    band a sell's price or stop must sit in, as multiples of the recent average price
+    (PERCENT_PRICE_BY_SIDE)."""
 
     step: Decimal
     tick: Decimal
     min_notional: Decimal
+    ask_up: Decimal | None = None
+    ask_down: Decimal | None = None
 
     def amount(self, qty: Decimal) -> Decimal:
         return (qty // self.step) * self.step
@@ -241,10 +245,13 @@ class Binance:
             info = self._get("/api/v3/exchangeInfo", urlencode({"symbol": symbol}), "pair rules")
             rules = {f["filterType"]: f for f in info["symbols"][0]["filters"]}
             notional: dict[str, Any] = rules.get("NOTIONAL") or rules.get("MIN_NOTIONAL") or {}
+            band: dict[str, Any] = rules.get("PERCENT_PRICE_BY_SIDE") or {}
             self._filters[symbol] = Filters(
                 step=Decimal(rules["LOT_SIZE"]["stepSize"]),
                 tick=Decimal(rules["PRICE_FILTER"]["tickSize"]),
                 min_notional=Decimal(str(notional.get("minNotional", "0"))),
+                ask_up=Decimal(str(band["askMultiplierUp"])) if band else None,
+                ask_down=Decimal(str(band["askMultiplierDown"])) if band else None,
             )
         return self._filters[symbol]
 
@@ -285,9 +292,13 @@ class Binance:
         params |= {"quantity": plain(qty), "price": plain(price), "newClientOrderId": client_id}
         return self._order(params, f"limit sell {plain(qty)} {symbol} at {plain(price)}")
 
-    def sell_stop(self, symbol: str, qty: Decimal, stop: Decimal) -> dict[str, Any]:
+    def sell_stop(
+        self, symbol: str, qty: Decimal, stop: Decimal, client_id: str | None = None
+    ) -> dict[str, Any]:
         params = {"symbol": symbol, "side": "SELL", "type": "STOP_LOSS"}
         params |= {"quantity": plain(qty), "stopPrice": plain(stop)}
+        if client_id:
+            params["newClientOrderId"] = client_id
         return self._order(params, f"stop-loss sell {plain(qty)} {symbol} at {plain(stop)}")
 
     def sell_oco(
