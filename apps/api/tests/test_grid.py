@@ -9,7 +9,7 @@ import httpx
 import pytest
 from api import demo
 from api.audit import Audit
-from api.binance import Binance
+from api.binance import Binance, BinanceError
 from api.grid import GridConfig, Grids, backtest, config_of, parse_grid, plan, stored
 from api.handler import handler
 from api.indicators import Candle
@@ -294,3 +294,32 @@ def test_a_buy_held_overnight_counts_on_the_day_it_is_sent(grids: Grids) -> None
     assert len(mine("BUY")) == 8  # sent this morning
     left = Decimal(grids.trading.settings()["leftToday"])
     assert left < Decimal(351)  # and counted today: about 350 left, not the full 400
+
+
+def test_a_grid_buy_the_kill_switch_couldnt_cancel_stays_open_and_is_tried_again(
+    grids: Grids, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 3: a buy still live on Binance is never marked cancelled; it stays followed, and
+    each step tries it again while trading is off."""
+    grids.trading.set_limits("60", "1000")
+    grid_id = grids.create(SETTINGS)["grids"][0]["id"]
+    grids.switch(grid_id, on=True, confirmed=True)
+    real = grids._binance.cancel  # pyright: ignore[reportPrivateUsage]
+
+    def lost(*_a: object, **_k: object) -> None:
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(grids._binance, "cancel", lost)  # pyright: ignore[reportPrivateUsage]
+    grids.trading.set_trading(False)
+    assert grids.stop_all("Stopped by the kill switch.") == 8
+    assert len(mine("BUY")) == 8
+    view = grids.view()["grids"][0]
+    assert not view["enabled"]
+    assert view["openBuys"] == 8  # still open in the book, not cancelled
+    with pytest.raises(Refused, match="still live on Binance"):
+        grids.switch(grid_id, on=False, confirmed=False)
+
+    monkeypatch.setattr(grids._binance, "cancel", real)  # pyright: ignore[reportPrivateUsage]
+    grids.step()
+    assert mine("BUY") == []
+    assert grids.view()["grids"][0]["openBuys"] == 0

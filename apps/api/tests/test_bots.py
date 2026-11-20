@@ -422,3 +422,33 @@ def test_a_market_sale_without_an_answer_isnt_sent_again(
     markets = [o for o in orders("SELL") if o["type"] == "MARKET"]
     assert len(markets) == 1
     assert bots.detail(trade_id)["deals"][0]["status"] == "stopped"
+
+
+def test_a_buy_the_kill_switch_couldnt_cancel_is_kept_and_tried_again(
+    bots: Bots, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 3: a cancel that didn't take leaves the buy followed, its deal open, and the next
+    step cancels it once Binance answers."""
+    dip(bots, monkeypatch)
+    bots.trading.set_limits("50", "500")
+    bot_id = bots.create(SETTINGS)["bots"][0]["id"]
+    bots.switch(bot_id, on=True, confirmed=True)
+    bots.step()  # six limit buys, none filled
+    real = bots._binance.cancel  # pyright: ignore[reportPrivateUsage]
+
+    def lost(*_a: object, **_k: object) -> None:
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(bots._binance, "cancel", lost)  # pyright: ignore[reportPrivateUsage]
+    bots.trading.set_trading(False)
+    assert bots.stop_all("Stopped by the kill switch.") == 6
+    assert all(o["status"] == "NEW" for o in orders("BUY"))
+    view = bots.view()["bots"][0]
+    assert not view["enabled"]
+    assert len(view["deals"]) == 1  # not ended while its buys are live
+
+    monkeypatch.setattr(bots._binance, "cancel", real)  # pyright: ignore[reportPrivateUsage]
+    bots.step()  # trading still off: tried again, though no bot is enabled
+    assert all(o["status"] == "CANCELED" for o in orders("BUY"))
+    assert bots.view()["bots"][0]["deals"] == []
+    assert bots.stop_all("Stopped by the kill switch.") == 0

@@ -481,15 +481,24 @@ class Grids:
         self._say(grid, "deleted", "OK")
         return self.view()
 
+    def _switch_off(self, grid: dict[str, Any]) -> dict[str, Any]:
+        grid |= {"enabled": 0, "note": None, "updated": self._now()}
+        self._store.save_grid(grid)
+        live = self._cancel(grid, sells=True)
+        if live:
+            self._say(grid, "switched off", f"{live} orders still live on Binance")
+            raise Refused(
+                f"Switched off, but {live} of its orders are still live on Binance: "
+                "the cancel didn't take. Switch it off again in a minute."
+            )
+        self._say(grid, "switched off", "its orders cancelled")
+        return self.view()
+
     @locked
     def switch(self, grid_id: int, on: bool, confirmed: bool) -> dict[str, Any]:
         grid = self._store.grid(grid_id)
         if not on:
-            grid |= {"enabled": 0, "note": None, "updated": self._now()}
-            self._store.save_grid(grid)
-            self._cancel(grid, sells=True)
-            self._say(grid, "switched off", "its orders cancelled")
-            return self.view()
+            return self._switch_off(grid)
         if grid["enabled"]:
             return self.view()
         if not confirmed:
@@ -528,24 +537,25 @@ class Grids:
         return self.view()
 
     @locked
-    def stop_all(self, reason: str) -> None:
+    def stop_all(self, reason: str) -> int:
         """The kill switch: every grid off and its buys cancelled; its sells stay, as they only
-        take risk away, and are still followed so their profit is recorded."""
+        take risk away, and are still followed so their profit is recorded. Returns how many
+        buys Binance may still have live; each step tries them again while trading is off."""
+        live = 0
         for grid in self._store.grids():
             if grid["enabled"]:
                 grid |= {"enabled": 0, "note": reason, "updated": self._now()}
                 self._store.save_grid(grid)
                 self._say(grid, "stopped", reason)
-            self._cancel(grid, sells=False)
+            live += self._cancel(grid, sells=False)
+        return live
 
     # Following each grid: the api's watcher calls this every 30 seconds.
 
     @locked
     def step(self) -> None:
-        if not self.trading.settings()["tradingOn"] and any(
-            g["enabled"] for g in self._store.grids()
-        ):
-            self.stop_all("Stopped by the kill switch.")
+        if not self.trading.settings()["tradingOn"]:
+            self.stop_all("Stopped by the kill switch.")  # again: a buy left live is retried
         for grid in self._store.grids():
             try:
                 self._follow(grid)
@@ -719,21 +729,35 @@ class Grids:
             qty = filters.amount(config.per_order() / lines[line])
             self._want(grid, Planned(line, line + 1, "buy", lines[line], qty), ZERO)
 
-    def _cancel(self, grid: dict[str, Any], sells: bool) -> None:
+    def _cancel(self, grid: dict[str, Any], sells: bool) -> int:
+        """Cancels the grid's orders (its buys only, unless sells). Returns how many Binance may
+        still have live, a cancel that didn't take or got no answer: those stay open and
+        followed, to be tried again, never marked cancelled while they can still fill."""
+        live = 0
         for listed in self._store.grid_orders(int(grid["id"])):
             if not sells and listed["side"] == "sell":
                 continue
-            # One sent without an answer is looked up first: it may be live on Binance.
-            row = self._resolve(grid, listed) if listed["status"] == "placing" else listed
-            if row["status"] == "wanted":
-                self._store.save_grid_order(row | {"status": "cancelled", "updated": self._now()})
-            elif row["status"] == "open":
-                symbol, order_id = str(grid["symbol"]), int(row["order_id"])
-                try:
-                    order = self._binance.cancel(symbol, order_id)
-                except BinanceError:
-                    order = self._binance.order(symbol, order_id)
-                self._done(grid, row, order)
+            try:
+                live += self._cancel_one(grid, listed)
+            except BinanceError:
+                live += 1
+        return live
+
+    def _cancel_one(self, grid: dict[str, Any], listed: dict[str, Any]) -> bool:
+        # One sent without an answer is looked up first: it may be live on Binance.
+        row = self._resolve(grid, listed) if listed["status"] == "placing" else listed
+        if row["status"] == "wanted":
+            self._store.save_grid_order(row | {"status": "cancelled", "updated": self._now()})
+        elif row["status"] == "open":
+            symbol, order_id = str(grid["symbol"]), int(row["order_id"])
+            try:
+                order = self._binance.cancel(symbol, order_id)
+            except BinanceError:
+                order = self._binance.order(symbol, order_id)
+            if str(order["status"]) != "FILLED" and str(order["status"]) not in DONE:
+                return True  # still working on Binance
+            self._done(grid, row, order)
+        return False
 
     # What the Grid Bot page shows.
 

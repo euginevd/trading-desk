@@ -616,30 +616,36 @@ class Bots:
                 raise Refused(problems[0])
         bot |= {"enabled": 1 if on else 0, "note": None, "updated": self._now()}
         self._store.save_bot(bot)
-        if not on:
-            self._cancel_buys(bot)
+        live = 0 if on else self._cancel_buys(bot)
+        if live:
+            self._say(bot, "switched off", f"{live} buys still live on Binance")
+            raise Refused(
+                f"Switched off, but {live} of its buys are still live on Binance: the cancel "
+                "didn't take. Switch it off again in a minute."
+            )
         self._say(bot, "switched on" if on else "switched off", "OK")
         return self.view("trade" if config_of(bot).is_trade() else "bot")
 
     @locked
-    def stop_all(self, reason: str) -> None:
+    def stop_all(self, reason: str) -> int:
         """The kill switch: every bot off and its open buys cancelled; take-profit sells stay,
-        as they only take risk away."""
+        as they only take risk away. Returns how many buys Binance may still have live; each
+        step tries them again while trading is off."""
+        live = 0
         for bot in self._store.bots():
             if bot["enabled"]:
                 bot |= {"enabled": 0, "note": reason, "updated": self._now()}
                 self._store.save_bot(bot)
                 self._say(bot, "stopped", reason)
-            self._cancel_buys(bot)
+            live += self._cancel_buys(bot)
+        return live
 
     # Following each bot: the api's watcher calls this every 30 seconds.
 
     @locked
     def step(self) -> None:
-        if not self.trading.settings()["tradingOn"] and any(
-            b["enabled"] for b in self._store.bots()
-        ):
-            self.stop_all("Stopped by the kill switch.")
+        if not self.trading.settings()["tradingOn"]:
+            self.stop_all("Stopped by the kill switch.")  # again: a buy left live is retried
         for bot in self._store.bots():
             try:
                 for deal in self._actives(int(bot["id"])):
@@ -893,30 +899,39 @@ class Bots:
     def _row(self, row: dict[str, Any]) -> dict[str, Any]:
         return next(r for r in self._store.bot_orders(int(row["deal_id"])) if r["id"] == row["id"])
 
-    def _cancel(self, bot: dict[str, Any], row: dict[str, Any]) -> None:
+    def _cancel(self, bot: dict[str, Any], row: dict[str, Any]) -> bool:
+        """Cancels one order; True when Binance still has it live (the cancel didn't take)."""
         if row["status"] == "placing":  # find out first whether Binance has it
             self._refresh(bot, row)
             row = self._row(row)
         if row["status"] != "open":
-            return
+            return False
         try:
             order = self._binance.cancel(str(bot["symbol"]), int(row["order_id"]))
         except BinanceError:
             order = self._binance.order(str(bot["symbol"]), int(row["order_id"]))
         self._record(bot, row, order)
+        return self._row(row)["status"] in ("placing", "open")
 
-    def _cancel_buys(self, bot: dict[str, Any]) -> None:
-        for deal in self._actives(int(bot["id"])):
-            self._cancel_deal_buys(bot, deal)
+    def _cancel_buys(self, bot: dict[str, Any]) -> int:
+        return sum(self._cancel_deal_buys(bot, deal) for deal in self._actives(int(bot["id"])))
 
-    def _cancel_deal_buys(self, bot: dict[str, Any], deal: dict[str, Any]) -> None:
+    def _cancel_deal_buys(self, bot: dict[str, Any], deal: dict[str, Any]) -> int:
+        """Cancels a deal's buys and returns how many Binance may still have live (no answer, or
+        a cancel that didn't take). The deal ends only once none is, so a live buy is never left
+        unfollowed; the next step tries it again."""
+        live = 0
         for row in self._store.bot_orders(int(deal["id"])):
             if row["side"] == "buy":
-                self._cancel(bot, row)
-        if not self._position(int(deal["id"]))["bought"]:
+                try:
+                    live += self._cancel(bot, row)
+                except BinanceError:
+                    live += 1
+        if not live and not self._position(int(deal["id"]))["bought"]:
             self._store.end_deal(
                 int(deal["id"]), "stopped", None, self._now(), "Stopped before a buy filled."
             )
+        return live
 
     def _position(self, deal_id: int) -> dict[str, Any]:
         rows = self._store.bot_orders(deal_id)

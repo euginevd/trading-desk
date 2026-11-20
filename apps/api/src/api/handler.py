@@ -281,10 +281,15 @@ def live_bots() -> Generator[Bots]:
 def _set_trading(desk: Trading, on: bool) -> dict[str, Any]:
     """The kill switch: off stops every bot too, and cancels their open buys (spec 10)."""
     settings = desk.set_trading(on)
-    if not on:
-        Bots(*desk.parts()).stop_all("Stopped by the kill switch.")
-        Grids(*desk.parts()).stop_all("Stopped by the kill switch.")
-    return settings
+    if on:
+        return settings
+    # Both always run; a buy Binance still has live is retried by each step while trading is off.
+    live = Bots(*desk.parts()).stop_all("Stopped by the kill switch.")
+    live += Grids(*desk.parts()).stop_all("Stopped by the kill switch.")
+    if live:
+        audit = desk.parts()[2]
+        audit.record("settings", "Kill switch", f"{live} bot and grid buys still live; retrying")
+    return settings | {"stillLive": live}
 
 
 BOT_ROUTES: dict[tuple[str, str], Callable[[Bots, dict[str, Any]], dict[str, Any]]] = {
