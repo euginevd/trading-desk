@@ -14,12 +14,14 @@ const saved: AiSettings = {
     { id: "claude-haiku-5-5", name: "Claude Haiku 5.5" },
   ],
   effort: "medium",
+  efforts: ["low", "medium", "high", "xhigh", "max"],
   budget: { spent: "4.1", cap: "20" },
 };
 const LINK = "https://claude.com/cai/oauth/authorize?code=true";
 
-const setAiSettings = vi.fn((mode: AiSettings["mode"], fallback: boolean, model: string) =>
-  Promise.resolve({ ...saved, mode, fallback, model }),
+const setAiSettings = vi.fn(
+  (mode: AiSettings["mode"], fallback: boolean, model: string, effort?: string) =>
+    Promise.resolve({ ...saved, mode, fallback, model, effort: effort ?? saved.effort }),
 );
 const saveAiKey = vi.fn((key: string) => key && Promise.resolve({ ...saved, apiKeySet: true }));
 const startSignIn = vi.fn(() => Promise.resolve({ url: LINK }));
@@ -52,8 +54,11 @@ vi.mock("./api", () => ({
   getProfile: () => Promise.resolve({ name: "" }),
   setProfile: (name: string) => Promise.resolve({ name }),
   getAiSettings: () => Promise.resolve(saved),
-  setAiSettings: (mode: AiSettings["mode"], fallback: boolean, model: string) =>
-    setAiSettings(mode, fallback, model),
+  // Effort only when the page sends one, as the real call leaves it out.
+  setAiSettings: (mode: AiSettings["mode"], fallback: boolean, model: string, effort?: string) =>
+    effort === undefined
+      ? setAiSettings(mode, fallback, model)
+      : setAiSettings(mode, fallback, model, effort),
   saveAiKey: (key: string) => saveAiKey(key),
   startSignIn: () => startSignIn(),
   finishSignIn: (code: string) => finishSignIn(code),
@@ -78,13 +83,28 @@ describe("Settings", () => {
     expect(setAiSettings).toHaveBeenLastCalledWith("subscription", true, "claude-opus-5-5");
   });
 
+  it("sets the effort for whichever model is chosen", async () => {
+    render(<SettingsPage />);
+    fireEvent.click(await screen.findByRole("radio", { name: "Extra high" }));
+    expect(setAiSettings).toHaveBeenLastCalledWith("api_key", false, "claude-opus-5-5", "xhigh");
+    await waitFor(() =>
+      expect(screen.getByRole("radio", { name: "Extra high" }).getAttribute("aria-checked")).toBe(
+        "true",
+      ),
+    );
+    expect(screen.getByText(/For hard calls/)).toBeTruthy();
+  });
+
   it("switches the model", async () => {
     render(<SettingsPage />);
     const opus = (await screen.findByRole("radio", { name: "Opus 5.5" })) as HTMLInputElement;
     expect(opus.checked).toBe(true);
     expect(screen.getByText("The cheapest and fastest")).toBeTruthy();
     // The effort every model answers at, as the api reports it.
-    expect(screen.getAllByText("Effort: Medium (default)")).toHaveLength(3);
+    // One effort for whichever model is chosen, Medium unless changed.
+    const medium = screen.getByRole("radio", { name: "Medium" });
+    expect(medium.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByText(/The default: a balance/)).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "Haiku 5.5" }));
     expect(setAiSettings).toHaveBeenLastCalledWith("api_key", false, "claude-haiku-5-5");
     await waitFor(() =>

@@ -2105,11 +2105,16 @@ dialog.in-place .detail-head {
 .settings-option-text .muted {
   font-size: 12px;
 }
-/* "Effort: Medium (default)" under each model's line. */
-.settings-effort {
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--dim);
+/* Effort, under Model: five pills for whichever model is chosen; the choice fills in accent. */
+.settings-efforts {
+  max-width: 100%;
+  overflow-x: auto;
+}
+.settings-efforts button[aria-checked="true"] {
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+  box-shadow: none;
 }
 .settings-tag {
   padding: 2px 8px;

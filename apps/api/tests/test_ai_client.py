@@ -307,6 +307,18 @@ def test_the_model_is_chosen_on_settings_priced_and_passed_on(
             ai_client.choose(
                 store, audit, signals, {"mode": "api_key", "fallback": False, "model": "gpt"}
             )
+        # Effort applies to whichever model is chosen, and is kept when only the model changes.
+        assert shown["effort"] == "medium"
+        assert shown["efforts"] == ["low", "medium", "high", "xhigh", "max"]
+        pick = {"mode": "api_key", "fallback": False, "effort": "high"}
+        assert ai_client.choose(store, audit, signals, pick)["effort"] == "high"
+        pick = {"mode": "api_key", "fallback": False, "model": "claude-opus-5-5"}
+        assert ai_client.choose(store, audit, signals, pick)["effort"] == "high"
+        assert ai_client.effort(store) == "high"
+        with pytest.raises(Refused):
+            ai_client.choose(
+                store, audit, signals, {"mode": "api_key", "fallback": False, "effort": "huge"}
+            )
     finally:
         store.close()
 
@@ -331,13 +343,19 @@ def test_the_model_is_chosen_on_settings_priced_and_passed_on(
             return Reply()
 
     client = type("Client", (), {"beta": type("Beta", (), {"messages": Messages()})()})()
-    reply, _ = claude(client, lambda: "claude-haiku-5-5")("system", "the facts", SHAPE)
+    reply, _ = claude(client, lambda: "claude-haiku-5-5", lambda: "low")(
+        "system", "the facts", SHAPE
+    )
     assert sent["model"] == "claude-haiku-5-5"
+    assert sent["output_config"]["effort"] == "low"
     assert sent["tools"][0]["type"] == "web_search_20250305"  # Haiku's search tool
     assert reply["_model"] == "claude-haiku-5-5"
 
     env.setenv("CLAUDE_CODE_OAUTH_TOKEN", OAUTH)
     query = FakeQuery(result())
-    subscription(query, model=lambda: "claude-sonnet-5-5")("system", "the facts", SHAPE)
+    subscription(query, model=lambda: "claude-sonnet-5-5", effort=lambda: "max")(
+        "system", "the facts", SHAPE
+    )
     assert query.options is not None
     assert query.options.model == "claude-sonnet-5-5"
+    assert query.options.effort == "max"
