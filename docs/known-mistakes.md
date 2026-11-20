@@ -51,12 +51,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 ## Python and Postgres
 
-26a. Services creating the same tables at start race on Postgres's catalog: retry setup on `UniqueViolation`, `DuplicateTable` and `DuplicateObject`.
-27. Semgrep blocks `urllib` and `http.client` calls to a variable URL, even with the scheme checked: use `httpx`.
-27a. Appending to a log file per line lost lines under threads on Windows: keep one shared handle under the lock (`audit.py`, `test_audit.py`).
-27b. A second reader of a rate-limited source tripped Taostats' 429 and showed the wallet empty: keep and fall back to the last good reading (`tao.py`).
-27c. `KeyError` is a `LookupError`: signal missing config with its own class (`MissingKey`).
-27d. `zipfile.BadZipFile` is neither `OSError` nor `ValueError`: catch it by name when reading a file another process may be writing (`backtest.py`).
+26a to 27f, on Postgres, Semgrep, logs, rate limits, errors and Freqtrade: [known-mistakes/python.md](known-mistakes/python.md).
 
 ## Pull requests
 
