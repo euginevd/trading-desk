@@ -754,8 +754,8 @@ export default function BacktestPage() {
           <h1 className="sentence">Backtests</h1>
         )}
         <p className="lede">
-          Each style&apos;s own rule on years of Binance candles, sized and stopped as the desk
-          does. Freqtrade runs it; nothing is ever placed.
+          A style&apos;s own rule on one coin&apos;s past Binance candles, up to 3 months, sized and
+          stopped as the desk does. Freqtrade runs it; nothing is ever placed.
         </p>
       </div>
 
@@ -825,7 +825,7 @@ export default function BacktestPage() {
           <section className="panel" aria-labelledby="bt-result">
             <div className="panel-head">
               <h2 id="bt-result">
-                {runName(shown)} · {dayOf(shown.from)} to {dayOf(shown.to)} · {shown.pairs} coins
+                {runName(shown)} · {dayOf(shown.from)} to {dayOf(shown.to)}
               </h2>
               <label className="bt-compare">
                 <span className="muted">Compare with</span>
@@ -839,17 +839,28 @@ export default function BacktestPage() {
                 </select>
               </label>
             </div>
-            <Tiles run={shown} other={compared} />
-            <div className="bt-grid">
-              <Curve run={shown} other={compared} />
-              <div className="bt-groups">
-                <Bars title="By setup" rows={shown.bySetup} />
-                <Bars title="By exit" rows={shown.byExit} />
-                <Bars title="By year" rows={shown.byYear} />
-              </div>
-            </div>
+            {shown.all ? (
+              <>
+                <Tiles run={shown} other={compared} />
+                <div className="bt-grid">
+                  <Curve run={shown} other={compared} />
+                  <div className="bt-groups">
+                    <Bars title="By setup" rows={shown.bySetup} />
+                    <Bars title="By exit" rows={shown.byExit} />
+                    <Bars title="By year" rows={shown.byYear} />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="empty">
+                No setup on {shown.coin ?? "this coin"} met the{" "}
+                {STYLE_NAMES[shown.style] ?? shown.style} rule in these dates, so nothing was
+                bought. In a Bear market the desk takes no new trades. Try 3 months, another coin or
+                another type.
+              </p>
+            )}
           </section>
-          <Trades key={shown.id} run={shown} />
+          {shown.all && <Trades key={shown.id} run={shown} />}
         </>
       )}
 

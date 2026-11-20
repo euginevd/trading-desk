@@ -235,7 +235,15 @@ describe("feature flags", () => {
     );
     const nav = screen.getByRole("navigation", { name: "Main" });
     const links = Array.from(nav.querySelectorAll("a")).map((a) => a.textContent);
-    expect(links).toEqual(["Dashboard", "Portfolio", "Trade", "Bots", "Profile", "Settings"]);
+    expect(links).toEqual([
+      "Dashboard",
+      "Portfolio",
+      "Trade",
+      "Backtest",
+      "Bots",
+      "Profile",
+      "Settings",
+    ]);
     expect(within(nav).getByRole("link", { name: "Dashboard" }).getAttribute("aria-current")).toBe(
       "page",
     );

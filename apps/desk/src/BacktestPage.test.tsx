@@ -210,6 +210,23 @@ describe("the backtest page", () => {
     window.localStorage.clear();
   });
 
+  it("says plainly when a run found no trades", async () => {
+    const none = { ...RUN, all: null, curve: [], bySetup: [], byExit: [], byYear: [], trades: [] };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) =>
+        Promise.resolve(
+          new Response(JSON.stringify(url.includes("/backtest/run") ? none : VIEW), {
+            status: 200,
+          }),
+        ),
+      ),
+    );
+    render(<BacktestPage />);
+    expect(await screen.findByText(/No setup on SOL met the Swing rule/)).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Trades" })).toBeNull();
+  });
+
   it("counts months back to the same day, or the month's last", () => {
     expect(monthsBefore("2026-03-31", 1)).toBe("2026-02-28");
     expect(monthsBefore("2026-01-15", 3)).toBe("2025-10-15");
