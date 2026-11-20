@@ -2105,6 +2105,12 @@ dialog.in-place .detail-head {
 .settings-option-text .muted {
   font-size: 12px;
 }
+/* "Effort: Medium (default)" under each model's line. */
+.settings-effort {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--dim);
+}
 .settings-tag {
   padding: 2px 8px;
   border-radius: 5px;

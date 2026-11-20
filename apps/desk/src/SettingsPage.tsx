@@ -36,6 +36,9 @@ const MODEL_NOTES: [string, string][] = [
 ];
 const modelNote = (name: string) => MODEL_NOTES.find(([family]) => name.includes(family))?.[1];
 const shortName = (name: string) => name.replace("Claude ", "");
+// The effort every model answers at, as the api reports it: "Effort: Medium (default)".
+const effortLabel = (effort: string) =>
+  `Effort: ${effort.charAt(0).toUpperCase()}${effort.slice(1)} (default)`;
 
 type Tone = "up" | "wait" | "down" | "idle";
 
@@ -226,6 +229,7 @@ export default function SettingsPage() {
                             {note}
                           </span>
                         )}
+                        <span className="settings-effort">{effortLabel(ai.effort)}</span>
                       </span>
                     </label>
                   );
@@ -233,10 +237,8 @@ export default function SettingsPage() {
               </div>
             </fieldset>
             <p className="settings-note muted">
-              Each model answers at <strong className="settings-effort">{ai.effort} effort</strong>:
-              how hard it thinks before answering. Applies to every AI feature: the coach, the
-              desk&apos;s agents, Analyse and the Profile&apos;s command bar. What you enter is
-              saved to .env and never shown again.
+              Applies to every AI feature: the coach, the desk&apos;s agents, Analyse and the
+              Profile&apos;s command bar. What you enter is saved to .env and never shown again.
             </p>
           </>
         )}

@@ -84,7 +84,7 @@ describe("Settings", () => {
     expect(opus.checked).toBe(true);
     expect(screen.getByText("The cheapest and fastest")).toBeTruthy();
     // The effort every model answers at, as the api reports it.
-    expect(screen.getByText("medium effort")).toBeTruthy();
+    expect(screen.getAllByText("Effort: Medium (default)")).toHaveLength(3);
     fireEvent.click(screen.getByRole("radio", { name: "Haiku 5.5" }));
     expect(setAiSettings).toHaveBeenLastCalledWith("api_key", false, "claude-haiku-5-5");
     await waitFor(() =>
