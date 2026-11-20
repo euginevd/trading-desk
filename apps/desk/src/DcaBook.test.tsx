@@ -404,6 +404,61 @@ describe("DCA book page", () => {
       expect(JSON.parse(String(init?.body))).not.toHaveProperty("side", "sell");
   });
 
+  it("overrides only the order a rule held, and stops when the confirm closes (audit 16)", async () => {
+    const fetch = serve(book());
+    const answer = fetch.getMockImplementation();
+    let calls = 0;
+    let release: (() => void) | null = null;
+    fetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/dca/orders") {
+        calls += 1;
+        if (calls === 1) {
+          const held = { error: "This buy breaks your rule: Per-trade size.", ruleBreaks: [{}] };
+          return Promise.resolve(new Response(JSON.stringify(held), { status: 409 }));
+        }
+        if (calls === 4) {
+          // the second batch's first order: answered only once the confirm has closed
+          return new Promise<Response>((done) => {
+            release = () => done(new Response(JSON.stringify(order({})), { status: 200 }));
+          });
+        }
+      }
+      if (!answer) throw new Error("No fetch.");
+      return answer(url, init);
+    });
+    render(<DcaBookPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add funds" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Amount in USDC" }), {
+      target: { value: "100" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Plan it" }));
+    expect(await screen.findByText("Most to BTC, near last week's low.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Review \d limit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Place \d/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Place anyway (logged)" }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders")).toHaveLength(3));
+    const bodies = sent(fetch, "/dca/orders").map(
+      ([, init]) => JSON.parse(String(init?.body)) as { override: boolean },
+    );
+    expect(bodies.map((b) => b.override)).toEqual([false, true, false]); // the held one alone
+
+    // A second plan, its confirm closed while the first order is on its way: no second order.
+    fireEvent.click(screen.getByRole("button", { name: "Plan again" }));
+    expect(await screen.findByRole("button", { name: /^Review \d limit/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Review \d limit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Place \d/ }));
+    await waitFor(() => expect(calls).toBe(4));
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    (release as (() => void) | null)?.();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^Review \d limit/ })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
+    expect(sent(fetch, "/dca/orders")).toHaveLength(4);
+  });
+
   it("adds funds: the desk's split, a tick and a hand edit, then one limit per coin", async () => {
     const fetch = serve(book());
     render(<DcaBookPage />);

@@ -71,6 +71,10 @@ export default function DcaFunds({
   const [busy, setBusy] = useState<"analyse" | "chat" | "place" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [held, setHeld] = useState<string | null>(null);
+  // The row a Profile rule held: Place anyway overrides it alone, never the rows after it.
+  const [heldAt, setHeldAt] = useState<number | null>(null);
+  // Set when the confirm closes mid-batch: nothing more is sent (audit 16).
+  const stopped = useRef(false);
   const [lines, setLines] = useState<Line[]>([]);
   const [message, setMessage] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
@@ -159,14 +163,18 @@ export default function DcaFunds({
     );
   };
 
-  const place = async (override = false) => {
+  const place = async (overrideAt: number | null = null) => {
     // The plan's own side decides buy or sell, never the toggle (audit 12).
     const sells = plan ? plan.side === "sell" : selling;
     setBusy("place");
     setHeld(null);
+    setHeldAt(null);
+    stopped.current = false;
     const next = [...rows];
     for (const [i, r] of next.entries()) {
       if (r.result || r.skipped || !(Number(r.usdc) > 0)) continue; // left-out coins stay out
+      if (stopped.current) break;
+      const override = i === overrideAt;
       try {
         const placed = await placeDcaOrder(
           sells
@@ -189,6 +197,7 @@ export default function DcaFunds({
       } catch (e) {
         if (e instanceof ApiError && e.ruleBreaks.length) {
           setHeld(e.message);
+          setHeldAt(i);
           break;
         }
         next[i] = { ...r, result: errorOf(e, "Not placed."), failed: true };
@@ -408,7 +417,7 @@ export default function DcaFunds({
           {held && (
             <div className="alert" role="alert">
               <span>{held}</span>
-              <button type="button" className="btn btn-small" onClick={() => void place(true)}>
+              <button type="button" className="btn btn-small" onClick={() => void place(heldAt)}>
                 Place anyway (logged)
               </button>
             </div>
@@ -433,7 +442,13 @@ export default function DcaFunds({
         </>
       )}
 
-      <dialog ref={dialog} aria-labelledby="dcf-confirm">
+      <dialog
+        ref={dialog}
+        aria-labelledby="dcf-confirm"
+        onClose={() => {
+          if (busy === "place") stopped.current = true;
+        }}
+      >
         <h2 id="dcf-confirm">
           Place {pending.length} {selling ? "limit sells" : "limit buys"}?
         </h2>
@@ -454,7 +469,7 @@ export default function DcaFunds({
         />
         <div className="dlg-btns">
           <button className="btn" type="button" onClick={() => dialog.current?.close()}>
-            Not yet
+            {busy === "place" ? "Stop" : "Not yet"}
           </button>
           <button
             className={`btn ${selling ? "btn-danger" : "btn-accent"}`}
