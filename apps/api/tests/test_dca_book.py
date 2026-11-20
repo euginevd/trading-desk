@@ -391,6 +391,19 @@ def test_a_cancel_that_didnt_take_places_nothing_in_its_place(
     assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["open"]
 
 
+def test_a_trim_with_trading_off_is_refused(book: DcaBook, desk: Trading) -> None:
+    """Audit 9: the kill switch refuses every new order, sells included (spec 10)."""
+    book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+    fill(max(demo.EXCHANGE.orders))
+    book.sync()
+    desk.set_trading(False)
+    sent = len(demo.EXCHANGE.orders)
+    trim = {"coin": "ETH", "side": "sell", "qty": "0.005", "price": "3500", "source": "trim"}
+    with pytest.raises(Refused, match="Trading is off"):
+        book.place(trim)
+    assert len(demo.EXCHANGE.orders) == sent
+
+
 def test_a_buy_met_with_a_5xx_is_looked_up_not_written_off(
     book: DcaBook, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -349,6 +349,32 @@ def test_a_buy_over_the_monthly_cap_needs_a_second_confirm(
     assert profile_ai.overrides(store)[0]["rules"] == ["monthly_deposit_cap_aud"]
 
 
+def test_raising_a_dca_order_meets_the_pre_trade_check(
+    call: Any, store: Store, audit: Audit
+) -> None:
+    """Audit 9: a change that raises a buy is checked like a new buy; a new price isn't."""
+    call("PUT", "/limits", {"perOrder": "1000", "perDay": "1000"})
+    plan = {
+        "start": "2026-11-06",
+        "weeks": 156,
+        "orders": [{"coin": "BTC", "spend": "40", "odds": 70}],
+    }
+    assert call("PUT", "/dca/plan", plan)[0] == 200  # noqa: PLR2004
+    profile.save_section(store, audit, "rules", {"per_trade_aud": "100"}, now=NOW)
+    status, placed = call("POST", "/dca/orders", buy(spend="40"))  # about A$60: under A$100
+    assert status == 200  # noqa: PLR2004
+    status, moved = call("POST", "/dca/orders/amend", {"ref": placed["ref"], "price": "89000"})
+    assert status == 200  # noqa: PLR2004 - a new price adds nothing: not checked
+    raised = {"ref": moved["ref"], "price": "89000", "spend": "90", "raise": True}
+    status, held_back = call("POST", "/dca/orders/amend", raised)  # about A$135
+    assert status == 409  # noqa: PLR2004
+    assert held_back["ruleBreaks"][0]["rule"] == "per_trade_aud"
+    assert (store.dca_order(moved["ref"]) or {}).get("status") == "open"  # still working
+    status, _ = call("POST", "/dca/orders/amend", raised | {"override": True})
+    assert status == 200  # noqa: PLR2004
+    assert profile_ai.overrides(store)[0]["rules"] == ["per_trade_aud"]
+
+
 def test_a_bot_holds_a_buy_that_breaks_a_rule(store: Store, audit: Audit) -> None:
     doc = profile.clean(sample())
     now = datetime(2026, 11, 15, 10, tzinfo=SYDNEY)

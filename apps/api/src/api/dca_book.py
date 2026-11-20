@@ -420,6 +420,9 @@ class DcaBook:
         price = rules.price(number(body.get("price"), "Price")) if kind == "limit" else None
         smallest = f"That's under Binance's smallest order of {rules.min_notional}."
         if side == "sell":
+            # A sell is a new order too: the kill switch refuses every one (spec 10, audit 9).
+            if not self._desk.settings()["tradingOn"]:
+                raise Refused("Trading is off. Turn it on in the top bar to trade.")
             qty = rules.amount(number(body.get("qty"), "Quantity"))
             if qty > self._held(coin):
                 raise Refused(f"The book holds less {coin} than that.")

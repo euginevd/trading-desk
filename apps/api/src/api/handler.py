@@ -574,9 +574,11 @@ def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
 
 
 # The Trading account's trades are the owner's own buys too (decision 78); the DCA close-out is
-# not, as it finishes a week the owner already approved.
+# not, as it finishes a week the owner already approved. A DCA change is checked when it raises a
+# buy (audit 9).
 BUYS = (
     "/dca/orders",
+    "/dca/orders/amend",
     "/pot/trades",
     "/pot/trades/add",
     "/pot/trades/enter-now",
@@ -610,6 +612,8 @@ def _pretrade(
         return _rule_check(store, audit, str(sized["coin"]), spend, override, portfolio)[0]
     if path in ("/pot/trades/add", "/pot/trades/enter-now"):
         return _pretrade_add(desk, body, portfolio)
+    if path == "/dca/orders/amend":
+        return _pretrade_amend(desk, body, portfolio)
     spend = _spend_of(path, body)
     if spend is None or not spend.is_finite() or spend <= 0:
         return None
@@ -638,11 +642,43 @@ def _pretrade_add(
     return _rule_check(store, audit, str(trade["coin"]), spend, override, portfolio)[0]
 
 
+def _pretrade_amend(
+    desk: Trading, body: dict[str, Any], portfolio: Portfolio
+) -> dict[str, object] | None:
+    """A DCA change that raises a buy (audit 9): the per-trade size is judged on the new
+    order, the monthly cap and the coin's share on what the raise adds, as the old order's
+    unfilled part already counts. A new price, or the same or a smaller amount, adds nothing."""
+    _, store, audit, clock = desk.parts()
+    row = store.dca_order(str(body.get("ref") or ""))
+    if row is None or row["side"] != "buy" or body.get("raise") is not True:
+        return None
+    try:
+        spend = Decimal(str(body.get("spend")))
+        left = Decimal(row["spend"] or "0") - Decimal(row["executed_quote"])
+    except (InvalidOperation, ValueError):
+        return None
+    if not spend.is_finite() or spend <= left:
+        return None
+    now = datetime.fromtimestamp(clock(), SYDNEY)
+    counted = left if int(row["created"]) >= profile_live.month_start_ms(now) else Decimal(0)
+    override = body.get("override") is True
+    coin = str(row["coin"])
+    return _rule_check(store, audit, coin, spend, override, portfolio, credit=counted)[0]
+
+
 def _rule_check(  # noqa: PLR0913, PLR0917 - each is a separate fact about the buy
-    store: Store, audit: Audit, coin: str, spend: Decimal, override: bool, portfolio: Portfolio
+    store: Store,
+    audit: Audit,
+    coin: str,
+    spend: Decimal,
+    override: bool,
+    portfolio: Portfolio,
+    *,
+    credit: Decimal = Decimal(0),
 ) -> tuple[dict[str, object] | None, list[dict[str, str]]]:
     """A 409 naming each set Profile rule the buy breaks, or None when it may go; and the rules
-    it breaks, whether or not the owner confirmed past them."""
+    it breaks, whether or not the owner confirmed past them. credit: what an order this buy
+    replaces already counts this month, so the cap and the coin's share see only what it adds."""
 
     _, doc = profile.current(store)
     if all(profile.rule(doc, key) is None for key in PRETRADE_RULES):
@@ -659,8 +695,8 @@ def _rule_check(  # noqa: PLR0913, PLR0917 - each is a separate fact about the b
     found = profile_live.breaks(
         doc,
         spend_aud=spend * rate,
-        month_aud=profile_live.month_spent_aud(store, rate, datetime.now(SYDNEY)),
-        share_after=profile_live.share_after(held, coin, spend) if held else None,
+        month_aud=profile_live.month_spent_aud(store, rate, datetime.now(SYDNEY)) - credit * rate,
+        share_after=profile_live.share_after(held, coin, spend - credit) if held else None,
         coin=coin,
     )
     if held is None and profile.rule(doc, "max_pct_per_coin") is not None:
