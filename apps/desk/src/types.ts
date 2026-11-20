@@ -1331,7 +1331,7 @@ export interface DcaAction {
 export interface PotOrder {
   ref: string;
   role: "entry" | "exit" | "close" | "add";
-  kind: "limit" | "oco" | "market";
+  kind: "limit" | "oco" | "market" | "stop";
   price: string | null;
   stop: string | null;
   qty: string;
@@ -1356,6 +1356,9 @@ export interface PotTrade {
   now: string | null;
   exitPrice: string | null;
   exitKind: "target" | "stop" | "market" | null;
+  // An open trade's exits on Binance: both, the stop alone (the target is out of Binance's
+  // price range for now), held by the desk (Binance takes no stop that far under the price), or none.
+  exits?: "both" | "stop" | "desk" | "none" | null;
   result: string | null;
   r: string | null;
   fees: string;
@@ -1536,6 +1539,17 @@ export interface PotPreview {
   problems: string[];
 }
 
+// A style's or a setup's closed trades, summed (the Stats tab's tables).
+export interface PotStatsRow {
+  name: string;
+  trades: number;
+  wins: number;
+  winRate: string | null;
+  expectancyR: string | null;
+  totalR: string;
+  result: string;
+}
+
 export interface PotView {
   quote: string;
   config: { mode: "test" | "risk"; fixed: string; riskPct: string; maxRisk?: string };
@@ -1569,6 +1583,10 @@ export interface PotView {
     expectancyR: string | null;
     drawdownPct: string;
     judgeAfter: number;
+    byStyle?: PotStatsRow[];
+    bySetup?: PotStatsRow[];
+    // The equity curve, trade by trade in close order: running totals in R and in USDC.
+    curve?: { closed: number; r: string; cumR: string; cumResult: string }[];
   };
   coins: string[];
   priceError: string | null;

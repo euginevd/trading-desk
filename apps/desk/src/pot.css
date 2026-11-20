@@ -146,11 +146,11 @@
 .pot-ladder {
   position: relative;
   display: block;
-  height: 34px;
+  height: 46px;
 }
 .pot-rail {
   position: absolute;
-  top: 15px;
+  top: 20px;
   right: 0;
   left: 0;
   height: 4px;
@@ -159,19 +159,21 @@
 }
 .pot-pin {
   position: absolute;
-  top: 0;
+  top: 18px;
   color: var(--muted);
   font-size: 11px;
+  line-height: 14px;
   white-space: nowrap;
   text-align: center;
   transform: translateX(-50%);
 }
-.pot-pin::after {
+/* The tick crosses the line, its price beneath: clear of the dot and the price now above it. */
+.pot-pin::before {
   content: "";
   display: block;
   width: 2px;
-  height: 10px;
-  margin: 1px auto 0;
+  height: 12px;
+  margin: 0 auto 1px;
   background: var(--line-2);
 }
 .pot-pin.is-stop {
@@ -179,7 +181,7 @@
   text-align: left;
   transform: none;
 }
-.pot-pin.is-stop::after {
+.pot-pin.is-stop::before {
   margin-left: 0;
   background: var(--down);
 }
@@ -188,13 +190,37 @@
   text-align: right;
   transform: translateX(-100%);
 }
-.pot-pin.is-target::after {
+.pot-pin.is-target::before {
   margin-right: 0;
   background: var(--up);
 }
+.pot-now-px {
+  position: absolute;
+  top: 0;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 14px;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+/* Near an end, the label lines up with the dot's edge instead of running off the line. */
+.pot-now-px.is-start {
+  margin-left: -6px;
+  transform: none;
+}
+.pot-now-px.is-end {
+  margin-left: 6px;
+  transform: translateX(-100%);
+}
+.pot-to-stop {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
 .pot-now {
   position: absolute;
-  top: 11px;
+  top: 16px;
   width: 12px;
   height: 12px;
   margin-left: -6px;
@@ -924,55 +950,78 @@ dialog.pnt {
   display: flex;
   gap: 8px;
 }
+/* The watchlist's coins: one dense row each, its cells in fixed columns so the rows line up
+   like a table; two columns of rows where both fit. */
 .acc-coins {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(min(540px, 100%), 1fr));
+  column-gap: 28px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 .acc-coin {
   display: grid;
-  align-content: start;
-  gap: 6px;
-  padding: 14px;
-  border: 1px solid var(--line);
-  border-left: 3px solid var(--line-2);
-  border-radius: var(--r);
-  background: var(--panel);
+  grid-template-columns: minmax(72px, 1fr) 88px 58px 64px 92px 84px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 10px;
+  background: none;
   color: inherit;
   font: inherit;
+  font-size: 13px;
   text-align: left;
 }
 button.acc-coin {
   cursor: pointer;
 }
 button.acc-coin:hover {
-  border-color: var(--hover-line);
+  background: var(--accent-soft);
 }
 button.acc-coin:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.acc-coin.is-watch {
-  border-left-color: var(--up);
-}
-.acc-coin.is-wait {
-  border-left-color: var(--wait);
+  outline-offset: -2px;
 }
 .acc-coin.is-off {
   opacity: 0.75;
 }
-.acc-coin-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-.acc-coin-head .dcb-coin {
-  margin-right: auto;
+.acc-coin .dcb-coin {
+  min-width: 0;
   font-weight: 600;
 }
+.acc-coin-px,
+.acc-coin-day,
+.acc-coin-held {
+  text-align: right;
+  white-space: nowrap;
+}
+.acc-coin-px {
+  color: var(--text);
+}
+.acc-coin-day,
+.acc-coin-held {
+  font-size: 12px;
+}
+.acc-coin-held {
+  color: var(--muted);
+}
+.acc-coin-spark {
+  display: block;
+  height: 22px;
+}
+/* The tag and what's held: two cells of the row, stacked in one on a phone. */
+.acc-coin-end {
+  display: contents;
+}
 .acc-spark {
+  display: block;
   width: 100%;
-  height: 30px;
+  height: 22px;
 }
 .acc-spark polyline {
   stroke-width: 1.6;
@@ -983,19 +1032,47 @@ button.acc-coin:focus-visible {
 .acc-spark.down polyline {
   stroke: var(--down);
 }
-.acc-coin-foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
 .acc-act {
+  justify-self: start;
   padding: 2px 8px;
   border-radius: 999px;
   background: var(--line);
   color: var(--muted);
   font-size: 12px;
   font-weight: 600;
+  white-space: nowrap;
+}
+/* No setup, on most rows most days: the words alone, so the tags that matter stand out. */
+.acc-act.is-none {
+  padding-right: 0;
+  padding-left: 0;
+  background: none;
+  font-weight: 400;
+}
+.acc-act.is-trade,
+.acc-act.is-proposed {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+@media (max-width: 520px) {
+  .acc-coin {
+    grid-template-columns: minmax(64px, 1fr) 78px 52px 88px;
+    gap: 8px;
+  }
+  .acc-coin-spark {
+    display: none;
+  }
+  .acc-coin-end {
+    display: grid;
+    justify-items: end;
+    gap: 2px;
+  }
+  .acc-coin-end .acc-act {
+    justify-self: end;
+  }
+  .acc-coin-held.is-zero {
+    display: none;
+  }
 }
 .acc-act.is-watch {
   background: var(--up-soft, rgba(46, 189, 133, 0.14));
@@ -1864,5 +1941,117 @@ dialog.ntf {
 @media (max-width: 760px) {
   .pot-scan {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* The Stats tab (PotStats): the equity curve in R, then the figures by style and by setup. */
+.pst-empty {
+  margin-top: 14px;
+}
+.pst-curve {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.pst-curve-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 6px;
+}
+.pst-sum {
+  font-size: 12px;
+  color: var(--muted);
+}
+.pst-plot {
+  position: relative;
+}
+.pst-plot svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: pan-y;
+}
+.pst-zero,
+.pst-cross {
+  stroke: var(--line-2);
+  stroke-width: 1;
+}
+.pst-axis {
+  fill: var(--dim);
+  font-size: 11px;
+}
+.pst-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.pst-dot {
+  fill: var(--accent);
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+.pst-tip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 12px));
+  display: grid;
+  padding: 6px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  background: var(--panel-2);
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+.pst-tip b {
+  font-size: 14px;
+  color: var(--text);
+}
+.pst-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+}
+.pst-group {
+  min-width: 0;
+  padding: 4px 0 4px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+.pst-group h3 {
+  margin: 10px 16px 2px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.pst-group tbody th {
+  border-top: 1px solid var(--line);
+  color: var(--text);
+  font-size: inherit;
+  white-space: normal;
+}
+.pst-group td {
+  white-space: nowrap;
+}
+.pst-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+}
+@media (max-width: 900px) {
+  .pst-groups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+@media (max-width: 640px) {
+  .pst-axis {
+    font-size: 17px;
   }
 }

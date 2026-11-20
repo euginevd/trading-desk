@@ -1,5 +1,6 @@
 // The Trading account's watchlist, at the foot of the page and folded away when not wanted: a
-// card per coin (price, day, 30 days as a line, and the one thing to do about it), Edit to add
+// row per coin (price, day, 30 days as a line, the one thing to do about it and what's held),
+// the coins in a trade or with a setup first, Edit to add
 // or remove coins, and a panel per coin with its daily chart, the desk's read and, when asked,
 // trading-agent's (one model call per ask), then New trade on it.
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -22,12 +23,24 @@ function readOpen(): boolean {
   }
 }
 
-// What to do about a coin, in a word: the card's chip.
+// What to do about a coin, in a word: the row's tag.
 const ACTION: Record<"watch" | "wait" | "none", string> = {
   watch: "Analyse",
   wait: "Wait",
   none: "No setup",
 };
+// A coin's tag, and its place in the list: in a trade, proposed, worth an Analyse, waiting,
+// then the coins with no setup.
+const TAGS = ["trade", "proposed", "watch", "wait", "none"] as const;
+const tagOf = (c: AccountCoin): (typeof TAGS)[number] =>
+  c.inTrade ? "trade" : c.watching ? "proposed" : (c.insight?.status ?? "none");
+const tagWord = (c: AccountCoin): string => {
+  const tag = tagOf(c);
+  return tag === "trade" ? "In a trade" : tag === "proposed" ? "Proposed" : ACTION[tag];
+};
+// Sorted by tag; coins with the same tag keep the watchlist's own order.
+const byTag = (coins: AccountCoin[]): AccountCoin[] =>
+  [...coins].sort((a, b) => TAGS.indexOf(tagOf(a)) - TAGS.indexOf(tagOf(b)));
 
 function Spark({ closes }: { closes: string[] }) {
   if (closes.length < 2) return null;
@@ -188,39 +201,38 @@ export default function AccountWatchlist({
             <p className="muted">Nothing on the watchlist. Edit adds a coin.</p>
           )}
           {coins && coins.length > 0 && (
-            <div className="acc-coins">
-              {coins.map((c) => {
+            <ul className="acc-coins" aria-label="Watchlist coins">
+              {byTag(coins).map((c) => {
                 const day = Number(c.change24hPct);
-                const status = c.insight?.status ?? "none";
+                const isHeld = Number(c.value) > 0;
                 return (
-                  <button
-                    key={c.coin}
-                    type="button"
-                    className={`acc-coin is-${status}`}
-                    onClick={() => setViewing(c.coin)}
-                    aria-label={`${c.coin}: ${c.insight?.setup ?? "no read yet"} Open its chart`}
-                  >
-                    <span className="acc-coin-head">
+                  <li key={c.coin}>
+                    <button
+                      type="button"
+                      className="acc-coin"
+                      onClick={() => setViewing(c.coin)}
+                      aria-label={`${c.coin}: ${c.insight?.setup ?? "no read yet"} Open its chart`}
+                    >
                       <span className="dcb-coin">
                         <CoinIcon coin={c.coin} />
                         {c.coin}
                       </span>
-                      <span className="num">{limit(c.price)}</span>
-                      <small className={`num ${toneOf(day)}`}>{signed(day)}</small>
-                    </span>
-                    <Spark closes={c.spark} />
-                    <span className="acc-coin-foot">
-                      <span className={`acc-act is-${status}`}>
-                        {c.inTrade ? "In a trade" : c.watching ? "Proposed" : ACTION[status]}
+                      <span className="acc-coin-px num">{limit(c.price)}</span>
+                      <small className={`acc-coin-day num ${toneOf(day)}`}>{signed(day)}</small>
+                      <span className="acc-coin-spark">
+                        <Spark closes={c.spark} />
                       </span>
-                      <small className="muted num">
-                        {Number(c.value) > 0 ? `${dollars(c.value)} held` : "not held"}
-                      </small>
-                    </span>
-                  </button>
+                      <span className="acc-coin-end">
+                        <span className={`acc-act is-${tagOf(c)}`}>{tagWord(c)}</span>
+                        <small className={`acc-coin-held num${isHeld ? "" : " is-zero"}`}>
+                          {isHeld ? `${dollars(c.value)} held` : "—"}
+                        </small>
+                      </span>
+                    </button>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </div>
       )}

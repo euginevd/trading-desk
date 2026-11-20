@@ -2,7 +2,7 @@
 // (available, in trades, value, this month) and the risk rules in a line; then the market and
 // Scan now, what trading-agent proposes, the trades in tabs (positions, orders, history,
 // stats, the ledger) and, at the foot, the watchlist (AccountWatchlist.tsx).
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import {
   ApiError,
   checkPot,
@@ -23,6 +23,7 @@ import PotChat, { usePotChat } from "./PotChat";
 import PotNewTrade from "./PotNewTrade";
 import NewTradeFlow, { OddsLine } from "./NewTradeFlow";
 import PotPanel, { px, rewardOf, rWord, rr, tone } from "./PotPanel";
+import PotStats from "./PotStats";
 import { RuleBreakBanner } from "./RuleMarks";
 import type {
   PotAction,
@@ -156,7 +157,31 @@ function toCsv(trades: PotTrade[]): string {
   return [head.join(","), ...rows].join("\n");
 }
 
-// The trade as a line: stop on the left, target on the right, the entry between, and now.
+// How far the price now sits above the stop, as a share of the price now: the fall that would
+// hit it. In a few words for the row, and as a sentence for a screen reader.
+function toStop(trade: PotTrade): { short: string; long: string } | null {
+  if (trade.now === null) return null;
+  const now = Number(trade.now);
+  const stop = Number(trade.stop);
+  if (!(now > 0) || !(stop > 0)) return null;
+  const pct = ((now - stop) / now) * 100;
+  const n = Math.abs(pct).toFixed(1);
+  if (pct > 0)
+    return {
+      short: `${n}% to stop`,
+      long: `Price now ${px(now)}, ${n}% above the stop at ${px(stop)}.`,
+    };
+  return {
+    short: pct < 0 ? `${n}% under stop` : "At the stop",
+    long:
+      pct < 0
+        ? `Price now ${px(now)}, ${n}% under the stop at ${px(stop)}.`
+        : `Price now ${px(now)}, at the stop.`,
+  };
+}
+
+// The trade as a line: the price now above its dot; under the line, stop on the left, target
+// on the right and the entry between, so the entry's label never sits under the dot.
 function Ladder({ trade }: { trade: PotTrade }) {
   const stop = Number(trade.stop);
   const span = Number(trade.target) - stop || 1;
@@ -164,6 +189,7 @@ function Ladder({ trade }: { trade: PotTrade }) {
   const entry = Number(trade.fillPrice ?? trade.entry);
   const now = trade.now === null ? null : Number(trade.now);
   const waiting = trade.status !== "open";
+  const nowAt = now === null ? 0 : at(now);
   return (
     <span
       className="pot-ladder"
@@ -181,10 +207,18 @@ function Ladder({ trade }: { trade: PotTrade }) {
         {px(trade.target)}
       </span>
       {now !== null && (
-        <span
-          className={`pot-now${waiting ? " is-waiting" : ""}`}
-          style={{ left: `${at(now)}%` }}
-        />
+        <>
+          <span
+            className={`pot-now-px num${nowAt < 12 ? " is-start" : nowAt > 88 ? " is-end" : ""}`}
+            style={{ left: `${nowAt}%` }}
+          >
+            {px(now)}
+          </span>
+          <span
+            className={`pot-now${waiting ? " is-waiting" : ""}`}
+            style={{ left: `${nowAt}%` }}
+          />
+        </>
       )}
     </span>
   );
@@ -198,12 +232,16 @@ function TradeRow({ trade, onOpen }: { trade: PotTrade; onOpen: () => void }) {
   // How far the coin has moved from the fill, the way a chart reads it; R when there's no price.
   const fill = Number(trade.fillPrice ?? trade.entry);
   const moved = trade.now !== null && fill > 0 ? (Number(trade.now) / fill - 1) * 100 : null;
+  // The stop only matters once the entry has filled.
+  const stopGap = waiting ? null : toStop(trade);
+  const stopGapId = useId();
   return (
     <li>
       <button
         type="button"
         className="pot-trade"
         aria-label={`${trade.coin} trade ${trade.ref}: open its panel`}
+        aria-describedby={stopGap ? stopGapId : undefined}
         onClick={onOpen}
       >
         <span>
@@ -229,13 +267,37 @@ function TradeRow({ trade, onOpen }: { trade: PotTrade; onOpen: () => void }) {
                 {moved === null ? rWord(trade.r) : percent(String(moved))}
               </b>
               <small className={`num ${tone(n)}`}>{dollars(trade.result, true)}</small>
+              {stopGap && (
+                <>
+                  <small className="pot-to-stop num" aria-hidden="true">
+                    {stopGap.short}
+                  </small>
+                  <span id={stopGapId} className="visually-hidden">
+                    {stopGap.long}
+                  </span>
+                </>
+              )}
             </>
           )}
         </span>
         <span className="r">
-          <span className={`pot-tag ${waiting ? "is-wait" : "is-live"}`}>
-            {waiting ? "Entry waiting" : "In trade"}
-          </span>
+          {waiting ? (
+            <span className="pot-tag is-wait">Entry waiting</span>
+          ) : trade.exits === "none" ? (
+            <span className="pot-tag is-lost" title={trade.note ?? undefined}>
+              No stop on Binance
+            </span>
+          ) : trade.exits === "desk" ? (
+            <span className="pot-tag is-wait" title={trade.note ?? undefined}>
+              Desk-watched stop
+            </span>
+          ) : trade.exits === "stop" ? (
+            <span className="pot-tag is-wait" title={trade.note ?? undefined}>
+              Stop only
+            </span>
+          ) : (
+            <span className="pot-tag is-live">In trade</span>
+          )}
         </span>
       </button>
     </li>
@@ -252,7 +314,7 @@ function ScanCards({ cards, onReview }: { cards: PotScanCard[]; onReview: (id: s
           <header>
             <b>{c.name}</b>
             <span className={`pot-tag ${take ? "is-live" : c.close ? "is-wait" : "is-quiet"}`}>
-              {take ? "Take" : c.close ? "Close" : "Nothing near"}
+              {take ? "Take" : c.close ? "Nearest" : "Nothing near"}
             </span>
           </header>
           {take ? (
@@ -558,6 +620,18 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
   const short = Number(pot.backing?.short ?? 0);
   const used = Math.max(0, -Number(pot.monthResult));
   const openTrade = pot.trades.find((t) => t.ref === openRef) ?? null;
+  // The last scan's card per style. A take placed, dismissed or expired since the scan has
+  // nothing left to review.
+  const scanCards: PotScanCard[] | undefined = pot.lastScan?.styles?.map(({ take, ...c }) =>
+    take && pot.proposals.some((x) => x.id === take.id) ? { ...c, take } : c,
+  );
+  // With cards under it, the scan line is only when and how many: the cards say the rest.
+  const takes = scanCards?.filter((c) => c.take).length ?? 0;
+  const scanLine = !pot.lastScan
+    ? "Not scanned yet"
+    : scanCards
+      ? `${when(pot.lastScan.at)}: ${takes ? `${takes} to review` : "no setups"}, ${scanCards.length} ${scanCards.length === 1 ? "style" : "styles"} checked`
+      : `${when(pot.lastScan.at)}: ${pot.lastScan.line}`;
 
   const scan = () => {
     setScanning(true);
@@ -807,11 +881,7 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
                 className="acc-scan"
                 title={`${pot.lastScan?.line ?? ""}${pot.scansOnItsOwn ? ` Next scan ${when(pot.nextScan)}.` : " Scans paused."}`}
               >
-                {scanning
-                  ? "Scanning the market…"
-                  : pot.lastScan
-                    ? `${when(pot.lastScan.at)}: ${pot.lastScan.line}`
-                    : "Not scanned yet"}
+                {scanning ? "Scanning the market…" : scanLine}
               </span>
               <div className="acc-acts">
                 <button type="button" className="btn" disabled={scanning} onClick={scan}>
@@ -829,13 +899,10 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
               </p>
             )}
 
-            {!scanning && pot.lastScan?.styles && (
+            {!scanning && pot.lastScan && scanCards && (
               <ScanCards
                 key={pot.lastScan.at}
-                // A take placed, dismissed or expired since the scan has nothing left to review.
-                cards={pot.lastScan.styles.map(({ take, ...c }) =>
-                  take && pot.proposals.some((x) => x.id === take.id) ? { ...c, take } : c,
-                )}
+                cards={scanCards}
                 onReview={(id) => {
                   const p = pot.proposals.find((x) => x.id === id);
                   if (!p) {
@@ -981,43 +1048,7 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
                       </p>
                     </>
                   ))}
-                {tab === "stats" && (
-                  <>
-                    <dl className="pot-stats">
-                      <div>
-                        <dt>Trades</dt>
-                        <dd className="num">{pot.stats.trades}</dd>
-                      </div>
-                      <div>
-                        <dt>Win rate</dt>
-                        <dd className="num">
-                          {pot.stats.winRate === null ? "—" : `${pot.stats.winRate}%`}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt>Average win</dt>
-                        <dd className="num">{rWord(pot.stats.avgWinR)}</dd>
-                      </div>
-                      <div>
-                        <dt>Average loss</dt>
-                        <dd className="num">{rWord(pot.stats.avgLossR)}</dd>
-                      </div>
-                      <div>
-                        <dt>Expectancy</dt>
-                        <dd className="num">{rWord(pot.stats.expectancyR)}</dd>
-                      </div>
-                      <div>
-                        <dt>Deepest drawdown</dt>
-                        <dd className="num">{pot.stats.drawdownPct}%</dd>
-                      </div>
-                    </dl>
-                    <p className="muted">
-                      The method is judged after {pot.stats.judgeAfter} trades:{" "}
-                      {Math.min(pot.stats.trades, pot.stats.judgeAfter)} of {pot.stats.judgeAfter}{" "}
-                      so far.
-                    </p>
-                  </>
-                )}
+                {tab === "stats" && <PotStats stats={pot.stats} />}
                 {tab === "ledger" && (
                   <div className="acc-ledger">
                     <table className="dcb-table" aria-label="The account's ledger">

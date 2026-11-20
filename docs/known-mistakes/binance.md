@@ -13,3 +13,4 @@ Part of [known-mistakes.md](../known-mistakes.md); the numbers stay as cited.
 29h. A fill was saved as filled before a Binance read (pair rules) that could fail, leaving the trade waiting with no stop: do every Binance read before the first save of a sync step.
 29i. The daily limit counted the pot's entries but not its adds: count spend by `side = 'buy'`, never by one role.
 29j. An add skipped the pot's month-loss, stop-out and Bear rules a new trade meets: a buy that adds risk meets every rule a new trade does.
+29m. A stop or target outside Binance's price band (PERCENT_PRICE_BY_SIDE: 0.8 to 2 times the price on NEARUSDC, and it applies to a stop's price too) had the OCO refused every 30 seconds for days: read the band from the pair's rules before sending, and never assume which leg was refused.

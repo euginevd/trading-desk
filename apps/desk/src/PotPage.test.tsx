@@ -388,6 +388,12 @@ describe("the trading pot", () => {
     // The row shows how far the coin has moved from its fill, not R.
     const row = screen.getByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" });
     expect(within(row).getByText("+1.9%")).toBeTruthy();
+    // The price now is labelled on the line, and how far it sits above the stop is said.
+    expect(row.querySelector(".pot-now-px")?.textContent).toBe("138.02");
+    expect(within(row).getByText("4.9% to stop")).toBeTruthy();
+    expect(document.getElementById(row.getAttribute("aria-describedby") ?? "")?.textContent).toBe(
+      "Price now 138.02, 4.9% above the stop at 131.20.",
+    );
     fireEvent.click(within(tabs).getByRole("tab", { name: "Ledger" }));
     expect(screen.getByRole("table", { name: "The account's ledger" }).textContent).toContain(
       "POT-IN-1",
@@ -595,6 +601,10 @@ describe("the trading pot", () => {
     expect(cards.textContent).toContain("Scalps wait out the weekend.");
     expect(cards.textContent).toContain("Needs a 4-hour close over 3,200.");
     expect(cards.textContent).toContain("2.4 : 1");
+    // With cards under it, the scan line is only when and how many, not the scan's full line.
+    const line = document.querySelector(".acc-scan") as HTMLElement;
+    expect(line.textContent).toMatch(/: 1 to review, 4 styles checked$/);
+    expect(line.textContent).not.toContain("Scanned.");
     fireEvent.click(within(cards).getByRole("button", { name: "Review" }));
     expect(screen.getByRole("list", { name: "The trade's orders" }).textContent).toContain(
       "limit buy 3.4172",
@@ -636,6 +646,87 @@ describe("the trading pot", () => {
     const cards = await screen.findByRole("list", { name: "Scan by style" });
     expect(cards.textContent).toContain("Nothing near");
     expect(within(cards).queryByRole("button", { name: "Review" })).toBeNull();
+  });
+
+  it("tags a style's closest coin Nearest, never Close", async () => {
+    const styles = [
+      {
+        style: "day",
+        name: "Day trade",
+        line: "One close.",
+        close: { coin: "ETH", why: "Needs a 4-hour close over 3,200." },
+      },
+      { style: "position", name: "Position", line: "No position setups right now." },
+    ];
+    serve(pot({ proposals: [], lastScan: { at: NOW, line: "Scanned.", styles } }));
+    render(<PotPage />);
+    const cards = await screen.findByRole("list", { name: "Scan by style" });
+    const [day] = within(cards).getAllByRole("listitem");
+    expect(within(day as HTMLElement).getByText("Nearest")).toBeTruthy();
+    expect(within(cards).queryByText("Close")).toBeNull();
+    expect(document.querySelector(".acc-scan")?.textContent).toMatch(
+      /: no setups, 2 styles checked$/,
+    );
+  });
+
+  it("lists the watchlist as rows, coins in a trade or with a setup first", async () => {
+    const base = serve(pot({ proposals: [], trades: [] }));
+    const coin = (name: string, more: object) => ({
+      coin: name,
+      amount: "0",
+      price: "10",
+      value: "0",
+      change24hPct: "0.4",
+      change30dPct: null,
+      spark: ["9", "10"],
+      insight: null,
+      tradable: true,
+      watching: false,
+      inTrade: false,
+      ...more,
+    });
+    const read = (status: string) => ({ trend: "Up trend.", setup: "A read.", status });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) =>
+        url === "/api/pot/coins"
+          ? Promise.resolve(
+              new Response(
+                JSON.stringify({
+                  quote: "USDC",
+                  list: 7,
+                  max: 10,
+                  coins: [
+                    coin("BTC", {}),
+                    coin("ETH", { insight: read("wait") }),
+                    coin("LINK", { insight: read("none") }),
+                    coin("SUI", { insight: read("watch") }),
+                    coin("SOL", { inTrade: true, value: "25" }),
+                  ],
+                }),
+              ),
+            )
+          : base(url, init),
+      ),
+    );
+    render(<PotPage />);
+    const list = await screen.findByRole("list", { name: "Watchlist coins" });
+    const rows = within(list).getAllByRole("button");
+    expect(rows.map((r) => r.querySelector(".dcb-coin")?.textContent)).toEqual([
+      "SOL",
+      "SUI",
+      "ETH",
+      "BTC",
+      "LINK",
+    ]);
+    expect(rows.map((r) => r.querySelector(".acc-act")?.textContent)).toEqual([
+      "In a trade",
+      "Analyse",
+      "Wait",
+      "No setup",
+      "No setup",
+    ]);
+    expect(rows[0]?.textContent).toContain("$25 held");
   });
 
   it("starts an empty pot with money put in", async () => {

@@ -1,6 +1,7 @@
 import json
 from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -877,6 +878,130 @@ def test_a_refused_exit_between_stop_and_target_sells_nothing(
     live = pot.view()["trades"][0]
     assert live["status"] == "open"
     assert "close" not in [o["role"] for o in live["orders"]]
+    assert live["exits"] == "none"
+    pot.sync()
+    pot.sync()  # refused again each time: kept in the book, but only the latest is shown
+    shown = pot.view()["trades"][0]["orders"]
+    assert [o["role"] for o in shown] == ["entry", "exit"]
+
+
+def out_of_range(*_args: Any) -> dict[str, Any]:
+    raise BinanceError(400, "Filter failure: PERCENT_PRICE_BY_SIDE")
+
+
+def test_a_target_binance_wont_take_leaves_the_stop_on_alone(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A target over Binance's price band had the whole OCO refused, every 30 seconds, and
+    the trade held with no stop."""
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    monkeypatch.setattr(pot.binance, "sell_oco", out_of_range)
+    pot.sync()
+    live = pot.view()["trades"][0]
+    assert live["exits"] == "stop"
+    assert live["note"].startswith("Its stop is on Binance alone")
+    stop = by_tag(f"{trade['ref']}-X2")
+    assert (stop["type"], stop["side"], stop["status"]) == ("STOP_LOSS", "SELL", "NEW")
+    sent = len(demo.EXCHANGE.orders)
+    pot.sync()
+    pot.sync()  # the stop holds: nothing is sent again while the target is out of range
+    assert len(demo.EXCHANGE.orders) == sent
+    assert sum("on Binance alone" in str(n) for n in pot.view()["trades"][0]["notes"]) == 1
+    stop["price"] = "190"  # where the stop sold
+    fill(stop["orderId"])
+    pot.sync()
+    done = pot.view()["trades"][0]
+    assert (done["status"], done["exitKind"]) == ("closed", "stop")
+
+
+def test_the_target_goes_back_on_once_binance_takes_it(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = pot.binance.sell_oco
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    monkeypatch.setattr(pot.binance, "sell_oco", out_of_range)
+    pot.sync()
+    symbol = f"SOL{QUOTE}"
+    rules = pot.binance.filters(symbol)
+    pot.binance._filters[symbol] = replace(rules, ask_up=Decimal("1.1"))  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    pot.sync()  # 230 is over 212.40 x 1.1, less the room kept: still the stop alone
+    assert pot.view()["trades"][0]["exits"] == "stop"
+    pot.binance._filters[symbol] = replace(rules, ask_up=Decimal("1.3"))  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(pot.binance, "sell_oco", real)
+    pot.sync()
+    live = pot.view()["trades"][0]
+    assert live["exits"] == "both"
+    assert live["note"] is None
+    assert by_tag(f"{trade['ref']}-X2")["status"] == "CANCELED"
+    assert by_tag(f"{trade['ref']}-X3T")["type"] == "LIMIT_MAKER"
+
+
+def test_a_stop_binance_wont_take_is_watched_by_the_desk(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Binance refuses a stop too far under the price as well (NEAR's was 30% under, the band
+    20%): the desk sends nothing, sells at market at the stop, and places it once in range."""
+    symbol = f"SOL{QUOTE}"
+    rules = pot.binance.filters(symbol)
+    pot.binance._filters[symbol] = replace(rules, ask_down=Decimal("0.92"))  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    sent = len(demo.EXCHANGE.orders)
+    pot.sync()
+    pot.sync()  # 190 is over 8% under 212.40: nothing Binance would take, so nothing is sent
+    live = pot.view()["trades"][0]
+    assert live["exits"] == "desk"
+    assert [o["role"] for o in live["orders"]] == ["entry"]
+    assert len(demo.EXCHANGE.orders) == sent
+    assert sum("watching its stop" in str(n) for n in live["notes"]) == 1
+    monkeypatch.setattr(pot, "prices", at("200"))
+    pot.sync()  # close enough now: the stop and target go on Binance
+    live = pot.view()["trades"][0]
+    assert (live["exits"], live["note"]) == ("both", None)
+
+
+def test_a_watched_stop_sells_at_market_when_the_price_reaches_it(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    symbol = f"SOL{QUOTE}"
+    rules = pot.binance.filters(symbol)
+    pot.binance._filters[symbol] = replace(rules, ask_down=Decimal("0.92"))  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    pot.sync()
+
+    def never(_trade: dict[str, Any]) -> str:  # a gap down: never in range on the way
+        return "none"
+
+    monkeypatch.setattr(pot, "_fits", never)
+    monkeypatch.setattr(pot, "prices", at("189"))
+    pot.sync()
+    done = pot.view()["trades"][0]
+    assert done["status"] == "closed"
+    assert by_tag(f"{trade['ref']}-M1")["side"] == "SELL"
+
+
+def test_a_stop_on_alone_is_replaced_when_the_stop_moves(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    monkeypatch.setattr(pot.binance, "sell_oco", out_of_range)
+    pot.sync()
+    pot.move_stop({"ref": trade["ref"], "stop": "195"})
+    assert by_tag(f"{trade['ref']}-X2")["status"] == "CANCELED"
+    live = pot.view()["trades"][0]
+    assert (live["stop"], live["exits"]) == ("195", "stop")
+    pot.close(trade["ref"])
+    assert pot.view()["trades"][0]["status"] == "closed"
+    open_stops = [
+        o
+        for o in demo.EXCHANGE.orders.values()
+        if o["type"] == "STOP_LOSS" and o["status"] == "NEW"
+    ]
+    assert open_stops == []
 
 
 def test_no_sell_past_the_stop_while_a_close_is_unanswered(

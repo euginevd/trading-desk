@@ -20,6 +20,9 @@ Every page follows [design-system.md](design-system.md) 18 to 22. Features 1 to 
 | 104 | Trading account money in P&L: Unrealized (open trades in $ and % of what they cost) and Realized (closed trades in $ and % of what went in, with this month under it) replace This month; a position row shows how far the coin has moved from its fill in %, not R (owner, 20 Nov 2026) | Done | |
 | 105 | Scan now runs all four styles (scalp, day, swing, position) and leaves a card for each under the scan line: a take with its grade and reward to risk and a Review button, else the coin closest to a setup and what it is missing, else why nothing is near or the style is off; the daily scan stays swing, plus position on Mondays (owner, 20 Nov 2026; decision 88) | Done | Each card's backtest result follows once the Backtest page merges |
 | 106 | Backtest exits and a benchmark: each style's Not built yet exits (the partial at the target, break-even, close stops, trails, time stops, the day close) as `run.sh <style>-exits` beside the plain style; NostalgiaForInfinity X8 as a public benchmark (`run.sh nfi`, downloaded at a pinned release); any run on BTC/USDT alone (`btc`) (owner, 20 Nov 2026; decision 89) | Done | |
+| 108 | Exits Binance won't take yet: a stop or target outside its price band is watched by the desk or placed as the stop alone, then placed in full once in range; the Positions row says Desk-watched stop, Stop only or No stop on Binance (owner, 20 Nov 2026; decision 91) | Done | |
+| 109 | Trading account stats by style and setup, with an equity curve in R (owner, 20 Nov 2026) | Done | |
+| 110 | Trade page tidy: scan cards say Nearest, the scan line is a count, the positions ladder labels the price now and the distance to the stop, and the watchlist is compact rows with setups first (owner, 20 Nov 2026) | Done | |
 
 ## `api`
 

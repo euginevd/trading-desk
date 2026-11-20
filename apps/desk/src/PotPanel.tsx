@@ -487,14 +487,20 @@ export default function PotPanel({
               <tr key={o.ref}>
                 <td className="dcb-id">{o.ref}</td>
                 <td>
-                  {o.role === "entry" && o.kind === "market" ? "Entry, market buy" : ROLE[o.role]}
+                  {o.role === "entry" && o.kind === "market"
+                    ? "Entry, market buy"
+                    : o.kind === "stop"
+                      ? "Exit, the stop alone"
+                      : ROLE[o.role]}
                 </td>
                 <td className="r num">
                   {o.kind === "oco"
                     ? `${px(o.stop)} / ${px(o.price)}`
-                    : o.kind === "market"
-                      ? "Market"
-                      : px(o.price)}
+                    : o.kind === "stop"
+                      ? px(o.stop)
+                      : o.kind === "market"
+                        ? "Market"
+                        : px(o.price)}
                 </td>
                 <td>
                   <span className={`dcb-tag is-${o.status}`}>{STATE[o.status]}</span>

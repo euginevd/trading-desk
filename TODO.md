@@ -30,6 +30,8 @@ Your requirements, features and ideas, numbered, in your own words. In `producti
 25. Trading account, left from the 20 Nov 2026 audit (decision 86): an entry that part-fills under Binance's smallest order is held as an open trade with no exit, so close the dust as its own state; open risk and free cash should count what a reduce sold; a proposal's stored expiry should be re-checked on place, not only what the page sends; enter now near the daily limit counts the waiting limit's spend too.
 26. Test the backtests from the desk, not the terminal, kept simple: pick a type (scalp, day trade, swing, position), one coin from the top 100 USDC coins as on Trade, 1 or 3 months (3 at most), and run; only runs from the desk show. *(Built: feature 103, decision 87. Still to come: paper trading on the page, and offering it to others, a production move decided at the commercialising review, decision 6.)*
 27. Scan now: show each style's backtest result in red on its card beside a take, once the Backtest page (branch `backtest-page`) is on main. *(Asked 20 Nov 2026; the cards are built, feature 105.)*
+30. A notification bell on the desk: exchange alerts like a stop Binance refused or a trade left with no stop show there and go to Telegram, and from Telegram I can resolve them. *(Asked 20 Nov 2026, after the NEAR trade held no stop for two days, decision 91. To decide first: which alerts, and what Resolve may do from Telegram.)*
+31. A minimum of 20 USDC a trade. *(Asked 20 Nov 2026; my lean: refuse a smaller trade, never size it up.)*
 
 Later, from the project ideas doc, not started until listed above:
 
