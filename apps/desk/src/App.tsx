@@ -1,5 +1,14 @@
 import "./dca.css";
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Component,
+  lazy,
+  Suspense,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   getFeatures,
   getGlobal,
@@ -51,6 +60,28 @@ const PotPage = lazy(() => import("./PotPage"));
 const RiskPage = lazy(() => import("./RiskPage"));
 const ProfilePage = lazy(() => import("./ProfilePage"));
 const Portfolio = lazy(() => import("./Portfolio"));
+
+// A page that fails to load (an old tab after the desk was rebuilt, its file gone) says so in its
+// place; the side panel, and the kill switch in it, stay up.
+class PageFailed extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <main className="wrap">
+        <div className="alert" role="alert">
+          <span>This page couldn&apos;t load. The desk may have been updated.</span>
+          <button type="button" className="btn btn-small" onClick={() => window.location.reload()}>
+            Reload
+          </button>
+        </div>
+      </main>
+    );
+  }
+}
 
 // The switch each page answers to; the DCA book is part of Bots.
 const FEATURE_OF: Record<Page, FeatureId> = {
@@ -528,35 +559,37 @@ export default function App() {
               <a href="#/settings">Turn it on in Settings</a>
             </p>
           )}
-          <Suspense
-            fallback={
-              <main className="wrap" aria-busy="true">
-                <p className="muted">Loading…</p>
-              </main>
-            }
-          >
-            {hidden === null && page !== "dashboard" && page !== "settings" ? (
-              <main className="wrap" aria-busy="true">
-                <p className="muted">Loading…</p>
-              </main>
-            ) : current === "trade" ? (
-              <PotPage />
-            ) : current === "bots" || current === "dca-book" ? (
-              <BotsHome tab={botsTab} />
-            ) : current === "risk" ? (
-              <RiskPage />
-            ) : current === "settings" ? (
-              <SettingsPage />
-            ) : current === "profile" ? (
-              <ProfilePage />
-            ) : current === "journal" ? (
-              <Journal />
-            ) : current === "portfolio" ? (
-              <Portfolio onStatus={onStatus} onTao={onTao} currency={currency} />
-            ) : (
-              <Coach />
-            )}
-          </Suspense>
+          <PageFailed key={current}>
+            <Suspense
+              fallback={
+                <main className="wrap" aria-busy="true">
+                  <p className="muted">Loading…</p>
+                </main>
+              }
+            >
+              {hidden === null && page !== "dashboard" && page !== "settings" ? (
+                <main className="wrap" aria-busy="true">
+                  <p className="muted">Loading…</p>
+                </main>
+              ) : current === "trade" ? (
+                <PotPage tradingOn={settings ? settings.tradingOn : null} />
+              ) : current === "bots" || current === "dca-book" ? (
+                <BotsHome tab={botsTab} />
+              ) : current === "risk" ? (
+                <RiskPage />
+              ) : current === "settings" ? (
+                <SettingsPage />
+              ) : current === "profile" ? (
+                <ProfilePage />
+              ) : current === "journal" ? (
+                <Journal />
+              ) : current === "portfolio" ? (
+                <Portfolio onStatus={onStatus} onTao={onTao} currency={currency} />
+              ) : (
+                <Coach />
+              )}
+            </Suspense>
+          </PageFailed>
         </FeaturesContext.Provider>
       </div>
     </div>

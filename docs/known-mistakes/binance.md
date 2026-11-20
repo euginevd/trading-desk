@@ -10,3 +10,6 @@ Part of [known-mistakes.md](../known-mistakes.md); the numbers stay as cited.
 29e. Changing an order cancelled it before checking the replacement: check the new order first, then cancel. Every route that buys, the Monday close-out included, goes through the kill switch and limits.
 29f. Real plan and account figures went into public docs: write "the weekly plan" or "the account's balance"; amounts stay in `local/`.
 29g. trading-agent judging a setup from its levels alone made up the trend ("above its 50-day" when it was 30% under): always pass it the screener's facts for the coin.
+29h. A fill was saved as filled before a Binance read (pair rules) that could fail, leaving the trade waiting with no stop: do every Binance read before the first save of a sync step.
+29i. The daily limit counted the pot's entries but not its adds: count spend by `side = 'buy'`, never by one role.
+29j. An add skipped the pot's month-loss, stop-out and Bear rules a new trade meets: a buy that adds risk meets every rule a new trade does.

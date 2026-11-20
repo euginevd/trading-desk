@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import App, { dominanceMove } from "./App";
 import { amount, amountSleek, percent, price, priceSleek, usd, usdShort, usdWhole } from "./format";
 import type { Portfolio, Settings } from "./types";
@@ -122,6 +122,19 @@ const basics: Routes = {
   "GET /settings": () => [200, settings],
   "GET /tickers": () => [200, { tickers: [{ coin: "BTC", price: "98400", change24h: "2.1" }] }],
 };
+
+// The pages load lazily (decision 85): fetched once up front, so a busy test run doesn't time out
+// waiting for a page's code.
+beforeAll(async () => {
+  await Promise.all([
+    import("./Journal"),
+    import("./BotsHome"),
+    import("./PotPage"),
+    import("./RiskPage"),
+    import("./ProfilePage"),
+    import("./Portfolio"),
+  ]);
+});
 
 afterEach(() => {
   cleanup();

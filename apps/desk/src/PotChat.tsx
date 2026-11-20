@@ -102,6 +102,7 @@ export default function PotChat({
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLOListElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const stopped = useRef(false); // set by Stop after this one, read between actions
 
   useEffect(() => {
     if (open) input.current?.focus();
@@ -135,9 +136,12 @@ export default function PotChat({
     const line = lines[review];
     if (!line?.actions) return;
     setBusy(true);
+    stopped.current = false;
     const next = [...line.actions];
     for (const [i, a] of next.entries()) {
       if (!a.on || a.result) continue;
+      if (stopped.current) break; // the owner stopped the batch: the rest stay undone
+
       try {
         next[i] = { ...a, result: await runAction(a) };
       } catch (e) {
@@ -278,7 +282,17 @@ export default function PotChat({
           </button>
         </form>
 
-        <dialog ref={dialog} aria-labelledby="pot-confirm" onClose={() => setReview(null)}>
+        <dialog
+          ref={dialog}
+          aria-labelledby="pot-confirm"
+          onClose={() => setReview(null)}
+          onCancel={(e) => {
+            // Esc mid-batch stops what's left, and the dialog stays to show what was done.
+            if (!busy) return;
+            e.preventDefault();
+            stopped.current = true;
+          }}
+        >
           <h2 id="pot-confirm">
             Do {chosen.length} {chosen.length === 1 ? "action" : "actions"}?
           </h2>
@@ -300,8 +314,15 @@ export default function PotChat({
             They go to Binance now. A stop only ever moves toward profit; closing sells at market.
           </p>
           <div className="dlg-btns">
-            <button className="btn" type="button" onClick={() => dialog.current?.close()}>
-              Not yet
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                if (busy) stopped.current = true;
+                else dialog.current?.close();
+              }}
+            >
+              {busy ? "Stop after this one" : "Not yet"}
             </button>
             <button
               className="btn btn-accent"

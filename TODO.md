@@ -28,6 +28,8 @@ Your requirements, features and ideas, numbered, in your own words. In `producti
 24. New trade by style: pick scalp, day trade, swing or position (one line each on its timeframe and candles); the coins are scanned in code first, then checked for confluence and upcoming catalysts online, rated, with entry, take profit, stop and reward to risk; Okay shows the order and Approve places it on Binance. *(Built: feature 95, decision 80, on test. Still to build: each style's exits after the fill (half at target, trailing, time stops, the close stop) (backtests: feature 100, `bash apps/backtest/run.sh`), each style's Not built yet list in local/agents/trading-agent.md.)*
 
 
+25. Trading account, left from the 20 Nov 2026 audit (decision 86): an entry that part-fills under Binance's smallest order is held as an open trade with no exit, so close the dust as its own state; open risk and free cash should count what a reduce sold; a proposal's stored expiry should be re-checked on place, not only what the page sends; enter now near the daily limit counts the waiting limit's spend too.
+
 Later, from the project ideas doc, not started until listed above:
 
 - Bybit and leverage.

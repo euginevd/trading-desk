@@ -481,10 +481,7 @@ class Pot:
         if put_in <= ZERO:
             raise Refused("Put money in the pot first.")
         self._regime_rule(sized)
-        if self.month_result() <= -put_in * MONTH_LOSS_PCT / HUNDRED:
-            raise Refused("The month's 6% loss limit is used: no new trades until the 1st.")
-        if equity <= put_in * (HUNDRED - STOP_OUT_PCT) / HUNDRED:
-            raise Refused("The pot is down 20% from what was put in: trading stops for a review.")
+        self._account_rules(put_in, equity)
         mine = replacing["ref"] if replacing else None
         others = [r for r in self._live() if r["ref"] != mine]
         spend, risk = Decimal(sized["spend"]), Decimal(sized["risk"])
@@ -500,6 +497,18 @@ class Pot:
         if any(r["coin"] == sized["coin"] for r in others):
             raise Refused(f"A {sized['coin']} trade is on already.")
         self._check_desk(spend)
+
+    def _account_rules(self, put_in: Decimal | None = None, equity: Decimal | None = None) -> None:
+        """The pot's stops on buying more, for a new trade and an add alike: the month's loss
+        limit, the 20% stop-out, and no new longs in a Bear regime."""
+        put_in = self._put_in() if put_in is None else put_in
+        equity = self.equity() if equity is None else equity
+        if self.regime()[0] == "bear":
+            raise Refused("BTC is in a Bear regime: no new longs until it turns.")
+        if self.month_result() <= -put_in * MONTH_LOSS_PCT / HUNDRED:
+            raise Refused("The month's 6% loss limit is used: no new trades until the 1st.")
+        if equity <= put_in * (HUNDRED - STOP_OUT_PCT) / HUNDRED:
+            raise Refused("The pot is down 20% from what was put in: trading stops for a review.")
 
     def _regime_rule(self, sized: dict[str, Any]) -> None:
         """No new longs in a Bear regime; a style may need more (position: Bull only)."""
@@ -668,6 +677,10 @@ class Pot:
             if trade["status"] == "placing":
                 self._save_trade(trade, {"status": "waiting"})
             return
+        # Every Binance read before the first save: a failed read leaves the order to be followed
+        # again in 30 seconds, never saved filled with its trade left behind. The pair's rules
+        # are kept once read, so the steps after the saves don't call Binance for them.
+        self._rules_of(trade["coin"])
         fee, in_coin = (ZERO, ZERO)
         if executed > ZERO and order_id:
             fee, in_coin = self._fees(trade["coin"], int(order_id))
@@ -751,8 +764,10 @@ class Pot:
         ]
         return f"{trade_ref}-X{len(made) + 1}"
 
-    def _exit(self, trade: dict[str, Any]) -> None:
-        """The stop and target on Binance as one OCO sell, so they hold with the desk off."""
+    def _exit(self, trade: dict[str, Any], *, fallback: bool = True) -> None:
+        """The stop and target on Binance as one OCO sell, so they hold with the desk off. If
+        Binance refuses it because the price is already through the stop or the target, the
+        rest is sold at market, as that leg would have (decision 86)."""
         ref = self._exit_ref(trade["ref"])
         qty = self._rest(trade)
         if qty <= ZERO:
@@ -787,10 +802,48 @@ class Pot:
             self._save_trade(
                 trade, {"note": f"Its stop and target aren't on Binance yet: {error.message}"}
             )
+            if fallback:
+                self._through(self._trade(trade["ref"]), qty)
             return
         self._listed(saved, sent)
         if trade["note"]:
             self._save_trade(self._trade(trade["ref"]), {"note": None})
+
+    def _through(self, trade: dict[str, Any], qty: Decimal) -> None:
+        """The price already past the stop or the target: sold at market now, rather than the
+        position held unprotected while the OCO is refused every 30 seconds. Never while a sell
+        or an add is still unanswered (it may have sold or bought already), and a refused sell
+        is said once in the note, never raised: the caller's own step still finishes."""
+        unanswered = any(
+            o["trade_ref"] == trade["ref"]
+            and o["role"] in ("close", "add")
+            and o["status"] == "placing"
+            for o in self._store.pot_orders()
+        )
+        now = self.prices([trade["coin"]]).get(trade["coin"])
+        if unanswered or now is None:
+            return
+        if now <= Decimal(trade["stop"]):
+            past = "stop"
+        elif now >= Decimal(trade["target"]):
+            past = "target"
+        else:
+            return
+        try:
+            self._sell(trade, qty, fallback=False)
+        except BinanceError as error:
+            note = f"Past its {past}, but Binance refused the market sell: {error.message}"
+            self._save_trade(self._trade(trade["ref"]), {"note": note})
+            said = note + ". The desk tries again every 30 seconds."
+            if not any(n["text"] == said for n in self._store.pot_notes(trade["ref"])):
+                self._log(trade["ref"], said)  # once, not every 30 seconds
+            return
+        self._audit.record("pot", f"{trade['ref']}: price {plain(now)} past its {past}", "sold")
+        self._log(
+            trade["ref"],
+            f"The price ({plain(now)}) was already past its {past}, so Binance refused the "
+            "stop and target: sold at market instead.",
+        )
 
     def _listed(self, order: dict[str, Any], sent: dict[str, Any]) -> dict[str, Any]:
         legs = [int(o["orderId"]) for o in sent.get("orders", [])]
@@ -801,6 +854,7 @@ class Pot:
     def _check_exit(self, order: dict[str, Any]) -> None:
         listed = self._binance.order_list(int(order["list_id"]))
         trade = self._trade(order["trade_ref"])
+        self._rules_of(trade["coin"])  # read before any save, as in _follow
         if listed.get("listStatusType") == "REJECT" or listed.get("listOrderStatus") == "REJECT":
             self._save_order(order, {"status": "cancelled"})
             return
@@ -901,16 +955,25 @@ class Pot:
             raise Refused("Only a trade waiting for its entry can be cancelled. Close it instead.")
         order = self._order(f"{trade['ref']}-E")
         symbol = f"{trade['coin']}{QUOTE}"
-        if order["order_id"] is not None:
+        if order["order_id"] is None:  # sent without an answer: looked up by its id first
+            self._refresh(order)
+            order = self._order(order["ref"])
+        if order["order_id"] is not None and order["status"] in ("placing", "open"):
             with contextlib.suppress(BinanceError):  # filled meanwhile: its state says so
                 self._binance.cancel(symbol, int(order["order_id"]))
             self._follow(order, self._binance.order(symbol, int(order["order_id"])))
-        else:
-            self._refresh(order)
-        self._audit.record(
-            "pot", f"{trade['ref']}: entry cancelled", self._trade(trade["ref"])["status"]
+        status = self._trade(trade["ref"])["status"]
+        done = self._order(order["ref"])
+        whole = Decimal(done["executed_qty"] or "0") >= Decimal(done["qty"] or "0") > ZERO
+        self._audit.record("pot", f"{trade['ref']}: entry cancelled", status)
+        self._log(
+            trade["ref"],
+            "Entry cancelled."
+            if status == "cancelled"
+            else "The entry had filled already, so nothing was cancelled; it's an open trade."
+            if whole
+            else "Entry cancelled; part had filled, so that part is an open trade with exits.",
         )
-        self._log(trade["ref"], "Entry cancelled.")
         return self.trade_view(self._trade(trade["ref"]), None)
 
     def _pull_exit(self, trade: dict[str, Any]) -> None:
@@ -925,7 +988,13 @@ class Pot:
             self._binance.cancel_list(f"{trade['coin']}{QUOTE}", int(live["list_id"]))
         except BinanceError:
             self._check_exit(live)
-            raise Refused("Its stop or target filled a moment ago; the trade is closed.") from None
+            if self._trade(trade["ref"])["status"] == "closed":
+                raise Refused(
+                    "Its stop or target filled a moment ago; the trade is closed."
+                ) from None
+            raise Refused(
+                "Binance didn't take its stop and target off, so nothing changed. Try again."
+            ) from None
         self._save_order(live, {"status": "cancelled"})
 
     @locked
@@ -1028,6 +1097,9 @@ class Pot:
         trade = self._trade(str(body.get("ref") or ""))
         if trade["status"] != "open":
             raise Refused("Only an open trade can be added to.")
+        if Decimal(trade["fill_qty"]) <= ZERO:
+            raise Refused("Nothing of this trade filled, so there's nothing to add to.")
+        self._account_rules()
         coin, stop = trade["coin"], Decimal(trade["stop"])
         now = self._price_now(coin)
         held = Decimal(trade["fill_qty"]) - Decimal(trade["exit_qty"])
@@ -1182,8 +1254,9 @@ class Pot:
         self._log(trade["ref"], f"Target moved from {old} to {plain(target)}.")
         return self.trade_view(self._trade(trade["ref"]), now)
 
-    def _sell(self, trade: dict[str, Any], qty: Decimal) -> None:
-        """A market sell of `qty` for the trade, its exits already taken off."""
+    def _sell(self, trade: dict[str, Any], qty: Decimal, *, fallback: bool = True) -> None:
+        """A market sell of `qty` for the trade, its exits already taken off. `fallback` off:
+        a refused sell puts the exits back without selling again (no loop with _through)."""
         closes = [o for o in self._store.pot_orders() if o["trade_ref"] == trade["ref"]]
         n = 1 + sum(1 for o in closes if o["role"] == "close")
         order: dict[str, Any] = {
@@ -1205,7 +1278,7 @@ class Pot:
         except BinanceError as error:
             if not unknown(error):  # refused: nothing sold, so the exits go back on
                 self._save_order(saved, {"status": "cancelled"})
-                self._exit(self._trade(trade["ref"]))
+                self._exit(self._trade(trade["ref"]), fallback=fallback)
             raise
         self._follow(saved, sent)
 

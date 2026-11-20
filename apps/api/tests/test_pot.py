@@ -1,5 +1,5 @@
 import json
-from collections.abc import Generator, Iterator
+from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
 from decimal import Decimal
 from pathlib import Path
@@ -675,3 +675,152 @@ def test_a_waiting_trade_target_keeps_the_style_reward(pot: Pot) -> None:
     waiting = pot.place(SOL | {"target": "230"})
     with pytest.raises(Refused, match="the rules need 2"):
         pot.move_target({"ref": waiting["ref"], "target": "213"})
+
+
+# From the Trade page audit (20 Nov 2026).
+
+
+def at(price: str) -> Callable[[list[str]], dict[str, Decimal]]:
+    """Every coin's price now, as one made-up figure."""
+    return lambda coins: dict.fromkeys(coins, Decimal(price))
+
+
+def test_a_failed_read_mid_fill_leaves_the_entry_to_follow_again(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    pot.binance._filters.clear()  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    real = pot.binance.filters
+    calls: list[str] = []
+
+    def busy_once(symbol: str) -> Any:
+        calls.append(symbol)
+        if len(calls) == 1:
+            raise BinanceError(503, "Service unavailable")
+        return real(symbol)
+
+    monkeypatch.setattr(pot.binance, "filters", busy_once)
+    pot.sync()  # the read fails: nothing saved, the entry still open in the book
+    first = pot.view()["trades"][0]
+    assert [(o["role"], o["status"]) for o in first["orders"]] == [("entry", "open")]
+    pot.sync()  # followed again: filled, with its stop and target on Binance
+    live = pot.view()["trades"][0]
+    assert live["status"] == "open"
+    assert [(o["role"], o["status"]) for o in live["orders"]] == [
+        ("entry", "filled"),
+        ("exit", "open"),
+    ]
+
+
+def test_an_add_counts_toward_the_daily_limit(pot: Pot, desk: Trading) -> None:
+    trade = opened(pot)
+    pot.set_config({"mode": "test", "fixed": "10", "riskPct": "2", "maxRisk": ""})
+    before = Decimal(desk.settings()["spentToday"])
+    pot.add({"ref": trade["ref"], "usdc": "10"})
+    assert Decimal(desk.settings()["spentToday"]) > before
+
+
+def test_an_add_meets_the_accounts_rules(pot: Pot) -> None:
+    trade = opened(pot)
+    pot._regime = ("bear", "BTC under its 200-day")  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(Refused, match="Bear regime"):
+        pot.add({"ref": trade["ref"], "usdc": "5"})
+
+
+@pytest.mark.parametrize(("price", "past"), [("185", "stop"), ("240", "target")])
+def test_exits_refused_with_the_price_already_past_them_sell_at_market(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch, price: str, past: str
+) -> None:
+    def refuse(*_args: Any) -> dict[str, Any]:
+        raise BinanceError(400, "The relationship of the prices for the orders is not correct.")
+
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    monkeypatch.setattr(pot.binance, "sell_oco", refuse)
+    monkeypatch.setattr(pot, "prices", at(price))
+    pot.sync()
+    done = pot.view()["trades"][0]
+    assert done["status"] == "closed"
+    assert by_tag(f"{trade['ref']}-M1")["side"] == "SELL"
+    assert any(f"past its {past}" in str(note) for note in done["notes"])
+
+
+def test_a_refused_sell_after_a_refused_exit_doesnt_loop(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(*_args: Any) -> dict[str, Any]:
+        raise BinanceError(400, "Refused")
+
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    monkeypatch.setattr(pot.binance, "sell_oco", refuse)
+    monkeypatch.setattr(pot.binance, "sell_market", refuse)
+    monkeypatch.setattr(pot, "prices", at("185"))
+    pot.sync()  # each try: an exit, a sell, an exit; then it stops until the next sync
+    roles = [o["role"] for o in pot.view()["trades"][0]["orders"]]
+    assert 1 <= roles.count("close") <= 2  # it tried to sell; the fill's try and one retry
+    live = pot.view()["trades"][0]
+    assert live["status"] == "open"
+    assert live["note"].startswith("Past its stop, but Binance refused the market sell")
+    pot.sync()  # tried again, but said once
+    notes = pot.view()["trades"][0]["notes"]
+    assert sum("refused the market sell" in str(n) for n in notes) == 1
+    assert not any("sold at market instead" in str(n) for n in notes)
+
+
+def test_a_refused_exit_between_stop_and_target_sells_nothing(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(*_args: Any) -> dict[str, Any]:
+        raise BinanceError(400, "Filter failure: PRICE_FILTER")
+
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    monkeypatch.setattr(pot.binance, "sell_oco", refuse)
+    monkeypatch.setattr(pot, "prices", at("212.4"))
+    pot.sync()
+    live = pot.view()["trades"][0]
+    assert live["status"] == "open"
+    assert "close" not in [o["role"] for o in live["orders"]]
+
+
+def test_no_sell_past_the_stop_while_a_close_is_unanswered(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trade = opened(pot)
+
+    def lost(*_args: Any) -> dict[str, Any]:
+        raise BinanceError(0, "Timed out")
+
+    def refuse(*_args: Any) -> dict[str, Any]:
+        raise BinanceError(400, "Refused")
+
+    monkeypatch.setattr(pot.binance, "sell_market", lost)
+    with pytest.raises(BinanceError):
+        pot.close(trade["ref"])  # the sell went out; no answer came back
+    monkeypatch.setattr(pot.binance, "order_by_client", lost)
+    monkeypatch.setattr(pot.binance, "sell_oco", refuse)
+    monkeypatch.setattr(pot, "prices", at("185"))
+    pot.sync()
+    closes = [o for o in pot.view()["trades"][0]["orders"] if o["role"] == "close"]
+    assert len(closes) == 1  # never a second market sell
+
+
+def test_cancelling_an_entry_binance_has_cancels_it_there(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = pot.binance.buy_limit
+
+    def lost_reply(*args: Any) -> dict[str, Any]:
+        real(*args)  # Binance took it; the answer never came back
+        raise BinanceError(0, "Timed out")
+
+    monkeypatch.setattr(pot.binance, "buy_limit", lost_reply)
+    with pytest.raises(BinanceError):
+        pot.place(SOL)
+    trade = pot.view()["trades"][0]
+    assert trade["status"] == "placing"
+    pot.cancel(trade["ref"])
+    assert by_tag(f"{trade['ref']}-E")["status"] == "CANCELED"
+    assert pot.view()["trades"][0]["status"] == "cancelled"

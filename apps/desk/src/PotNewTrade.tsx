@@ -269,7 +269,13 @@ export default function PotNewTrade({
   const s = Number(stop);
   const now = seen?.now ? Number(seen.now) : null;
   const rrNum = sized ? Number(sized.rr) : null;
-  const ready = sized !== null && problems.length === 0 && !reading && why.trim().length >= 10;
+  // A failed sizing leaves the last one in `seen`: never review on it.
+  const ready =
+    sized !== null &&
+    problems.length === 0 &&
+    !reading &&
+    error === null &&
+    why.trim().length >= 10;
 
   const review = () => {
     if (!sized) return;
