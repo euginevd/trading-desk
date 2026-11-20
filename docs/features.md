@@ -31,4 +31,5 @@ Features 7 to 25: [features/01-52.md](features/01-52.md); 53: [features/53-72.md
 What no single app owns, such as an agent, a check every request goes through, or a deployment. Every feature so far is in [features/01-52.md](features/01-52.md).
 
 Status: Next, Building, Done or Dropped (with the reason).
-| 102 | Trading account money in P&L: Unrealized (open trades in $ and % of what they cost) and Realized (closed trades in $ and % of what went in, with this month under it) replace This month; a position row shows how far the coin has moved from its fill in %, not R (owner, 20 Nov 2026) | Done | |
+| 104 | Trading account money in P&L: Unrealized (open trades in $ and % of what they cost) and Realized (closed trades in $ and % of what went in, with this month under it) replace This month; a position row shows how far the coin has moved from its fill in %, not R (owner, 20 Nov 2026) | Done | |
+| 105 | Scan now runs all four styles (scalp, day, swing, position) and leaves a card for each under the scan line: a take with its grade and reward to risk and a Review button, else the coin closest to a setup and what it is missing, else why nothing is near or the style is off; the daily scan stays swing, plus position on Mondays (owner, 20 Nov 2026; decision 88) | Done | Each card's backtest result follows once the Backtest page merges |

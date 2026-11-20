@@ -1788,3 +1788,69 @@ dialog.ntf {
 .ntf-odds .pot-tag {
   flex: none;
 }
+
+/* Scan now: a card per style (feature 103). */
+.pot-scan {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.pot-scan-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  background: var(--layer-1);
+}
+.pot-scan-card.is-take {
+  border-color: var(--accent);
+}
+.pot-scan-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.pot-scan-card .btn {
+  align-self: flex-start;
+  margin-top: auto;
+}
+.pot-scan-coin {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  font-weight: 500;
+}
+.pot-scan-coin small {
+  color: var(--muted);
+  font-weight: 400;
+}
+.pot-tag.is-quiet {
+  background: var(--layer-2);
+  color: var(--muted);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pot-scan-card {
+    animation: ntf-in 260ms ease-out both;
+  }
+  .pot-scan-card:nth-child(2) {
+    animation-delay: 60ms;
+  }
+  .pot-scan-card:nth-child(3) {
+    animation-delay: 120ms;
+  }
+  .pot-scan-card:nth-child(4) {
+    animation-delay: 180ms;
+  }
+}
+@media (max-width: 760px) {
+  .pot-scan {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

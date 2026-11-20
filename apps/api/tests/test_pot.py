@@ -261,6 +261,53 @@ def test_the_daily_scan_proposes_only_swing_takes_the_desk_can_place(
     assert pot.view()["proposals"] == []
 
 
+def test_scan_now_runs_every_style_and_leaves_a_card_for_each(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def last(key: str, *_a: object) -> dict[str, Any]:
+        style = screener.STYLES[key]
+        shortlist: list[dict[str, Any]] = [
+            {"coin": c, "setup": "Pullback", "facts": {}, "crowding": "Clear"}
+            | {"entry": "200", "stop": "190", "target": "240"}
+            for c in ("SOL", "ETH")
+        ]
+        return {
+            "style": key,
+            "name": style.name,
+            "regime": {"state": "neutral", "words": ""},
+            "warnings": [],
+            "counts": {},
+            "allowed": key != "scalp",
+            "note": "Scalps wait out the weekend." if key == "scalp" else "",
+            "riskPct": "1",
+            "shortlist": shortlist,
+            "misses": [{"coin": "ADA", "why": "3% above its 20-day"}],
+        }
+
+    monkeypatch.setattr(screener, "last_screen", last)
+    base = {"setup": "Pullback", "grade": "B", "score": 7, "entry": "200", "stop": "190"}
+    base |= {"target": "240", "confluence": [], "against": [], "catalyst": "", "crowding": ""}
+    take = base | {"coin": "SOL", "verdict": "take", "reason": "Back at its 20-day."}
+    wait = base | {"coin": "ETH", "verdict": "wait", "reason": "Needs a close over 210."}
+    agent = PotAgent(pot, Fake({"line": "One.", "picks": [take, wait]}))  # type: ignore[arg-type]
+    cards = {c["style"]: c for c in agent.scan(every=True)["lastScan"]["styles"]}
+    assert list(cards) == ["scalp", "day", "swing", "position"]
+    assert cards["scalp"]["line"] == "Scalps wait out the weekend."
+    assert "take" not in cards["scalp"]
+    assert "close" not in cards["scalp"]  # an off style names no coin
+    assert cards["swing"]["take"]["coin"] == "SOL"
+    assert cards["swing"]["take"]["rr"] == "3.8"  # after fees
+    # With no take, the closest: trading-agent's wait, else the screener's near miss.
+    agent = PotAgent(pot, Fake({"line": "Close.", "picks": [wait]}))  # type: ignore[arg-type]
+    cards = {c["style"]: c for c in agent.scan(every=True)["lastScan"]["styles"]}
+    assert cards["day"]["close"] == {"coin": "ETH", "why": "Needs a close over 210."}
+    agent = PotAgent(pot, Fake({"line": "None.", "picks": []}))  # type: ignore[arg-type]
+    cards = {c["style"]: c for c in agent.scan(every=True)["lastScan"]["styles"]}
+    assert cards["position"]["close"] == {"coin": "ADA", "why": "3% above its 20-day"}
+    # The daily scan keeps its line alone.
+    assert "styles" not in agent.scan()["lastScan"]
+
+
 def test_the_chat_checks_its_actions(pot: Pot) -> None:
     trade = opened(pot)
     reply = {

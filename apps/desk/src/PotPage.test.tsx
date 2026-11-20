@@ -545,6 +545,43 @@ describe("the trading pot", () => {
     expect(await screen.findByText(/Scanned: no setup today/)).toBeTruthy();
   });
 
+  it("shows Scan now's card per style: a take to review, the closest coin, or nothing near", async () => {
+    const styles = [
+      { style: "scalp", name: "Scalp", line: "Scalps wait out the weekend." },
+      {
+        style: "day",
+        name: "Day trade",
+        line: "One close.",
+        close: { coin: "ETH", why: "Needs a 4-hour close over 3,200." },
+      },
+      {
+        style: "swing",
+        name: "Swing",
+        line: "One pullback.",
+        take: {
+          id: proposal.id,
+          coin: "SUI",
+          setup: "Trend pullback",
+          grade: "B",
+          entry: "3.4172",
+          rr: "2.4",
+        },
+      },
+      { style: "position", name: "Position", line: "No position setups right now." },
+    ];
+    serve(pot({ lastScan: { at: NOW, line: "Scanned.", styles } }));
+    render(<PotPage />);
+    const cards = await screen.findByRole("list", { name: "Scan by style" });
+    expect(within(cards).getAllByRole("listitem")).toHaveLength(4);
+    expect(cards.textContent).toContain("Scalps wait out the weekend.");
+    expect(cards.textContent).toContain("Needs a 4-hour close over 3,200.");
+    expect(cards.textContent).toContain("2.4 : 1");
+    fireEvent.click(within(cards).getByRole("button", { name: "Review" }));
+    expect(screen.getByRole("list", { name: "The trade's orders" }).textContent).toContain(
+      "limit buy 3.4172",
+    );
+  });
+
   it("starts an empty pot with money put in", async () => {
     const fetch = serve(
       pot({ putIn: "0", value: "0", result: "0", moves: [], trades: [], proposals: [] }),

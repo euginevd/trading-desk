@@ -1303,8 +1303,12 @@ class Pot:
         raw = self._store.setting(SCAN_KEY, "")
         return json.loads(raw) if raw else None
 
-    def set_last_scan(self, line: str) -> None:
-        self._store.set_setting(SCAN_KEY, json.dumps({"at": self._now(), "line": line[:300]}))
+    def set_last_scan(self, line: str, styles: list[dict[str, Any]] | None = None) -> None:
+        """The scan's line; Scan now adds a card per style (pot_agent.scan)."""
+        last: dict[str, Any] = {"at": self._now(), "line": line[:300]}
+        if styles is not None:
+            last["styles"] = styles
+        self._store.set_setting(SCAN_KEY, json.dumps(last))
 
     # What the page shows.
 

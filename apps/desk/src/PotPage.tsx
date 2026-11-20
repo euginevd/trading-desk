@@ -29,6 +29,7 @@ import type {
   PotCheck,
   PotOdds,
   PotProposal,
+  PotScanCard,
   PotStyleKey,
   PotTrade,
   PotPreview,
@@ -243,6 +244,54 @@ function TradeRow({ trade, onOpen }: { trade: PotTrade; onOpen: () => void }) {
         </span>
       </button>
     </li>
+  );
+}
+
+// Scan now, one card per style: a take to review, else the coin closest to one and what it's
+// missing, else the style's own line (nothing near, or why it's off today).
+function ScanCards({ cards, onReview }: { cards: PotScanCard[]; onReview: (id: string) => void }) {
+  return (
+    <ul className="pot-scan" aria-label="Scan by style">
+      {cards.map(({ take, ...c }) => (
+        <li key={c.style} className={`pot-scan-card${take ? " is-take" : ""}`}>
+          <header>
+            <b>{c.name}</b>
+            <span className={`pot-tag ${take ? "is-live" : c.close ? "is-wait" : "is-quiet"}`}>
+              {take ? "Take" : c.close ? "Close" : "Nothing near"}
+            </span>
+          </header>
+          {take ? (
+            <>
+              <p className="pot-scan-coin">
+                <CoinIcon coin={take.coin} />
+                {take.coin}
+                <small className="num">
+                  {take.grade} · {take.rr ? `${take.rr} : 1` : take.setup}
+                </small>
+              </p>
+              <small className="muted">{take.setup}</small>
+              <button
+                type="button"
+                className="btn btn-small btn-accent"
+                onClick={() => onReview(take.id)}
+              >
+                Review
+              </button>
+            </>
+          ) : c.close ? (
+            <>
+              <p className="pot-scan-coin">
+                <CoinIcon coin={c.close.coin} />
+                {c.close.coin}
+              </p>
+              <small className="muted">{c.close.why}</small>
+            </>
+          ) : (
+            <small className="muted">{c.line}</small>
+          )}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -783,6 +832,22 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
               <p className="acc-toast" role="status">
                 {said}
               </p>
+            )}
+
+            {!scanning && pot.lastScan?.styles && (
+              <ScanCards
+                key={pot.lastScan.at}
+                cards={pot.lastScan.styles}
+                onReview={(id) => {
+                  const p = pot.proposals.find((x) => x.id === id);
+                  if (!p) {
+                    setSaid("That setup has gone: scan again for a fresh one.");
+                    return;
+                  }
+                  setPlaceError(null);
+                  setPending({ ...p, proposal: p.id });
+                }}
+              />
             )}
 
             {pot.proposals.length > 0 && (
