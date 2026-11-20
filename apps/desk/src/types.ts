@@ -1370,6 +1370,21 @@ export interface PotTrade {
   orders: PotOrder[];
 }
 
+export interface PotScanCard {
+  style: string;
+  name: string;
+  line: string;
+  take?: {
+    id: string;
+    coin: string;
+    setup: string;
+    grade: string;
+    entry: string;
+    rr: string | null;
+  };
+  close?: { coin: string; why: string };
+}
+
 export interface PotProposal {
   id: string;
   created: number;
@@ -1538,7 +1553,8 @@ export interface PotView {
   monthLimit: string;
   regime: { state: "bull" | "neutral" | "bear" | null; words: string };
   nextScan: number;
-  lastScan: { at: number; line: string } | null;
+  // Scan now adds a card per style: its take, or the coin closest to one and what's missing.
+  lastScan: { at: number; line: string; styles?: PotScanCard[] } | null;
   scansOnItsOwn?: boolean;
   proposals: PotProposal[];
   trades: PotTrade[];
