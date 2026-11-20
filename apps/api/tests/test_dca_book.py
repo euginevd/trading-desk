@@ -184,16 +184,46 @@ def test_a_trim_and_its_buy_back(book: DcaBook) -> None:
     assert back["link"] == trim["ref"]
 
 
-def test_close_out_buys_what_the_limits_didnt(book: DcaBook) -> None:
-    book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+def test_the_week_counts_every_buy_whichever_button_placed_it(book: DcaBook) -> None:
+    # TODO 27: Add funds ("named") counts toward the week like Weekly DCA does.
+    book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "named"})
+    book.place({"coin": "SOL", "spend": "20", "kind": "market", "source": "desk"})
+    state = book.week_state()
+    assert state["planned"] == "80"
+    assert [o["coin"] for o in state["open"]] == ["ETH"]
+    assert state["toPlaceByCoin"] == {"BTC": "40"}  # SOL bought, ETH waiting, cents ignored
+    assert Decimal(state["bought"]) > 0
+
+
+def test_close_out_buys_open_limits_and_what_was_never_placed(book: DcaBook) -> None:
+    book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "named"})
     closed = book.close_out()
-    assert closed["closed"] == ["ETH 19.98"]  # what the limit would have spent, to the step
+    assert closed == {"closed": ["ETH 19.98", "BTC 40", "SOL 20"], "missed": []}
     orders = book.view()["week"]["orders"]
     assert [(o["source"], o["status"]) for o in orders] == [
-        ("weekly", "cancelled"),
+        ("named", "cancelled"),
+        ("close-out", "filled"),
+        ("close-out", "filled"),
         ("close-out", "filled"),
     ]
     assert orders[1]["link"] == orders[0]["ref"]
+    assert book.week_state()["toPlace"] == "0"
+
+
+def test_a_refused_coin_never_stops_the_rest_of_the_close_out(book: DcaBook, desk: Trading) -> None:
+    desk.set_limits("30", "500")  # BTC's 40 is over the per-order limit
+    book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+    closed = book.close_out()
+    assert closed["closed"] == ["ETH 19.98", "SOL 20"]
+    assert len(closed["missed"]) == 1
+    assert closed["missed"][0].startswith("BTC (That's over your per-order limit")
+
+
+def test_a_week_short_of_its_amount_shows_as_part_bought(book: DcaBook) -> None:
+    book.place({"coin": "SOL", "spend": "20", "kind": "market", "source": "named"})
+    book._clock = lambda: NOW + 7 * 86_400  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    ticks = book.view()["progress"]["ticks"]
+    assert [t["state"] for t in ticks] == ["part", "now"]
 
 
 def test_suggestions_and_odds_come_from_the_desk(book: DcaBook) -> None:

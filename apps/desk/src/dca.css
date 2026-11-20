@@ -436,6 +436,10 @@
   height: 22px;
   background: var(--accent);
 }
+.dcb-tick.is-part {
+  height: 16px;
+  background: color-mix(in srgb, var(--accent) 45%, var(--line-2));
+}
 .dcb-tick.is-missed {
   height: 10px;
   background: var(--dim);
@@ -460,6 +464,7 @@
 }
 @media (prefers-reduced-motion: no-preference) {
   .dcb-tick.is-bought,
+  .dcb-tick.is-part,
   .dcb-tick.is-trim {
     animation: dcb-grow 420ms var(--ease) both;
     animation-delay: calc(var(--i) * 14ms);

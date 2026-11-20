@@ -26,6 +26,10 @@ RATE_KEY = "aud_per_usd"  # the desk's remembered A$ per US$ (profile_live)
 SOURCES = ("weekly", "named", "close-out", "trim", "buy-back", "desk")
 MIN_ORDER = Decimal(10)  # the agent's rule: 10 USDC a coin at least
 IMPORTED = "imported"  # found on Binance by its reference, added back by Check against Binance
+# Every buy that counts toward its week, whichever button placed it (TODO 27): the owner may
+# buy the week through Weekly DCA, Add funds or a single order. A buy-back answers its trim.
+WEEK_BUYS = ("weekly", "named", "close-out", "desk", IMPORTED)
+PART = Decimal("0.95")  # a week this close to its amount counts as bought
 TAG = "DCA-"
 REF = re.compile(r"DCA-([A-Z0-9]{1,10})-(\d{2}W\d{2})-\d+")
 DAY_MS = 86_400_000
@@ -592,67 +596,128 @@ class DcaBook:
         self._audit.record("dca", f"{row['ref']}: cancelled", done["status"])
         return order_view(done)
 
-    def open_weekly(self) -> list[dict[str, Any]]:
-        """This week's weekly limits not yet filled: what the close-out would buy."""
+    def open_week(self) -> list[dict[str, Any]]:
+        """This week's buys still waiting, whichever button placed them."""
         week, _ = week_of(self._now())
         return [
             r
             for r in self._store.dca_orders()
             if r["week"] == week
-            and r["source"] == "weekly"
+            and r["source"] in WEEK_BUYS
             and r["side"] == "buy"
             and r["status"] in ("placing", "open")
         ]
 
-    @locked
-    def close_out(self) -> dict[str, Any]:
-        """This week's unfilled weekly limits: each cancelled, and what it didn't buy bought at
-        market, so a week is never skipped."""
+    def week_state(self) -> dict[str, Any]:
+        """This week against the plan, by coin: bought, waiting in open limits, and not placed
+        yet. What Monday's close-out shows; nothing here places or cancels."""
+        plan = self.plan()
         week, _ = week_of(self._now())
-        bought: list[str] = []
-        for row in self._store.dca_orders():
-            if row["week"] != week or row["source"] != "weekly" or row["side"] != "buy":
+        target: dict[str, Decimal] = {}
+        for slot in (plan or {}).get("orders", []):
+            target[slot["coin"]] = target.get(slot["coin"], ZERO) + Decimal(slot["spend"])
+        bought: dict[str, Decimal] = {}
+        waiting: dict[str, Decimal] = {}
+        opened: list[dict[str, Any]] = []
+        for r in self._store.dca_orders():
+            if r["week"] != week or r["side"] != "buy" or r["source"] not in WEEK_BUYS:
                 continue
-            if row["status"] not in ("placing", "open"):
-                continue
-            # The kill switch and the limits first: refused, the limit stays working.
-            before = Decimal(row["spend"] or "0") - Decimal(row["executed_quote"])
-            self._check_buy(before, before if self._today(row) else ZERO)
-            done = self._cancel(row)
-            left = Decimal(done["spend"] or "0") - Decimal(done["executed_quote"])
-            symbol = f"{done['coin']}{QUOTE}"
-            if left < self._binance.filters(symbol).min_notional:
-                continue
-            from api.pot import Pot  # noqa: PLC0415 - the pot reads the DCA book's prices
+            coin = r["coin"]
+            bought[coin] = bought.get(coin, ZERO) + Decimal(r["executed_quote"])
+            if r["status"] in ("placing", "open"):
+                left = max(Decimal(r["spend"] or "0") - Decimal(r["executed_quote"]), ZERO)
+                waiting[coin] = waiting.get(coin, ZERO) + left
+                opened.append(
+                    {"ref": r["ref"], "coin": coin, "price": r["price"], "left": plain(left)}
+                )
+        # What's left of each coin's share; under the smallest order it's rounding, not a gap.
+        gaps = {c: t - bought.get(c, ZERO) - waiting.get(c, ZERO) for c, t in target.items()}
+        to_place = {c: v for c, v in gaps.items() if v >= MIN_ORDER}
 
-            Pot(self._desk).guard(left, "the DCA close-out")
-            market = {
-                "ref": self._ref(done["coin"], week),
-                "coin": done["coin"],
+        def cents(v: Decimal) -> str:
+            return plain(round(v, 2))
+
+        return {
+            "week": week,
+            "planned": cents(sum(target.values(), ZERO)),
+            "bought": cents(sum(bought.values(), ZERO)),
+            "waiting": cents(sum(waiting.values(), ZERO)),
+            "toPlace": cents(sum(to_place.values(), ZERO)),
+            "open": opened,
+            "toPlaceByCoin": {c: cents(v) for c, v in to_place.items()},
+        }
+
+    def _market_buy(self, coin: str, week: str, spend: Decimal, link: str | None) -> None:
+        """One close-out market buy, recorded before it is sent."""
+        from api.pot import Pot  # noqa: PLC0415 - the pot reads the DCA book's prices
+
+        Pot(self._desk).guard(spend, "the DCA close-out")
+        row_id = self._store.add_dca_order(
+            {
+                "ref": self._ref(coin, week),
+                "coin": coin,
                 "side": "buy",
                 "kind": "market",
                 "source": "close-out",
-                "link": done["ref"],
+                "link": link,
                 "week": week,
                 "price": None,
                 "qty": None,
-                "spend": plain(round(left, 2)),
+                "spend": plain(round(spend, 2)),
                 "aud_rate": plain(self._rate()),
                 "created": self._now(),
             }
-            row_id = self._store.add_dca_order(market)
-            saved = self._row(row_id)
+        )
+        saved = self._row(row_id)
+        try:
+            self._record(saved, self._send(saved, f"{coin}{QUOTE}"))
+        except BinanceError as error:
+            if error.status != 0:
+                self._store.save_dca_order(saved | {"status": "cancelled", "updated": self._now()})
+            raise
+
+    @locked
+    def close_out(self) -> dict[str, Any]:
+        """Buy the rest at market, only when the owner chooses it: each of this week's open buys
+        is cancelled and what it didn't buy is bought at market, then each coin's share of the
+        plan not placed at all. One coin refused (a limit, Binance) never stops the others; it
+        is named in `missed`, and an open limit refused this way stays working."""
+        if not self._desk.settings()["tradingOn"]:
+            raise Refused("Trading is off. Turn it on in the top bar to trade.")
+        week, _ = week_of(self._now())
+        bought: list[str] = []
+        missed: list[str] = []
+
+        def reason(error: Exception) -> str:
+            return getattr(error, "message", None) or str(error)
+
+        for row in self.open_week():
+            coin = row["coin"]
             try:
-                self._record(saved, self._send(saved, symbol))
-            except BinanceError as error:
-                if error.status != 0:
-                    self._store.save_dca_order(
-                        saved | {"status": "cancelled", "updated": self._now()}
-                    )
-                raise
-            bought.append(f"{done['coin']} {plain(round(left, 2))}")
-        self._audit.record("dca", f"Close-out {week}", ", ".join(bought) or "nothing left open")
-        return {"closed": bought}
+                # The kill switch and the limits first: refused, the limit stays working.
+                before = Decimal(row["spend"] or "0") - Decimal(row["executed_quote"])
+                self._check_buy(before, before if self._today(row) else ZERO)
+                done = self._cancel(row)
+                left = Decimal(done["spend"] or "0") - Decimal(done["executed_quote"])
+                if left < self._binance.filters(f"{coin}{QUOTE}").min_notional:
+                    continue
+                self._market_buy(coin, week, left, done["ref"])
+                bought.append(f"{coin} {plain(round(left, 2))}")
+            except (Refused, BinanceError) as error:
+                missed.append(f"{coin} ({reason(error)})")
+        for coin, raw in self.week_state()["toPlaceByCoin"].items():
+            spend = Decimal(raw)
+            try:
+                self._check_buy(spend)
+                self._market_buy(coin, week, spend, None)
+                bought.append(f"{coin} {plain(round(spend, 2))}")
+            except (Refused, BinanceError) as error:
+                missed.append(f"{coin} ({reason(error)})")
+        said = ", ".join(bought) or "nothing bought"
+        if missed:
+            said += f"; not bought: {', '.join(missed)}"
+        self._audit.record("dca", f"Close-out {week}", said)
+        return {"closed": bought, "missed": missed}
 
     # Changing an open order: the old one is cancelled (its fills kept) and a new one placed
     # under a new reference, linked to it, so the book keeps both.
@@ -873,6 +938,7 @@ class DcaBook:
                 "start": int(friday.timestamp() * 1000),
                 "closeOut": int(close_out_of(friday).timestamp() * 1000),
                 "orders": [order_view(r) for r in rows if r["week"] == key],
+                "state": self.week_state(),
             },
             "next": {
                 "key": week_of(int((friday + timedelta(days=7)).timestamp() * 1000))[0],
@@ -919,7 +985,7 @@ class DcaBook:
         for row in rows:
             spent = Decimal(row["executed_quote"])
             entry = by_week.setdefault(row["week"], {"usdc": ZERO, "trim": False})
-            if row["side"] == "buy" and row["source"] in ("weekly", "close-out"):
+            if row["side"] == "buy" and row["source"] in WEEK_BUYS:
                 entry["usdc"] = Decimal(entry["usdc"]) + spent
             if row["source"] == "trim" and Decimal(row["executed_qty"]) > ZERO:
                 entry["trim"] = True
@@ -930,7 +996,15 @@ class DcaBook:
             entry = by_week.get(key, {"usdc": ZERO, "trim": False})
             usdc = Decimal(entry["usdc"])
             on_plan += usdc
-            state = "now" if i == this else "bought" if usdc > ZERO else "missed"
+            state = (
+                "now"
+                if i == this
+                else "bought"
+                if usdc >= weekly * PART
+                else "part"
+                if usdc > ZERO
+                else "missed"
+            )
             ticks.append(
                 {
                     "week": i + 1,

@@ -74,7 +74,9 @@ function afterCancel(list: DcaOrder[], quote: string): string {
   return (
     `They come off Binance straight away and $${two(usd)} ${quote} is free to spend again. ` +
     "Each reference stays in the book as cancelled and is never reused; anything already filled is kept." +
-    (weekly ? " A cancelled weekly limit isn't bought at market by Monday's close-out." : "")
+    (weekly
+      ? " What a cancelled limit didn't buy shows as not placed yet at Monday's close-out."
+      : "")
   );
 }
 
@@ -172,7 +174,7 @@ export default function DcaOrders({
     .sort((a, b) => Math.abs(a.off ?? 0) - Math.abs(b.off ?? 0))[0];
   const weekly = weeklyTotal(book);
   const boughtThisWeek = book.week.orders
-    .filter((o) => o.side === "buy" && (o.source === "weekly" || o.source === "close-out"))
+    .filter((o) => o.side === "buy" && o.source !== "buy-back")
     .reduce((s, o) => s + Number(o.filledQuote || 0), 0);
   const known = open
     .filter(canEdit)

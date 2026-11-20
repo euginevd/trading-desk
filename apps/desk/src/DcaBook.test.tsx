@@ -109,6 +109,15 @@ function book(over: Partial<DcaBook> = {}): DcaBook {
       start: START,
       closeOut: START + 3 * 86_400_000,
       orders: [order({}), filledEth],
+      state: {
+        week: "26W47",
+        planned: "70",
+        bought: "19.85",
+        waiting: "49.79",
+        toPlace: "0",
+        open: [{ ref: "DCA-BTC-26W47-1", coin: "BTC", price: "63837.4", left: "49.79" }],
+        toPlaceByCoin: {},
+      },
     },
     next: {
       key: "26W48",
@@ -195,7 +204,7 @@ function serve(reply: DcaBook) {
       Promise.resolve(new Response(JSON.stringify(body), { status }));
     if (path === "/dca") return json(reply);
     if (path === "/dca/suggest") return json(plan);
-    if (path === "/dca/close-out") return json({ closed: ["BTC 49.79"] });
+    if (path === "/dca/close-out") return json({ closed: ["BTC 49.79"], missed: [] });
     if (path === "/dca/funds/analyse") return json(funds);
     if (path === "/dca/agent")
       return json({
@@ -245,7 +254,7 @@ describe("DCA widget", () => {
     render(<DcaWidget now={START + 86_400_000} />);
     expect(
       await screen.findByText(
-        "1 of 2 limits filled. The rest buy at market on 23 Nov (Mon) at 7pm.",
+        "19.85 of 70 USDC bought, 49.79 in open limits. Open limits stay open until you choose.",
       ),
     ).toBeTruthy();
     expect(
@@ -438,7 +447,7 @@ describe("DCA book page", () => {
     const ask = screen.getByRole("dialog", { name: /^Cancel DCA-BTC-26W47-1/ });
     expect(ask.textContent).toContain("$49.79 USDC is free to spend again");
     expect(ask.textContent).toContain("never reused");
-    expect(ask.textContent).toContain("isn't bought at market by Monday's close-out");
+    expect(ask.textContent).toContain("shows as not placed yet at Monday's close-out");
     fireEvent.click(within(ask).getByRole("button", { name: "Keep order" }));
     expect(sent(fetch, "/dca/orders/cancel")).toHaveLength(0);
     fireEvent.click(screen.getByRole("checkbox", { name: "Select DCA-BTC-26W47-1" }));

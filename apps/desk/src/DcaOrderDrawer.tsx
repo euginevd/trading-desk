@@ -417,9 +417,9 @@ export default function DcaOrderDrawer({
   if (live && thisWeek)
     facts.push([
       "At Monday's close-out",
-      order.source === "weekly" && buy
-        ? `${when(closeOut)}: if still open, cancelled and bought at market`
-        : `${when(closeOut)}: left open; only weekly limits are bought at market`,
+      buy && order.source !== "buy-back"
+        ? `${when(closeOut)}: stays open unless you choose Buy the rest at market`
+        : `${when(closeOut)}: left open; the close-out buys only this week's buys`,
     ]);
   if (pos && Number(pos.qty) > 0)
     facts.push([

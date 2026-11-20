@@ -95,25 +95,49 @@ def coach_line(dep: dict[str, Any]) -> str:
     return f" Deposits this month: A${month:,.0f} of A${cap:,.0f}."
 
 
+def _num(value: str) -> str:
+    return f"{Decimal(value):,.2f}".rstrip("0").rstrip(".")
+
+
+def close_out_text(state: dict[str, Any]) -> str:
+    """Monday's message: the whole week, whichever button placed its orders (TODO 27)."""
+    lines = [
+        f"dca-agent: Monday close-out, week {state['week']}",
+        f"Bought so far: {_num(state['bought'])} of {_num(state['planned'])} USDC",
+    ]
+    if state["open"]:
+        limits = " · ".join(
+            f"{o['coin']} {_num(o['left'])} at {_num(o['price'])}"
+            if o["price"]
+            else f"{o['coin']} {_num(o['left'])}"
+            for o in state["open"]
+        )
+        lines.append(f"Open limits: {limits}")
+    if Decimal(state["toPlace"]) > 0:
+        lines.append(f"Not placed yet: {_num(state['toPlace'])} USDC")
+    lines += [
+        "",
+        "Open limits stay open unless you choose. Buy the rest at market buys them and what's "
+        "not placed, until 7pm. Or choose per coin on the DCA book.",
+    ]
+    return "\n".join(lines)
+
+
 def close_out(s: Services, now: datetime) -> str:
-    rows = DcaBook(Trading(s.binance, s.store, s.audit)).open_weekly()
-    if not rows:
-        return "Every weekly limit filled: nothing to close out."
-    left = [(r["coin"], Decimal(r["spend"] or "0") - Decimal(r["executed_quote"])) for r in rows]
-    lines = [f"{coin} {usd:,.2f} USDC" for coin, usd in left]
+    state = DcaBook(Trading(s.binance, s.store, s.audit)).week_state()
+    if not state["open"] and Decimal(state["planned"]) <= 0:
+        return "No weekly plan set and nothing open: nothing to close out."
+    if not state["open"] and Decimal(state["toPlace"]) <= 0:
+        return f"This week is bought: {_num(state['bought'])} USDC. Nothing to close out."
     week, _ = week_of(int(now.timestamp() * 1000))
     turn = now.replace(hour=19, minute=0, second=0, microsecond=0)
-    token = schedule.offer(s.store, "dca-close-out", week, turn, now)
-    text = "\n".join(
-        [
-            f"dca-agent: close-out. {len(rows)} weekly limits haven't filled:",
-            *lines,
-            "",
-            "Buy the rest at market so the week isn't skipped. The button works until 7pm.",
-        ]
+    keep = schedule.offer(s.store, "dca-keep", week, turn, now)
+    buy = schedule.offer(s.store, "dca-close-out", week, turn, now)
+    missed = _tell(
+        s, close_out_text(state), [("Keep them open", keep), ("Buy the rest at market", buy)]
     )
-    missed = _tell(s, text, [("Buy the rest at market", token)])
-    return f"{len(rows)} open. {'Not sent: ' + missed if missed else 'Asked on Telegram.'}"
+    found = f"{len(state['open'])} open, {_num(state['toPlace'])} USDC not placed."
+    return f"{found} {'Not sent: ' + missed if missed else 'Asked on Telegram.'}"
 
 
 def risk_check(s: Services, now: datetime) -> str:
@@ -169,8 +193,11 @@ def _setup(desk: Trading, kind: str, arg: str, s: Services) -> str:
 def _close_out(desk: Trading, week: str, now: datetime) -> str:
     if week_of(int(now.timestamp() * 1000))[0] != week:
         return "Too late: the week turned over at 7pm. The DCA book shows what's open."
-    bought = DcaBook(desk).close_out()["closed"]
-    return f"Bought at market: {', '.join(bought)}." if bought else "Nothing was open."
+    done = DcaBook(desk).close_out()
+    said = f"Bought at market: {', '.join(done['closed'])}." if done["closed"] else ""
+    if done["missed"]:
+        said += f" Not bought: {', '.join(done['missed'])}."
+    return said.strip() or "Nothing was left to buy."
 
 
 def act(s: Services, item: dict[str, Any], now: datetime) -> str:
@@ -182,6 +209,8 @@ def act(s: Services, item: dict[str, Any], now: datetime) -> str:
             return _setup(desk, kind, arg, s)
         if kind == "dca-close-out":
             return _close_out(desk, arg, now)
+        if kind == "dca-keep":
+            return "Kept open: they wait on Binance. Change or cancel them on the DCA book."
     except (Refused, BinanceError) as error:
         return f"Not done: {getattr(error, 'message', None) or error}"
     return "The desk doesn't know that button."
