@@ -36,3 +36,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 85. Feature flags: one registry of the desk's pages and features, each switched on or off in Settings, kept in the api's store; off only hides and skips loading; new features arrive off. [Record](decisions/from-58.md)
 86. An exit Binance refuses with the price already past the stop or target sells the rest at market, once per try; the Trade page audit's other fixes. [Record](decisions/from-58.md)
 87. The Backtest page: a type, one top-100 USDC coin and up to 3 months, run by an always-on Freqtrade worker through a file queue, not the Docker socket or Freqtrade's webserver; only the desk's own runs listed. [Record](decisions/from-58.md)
+88. Scan now runs all four styles, a card each (take, closest, or nothing near); the daily scan stays swing and position, so its AI cost holds. [Record](decisions/from-58.md)

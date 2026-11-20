@@ -880,7 +880,7 @@ def _pot_agent(s: Services, body: dict[str, Any] | None, job: str = "chat") -> d
 
     def run(agent: PotAgent) -> dict[str, Any]:
         if body is None:
-            return agent.scan()
+            return agent.scan(every=job == "scan-now")
         jobs: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
             "analyse": agent.analyse,
             "styles": lambda _b: agent.styles(),
@@ -1097,7 +1097,7 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
         b.get("side"), b.get("amount"), b.get("agent", True) is not False
     ),
     ("POST", "/dca/funds/chat"): lambda s, _q, b: _funds(s).chat(b),
-    ("POST", "/pot/scan"): lambda s, _q, _b: _pot_agent(s, None),
+    ("POST", "/pot/scan"): lambda s, _q, _b: _pot_agent(s, None, "scan-now"),
     ("GET", "/risk-board"): lambda s, _q, _b: risk_board(s),
     ("POST", "/risk-board/review"): lambda s, _q, _b: _risk_review(s),
     ("POST", "/risk-board/check"): lambda s, _q, b: _risk_mark(s, b),
