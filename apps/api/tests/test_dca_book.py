@@ -389,3 +389,32 @@ def test_a_cancel_that_didnt_take_places_nothing_in_its_place(
     ]
     assert len(demo.EXCHANGE.orders) == sent + 2  # BTC and SOL only: no second ETH buy
     assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["open"]
+
+
+def test_a_dca_order_cant_be_changed_from_the_open_orders_list(
+    book: DcaBook, desk: Trading, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 5: the open-orders list's edit would replace it under a new id, and the book
+    would lose it; it is refused, by the book's id or, before that's known, by its tag."""
+    placed = book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+    order = next(
+        o for o in demo.EXCHANGE.orders.values() if o.get("clientOrderId") == placed["ref"]
+    )
+    edit = {
+        "symbol": "ETHUSDC",
+        "orderId": order["orderId"],
+        "price": "2900",
+        "amount": order["origQty"],
+        "clientId": "edit-test-0001",
+    }
+    with pytest.raises(Refused, match=r"belongs to the DCA book \(DCA-ETH-"):
+        desk.edit_order(edit)
+
+    def unknown(_order_id: int) -> None:
+        return None  # sent without an answer: the book has no Binance id for it yet
+
+    monkeypatch.setattr(desk._store, "order_owner", unknown)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(Refused, match="belongs to DCA-ETH-"):
+        desk.edit_order(edit)
+    assert order["status"] == "NEW"
+    assert book.view()["orders"][0]["status"] == "open"

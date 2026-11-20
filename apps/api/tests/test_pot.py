@@ -1213,3 +1213,20 @@ def test_a_target_that_part_filled_before_its_exits_came_off_is_never_sold_twice
     closed = pot.close(trade["ref"])
     assert by_tag(f"{trade['ref']}-M1")["origQty"] == "0.03"  # the rest, not the full 0.05
     assert (closed["status"], closed["exitKind"]) == ("closed", "market")
+
+
+def test_a_trade_entry_cant_be_changed_from_the_open_orders_list(pot: Pot, desk: Trading) -> None:
+    """Audit 5: changed there, the entry would fill untracked, with no stop put on."""
+    trade = pot.place(SOL)
+    entry = by_tag(f"{trade['ref']}-E")
+    edit = {
+        "symbol": "SOLUSDC",
+        "orderId": entry["orderId"],
+        "price": "195",
+        "amount": entry["origQty"],
+        "clientId": "edit-test-0002",
+    }
+    with pytest.raises(Refused, match=f"belongs to trade {trade['ref']}"):
+        desk.edit_order(edit)
+    assert entry["status"] == "NEW"
+    assert pot.view()["trades"][0]["status"] == "waiting"

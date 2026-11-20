@@ -388,7 +388,18 @@ class Store:
         return trades + bots + gridded + booked + potted
 
     def order_owner(self, order_id: int) -> str | None:
-        """Which bot or grid placed this Binance order, by its reference, if any."""
+        """Which part of the desk placed this Binance order, by its reference, if any: the DCA
+        book, a Trading account trade, a bot or a grid."""
+        row = self._db.execute(
+            "SELECT ref FROM dca_orders WHERE order_id = ?", (order_id,)
+        ).fetchone()
+        if row:
+            return f"the DCA book ({row['ref']})"
+        row = self._db.execute(
+            "SELECT trade_ref FROM pot_orders WHERE order_id = ?", (order_id,)
+        ).fetchone()
+        if row:
+            return f"trade {row['trade_ref']}"
         row = self._db.execute(
             "SELECT bot_deals.bot_id FROM bot_orders JOIN bot_deals "
             "ON bot_deals.id = bot_orders.deal_id WHERE bot_orders.order_id = ?",

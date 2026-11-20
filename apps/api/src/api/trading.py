@@ -20,6 +20,11 @@ ZERO = Decimal(0)
 CLOSED = {"closed_tp": "take-profit", "closed_sl": "stop-loss", "closed_market": "market"}
 
 
+# Client ids the DCA book and the Trading account give their orders (DCA-BTC-26W47-1,
+# TRD-SOL-26W47-1-E): changed from the open-orders list, their books would lose them.
+DESK_TAGS = ("DCA-", "TRD-")
+
+
 class Refused(Exception):
     """An order the desk won't send; the message says why, in plain words."""
 
@@ -330,6 +335,9 @@ class Trading:
         places the replacement in one call, inside the kill switch and the limits."""
         symbol, order_id, client_id = self._editable(request)
         current = self._binance.order(symbol, order_id)
+        tag = str(current.get("clientOrderId", ""))
+        if tag.startswith(DESK_TAGS):  # one the book hasn't an id for yet: sent, no answer
+            raise Refused(f"This order belongs to {tag}: change it on its own page.")
         if current.get("status") != "NEW" or str(current.get("type")) != "LIMIT":
             raise Refused("Only an open limit order that hasn't started filling can be changed.")
         filters = self._binance.filters(symbol)
