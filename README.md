@@ -15,12 +15,12 @@ Runs locally in Docker, against your own accounts or on demo data. Nothing is ho
 | Dashboard | The morning view: a coach with the day's mood and key points, the DCA book's week, deposits against the monthly cap; a morning summary on Telegram |
 | Portfolio | Holdings on Binance and in the TAO wallet, targets and drift, tax lots with the 12-month CGT discount countdown |
 | Journal | Every trade with tags and notes |
-| Trade | The Trading account, run by trading-agent: 1% of the pot a trade, New trade by style (scalp, day, swing, position) from a code screener over the top 100 USDC coins, an odds check on each pick, Scan now across all four styles, managing a trade (add, reduce, move the stop), P&L in dollars and percent |
+| Trade | The Trading account, run by trading-agent: 1% risk a trade, New trade by style from a screener over the top 100 USDC coins, an odds check, Scan now, add, reduce or move the stop, P&L |
 | Risk | risk-agent's board of limits, the biggest risks to your holdings, a daily check and a weekly review |
-| Bots | Accumulation (the long-term DCA book, run by dca-agent, every order with an ID; a Monday close-out on Telegram that keeps open limits unless you choose), Opportunities (short-term DCA bots) and Grid bots |
+| Bots | Accumulation (the DCA book, run by dca-agent, with a Monday close-out on Telegram), Opportunities and Grid bots |
 | Profile | Your Investment Policy Statement, versioned, with a command bar, a pre-trade check and My agents: each agent a versioned profile file, woken by a scheduler |
-| Settings | Keys, the AI provider (API key or your Claude subscription), Telegram, and a switch per page (feature flags). The kill switch sits in the side panel on every page |
-| Backtest | Pick a style, one top-100 USDC coin and up to 3 months, and an always-on `backtest-worker` runs Freqtrade on Binance candles, reported in R. From the terminal, `apps/backtest` also tests each style's unbuilt exits, a NostalgiaForInfinity benchmark, FreqAI filters and paper trading |
+| Settings | Keys, the AI provider, Telegram and a switch per page. The kill switch is in the side panel |
+| Backtest | A style, one top-100 coin and up to 3 months, run by Freqtrade in the `backtest-worker`, reported in R; more from the terminal in `apps/backtest` |
 
 ### In progress
 
@@ -36,8 +36,7 @@ Nothing on a branch right now.
 - The Opportunities budget, and a budget per agent enforced in code (TODO 13, 16).
 - One readable tag on every order the desk places, and Check against Binance for all of them (TODO 12).
 - Risk: Ledger addresses, then risk-agent's file (TODO 23).
-- Practice money per agent or bot (TODO 18), testing a bot on past prices before switching it on (TODO 20), replaying a trade from the Journal (TODO 21), bot rules typed in plain words (TODO 22).
-- Why each coin moved, one line per holding (TODO 17); an ATO-ready tax report (TODO 15); asking the desk from Claude on your phone, read-only first (TODO 19).
+- Practice money, bot backtests, trade replays, typed bot rules, why each coin moved, a tax report, the desk from your phone (TODO 15 to 22).
 - A rebalancing bot, paused for now (TODO 9).
 
 ### Later
