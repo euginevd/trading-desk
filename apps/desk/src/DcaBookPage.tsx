@@ -300,6 +300,8 @@ function OrderSheet({
   const [error, setError] = useState<string | null>(null);
   const [held, setHeld] = useState(false);
   const [busy, setBusy] = useState(false);
+  // The form's button (or Enter) only shows what will be sent; Place sends it (audit 13).
+  const [reviewing, setReviewing] = useState(false);
 
   useEffect(() => {
     dialog.current?.showModal?.();
@@ -355,6 +357,22 @@ function OrderSheet({
       },
     );
   };
+  const at = market ? "at market" : `at ${price}`;
+  const about =
+    !market && Number(price) > 0 && Number(amount) > 0
+      ? `, about ${two(Number(amount) * Number(price))} ${book.quote}`
+      : "";
+  const summary = trim
+    ? `Sell ${amount} ${coin} ${at}${about}.`
+    : `Buy ${amount} ${book.quote} of ${coin} ${at}.`;
+  const review = () => {
+    setError(null);
+    if (!(Number(amount) > 0) || (!market && !(Number(price) > 0))) {
+      setError(trim ? "Enter a quantity and a price." : "Enter an amount and a price.");
+      return;
+    }
+    setReviewing(true);
+  };
   const title = trim
     ? `Trim ${coin}`
     : sheet.source === "buy-back"
@@ -377,81 +395,90 @@ function OrderSheet({
         className="dcb-sheet-form"
         onSubmit={(e) => {
           e.preventDefault();
-          send();
+          if (!reviewing) review();
         }}
       >
-        {!trim && sheet.source === "desk" && (
+        <fieldset className="dcb-sheet-fields" disabled={reviewing || busy}>
+          {!trim && sheet.source === "desk" && (
+            <label>
+              Coin
+              <select value={coin} onChange={(e) => setCoin(e.target.value)}>
+                {book.positions.map((p) => (
+                  <option key={p.coin}>{p.coin}</option>
+                ))}
+              </select>
+            </label>
+          )}
+          <div className="dcb-seg" role="group" aria-label="Order type">
+            <button type="button" aria-pressed={!market} onClick={() => setMarket(false)}>
+              Limit
+            </button>
+            <button type="button" aria-pressed={market} onClick={() => setMarket(true)}>
+              Market
+            </button>
+          </div>
+          {!market && (
+            <label>
+              Price ({book.quote})
+              <input
+                inputMode="decimal"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                onBlur={() => {
+                  if (!trim && Number(price) > 0)
+                    dcaOdds(coin, price).then(setOdds, () => setOdds(null));
+                }}
+              />
+            </label>
+          )}
           <label>
-            Coin
-            <select value={coin} onChange={(e) => setCoin(e.target.value)}>
-              {book.positions.map((p) => (
-                <option key={p.coin}>{p.coin}</option>
-              ))}
-            </select>
-          </label>
-        )}
-        <div className="dcb-seg" role="group" aria-label="Order type">
-          <button type="button" aria-pressed={!market} onClick={() => setMarket(false)}>
-            Limit
-          </button>
-          <button type="button" aria-pressed={market} onClick={() => setMarket(true)}>
-            Market
-          </button>
-        </div>
-        {!market && (
-          <label>
-            Price ({book.quote})
+            {trim ? `Quantity (${coin})` : `Amount (${book.quote})`}
             <input
               inputMode="decimal"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-              onBlur={() => {
-                if (!trim && Number(price) > 0)
-                  dcaOdds(coin, price).then(setOdds, () => setOdds(null));
-              }}
+              value={amount}
+              onChange={(e) => changeAmount(e.target.value)}
             />
           </label>
-        )}
-        <label>
-          {trim ? `Quantity (${coin})` : `Amount (${book.quote})`}
-          <input
-            inputMode="decimal"
-            value={amount}
-            onChange={(e) => changeAmount(e.target.value)}
-          />
-        </label>
-        {trim && (
-          <p className="dcb-chips">
-            {[10, 20, 25].map((pct) => (
-              <button
-                key={pct}
-                type="button"
-                className="btn btn-small"
-                onClick={() =>
-                  changeAmount(String(Math.floor(holding * pct * 1e6) / 1e8).replace(/\.?0+$/, ""))
-                }
-              >
-                {pct}%
-              </button>
-            ))}
-            <span className="muted">of {qty(holding)} held</span>
+          {trim && (
+            <p className="dcb-chips">
+              {[10, 20, 25].map((pct) => (
+                <button
+                  key={pct}
+                  type="button"
+                  className="btn btn-small"
+                  onClick={() =>
+                    changeAmount(
+                      String(Math.floor(holding * pct * 1e6) / 1e8).replace(/\.?0+$/, ""),
+                    )
+                  }
+                >
+                  {pct}%
+                </button>
+              ))}
+              <span className="muted">of {qty(holding)} held</span>
+            </p>
+          )}
+          {trim && share > 25 && (
+            <p className="dcb-warn" role="note">
+              That's {Math.round(share)}% of the position; the agent's rule is 25% at most.
+            </p>
+          )}
+          {trim && tax && (
+            <p className={tax.young ? "dcb-warn" : "muted"}>
+              {tax.unknown
+                ? "The tax page can't price every parcel of this."
+                : `Estimated gain A$${two(tax.gainAud)}.`}
+              {tax.young && " Some was held under 12 months: no 50% discount on it."}
+            </p>
+          )}
+          {!trim && !market && odds && (
+            <p className="muted">Fill odds by Monday evening: {oddsWords(odds)}.</p>
+          )}
+        </fieldset>
+        {reviewing && (
+          <p className="dcb-review" role="status">
+            {summary}
           </p>
-        )}
-        {trim && share > 25 && (
-          <p className="dcb-warn" role="note">
-            That's {Math.round(share)}% of the position; the agent's rule is 25% at most.
-          </p>
-        )}
-        {trim && tax && (
-          <p className={tax.young ? "dcb-warn" : "muted"}>
-            {tax.unknown
-              ? "The tax page can't price every parcel of this."
-              : `Estimated gain A$${two(tax.gainAud)}.`}
-            {tax.young && " Some was held under 12 months: no 50% discount on it."}
-          </p>
-        )}
-        {!trim && !market && odds && (
-          <p className="muted">Fill odds by Monday evening: {oddsWords(odds)}.</p>
         )}
         {error && (
           <p className="error-text" role="alert">
@@ -459,18 +486,37 @@ function OrderSheet({
           </p>
         )}
         <div className="dlg-btns">
-          <button type="button" className="btn" onClick={() => dialog.current?.close()}>
-            Don't place
-          </button>
-          {held ? (
+          {reviewing ? (
+            <button
+              type="button"
+              className="btn"
+              disabled={busy}
+              onClick={() => {
+                setReviewing(false);
+                setHeld(false);
+              }}
+            >
+              Back
+            </button>
+          ) : (
+            <button type="button" className="btn" onClick={() => dialog.current?.close()}>
+              Don't place
+            </button>
+          )}
+          {!reviewing ? (
+            <button type="submit" className={`btn ${trim ? "btn-danger" : "btn-accent"}`}>
+              Review
+            </button>
+          ) : held ? (
             <button type="button" className="btn" disabled={busy} onClick={() => send(true)}>
               Place anyway (logged)
             </button>
           ) : (
             <button
-              type="submit"
+              type="button"
               className={`btn ${trim ? "btn-danger" : "btn-accent"}`}
               disabled={busy}
+              onClick={() => send()}
             >
               {trim ? `Sell ${coin}` : `Buy ${coin}`}
             </button>

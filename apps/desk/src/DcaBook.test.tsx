@@ -486,6 +486,32 @@ describe("DCA book page", () => {
     });
   });
 
+  it("shows a trim before it sells, and Enter only reviews it (audit 13)", async () => {
+    const fetch = serve(book());
+    render(<DcaBookPage />);
+    const [, ethTrim] = await screen.findAllByRole("button", { name: "Trim" });
+    if (!ethTrim) throw new Error("No Trim button for ETH.");
+    fireEvent.click(ethTrim);
+    const sheet = screen.getByRole("dialog", { name: "Trim ETH" });
+    const quantity = within(sheet).getByLabelText("Quantity (ETH)");
+    fireEvent.change(within(sheet).getByLabelText("Price (USDC)"), { target: { value: "2000" } });
+    fireEvent.change(quantity, { target: { value: "0.005" } });
+    fireEvent.submit(quantity); // Enter in a field
+    expect(within(sheet).getByRole("status").textContent).toBe(
+      "Sell 0.005 ETH at 2000, about 10.00 USDC.",
+    );
+    expect(quantity.matches(":disabled")).toBe(true); // locked inside its fieldset
+    expect(sent(fetch, "/dca/orders")).toHaveLength(0);
+    fireEvent.click(within(sheet).getByRole("button", { name: "Sell ETH" }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders")).toHaveLength(1));
+    expect(JSON.parse(String(sent(fetch, "/dca/orders")[0]?.[1]?.body))).toMatchObject({
+      coin: "ETH",
+      side: "sell",
+      qty: "0.005",
+      price: "2000",
+    });
+  });
+
   it("asks before cancelling, and says what happens to the reference and the money", async () => {
     const fetch = serve(book());
     render(<DcaBookPage />);
