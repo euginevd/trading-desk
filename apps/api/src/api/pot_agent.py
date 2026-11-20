@@ -230,32 +230,56 @@ class PotAgent:
             "crowding": self._crowding(sized["coin"]),
         }
 
-    def scan(self) -> dict[str, Any]:
-        """The daily-close scan (11:15am Sydney, or Scan now): swing every day and position on
-        Mondays, each through the screener and trading-agent; a take the desk can place
-        becomes a proposal, waiting for the owner on the desk and in Telegram."""
+    def scan(self, every: bool = False) -> dict[str, Any]:
+        """The daily-close scan (11:15am Sydney): swing every day and position on Mondays.
+        Scan now (every) runs all four styles. Each goes through the screener and
+        trading-agent; a take the desk can place becomes a proposal, waiting for the owner on
+        the desk and in Telegram, and each style leaves a card: its take, or the closest coin
+        and what it's missing."""
         pot = self._pot
         now = pot.now_ms()
         monday = datetime.fromtimestamp(now / 1000, SYDNEY).weekday() == 0
         found: list[dict[str, Any]] = []
         said: list[str] = []
-        for key in ("swing", "position") if monday else ("swing",):
-            seen = self.judge({"style": key})
+        cards: list[dict[str, Any]] = []
+        judged = 0
+        keys = tuple(screener.STYLES) if every else ("swing", "position") if monday else ("swing",)
+        for key in keys:
+            try:
+                seen = self.judge({"style": key})
+            except Refused as why:  # one style failing leaves the others standing
+                name = screener.STYLES[key].name
+                said.append(f"{name}: {why}")
+                cards.append({"style": key, "name": name, "line": str(why)[:200]})
+                continue
+            judged += 1
             misses = cast(list[dict[str, str]], seen.get("misses") or [])
             closest = "; ".join(f"{m['coin']} {m['why']}" for m in misses)
             said.append(
                 f"{seen['name']}: {seen['line']}"
                 + (f" Closest: {closest}." if closest and not seen["picks"] else "")
             )
+            take: dict[str, Any] | None = None
             for n, pick in enumerate(seen["picks"]):
                 if pick["problem"] or pick["verdict"] != "take":
                     continue
                 kept = {k: v for k, v in pick.items() if k != "facts"}
-                found.append(
-                    kept | {"id": f"P{now}{key[0]}{n}", "created": now, "expires": seen["expires"]}
-                )
+                proposal = kept | {
+                    "id": f"P{now}{key}{n}",  # the whole key: scalp and swing share an s
+                    "created": now,
+                    "expires": seen["expires"],
+                }
+                found.append(proposal)
+                take = take or proposal
+            cards.append(_card(key, seen, take, misses))
+        if not judged:  # nothing was judged: the proposals waiting stay, and the owner hears why
+            raise Refused(" ".join(said)[:300])
+        kept_ids = {p["id"] for p in found[:MAX_PROPOSALS]}
+        for card in cards:  # a take past the proposal cap has nothing to review
+            if card.get("take") and card["take"]["id"] not in kept_ids:
+                card.pop("take")
         pot.set_proposals(found[:MAX_PROPOSALS])
-        pot.set_last_scan(" ".join(said)[:600])
+        pot.set_last_scan(" ".join(said)[:600], cards if every else None)
         return pot.view()
 
     ANALYSIS: dict[str, Any] = {
@@ -672,3 +696,28 @@ class PotAgent:
         else:
             pick |= sized
         return pick
+
+
+def _card(
+    key: str,
+    seen: dict[str, Any],
+    take: dict[str, Any] | None,
+    misses: list[dict[str, str]],
+) -> dict[str, Any]:
+    """One style's line on the scan: its take, else the coin closest to one and what it's
+    missing (trading-agent's wait, a take the rules refused, or the screener's near miss)."""
+    card: dict[str, Any] = {"style": key, "name": seen["name"], "line": str(seen["line"])[:200]}
+    if not seen.get("allowed"):  # the style is off (a weekend, the regime): its note says why
+        return card
+    if take:
+        card["take"] = {k: take.get(k) for k in ("id", "coin", "setup", "grade", "entry", "rr")}
+        return card
+    picks = cast(list[dict[str, Any]], seen["picks"])
+    near = next((p for p in picks if p["verdict"] == "take" and p["problem"]), None) or next(
+        (p for p in picks if p["verdict"] == "wait"), None
+    )
+    if near:
+        card["close"] = {"coin": near["coin"], "why": clip(near["problem"] or near["reason"], 160)}
+    elif misses:
+        card["close"] = {"coin": misses[0]["coin"], "why": clip(misses[0]["why"], 160)}
+    return card

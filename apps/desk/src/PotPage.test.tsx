@@ -365,6 +365,11 @@ describe("the trading pot", () => {
     const money = document.querySelector(".acc-money") as HTMLElement;
     expect(within(money).getByText("Available")).toBeTruthy();
     expect(within(money).getByText("In trades")).toBeTruthy();
+    // Open trades' result against what they cost, in dollars and percent.
+    const unreal = within(money).getByText("Unrealized").parentElement as HTMLElement;
+    expect(unreal.textContent).toContain("+$0.19");
+    expect(unreal.textContent).toContain("+1.9%");
+    expect(within(money).getByText("Realized")).toBeTruthy();
     // Free USDC short of what the account holds: warned, never blocked.
     expect(screen.getByRole("alert").textContent).toContain(
       "is $10 short of the account's available $90",
@@ -380,10 +385,9 @@ describe("the trading pot", () => {
         .getByRole("tab", { name: /Positions/ })
         .getAttribute("aria-selected"),
     ).toBe("true");
-    expect(
-      screen.getByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" }),
-    ).toBeTruthy();
-    expect(screen.getByText("+0.6R")).toBeTruthy();
+    // The row shows how far the coin has moved from its fill, not R.
+    const row = screen.getByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" });
+    expect(within(row).getByText("+1.9%")).toBeTruthy();
     fireEvent.click(within(tabs).getByRole("tab", { name: "Ledger" }));
     expect(screen.getByRole("table", { name: "The account's ledger" }).textContent).toContain(
       "POT-IN-1",
@@ -558,6 +562,80 @@ describe("the trading pot", () => {
     expect(init?.headers).toEqual({ "content-type": "application/json" });
     expect((await screen.findAllByText(/No setup today./)).length).toBeGreaterThan(0);
     expect(await screen.findByText(/Scanned: no setup today/)).toBeTruthy();
+  });
+
+  it("shows Scan now's card per style: a take to review, the closest coin, or nothing near", async () => {
+    const styles = [
+      { style: "scalp", name: "Scalp", line: "Scalps wait out the weekend." },
+      {
+        style: "day",
+        name: "Day trade",
+        line: "One close.",
+        close: { coin: "ETH", why: "Needs a 4-hour close over 3,200." },
+      },
+      {
+        style: "swing",
+        name: "Swing",
+        line: "One pullback.",
+        take: {
+          id: proposal.id,
+          coin: "SUI",
+          setup: "Trend pullback",
+          grade: "B",
+          entry: "3.4172",
+          rr: "2.4",
+        },
+      },
+      { style: "position", name: "Position", line: "No position setups right now." },
+    ];
+    serve(pot({ lastScan: { at: NOW, line: "Scanned.", styles } }));
+    render(<PotPage />);
+    const cards = await screen.findByRole("list", { name: "Scan by style" });
+    expect(within(cards).getAllByRole("listitem")).toHaveLength(4);
+    expect(cards.textContent).toContain("Scalps wait out the weekend.");
+    expect(cards.textContent).toContain("Needs a 4-hour close over 3,200.");
+    expect(cards.textContent).toContain("2.4 : 1");
+    fireEvent.click(within(cards).getByRole("button", { name: "Review" }));
+    expect(screen.getByRole("list", { name: "The trade's orders" }).textContent).toContain(
+      "limit buy 3.4172",
+    );
+  });
+
+  it("adds up realized P&L from closed trades against what went in, this month under it", async () => {
+    const closed = (ref: string, result: string, at: number) =>
+      trade({ ref, status: "closed", result, closed: at, now: null });
+    serve(
+      pot({
+        trades: [
+          trade({}),
+          closed("TRD-SOL-26W46-1", "3", NOW - 1000),
+          closed("TRD-ETH-26W40-1", "-1", NOW - 90 * 86_400_000),
+        ],
+      }),
+    );
+    render(<PotPage />);
+    await screen.findByRole("heading", { level: 1 });
+    const money = document.querySelector(".acc-money") as HTMLElement;
+    const real = within(money).getByText("Realized").parentElement as HTMLElement;
+    expect(real.textContent).toContain("+$2.00"); // 3 − 1
+    expect(real.textContent).toContain("+2.0%"); // of the $100 put in
+    expect(real.textContent).toContain("+$3.00 this month");
+  });
+
+  it("drops a scan card's take once its proposal is gone", async () => {
+    const styles = [
+      {
+        style: "swing",
+        name: "Swing",
+        line: "One pullback.",
+        take: { id: "gone", coin: "SUI", setup: "Pullback", grade: "B", entry: "3", rr: "2" },
+      },
+    ];
+    serve(pot({ lastScan: { at: NOW, line: "Scanned.", styles } }));
+    render(<PotPage />);
+    const cards = await screen.findByRole("list", { name: "Scan by style" });
+    expect(cards.textContent).toContain("Nothing near");
+    expect(within(cards).queryByRole("button", { name: "Review" })).toBeNull();
   });
 
   it("starts an empty pot with money put in", async () => {
