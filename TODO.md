@@ -27,6 +27,8 @@ Your requirements, features and ideas, numbered, in your own words. In `producti
 23. Rethink the Risk agent around the biggest risks: funds left on Binance instead of cold storage (A$10K at most on the exchange); 70%+ of long-term holds on the Ledger; the Ledger's backup key kept securely; TAO as most of my crypto, in one high-conviction coin, and whether and when to diversify given its P&L. *(Approved 17 Nov 2026. Built: phase 1, the four on the Risk page. Next: Ledger addresses, then risk-agent's file; [plan-risk.md](docs/plan-risk.md).)*
 24. New trade by style: pick scalp, day trade, swing or position (one line each on its timeframe and candles); the coins are scanned in code first, then checked for confluence and upcoming catalysts online, rated, with entry, take profit, stop and reward to risk; Okay shows the order and Approve places it on Binance. *(Built: feature 95, decision 80, on test. Still to build: each style's exits after the fill (half at target, trailing, time stops, the close stop) (backtests: feature 100, `bash apps/backtest/run.sh`), each style's Not built yet list in local/agents/trading-agent.md.)*
 
+25. Feature flags in Settings: every page, and every feature I add from now on, has an on/off switch; off hides it from my desk and doesn't load its code, so I pick what's on (first: Journal and Risk off). *(Asked 20 Nov 2026; mockup [pages.html](docs/mockups/pages.html), waiting on my answers.)*
+
 Later, from the project ideas doc, not started until listed above:
 
 - Bybit and leverage.
