@@ -33,3 +33,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 82. The odds check: each pick's rule re-run on past candles and simulated from them, a warning not a gate; the record decides once it has 8 decided signals. [Record](decisions/from-58.md)
 83. Freqtrade 2026.10 backtests and paper-trades the styles, calling the desk's own screener rule; it never trades, the desk keeps placing orders. [Record](decisions/from-58.md)
 84. The AI parts: FreqAI filters setups in backtests; trading-agent judges only in paper trading, through a new single-setup endpoint the paper container may call by service name. [Record](decisions/from-58.md)
+85. The Backtest page runs Freqtrade through a file queue and an always-on worker, not the Docker socket or Freqtrade's webserver; one R report shared with run.sh. [Record](decisions/from-58.md)

@@ -21,6 +21,7 @@ from api import (
     agents,
     ai_client,
     analyse,
+    backtest,
     coach,
     coach_week,
     demo,
@@ -47,6 +48,7 @@ from api.ai_client import capped, subscription, switched
 from api.ai_signal import Ask, SignalError, Signals, claude
 from api.ai_signin import SignIn
 from api.audit import Audit
+from api.backtest_runs import BadRun
 from api.binance import Binance, BinanceError, plain
 from api.bots import Bots
 from api.dca_book import DcaBook
@@ -1391,6 +1393,19 @@ def _open_route(method: str, path: str) -> dict[str, object] | None:
     return None
 
 
+def _backtest_route(
+    method: str, path: str, params: dict[str, str], event: dict[str, object]
+) -> dict[str, object] | None:
+    """The Backtest page (decision 85): Freqtrade's results and the worker's queue, no exchange."""
+    route = backtest.ROUTES.get((method, path))
+    if route is None:
+        return None
+    try:
+        return _reply(200, route(params, _body(event)))
+    except BadRun as error:
+        return _reply(400, {"error": str(error)})
+
+
 def handler(  # noqa: PLR0913, PLR0917 - each factory is a seam the tests replace
     event: dict[str, object],
     context: object,
@@ -1408,6 +1423,11 @@ def handler(  # noqa: PLR0913, PLR0917 - each factory is a seam the tests replac
     query = event.get("queryStringParameters")
     params = cast(dict[str, str], query) if isinstance(query, dict) else {}
     open_reply = _open_route(method, path)
+    if open_reply is None:
+        try:
+            open_reply = _backtest_route(method, path, params, event)
+        except LookupError as error:
+            return _reply(*_failure(error))
     if open_reply is not None:
         return open_reply
     try:

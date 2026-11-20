@@ -19,6 +19,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 13. A saved Profile version keeps its typed fields: after a parser change, profile.md needs a real edit or new version.
 13a. Git Bash rewrites container paths in `docker compose run` and `exec` arguments (`/tmp/x` became `C:/.../Temp/x`): prefix the command with `MSYS_NO_PATHCONV=1`.
 13b. Freqtrade: FreqAI backtests refuse an open-ended `--timerange`, and `download-data --days` only adds candles newer than those kept: give an end date, and run it again with `--prepend` for older history.
+13c. Containers sharing a `local/` folder run as different users (api 10001, Freqtrade 1000), and Docker Desktop keeps the mode: the folder's maker opens it (`chmod 0o777`, `worker.py`) or the other's writes fail.
 13a. A cloud session's git config can name Claude as author (rule 29): commit with `git -c user.name=… -c user.email=…` from the last human commit, and check `git log -1 --format=%an` before pushing.
 
 ## CI

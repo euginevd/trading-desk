@@ -68,6 +68,9 @@ import type {
   MarkdownFile,
   PriceAlert,
   TicketChoice,
+  BacktestRun,
+  BacktestStyleKey,
+  BacktestView,
 } from "./types";
 
 export class ApiError extends Error {
@@ -375,6 +378,19 @@ export const notePotTrade = (ref: string, text: string) =>
   call<PotTrade>("POST", "/pot/trades/note", { ref, text });
 export const scanPot = () => call<PotView>("POST", "/pot/scan");
 export const getPotStyles = () => call<PotStyles>("GET", "/pot/styles");
+
+// The Backtest page (decision 85): runs Freqtrade through the worker, reads its results.
+export const getBacktests = () => call<BacktestView>("GET", "/backtest");
+export const getBacktestRun = (id: string) =>
+  call<BacktestRun>("GET", `/backtest/run?id=${encodeURIComponent(id)}`);
+export const startBacktest = (run: {
+  style: BacktestStyleKey;
+  ai: boolean;
+  from: string;
+  to: string;
+}) => call<BacktestView>("POST", "/backtest/jobs", run);
+export const cancelBacktest = (id: string) =>
+  call<BacktestView>("POST", "/backtest/jobs/cancel", { id });
 export const screenPot = (style: PotStyleKey) => call<PotScreen>("POST", "/pot/screen", { style });
 export const judgePot = (style: PotStyleKey) => call<PotJudge>("POST", "/pot/judge", { style });
 export const dismissPotProposal = (id: string) =>

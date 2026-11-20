@@ -1698,3 +1698,77 @@ export interface PotJudge {
   picks: PotPick[];
   expires: number;
 }
+
+// The Backtest page (decision 85): Freqtrade's results in R, and the worker's queue.
+export type BacktestStyleKey = "scalp" | "day" | "swing" | "position";
+export interface BacktestStyle {
+  key: BacktestStyleKey;
+  name: string;
+  candles: string;
+  takes: string;
+  ai: boolean; // whether FreqAI can filter it
+  from: string; // the style's usual test, ending yesterday
+  to: string;
+}
+export interface BacktestRow {
+  name: string;
+  trades: number;
+  won: number; // 0 to 1
+  avg: number; // R a trade
+  total: number; // R
+}
+export interface BacktestRunLine {
+  id: string;
+  created: number;
+  style: string;
+  ai: boolean;
+  strategy: string;
+  from: number;
+  to: number;
+  all: BacktestRow | null;
+}
+export interface BacktestTrade {
+  pair: string;
+  coin: string;
+  setup: string;
+  opened: number;
+  closed: number;
+  entry: number;
+  exit: number;
+  stop: number;
+  target: number;
+  exitReason: string;
+  r: number;
+}
+export interface BacktestRun extends BacktestRunLine {
+  pairs: number;
+  worstRun: number;
+  curve: [number, number][]; // closed at, cumulative R
+  bySetup: BacktestRow[];
+  byExit: BacktestRow[];
+  byYear: BacktestRow[];
+  trades: BacktestTrade[]; // newest first
+}
+export type BacktestJobState = "queued" | "running" | "done" | "failed" | "cancelled";
+export interface BacktestJob {
+  id: string;
+  style: BacktestStyleKey;
+  ai: boolean;
+  from: string;
+  to: string;
+  created: number;
+  state: BacktestJobState;
+  step: string | null;
+  started: number | null;
+  finished: number | null;
+  error: string | null;
+  result: string | null;
+  cancelling: boolean;
+  log: string[];
+}
+export interface BacktestView {
+  styles: BacktestStyle[];
+  runs: BacktestRunLine[];
+  job: BacktestJob | null;
+  worker: { seen: number | null; on: boolean };
+}

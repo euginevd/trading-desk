@@ -20,6 +20,7 @@ Every page follows [design-system.md](design-system.md) 18 to 22. Features 1 to 
 | 99 | The odds check on each New trade pick (the Time Machine idea from day-trader-skill, MIT): the style's rule re-run on the coin's past candles and the plan simulated 2,000 times from them, each against break-even after fees; a tag (strong, leans yes, coin flip, leans no, poor) and one line on the card and in the review, a warning not a block (owner, 17 Nov 2026) | Done | |
 | 100 | Backtest and paper trading with Freqtrade (apps/backtest): each style's own screener rule on years of Binance candles, sized, stopped and targeted as the desk does, reported in R by setup, exit and year; and one style paper-traded on live USDC prices. No keys, never places an order (owner, 17 Nov 2026) | Done | |
 | 101 | The AI parts of the backtest: FreqAI (LightGBM, retrained as the test walks forward) filters each style's own setups by its chance of a win; and the paper bot asks trading-agent before every entry (POST /pot/judge-one, New trade's prompt and the desk's facts), trading only a take and keeping every verdict (owner, 17 Nov 2026) | Done | |
+| 102 | The Backtest page: pick a style, the AI filter and dates and press Run; the backtest worker runs Freqtrade and the page shows its steps, then the result in R (tiles, the equity curve, by setup, exit and year, every trade), every kept run to open or compare, and each New trade style card's newest record (TODO 25, owner, 20 Nov 2026; decision 85) | Done | |
 
 ## `api`
 

@@ -6,7 +6,9 @@ import Coach from "./Coach";
 import Journal from "./Journal";
 import BotsHome, { type BotsTab } from "./BotsHome";
 import SettingsPage from "./SettingsPage";
+import BacktestPage from "./BacktestPage";
 import {
+  BacktestIcon,
   CollapseIcon,
   DashboardIcon,
   DcaIcon,
@@ -35,6 +37,7 @@ type Page =
   | "portfolio"
   | "journal"
   | "trade"
+  | "backtest"
   | "risk"
   | "bots"
   | "settings"
@@ -63,6 +66,7 @@ const PAGES: { page: Page; hash: string; name: string; Icon: () => React.JSX.Ele
   { page: "portfolio", hash: "#/portfolio", name: "Portfolio", Icon: PortfolioIcon },
   { page: "journal", hash: "#/journal", name: "Journal", Icon: JournalIcon },
   { page: "trade", hash: "#/trade", name: "Trade", Icon: TradeIcon },
+  { page: "backtest", hash: "#/backtest", name: "Backtest", Icon: BacktestIcon },
   { page: "risk", hash: "#/risk", name: "Risk", Icon: RiskIcon },
 ];
 // DCA and grid bots share one page (decision 68); the old links open it filtered.
@@ -480,6 +484,8 @@ export default function App() {
           <PotPage />
         ) : page === "bots" || page === "dca-book" ? (
           <BotsHome tab={botsTab} />
+        ) : page === "backtest" ? (
+          <BacktestPage />
         ) : page === "risk" ? (
           <RiskPage />
         ) : page === "settings" ? (

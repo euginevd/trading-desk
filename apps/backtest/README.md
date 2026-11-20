@@ -6,6 +6,12 @@ and needs no keys: Binance's public candles only.
 
 ## Run it
 
+From the desk: the **Backtest** page (http://127.0.0.1:5180/#/backtest) picks the style, AI filter
+and dates, runs them through the `backtest-worker` container (`worker.py`, which starts with
+`docker compose up`) and shows every result kept here, these runs included (decision 85).
+
+From the terminal:
+
 ```bash
 bash apps/backtest/run.sh swing      # or scalp, day, position, all
 TIMERANGE=20240101-20250101 bash apps/backtest/run.sh swing   # your own dates

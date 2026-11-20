@@ -60,6 +60,29 @@ services:
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
 
+  # The Backtest page's runs (decision 85): the api queues a checked request in
+  # local/backtest/jobs and this runs it, one at a time. No port, no keys, no Docker socket.
+  backtest-worker:
+    <<: *freqtrade
+    profiles: []
+    entrypoint: ["python", "/freqtrade/worker.py"]
+    volumes:
+      - ./local/backtest:/freqtrade/user_data
+      - ./apps/backtest/strategies:/freqtrade/user_data/strategies:ro
+      - ./apps/backtest/config:/freqtrade/config:ro
+      - ./apps/backtest/worker.py:/freqtrade/worker.py:ro
+      - ./apps/api/src:/desk:ro
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import json,time; s=json.load(open('/freqtrade/user_data/jobs/worker.json'))['seen']; exit(time.time()*1000-s > 30000)"
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+    restart: unless-stopped
+
   paper:
     <<: *freqtrade
     profiles: [paper]
