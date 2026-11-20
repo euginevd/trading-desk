@@ -500,7 +500,7 @@ DCA_ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/dca/orders"): lambda desk, _q, b: DcaBook(desk).place(b),
     ("POST", "/dca/orders/cancel"): lambda desk, _q, b: DcaBook(desk).cancel(b.get("ref")),
     ("POST", "/dca/orders/amend"): lambda desk, _q, b: DcaBook(desk).amend(b),
-    ("POST", "/dca/close-out"): lambda desk, _q, _b: DcaBook(desk).close_out(),
+    ("POST", "/dca/close-out"): lambda desk, _q, b: DcaBook(desk).close_out(b.get("week")),
     ("GET", "/dca/check"): lambda desk, _q, _b: DcaBook(desk).check(),
     ("POST", "/dca/check/fix"): lambda desk, _q, _b: DcaBook(desk).repair(),
 }
@@ -810,7 +810,7 @@ def risk_board(s: Services, now: datetime | None = None) -> dict[str, Any]:
 
     sources: list[tuple[str, Callable[[], list[dict[str, Any]]]]] = [
         ("the trading pot", lambda: risk.pot_limits(Pot(desk).view())),
-        ("the DCA book", lambda: risk.dca_limits(book.view(), len(book.open_weekly()), now)),
+        ("the DCA book", lambda: risk.dca_limits(book.view(), len(book.open_week()), now)),
         ("deposits", lambda: risk.deposit_limits(_coach(s, write=False)["deposits"])),
         ("the portfolio", lambda: risk.portfolio_limits(portfolio())),
         (

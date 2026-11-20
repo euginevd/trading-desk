@@ -193,7 +193,7 @@ def test_a_button_places_trading_agents_setup_with_the_desks_checks(services: Se
 
 def test_the_close_out_button_stops_working_when_the_week_turns(services: Services) -> None:
     monday = datetime(2026, 11, 16, 17, 30, tzinfo=SYDNEY)
-    assert jobs.close_out(services, monday).startswith("Every weekly limit filled")
+    assert jobs.close_out(services, monday).startswith("No weekly plan set")
     week = "26W46"
     said = jobs.act(services, {"kind": "dca-close-out", "arg": week}, monday + timedelta(hours=2))
     assert said.startswith("Too late")
@@ -249,3 +249,26 @@ def test_a_button_holds_a_setup_that_breaks_a_profile_rule(services: Services) -
     )
     said = jobs.act(held, {"kind": "pot-place", "arg": "p3"}, TUESDAY_NOON)
     assert said.startswith("Not placed: it breaks a Profile rule.")
+
+
+def test_the_close_out_message_shows_the_whole_week() -> None:
+    text = jobs.close_out_text(
+        {
+            "week": "26W47",
+            "planned": "600",
+            "bought": "152.40",
+            "waiting": "69",
+            "toPlace": "378.6",
+            "open": [{"ref": "DCA-ETH-26W47-4", "coin": "ETH", "price": "1712.37", "left": "12"}],
+            "toPlaceByCoin": {},
+        }
+    )
+    assert "Bought so far: 152.4 of 600 USDC" in text
+    assert "Open limits: ETH 12 at 1,712.37" in text
+    assert "Not placed yet: 378.6 USDC" in text
+    assert "stay open unless you choose" in text
+
+
+def test_keep_them_open_changes_nothing(services: Services) -> None:
+    said = jobs.act(services, {"kind": "dca-keep", "arg": "26W46"}, TUESDAY_NOON)
+    assert said.startswith("Kept open")

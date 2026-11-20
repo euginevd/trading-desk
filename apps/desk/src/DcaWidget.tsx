@@ -9,7 +9,7 @@ import CoinIcon from "./CoinIcon";
 import PositionDrawer from "./DcaPosition";
 import { dated, isOpen, qty, signed, two } from "./dcaFormat";
 import "./myagents.css";
-import type { DcaBook, DcaOrder, DcaPosition } from "./types";
+import type { DcaBook, DcaOrder, DcaPosition, DcaWeekState } from "./types";
 
 const DAY = 86_400_000;
 const HOUR = 3_600_000;
@@ -18,9 +18,14 @@ const SYD = "Australia/Sydney";
 
 type Cycle = { start: number; closeOut: number; orders: DcaOrder[]; current: boolean };
 
+// Every buy that counts toward its week, whichever button placed it (TODO 28); a buy-back
+// answers its trim. The api's dca_book.WEEK_BUYS.
+const WEEK_BUYS = new Set(["weekly", "named", "close-out", "desk", "imported"]);
+const weekBuy = (o: DcaOrder) => o.side === "buy" && WEEK_BUYS.has(o.source);
+
 // The cycle to show: this one while it's open or has limits waiting, else the next.
 export function cycleOf(book: DcaBook, now: number): Cycle {
-  const waiting = book.week.orders.some((o) => o.source === "weekly" && isOpen(o));
+  const waiting = book.week.orders.some((o) => weekBuy(o) && isOpen(o));
   if (now < book.week.closeOut || waiting) {
     const { start, closeOut, orders } = book.week;
     return { start, closeOut, orders, current: true };
@@ -30,25 +35,34 @@ export function cycleOf(book: DcaBook, now: number): Cycle {
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const whole = (n: number) => Math.round(n).toLocaleString("en-AU");
-const weeklyOf = (orders: DcaOrder[]) => orders.filter((o) => o.source === "weekly");
 const boughtOf = (orders: DcaOrder[]) =>
-  orders
-    .filter((o) => o.side === "buy" && (o.source === "weekly" || o.source === "close-out"))
-    .reduce((s, o) => s + Number(o.filledQuote), 0);
+  orders.filter(weekBuy).reduce((s, o) => s + Number(o.filledQuote), 0);
 
-function headline(quote: string, cycle: Cycle, now: number, total: number): string {
+function headline(
+  quote: string,
+  cycle: Cycle,
+  now: number,
+  total: number,
+  state: DcaWeekState,
+): string {
   const amount = `$${whole(total)} ${quote}`;
   if (now < cycle.start) {
     const days = Math.ceil((cycle.start - now) / DAY);
     const when = cycle.start - now < 12 * HOUR ? "today" : `in ${plural(days, "day")}`;
     return `Next buy ${when}: ${amount} on ${dated(cycle.start)} at 7pm.`;
   }
-  const weekly = weeklyOf(cycle.orders);
-  if (weekly.length === 0) return `The buying window is open: plan this week's ${amount}.`;
-  const open = weekly.filter(isOpen).length;
-  if (open === 0) return `This week's buy is done: ${two(boughtOf(cycle.orders))} ${quote} bought.`;
-  const filled = weekly.filter((o) => o.status === "filled").length;
-  return `${filled} of ${plural(weekly.length, "limit")} filled. The rest buy at market on ${dated(cycle.closeOut)} at 7pm.`;
+  const bought = Number(state.bought);
+  const waiting = Number(state.waiting);
+  const toPlace = Number(state.toPlace);
+  if (total > 0 && bought >= total * 0.95)
+    return `This week's buy is done: ${two(bought)} ${quote} bought.`;
+  if (bought === 0 && waiting === 0)
+    return `The buying window is open: plan this week's ${amount}.`;
+  const parts = [`${two(bought)} of ${whole(total)} ${quote} bought`];
+  if (waiting > 0) parts.push(`${two(waiting)} in open limits`);
+  if (toPlace > 0) parts.push(`${two(toPlace)} not placed yet`);
+  const after = waiting > 0 ? " Open limits stay open until you choose." : "";
+  return `${parts.join(", ")}.${after}`;
 }
 
 // A coin's week: what's bought of its weekly target (every source counts), then what's held or
@@ -105,11 +119,11 @@ export default function DcaWidget({ now: given }: { now?: number }) {
 
   const closeOut = () => {
     setClosing(true);
-    closeOutDca().then(
+    closeOutDca(book?.week.key ?? "").then(
       (r) => {
-        setSaid(
-          r.closed.length ? `Bought at market: ${r.closed.join(", ")}.` : "Nothing was open.",
-        );
+        const bought = r.closed.length ? `Bought at market: ${r.closed.join(", ")}.` : "";
+        const missed = r.missed.length ? ` Not bought: ${r.missed.join(", ")}.` : "";
+        setSaid(`${bought}${missed}`.trim() || "Nothing was left to buy.");
         setClosing(false);
         dialog.current?.close?.();
         load();
@@ -170,8 +184,13 @@ export default function DcaWidget({ now: given }: { now?: number }) {
   const pct = (t: number) => Math.min(100, Math.max(0, ((t - from) / (to - from)) * 100));
   const at = (t: number) => `${pct(t)}%`;
   const inside = now >= cycle.start && now <= cycle.closeOut;
-  const waiting = weeklyOf(cycle.orders).some(isOpen);
-  const placed = weeklyOf(cycle.orders).length > 0;
+  const state = book.week.state;
+  const placed = cycle.orders.some(weekBuy);
+  // Something to buy the rest of: limits waiting, or the plan's share not placed yet.
+  const waiting =
+    cycle.current &&
+    now >= cycle.start &&
+    (cycle.orders.some((o) => weekBuy(o) && isOpen(o)) || (placed && Number(state.toPlace) > 0));
   const fills = cycle.orders.filter((o) => o.side === "buy" && Number(o.filledQty) > 0);
   const last = cycle.current ? null : boughtOf(book.week.orders);
   const today = Math.floor((now - from) / DAY);
@@ -179,7 +198,7 @@ export default function DcaWidget({ now: given }: { now?: number }) {
   return (
     <section className="dcw" aria-label="Weekly DCA">
       {head}
-      <p className="dcw-line">{headline(book.quote, cycle, now, total)}</p>
+      <p className="dcw-line">{headline(book.quote, cycle, now, total, state)}</p>
 
       <div
         className="dcw-axis"
@@ -299,8 +318,9 @@ export default function DcaWidget({ now: given }: { now?: number }) {
       <dialog ref={dialog} aria-labelledby="dcw-close-title">
         <h2 id="dcw-close-title">Close out this week now?</h2>
         <p>
-          Every weekly limit still open is cancelled, and what it didn't buy is bought at market
-          straight away.
+          This week's open limits are cancelled and what they didn't buy is bought at market
+          straight away, with each coin's share of the plan not placed yet. Nothing is bought unless
+          you choose it here or on Telegram.
           {now < cycle.closeOut && ` The plan's close-out is ${dated(cycle.closeOut)} at 7pm.`}
         </p>
         <div className="dlg-btns">

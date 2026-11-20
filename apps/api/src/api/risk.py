@@ -249,8 +249,8 @@ def dca_limits(dca: dict[str, Any], open_weekly: int, now: datetime) -> list[dic
             rule="6.1",
             owner=owner,
             state="near" if late and open_weekly else "kept",
-            words="Unfilled limits are bought at market at Monday's close-out, so a week is "
-            "never skipped.",
+            words="Monday's close-out shows what's open and not placed; you choose to keep "
+            "the limits open or buy the rest at market.",
         )
     )
     return rows

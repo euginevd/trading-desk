@@ -316,7 +316,8 @@ export const placeDcaOrder = (order: DcaOrderRequest) =>
   call<DcaOrder>("POST", "/dca/orders", order);
 export const cancelDcaOrder = (ref: string) =>
   call<DcaOrder>("POST", "/dca/orders/cancel", { ref });
-export const closeOutDca = () => call<{ closed: string[] }>("POST", "/dca/close-out");
+export const closeOutDca = (week: string) =>
+  call<{ closed: string[]; missed: string[] }>("POST", "/dca/close-out", { week });
 // The desk's own plan at once; dca-agent's only when asked.
 export const analyseFunds = (side: "add" | "remove", amount: string, agent = false) =>
   call<FundsPlan>("POST", "/dca/funds/analyse", { side, amount, agent });

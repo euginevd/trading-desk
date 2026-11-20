@@ -13,7 +13,7 @@ from zoneinfo import ZoneInfo
 
 from api.binance import plain
 from api.dca_book import SYDNEY as BOOK_TZ
-from api.dca_book import week_of
+from api.dca_book import WEEK_BUYS, week_of
 
 SYDNEY = ZoneInfo("Australia/Sydney")
 DAYS = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
@@ -112,7 +112,7 @@ def with_book(
         (
             Decimal(r["executed_quote"])
             for r in rows
-            if r["week"] == key and r["side"] == "buy" and r["source"] in ("weekly", "close-out")
+            if r["week"] == key and r["side"] == "buy" and r["source"] in WEEK_BUYS
         ),
         ZERO,
     )
