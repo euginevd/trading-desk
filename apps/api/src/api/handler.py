@@ -39,6 +39,7 @@ from api import (
     rebalance,
     risk,
     risk_big,
+    scan_progress,
     schedule,
     screener,
     tax,
@@ -515,6 +516,7 @@ POT_ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/pot/trades/stop"): lambda desk, _q, b: Pot(desk).move_stop(b),
     ("POST", "/pot/trades/close"): lambda desk, _q, b: Pot(desk).close(b.get("ref")),
     ("POST", "/pot/trades/keep"): lambda desk, _q, b: Pot(desk).keep(b.get("ref")),
+    ("POST", "/pot/trades/hold"): lambda desk, _q, b: Pot(desk).hold(b.get("ref")),
     ("POST", "/pot/trades/enter-now"): lambda desk, _q, b: Pot(desk).enter_now(b.get("ref")),
     ("POST", "/pot/trades/add"): lambda desk, _q, b: Pot(desk).add(b),
     ("POST", "/pot/trades/reduce"): lambda desk, _q, b: Pot(desk).reduce(b),
@@ -886,7 +888,14 @@ def _pot_agent(s: Services, body: dict[str, Any] | None, job: str = "chat") -> d
 
     def run(agent: PotAgent) -> dict[str, Any]:
         if body is None:
-            return agent.scan(every=job == "scan-now")
+            # Scan now reports its steps (GET /pot/scan/progress); the scan that began the
+            # record ends it, whatever happened.
+            mine = job == "scan-now" and scan_progress.begin()
+            try:
+                return agent.scan(every=job == "scan-now")
+            finally:
+                if mine:
+                    scan_progress.finish()
         jobs: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
             "analyse": agent.analyse,
             "styles": lambda _b: agent.styles(),
@@ -1104,6 +1113,7 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ),
     ("POST", "/dca/funds/chat"): lambda s, _q, b: _funds(s).chat(b),
     ("POST", "/pot/scan"): lambda s, _q, _b: _pot_agent(s, None, "scan-now"),
+    ("GET", "/pot/scan/progress"): lambda _s, _q, _b: scan_progress.view(),
     ("GET", "/risk-board"): lambda s, _q, _b: risk_board(s),
     ("POST", "/risk-board/review"): lambda s, _q, _b: _risk_review(s),
     ("POST", "/risk-board/check"): lambda s, _q, b: _risk_mark(s, b),

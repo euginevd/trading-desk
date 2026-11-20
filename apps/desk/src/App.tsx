@@ -577,7 +577,11 @@ export default function App() {
                   <p className="muted">Loading…</p>
                 </main>
               ) : current === "trade" ? (
-                <PotPage tradingOn={settings ? settings.tradingOn : null} />
+                <PotPage
+                  tradingOn={settings ? settings.tradingOn : null}
+                  fear={fear}
+                  global={global}
+                />
               ) : current === "bots" || current === "dca-book" ? (
                 <BotsHome tab={botsTab} />
               ) : current === "backtest" ? (

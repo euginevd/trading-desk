@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from api import my_agents, screener
+from api import my_agents, scan_progress, screener
 from api.advisor import futures
 from api.ai_signal import MODELS, SignalError, Signals
 from api.binance import BinanceError, plain
@@ -244,6 +244,8 @@ class PotAgent:
         cards: list[dict[str, Any]] = []
         judged = 0
         keys = tuple(screener.STYLES) if every else ("swing", "position") if monday else ("swing",)
+        # Scan now's steps panel (scan_progress): nothing is recorded unless Scan now began it.
+        scan_progress.plan([(k, screener.STYLES[k].name) for k in keys])
         for key in keys:
             try:
                 seen = self.judge({"style": key})
@@ -251,7 +253,9 @@ class PotAgent:
                 name = screener.STYLES[key].name
                 said.append(f"{name}: {why}")
                 cards.append({"style": key, "name": name, "line": str(why)[:200]})
+                scan_progress.step(key, "failed", str(why))
                 continue
+            scan_progress.step(key, "done", _judged_words(seen))
             judged += 1
             misses = cast(list[dict[str, str]], seen.get("misses") or [])
             closest = "; ".join(f"{m['coin']} {m['why']}" for m in misses)
@@ -458,16 +462,23 @@ class PotAgent:
     def screen(self, body: dict[str, Any]) -> dict[str, Any]:
         """The style's screen: no model, a few seconds; kept briefly for judge."""
         pot = self._pot
+        key = str(body.get("style") or "")
+
+        def crowding(coin: str) -> str:
+            # The screener asks for funding once the shortlist is in, just before its odds.
+            scan_progress.step(key, "checking odds")
+            return self._crowding(coin)
+
         try:
             return screener.screen(
-                str(body.get("style") or ""),
+                key,
                 binance=pot.binance,
                 store=pot.store,
                 http=self._client,
                 regime=pot.regime(),
                 fallback=pot.coins(),
                 now_ms=pot.now_ms(),
-                crowding=self._crowding,
+                crowding=crowding,
             )
         except ValueError as error:
             raise Refused(str(error)) from error
@@ -523,7 +534,9 @@ class PotAgent:
         if style is None:
             raise Refused("Pick scalp, day, swing or position.")
         pot = self._pot
+        scan_progress.step(key, "screening")
         seen = screener.last_screen(key, pot.now_ms()) or self.screen(body)
+        scan_progress.step(key, None, _screened_words(seen))
         keys = ("style", "name", "regime", "warnings", "counts", "allowed", "misses", "block")
         out = {k: seen.get(k) for k in keys}
         out |= {"note": seen["note"], "riskPct": seen["riskPct"], "picks": [], "line": ""}
@@ -535,10 +548,12 @@ class PotAgent:
                 else f"No {style.name.lower()} setups right now."
             )
             return out
+        scan_progress.step(key, "judging")
         reply = self._ask(self._judge_prompt(style, seen), self.JUDGE, f"Pot: {key} picks", style)
         if reply is None:
             raise Refused("trading-agent couldn't be reached. Try again in a minute.")
         out["line"] = str(reply.get("line") or "")[:300]
+        scan_progress.step(key, "sizing")
         out["picks"] = self._checked_picks(style, seen, reply)
         return out
 
@@ -696,6 +711,36 @@ class PotAgent:
         else:
             pick |= sized
         return pick
+
+
+def _n(count: int, one: str, many: str) -> str:
+    return f"{count} {one if count == 1 else many}"
+
+
+def _screened_words(seen: dict[str, Any]) -> str:
+    """The screen's counts for the steps panel: '8 coins passed the filters, 2 setups'."""
+    if not seen.get("allowed"):
+        return str(seen.get("note") or "Off for now")
+    none: dict[str, Any] = {}
+    counts = cast(dict[str, Any], seen.get("counts") or none)
+    liquid, setups = int(counts.get("liquid") or 0), int(counts.get("setups") or 0)
+    passed = f"{_n(liquid, 'coin', 'coins')} passed the filters"
+    return f"{passed}, {_n(setups, 'setup', 'setups')}"
+
+
+def _judged_words(seen: dict[str, Any]) -> str:
+    """What trading-agent said of the shortlist, counted: 'trading-agent: 1 take, 1 wait'."""
+    picks = cast(list[dict[str, Any]], seen.get("picks") or [])
+    if not picks:
+        return "" if not seen.get("allowed") else "No setup to judge"
+    said = [
+        f"{n} {verdict}"
+        for verdict in VERDICTS
+        if (n := sum(1 for p in picks if p.get("verdict") == verdict))
+    ]
+    refused = sum(1 for p in picks if p.get("problem"))
+    words = "trading-agent: " + ", ".join(said)
+    return words + (f"; the rules refused {refused}" if refused else "")
 
 
 def _card(

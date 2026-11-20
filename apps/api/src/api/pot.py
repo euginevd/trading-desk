@@ -45,6 +45,7 @@ RETRY_MS = 10 * 60_000  # a refused stop is watched this long before Binance is 
 TARGET_RETRY_MS = 60 * 60_000  # a live stop is taken off for its target this often at most
 PAST = "Past its "  # _through's note when its market sell at the stop or target was refused
 WATCHED = "The desk is watching its stop."
+HELD = "held"  # an open trade's exit_kind while the owner holds it with no stop or target
 SCAN_HOUR, SCAN_MINUTE = 11, 15
 LIVE = ("placing", "waiting", "open")
 SETUP = re.compile(r"[\w ,.'()-]{1,60}")
@@ -125,6 +126,12 @@ def _never_placed(row: dict[str, Any]) -> bool:
     )
 
 
+def is_held(row: dict[str, Any]) -> bool:
+    """An open trade the owner holds with no stop or target: nothing on Binance, nothing watched,
+    and no risk counted, until a stop is set again (decision 94)."""
+    return row["status"] == "open" and row["exit_kind"] == HELD
+
+
 def order_view(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "ref": row["ref"],
@@ -143,6 +150,7 @@ class Pot:
         self._desk = desk
         self._binance, self._store, self._audit, self._clock = desk.parts()
         self._regime: tuple[str | None, str] | None = None
+        self._btc: dict[str, str] = {}  # BTC's price and its 50 and 200-day averages, once read
 
     def _now(self) -> int:
         return int(self._clock() * 1000)
@@ -247,7 +255,16 @@ class Pot:
         if self._regime is None:
             try:
                 rows = self._binance.klines(f"BTC{QUOTE}", "1d", 210)
-                self._regime = regime_of([Decimal(str(r[4])) for r in rows])
+                closes = [Decimal(str(r[4])) for r in rows]
+                self._regime = regime_of(closes)
+                fast, slow = sma(closes, 50), sma(closes, 200)
+                if closes and fast is not None and slow is not None:  # for the market card
+                    whole = Decimal(1)
+                    self._btc = {
+                        "btc": plain(closes[-1].quantize(whole)),
+                        "sma50": plain(fast.quantize(whole)),
+                        "sma200": plain(slow.quantize(whole)),
+                    }
             except BinanceError:
                 self._regime = (None, "no answer from Binance")
         return self._regime
@@ -424,6 +441,8 @@ class Pot:
 
     @staticmethod
     def _risk_of(r: dict[str, Any]) -> Decimal:
+        if is_held(r):  # no stop: not a measured risk, and outside the open-risk cap
+            return ZERO
         paid = Decimal(r["fill_quote"]) / Decimal(r["fill_qty"]) if Decimal(r["fill_qty"]) else None
         entry = paid or Decimal(r["entry"])
         held = Decimal(r["fill_qty"]) or Decimal(r["qty"])
@@ -498,6 +517,7 @@ class Pot:
             raise Refused("Put money in the pot first.")
         self._regime_rule(sized)
         self._account_rules(put_in, equity)
+        self._band_rule(sized)
         mine = replacing["ref"] if replacing else None
         others = [r for r in self._live() if r["ref"] != mine]
         spend, risk = Decimal(sized["spend"]), Decimal(sized["risk"])
@@ -505,14 +525,32 @@ class Pot:
         if spend > free:
             raise Refused(f"The pot has ${free:.2f} free; that trade needs ${spend:.2f}.")
         if self.open_risk(mine) + risk > equity * MAX_OPEN_RISK_PCT / HUNDRED:
-            raise Refused("That would put more than 3% of the pot at risk across open trades.")
+            raise Refused(
+                f"That would put more than {MAX_OPEN_RISK_PCT}% of the pot at risk across open "
+                "trades."
+            )
         if sized["coin"] != "BTC":
-            alts = [r for r in others if r["coin"] != "BTC"]
+            alts = [r for r in others if r["coin"] != "BTC" and not is_held(r)]
             if len(alts) >= MAX_ALTS:
                 raise Refused("Two alt trades are on already: alts move with BTC.")
         if any(r["coin"] == sized["coin"] for r in others):
             raise Refused(f"A {sized['coin']} trade is on already.")
         self._check_desk(spend)
+
+    def _band_rule(self, sized: dict[str, Any]) -> None:
+        """A stop Binance won't hold is refused before the trade, not found out after the fill:
+        it takes no stop further under the price than the pair's band (decision 93)."""
+        rules = self._rules_of(sized["coin"])
+        if rules.ask_down is None:
+            return
+        entry, stop = Decimal(str(sized["entry"])), Decimal(str(sized["stop"]))
+        lowest = rules.price(entry * rules.ask_down) + rules.tick
+        if stop < lowest:
+            pct = ((1 - rules.ask_down) * HUNDRED).normalize()
+            raise Refused(
+                f"Binance holds no stop more than {pct:f}% under the price on {sized['coin']}: "
+                f"with this entry the lowest it takes is {plain(lowest)}."
+            )
 
     def _account_rules(self, put_in: Decimal | None = None, equity: Decimal | None = None) -> None:
         """The pot's stops on buying more, for a new trade and an add alike: the month's loss
@@ -788,7 +826,7 @@ class Pot:
         rest is sold at market, as that leg would have (decision 86). Levels outside Binance's
         price band are watched by the desk, or the stop placed alone (decision 91)."""
         qty = self._rest(trade)
-        if qty <= ZERO:
+        if qty <= ZERO or is_held(trade):
             return
         if str(trade["note"] or "").startswith(WATCHED) and self._refused_lately(trade, RETRY_MS):
             if fallback:  # Binance refused these levels minutes ago: watched, not sent again
@@ -1220,7 +1258,8 @@ class Pot:
             raise Refused("Only an open trade's stop can move.")
         rules = self._rules_of(trade["coin"])
         stop = rules.price(number(body.get("stop"), "Stop"))
-        if stop <= Decimal(trade["stop"]):
+        was_held = is_held(trade)
+        if not was_held and stop <= Decimal(trade["stop"]):
             raise Refused("A stop only moves toward profit, never further away.")
         now = self.prices([trade["coin"]]).get(trade["coin"])
         if now is None:
@@ -1228,9 +1267,15 @@ class Pot:
         if stop >= now:
             raise Refused(f"A stop at or above the price ({plain(now)}) would sell straight away.")
         self._keeps_stop(trade, {"stop": plain(stop)})
+        if was_held and self._fits(trade | {"stop": plain(stop)}) == "none":
+            raise Refused(
+                "Binance holds no stop that far under the price. Set one closer, or keep "
+                "holding it with none."
+            )
         self._pull_exit(trade)
-        old = trade["stop"]
-        trade = self._save_trade(trade, {"stop": plain(stop)})
+        old = "none" if was_held else trade["stop"]
+        armed = {"exit_kind": None, "note": None} if was_held else {}
+        trade = self._save_trade(trade, {"stop": plain(stop)} | armed)
         self._exit(trade)
         self._audit.record("pot", f"{trade['ref']}: stop moved", plain(stop))
         self._log(trade["ref"], f"Stop moved from {old} to {plain(stop)}.")
@@ -1247,6 +1292,34 @@ class Pot:
             Decimal(trade["fill_qty"]) - Decimal(trade["exit_qty"])
         )
         self._sell(trade, qty)
+        return self.trade_view(self._trade(trade["ref"]), None)
+
+    @locked
+    def hold(self, ref: object) -> dict[str, Any]:
+        """An open trade held with no stop or target: its exits come off Binance and the desk
+        stops watching them. It stays in the account and on the page; setting a stop later
+        (the panel, or trading-agent's chat) puts its exits back."""
+        trade = self._trade(str(ref or ""))
+        if trade["status"] != "open":
+            raise Refused("Only an open trade can be held.")
+        if is_held(trade):
+            return self.trade_view(trade, None)
+        if any(
+            o["trade_ref"] == trade["ref"] and o["status"] == "placing" and o["role"] != "exit"
+            for o in self._store.pot_orders()
+        ):
+            raise Refused("An order for this trade is still unanswered. Try again in a minute.")
+        self._pull_exit(trade)
+        trade = self._trade(trade["ref"])
+        said = "Held with no stop or target. Nothing sells it until you set a stop or close it."
+        self._save_trade(trade, {"exit_kind": HELD, "note": said})
+        self._audit.record("pot", f"{trade['ref']}: held", "no stop or target")
+        self._log(
+            trade["ref"],
+            f"Held with no stop or target (they were {trade['stop']} and {trade['target']}): "
+            "its exits are off Binance and the desk no longer watches them. It counts toward "
+            "no risk limit until a stop is set.",
+        )
         return self.trade_view(self._trade(trade["ref"]), None)
 
     @locked
@@ -1386,7 +1459,10 @@ class Pot:
             raise Refused(f"The pot has ${self.cash():.2f} free; that needs ${spend:.2f}.")
         mine = max(held * (cost - stop) + held * (cost + stop) * FEE, ZERO)
         if self.open_risk() - mine + risk > equity * MAX_OPEN_RISK_PCT / HUNDRED:
-            raise Refused("That would put more than 3% of the pot at risk across open trades.")
+            raise Refused(
+                f"That would put more than {MAX_OPEN_RISK_PCT}% of the pot at risk across open "
+                "trades."
+            )
         self._check_desk(spend)
         self._pull_exit(trade)
         self._buy(self._trade(trade["ref"]), "add", "A", spend, qty)
@@ -1582,6 +1658,8 @@ class Pot:
         return {
             "exits": None
             if row["status"] != "open"
+            else "held"
+            if is_held(row)
             else "desk"
             if live is None and str(row["note"] or "").startswith(WATCHED)
             else "none"
@@ -1687,7 +1765,8 @@ class Pot:
             "fees": _cents(sum((Decimal(r["fees_usd"]) for r in rows), ZERO)),
             "monthResult": _cents(self.month_result()),
             "monthLimit": _cents(put_in * MONTH_LOSS_PCT / HUNDRED),
-            "regime": {"state": state, "words": words},
+            "openRiskLimit": _cents(self.equity() * MAX_OPEN_RISK_PCT / HUNDRED),
+            "regime": {"state": state, "words": words} | self._btc,
             "nextScan": next_scan(self._now()),
             "lastScan": self.last_scan(),
             # The scheduler runs the 11:15am scan while it's on (api.schedule).

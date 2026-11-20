@@ -779,11 +779,38 @@ dialog.pnt {
   margin: 0;
 }
 .acc-money div {
+  position: relative;
   padding: 12px 16px;
   border: 1px solid var(--line);
   border-radius: var(--r-panel);
   background: var(--layer-1);
   box-shadow: var(--sheen);
+}
+/* A tile or card that opens its details: its label is the button, stretched over the whole
+   card, so a card with a button of its own (Review) nests nothing. */
+.pot-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.pot-open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-panel);
+}
+.pot-open:focus-visible {
+  outline: none;
+}
+.pot-open:focus-visible::after {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.acc-money div:has(.pot-open:hover),
+.pot-scan-card:has(.pot-open:hover) {
+  background: var(--layer-2);
 }
 .acc-money dt {
   color: var(--muted);
@@ -842,51 +869,6 @@ dialog.pnt {
   color: var(--body);
   font-size: 15px;
 }
-.acc-strip {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 0 0 8px;
-  padding: 10px 12px 10px 16px;
-  border: 1px solid var(--line);
-  border-radius: var(--r-panel);
-  background: var(--panel);
-}
-.acc-regime {
-  flex: none;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--layer-2);
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
-}
-.acc-regime.is-bull {
-  background: var(--up-soft);
-  color: var(--up);
-}
-.acc-regime.is-neutral {
-  background: var(--wait-soft);
-  color: var(--wait);
-}
-.acc-regime.is-bear {
-  background: var(--down-soft);
-  color: var(--down);
-}
-.acc-btc {
-  flex: none;
-  color: var(--body);
-  font-size: 13px;
-}
-.acc-scan {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .acc-toast {
   position: fixed;
   z-index: 20;
@@ -932,18 +914,16 @@ dialog.pnt {
   .acc-money > div:first-child {
     grid-column: 1 / -1;
   }
-  .acc-strip {
-    flex-wrap: wrap;
-  }
-  .acc-scan {
-    flex-basis: 100%;
-    order: 3;
-    white-space: normal;
+  .acc-acts .btn {
+    flex: 1;
   }
 }
+/* Scan now and New trade, under the market cards. */
 .acc-acts {
   display: flex;
+  justify-content: flex-end;
   gap: 8px;
+  margin: 10px 0 0;
 }
 /* The watchlist's coins: one dense row each, its cells in fixed columns so the rows line up
    like a table; two columns of rows where both fit. */
@@ -1883,6 +1863,7 @@ dialog.ntf {
   list-style: none;
 }
 .pot-scan-card {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1900,9 +1881,128 @@ dialog.ntf {
   justify-content: space-between;
   gap: 8px;
 }
+/* Review sits above the card's stretched opener (.pot-open), a button of its own. */
 .pot-scan-card .btn {
+  position: relative;
+  z-index: 1;
   align-self: flex-start;
   margin-top: auto;
+}
+/* The market today, in cards the size of the style cards under them (PotMarket.tsx): a label,
+   one figure or word, and a line. */
+.pot-scan.pot-mkt {
+  margin: 0;
+}
+.pot-mkt .pot-scan-card {
+  animation: none;
+}
+.pot-mkt .pot-open {
+  align-self: flex-start;
+  color: var(--muted);
+  font-size: 12px;
+}
+.pot-mkt-fig {
+  margin: 0;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+.pot-mkt-fig small {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 400;
+}
+.pot-mkt-fig.is-bull {
+  color: var(--up);
+}
+.pot-mkt-fig.is-neutral {
+  color: var(--wait);
+}
+.pot-mkt-fig.is-bear {
+  color: var(--down);
+}
+.pot-mkt-line {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+/* Scan now's steps (PotMarket.tsx): a row per style, its stage as a word beside an icon, and
+   what it found; Hide steps folds it to its first line. */
+.pot-steps {
+  margin: 10px 0 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  background: var(--layer-1);
+}
+.pot-steps-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pot-steps-head p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--body);
+  font-size: 13px;
+}
+.pot-steps-time {
+  color: var(--muted);
+  font-size: 12px;
+}
+.pot-steps-list {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 2px;
+  padding: 0;
+  list-style: none;
+}
+.pot-steps-list li {
+  display: grid;
+  grid-template-columns: 20px 84px 220px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  color: var(--body);
+  font-size: 13px;
+}
+.pot-steps-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--line-2);
+  border-radius: 999px;
+  font-size: 11px;
+}
+.pot-steps-notes {
+  color: var(--muted);
+}
+.pot-steps-list .is-waiting {
+  color: var(--muted);
+}
+.pot-steps-list .is-busy .pot-steps-icon {
+  border-top-color: var(--accent);
+}
+.pot-steps-list .is-busy .pot-steps-stage {
+  color: var(--text);
+}
+.pot-steps-list .is-done .pot-steps-icon {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.pot-steps-list .is-failed .pot-steps-icon {
+  border-color: var(--down);
+  color: var(--down);
+}
+.pot-steps-list .is-failed .pot-steps-stage {
+  color: var(--down);
 }
 .pot-scan-coin {
   display: flex;
@@ -1932,10 +2032,32 @@ dialog.ntf {
   .pot-scan-card:nth-child(4) {
     animation-delay: 180ms;
   }
+  .pot-steps-list {
+    animation: ntf-in 200ms var(--ease);
+  }
+  .pot-steps-list .is-busy .pot-steps-icon {
+    animation: ntf-spin 800ms linear infinite;
+  }
 }
 @media (max-width: 760px) {
   .pot-scan {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pot-mkt-fig {
+    font-size: 20px;
+  }
+  .pot-steps-head {
+    flex-wrap: wrap;
+  }
+  .pot-steps-head p {
+    flex-basis: 100%;
+  }
+  .pot-steps-list li {
+    grid-template-columns: 20px minmax(0, 1fr);
+  }
+  .pot-steps-stage,
+  .pot-steps-notes {
+    grid-column: 2;
   }
 }
 

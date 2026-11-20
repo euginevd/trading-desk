@@ -28,7 +28,10 @@ UNIVERSE_KEY = "pot_universe"
 RETRY_MS = 10 * 60_000
 # Each style's section heading in local/agents/trading-agent.md, the one file of the rules.
 HEADING = {"scalp": "Scalp", "day": "Day trade", "swing": "Swing", "position": "Position"}
-RISK_PCT = "1"  # every style: 1% of the pot a trade, within its cap (owner, 17 Nov 2026)
+RISK_PCT = "2"  # every style: 2% of the pot a trade, within its cap (owner, 20 Nov 2026)
+# Binance holds no stop further under the price than a pair's band allows (20% on its tighter
+# pairs, NEARUSDC among them), so no style's stop is wider than this: decision 93.
+MAX_STOP = 0.18
 # Binance takes only these in a list of symbols: a ticker in another script (some Binance
 # listings have one) would refuse the whole request.
 PLAIN = re.compile(r"[A-Z0-9]{1,20}")
@@ -625,7 +628,7 @@ def _swing(coin: str, rows: Rows, btc_month: float | None, style: Style) -> dict
         return None
     zone = zone or {"names": ["Range top"], "strength": 3}
     entry = max(f[1] for f in found)
-    stop = _clamp_stop(entry, min(f[2] for f in found), 1.5 * a, 3 * a, a)
+    stop = _clamp_stop(entry, min(f[2] for f in found), 1.5 * a, min(3 * a, MAX_STOP * entry), a)
     if stop is None:
         return None
     lead = max((month or 0) - (btc_month or 0), 0)
@@ -677,6 +680,9 @@ def _position(
     found = [(n, min(e, price), s) for n, e, s in found]
     entry = max(f[1] for f in found)
     stop = off_round(min(f[2] for f in found), wa)
+    # A weekly stop is often wider than Binance will hold: tightened to the widest it takes,
+    # so the position is sized larger and the 3 : 1 target sits closer.
+    stop = max(stop, entry * (1 - MAX_STOP))
     if not 0 < stop < entry:
         return None
     lead = max((quarter or 0) - (btc_q or 0), 0)

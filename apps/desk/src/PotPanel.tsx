@@ -9,6 +9,7 @@ import {
   cancelPotTrade,
   closePotTrade,
   keepPotTrade,
+  holdPotTrade,
   enterPotTradeNow,
   movePotStop,
   movePotTarget,
@@ -69,7 +70,8 @@ const STATE: Record<PotTrade["orders"][number]["status"], string> = {
 };
 const NOTE = { desk: "Desk", thesis: "Thesis", you: "You" } as const;
 const PARTS = [25, 50, 75] as const;
-type Ask = "close" | "keep" | "cancel" | "now" | { reduce: number } | { add: string } | null;
+type Ask =
+  "close" | "keep" | "hold" | "cancel" | "now" | { reduce: number } | { add: string } | null;
 type Step = {
   text: string;
   button: string;
@@ -156,6 +158,14 @@ export default function PotPanel({
         run: () => closePotTrade(t.ref),
         said: (x) => `${x.ref} closed at market.`,
         stay: false,
+      };
+    if (a === "hold")
+      return {
+        text: `Hold ${t.ref} with no stop or target? They come off Binance and the desk stops watching them, so nothing sells it if ${t.coin} falls. It stays in Positions; set a stop later to put them back.`,
+        button: "Hold with no stop",
+        run: () => holdPotTrade(t.ref),
+        said: (x) => `${x.ref}: held with no stop or target.`,
+        stay: true,
       };
     if (a === "keep")
       return {
@@ -524,6 +534,11 @@ export default function PotPanel({
         {open && (
           <button type="button" className="btn btn-danger pot-left" onClick={() => setAsk("close")}>
             Close at market
+          </button>
+        )}
+        {open && t.exits !== "held" && (
+          <button type="button" className="btn" onClick={() => setAsk("hold")}>
+            Hold with no stop
           </button>
         )}
         {open && (

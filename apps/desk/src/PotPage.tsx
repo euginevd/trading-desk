@@ -1,13 +1,15 @@
 // The Trade page: the trading account, run by trading-agent (docs/plan-trade.md). Money first
-// (value, unrealized, realized) and the two risk limits as gauges; then the market and
-// Scan now, what trading-agent proposes, the trades in tabs (positions, orders, history,
-// stats, the ledger) and, at the foot, the watchlist (AccountWatchlist.tsx).
+// (value, unrealized, realized) and the two risk limits as gauges; then the market as cards
+// with Scan now and its steps (PotMarket.tsx), what trading-agent proposes, the trades in tabs
+// (positions, orders, history, stats, the ledger) and, at the foot, the watchlist
+// (AccountWatchlist.tsx). Every tile and card opens the figures behind it (PotDetail.tsx).
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from "react";
 import {
   ApiError,
   checkPot,
   dismissPotProposal,
   getPot,
+  getPotScanProgress,
   placePotTrade,
   previewPotTrade,
   putInPot,
@@ -17,31 +19,35 @@ import { errorOf, percent } from "./format";
 import AgentAvatar from "./AgentIcons";
 import AccountWatchlist from "./AccountWatchlist";
 import CoinIcon from "./CoinIcon";
-import { dated, day, dollars, qty, when } from "./dcaFormat";
+import { dated, day, dollars, qty } from "./dcaFormat";
 import { Live } from "./Figures";
 import PotChat, { usePotChat } from "./PotChat";
+import PotDetail from "./PotDetail";
+import { MarketCards, Opener, ScanSteps, type PotDetailOf } from "./PotMarket";
 import PotNewTrade from "./PotNewTrade";
 import NewTradeFlow, { OddsLine } from "./NewTradeFlow";
 import PotPanel, { px, rewardOf, rWord, rr, tone } from "./PotPanel";
 import PotStats from "./PotStats";
 import { RuleBreakBanner } from "./RuleMarks";
 import type {
+  MarketGlobal,
   PotAction,
   PotCheck,
   PotOdds,
   PotProposal,
   PotScanCard,
+  PotScanProgress,
   PotStyleKey,
   PotTrade,
   PotPreview,
   PotView,
   RuleBreak,
+  Sentiment,
 } from "./types";
 import "./pot.css";
 
 // Dollars without empty cents: $1, $0.81, $10.
 const cash = (v: string | number) => dollars(v).replace(/\.00$/, "");
-const REGIME = { bull: "Bull", neutral: "Neutral", bear: "Bear" } as const;
 
 // A risk limit as a tile: how much is used of it, with a bar that warns from three quarters.
 function Gauge({
@@ -49,17 +55,23 @@ function Gauge({
   value,
   limit,
   note,
+  onOpen,
 }: {
   name: string;
   value: number;
   limit: number;
   note: string;
+  onOpen: (from: HTMLElement) => void;
 }) {
   const share = limit > 0 ? Math.min(1, value / limit) : 0;
   const level = share >= 1 ? " is-full" : share >= 0.75 ? " is-near" : "";
   return (
     <div className={`acc-gauge${level}`}>
-      <dt>{name}</dt>
+      <dt>
+        <Opener name={name} onOpen={onOpen}>
+          {name}
+        </Opener>
+      </dt>
       <dd className="num">
         {cash(value)} <span className="pot-of">of {cash(limit)}</span>
       </dd>
@@ -100,6 +112,18 @@ function saveFlag(key: string, on: boolean) {
     window.localStorage.setItem(key, on ? "1" : "0");
   } catch {
     // not kept: it starts closed next time
+  }
+}
+// Scan now's steps: shown until the owner hides them, and for how long a finished scan stays
+// open before it folds on its own.
+const STEPS_KEY = "desk.pot.steps";
+const STEPS_LINGER_MS = 4000;
+const SCAN_POLL_MS = 1000;
+function readStepsShown(): boolean {
+  try {
+    return window.localStorage.getItem(STEPS_KEY) !== "0";
+  } catch {
+    return true;
   }
 }
 
@@ -261,7 +285,7 @@ function TradeRow({ trade, onOpen }: { trade: PotTrade; onOpen: () => void }) {
   const fill = Number(trade.fillPrice ?? trade.entry);
   const moved = trade.now !== null && fill > 0 ? (Number(trade.now) / fill - 1) * 100 : null;
   // The stop only matters once the entry has filled.
-  const stopGap = waiting ? null : toStop(trade);
+  const stopGap = waiting || trade.exits === "held" ? null : toStop(trade);
   const stopGapId = useId();
   return (
     <li>
@@ -281,7 +305,14 @@ function TradeRow({ trade, onOpen }: { trade: PotTrade; onOpen: () => void }) {
             {trade.ref}, {trade.setup}
           </small>
         </span>
-        <Ladder trade={trade} />
+        {trade.exits === "held" ? (
+          <span className="muted num">
+            Held · bought at {px(trade.fillPrice ?? trade.entry)}
+            {trade.now !== null && ` · now ${px(trade.now)}`}
+          </span>
+        ) : (
+          <Ladder trade={trade} />
+        )}
         <span className="r">
           {waiting ? (
             <span className="muted num">
@@ -322,6 +353,10 @@ function TradeRow({ trade, onOpen }: { trade: PotTrade; onOpen: () => void }) {
             <span className="pot-tag is-lost" title={trade.note ?? undefined}>
               No stop on Binance
             </span>
+          ) : trade.exits === "held" ? (
+            <span className="pot-tag is-wait" title={trade.note ?? undefined}>
+              No stop or target
+            </span>
           ) : trade.exits === "desk" ? (
             <span className="pot-tag is-wait" title={trade.note ?? undefined}>
               Desk-watched stop
@@ -340,14 +375,27 @@ function TradeRow({ trade, onOpen }: { trade: PotTrade; onOpen: () => void }) {
 }
 
 // Scan now, one card per style: a take to review, else the coin closest to one and what it's
-// missing, else the style's own line (nothing near, or why it's off today).
-function ScanCards({ cards, onReview }: { cards: PotScanCard[]; onReview: (id: string) => void }) {
+// missing, else the style's own line (nothing near, or why it's off today). The style's name
+// opens its details; Review stays a button of its own.
+function ScanCards({
+  cards,
+  onReview,
+  onOpen,
+}: {
+  cards: PotScanCard[];
+  onReview: (id: string) => void;
+  onOpen: (style: string, from: HTMLElement) => void;
+}) {
   return (
     <ul className="pot-scan" aria-label="Scan by style">
       {cards.map(({ take, ...c }) => (
         <li key={c.style} className={`pot-scan-card${take ? " is-take" : ""}`}>
           <header>
-            <b>{c.name}</b>
+            <b>
+              <Opener name={c.name} onOpen={(el) => onOpen(c.style, el)}>
+                {c.name}
+              </Opener>
+            </b>
             <span className={`pot-tag ${take ? "is-live" : c.close ? "is-wait" : "is-quiet"}`}>
               {take ? "Take" : c.close ? "Near" : "Nothing near"}
             </span>
@@ -537,7 +585,17 @@ function Checked({ found }: { found: PotCheck }) {
 
 // tradingOn: the side panel's kill switch, from App, so this page says at once when it changes;
 // null while unknown (and in tests that render the page alone).
-export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | null }) {
+// fear and global: the top bar's Fear & Greed and market figures, read once by App and handed
+// down for the market cards; null while unknown.
+export default function PotPage({
+  tradingOn = null,
+  fear = null,
+  global = null,
+}: {
+  tradingOn?: boolean | null;
+  fear?: Sentiment | null;
+  global?: MarketGlobal | null;
+}) {
   const [pot, setPot] = useState<PotView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -568,6 +626,18 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
   // so it can't switch a closed or changed review to market.
   const marketAsk = useRef(0);
   const chat = usePotChat();
+  // The figures behind a tile or card, and the button that opened them: focus goes back there.
+  const [detail, setDetail] = useState<PotDetailOf | null>(null);
+  const detailFrom = useRef<HTMLElement | null>(null);
+  // Scan now's steps while it runs (null: none to show, or the progress route didn't answer),
+  // the owner's kept choice to see them, whether they touched it this scan, and whether a
+  // finished scan has folded on its own.
+  const [progress, setProgress] = useState<PotScanProgress | null>(null);
+  const [stepsShown, setStepsShown] = useState(readStepsShown);
+  const [stepsTouched, setStepsTouched] = useState(false);
+  const [stepsFolded, setStepsFolded] = useState(false);
+  const [scanClock, setScanClock] = useState({ start: 0, now: 0 });
+  const sawScanRun = useRef(false);
 
   const load = useCallback(() => {
     getPot().then(
@@ -593,6 +663,35 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
     const fade = window.setTimeout(() => setSaid(null), 6000);
     return () => window.clearTimeout(fade);
   }, [said]);
+  // While a scan runs, ask for its steps about once a second. A reply that isn't a running
+  // scan (the last scan's record, before this one began) and a failed ask are both left out,
+  // so the page falls back to its plain "Scanning…".
+  useEffect(() => {
+    if (!scanning) return;
+    let on = true;
+    const tick = window.setInterval(() => {
+      setScanClock((c) => ({ ...c, now: Date.now() }));
+      getPotScanProgress().then(
+        (p) => {
+          if (!on || !p.running || p.steps.length === 0) return;
+          sawScanRun.current = true;
+          setProgress(p);
+        },
+        () => undefined,
+      );
+    }, SCAN_POLL_MS);
+    return () => {
+      on = false;
+      window.clearInterval(tick);
+    };
+  }, [scanning]);
+  // A finished scan shows how it ended, then folds on its own.
+  const hasSteps = progress !== null;
+  useEffect(() => {
+    if (scanning || !hasSteps) return;
+    const fold = window.setTimeout(() => setStepsFolded(true), STEPS_LINGER_MS);
+    return () => window.clearTimeout(fold);
+  }, [scanning, hasSteps]);
 
   const openChat = (on: boolean) => {
     setChatOpen(on);
@@ -650,7 +749,7 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
   const realPct = ofBase(realUsd, putIn);
   const waiting = on.filter((t) => t.status !== "open");
   const inTrades = Math.max(0, Number(pot.value) - Number(pot.cash));
-  const openLimit = (Number(pot.value) * 3) / 100;
+  const openLimit = Number(pot.openRiskLimit ?? (Number(pot.value) * 6) / 100);
   const short = Number(pot.backing?.short ?? 0);
   const used = Math.max(0, -Number(pot.monthResult));
   // What one trade may lose: the percent, or the cap when the cap is what holds it.
@@ -665,13 +764,31 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
     take && pot.proposals.some((x) => x.id === take.id) ? { ...c, take } : c,
   );
 
+  // The scan is over: read its steps once more for how each style ended. After a scan that
+  // failed, only a record this page saw running is this scan's; otherwise it may be the last one's.
+  const scanEnded = (ok: boolean) => {
+    setScanning(false);
+    setScanClock((c) => ({ ...c, now: Date.now() }));
+    const seen = sawScanRun.current;
+    getPotScanProgress().then(
+      (p) => {
+        if (!p.running && p.steps.length > 0 && (ok || seen)) setProgress(p);
+      },
+      () => undefined,
+    );
+  };
   const scan = () => {
     setScanning(true);
     setSaid(null);
+    setProgress(null);
+    setStepsTouched(false);
+    setStepsFolded(false);
+    setScanClock({ start: Date.now(), now: Date.now() });
+    sawScanRun.current = false;
     scanPot().then(
       (p) => {
         setPot(p);
-        setScanning(false);
+        scanEnded(true);
         setCoinsVersion((v) => v + 1);
         const n = p.proposals.length;
         setSaid(
@@ -681,10 +798,37 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
         );
       },
       (e: unknown) => {
-        setScanning(false);
+        scanEnded(false);
         setSaid(errorOf(e, "trading-agent couldn't scan. Try again in a minute."));
       },
     );
+  };
+  // Hide steps or Show steps: the owner's choice, kept; a scan they opened doesn't fold itself.
+  const stepsOpen = stepsTouched ? stepsShown : stepsShown && !stepsFolded;
+  const toggleSteps = () => {
+    setStepsTouched(true);
+    setStepsShown(!stepsOpen);
+    saveFlag(STEPS_KEY, !stepsOpen);
+  };
+  const openDetail = (of: PotDetailOf, from: HTMLElement) => {
+    detailFrom.current = from;
+    setDetail(of);
+  };
+  // The panel has closed (Esc, a click outside, Close or one of its own buttons): focus goes
+  // back to the card that opened it, or to where its button pointed.
+  const detailClosed = () => {
+    setDetail(null);
+    detailFrom.current?.focus();
+    detailFrom.current = null;
+  };
+  const reviewProposal = (id: string) => {
+    const p = pot.proposals.find((x) => x.id === id);
+    if (!p) {
+      setSaid("That setup has gone: scan again for a fresh one.");
+      return;
+    }
+    setPlaceError(null);
+    setPending({ ...p, proposal: p.id });
   };
   const dismiss = (id: string) =>
     dismissPotProposal(id).then(setPot, (e: unknown) =>
@@ -817,7 +961,11 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
           <section className="acc-head" aria-label="The account">
             <dl className="acc-money">
               <div>
-                <dt>Value</dt>
+                <dt>
+                  <Opener name="Value" onOpen={(el) => openDetail({ kind: "value" }, el)}>
+                    Value
+                  </Opener>
+                </dt>
                 <dd className="num">
                   <Live value={pot.value}>{dollars(pot.value)}</Live>
                 </dd>
@@ -827,7 +975,11 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
                 </small>
               </div>
               <div>
-                <dt>Unrealized</dt>
+                <dt>
+                  <Opener name="Unrealized" onOpen={(el) => openDetail({ kind: "unrealized" }, el)}>
+                    Unrealized
+                  </Opener>
+                </dt>
                 <dd className={`num ${tone(unrealUsd)}`}>
                   {dollars(unrealUsd, true)}{" "}
                   {unrealPct !== null && <span className="pot-of">{percent(unrealPct)}</span>}
@@ -839,7 +991,11 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
                 </small>
               </div>
               <div>
-                <dt>Realized</dt>
+                <dt>
+                  <Opener name="Realized" onOpen={(el) => openDetail({ kind: "realized" }, el)}>
+                    Realized
+                  </Opener>
+                </dt>
                 <dd className={`num ${tone(realUsd)}`}>
                   {dollars(realUsd, true)}{" "}
                   {realPct !== null && <span className="pot-of">{percent(realPct)}</span>}
@@ -857,12 +1013,14 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
                 value={Number(pot.openRisk)}
                 limit={openLimit}
                 note={`${dollars(pot.allowedRisk ?? "0")} a trade, ${perTrade}`}
+                onOpen={(el) => openDetail({ kind: "risk" }, el)}
               />
               <Gauge
                 name="Month's loss"
                 value={used}
                 limit={Number(pot.monthLimit)}
                 note="Trading stops at the limit"
+                onOpen={(el) => openDetail({ kind: "month" }, el)}
               />
             </dl>
             {pot.proposals.length > 0 && (
@@ -901,33 +1059,30 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
           </section>
         ) : (
           <>
-            <div className="acc-strip" aria-label="The market today">
-              <span className={`acc-regime is-${pot.regime.state ?? "none"}`}>
-                {pot.regime.state ? REGIME[pot.regime.state] : "Unknown"}
-              </span>
-              <span className="acc-btc">BTC {pot.regime.words || "—"}</span>
-              <span
-                className="acc-scan"
-                title={`${pot.lastScan?.line ?? ""}${pot.scansOnItsOwn ? ` Next scan ${when(pot.nextScan)}.` : " Scans paused."}`}
-              >
-                {scanning
-                  ? "Scanning the market…"
-                  : !pot.lastScan
-                    ? "Not scanned yet"
-                    : pot.lastScan.styles
-                      ? // The cards below say what each style found; the strip says only when.
-                        `Scanned ${when(pot.lastScan.at)} · ${pot.scansOnItsOwn ? `next ${when(pot.nextScan)}` : "scans paused"}`
-                      : `${when(pot.lastScan.at)}: ${pot.lastScan.line}`}
-              </span>
-              <div className="acc-acts">
-                <button type="button" className="btn" disabled={scanning} onClick={scan}>
-                  {scanning ? "Scanning…" : "Scan now"}
-                </button>
-                <button type="button" className="btn btn-accent" onClick={() => setFlow(true)}>
-                  New trade
-                </button>
-              </div>
+            <MarketCards
+              pot={pot}
+              fear={fear}
+              global={global}
+              scanning={scanning}
+              onOpen={openDetail}
+            />
+            <div className="acc-acts">
+              <button type="button" className="btn" disabled={scanning} onClick={scan}>
+                {scanning ? "Scanning…" : "Scan now"}
+              </button>
+              <button type="button" className="btn btn-accent" onClick={() => setFlow(true)}>
+                New trade
+              </button>
             </div>
+            {progress && (
+              <ScanSteps
+                progress={progress}
+                scanning={scanning}
+                open={stepsOpen}
+                elapsed={scanClock.now - scanClock.start}
+                onToggle={toggleSteps}
+              />
+            )}
 
             {said && (
               <p className="acc-toast" role="status">
@@ -939,15 +1094,8 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
               <ScanCards
                 key={pot.lastScan.at}
                 cards={scanCards}
-                onReview={(id) => {
-                  const p = pot.proposals.find((x) => x.id === id);
-                  if (!p) {
-                    setSaid("That setup has gone: scan again for a fresh one.");
-                    return;
-                  }
-                  setPlaceError(null);
-                  setPending({ ...p, proposal: p.id });
-                }}
+                onReview={reviewProposal}
+                onOpen={(style, el) => openDetail({ kind: "style", style }, el)}
               />
             )}
 
@@ -1196,6 +1344,32 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
           }}
         />
       )}
+
+      <PotDetail
+        detail={detail}
+        pot={pot}
+        fear={fear}
+        global={global}
+        openLimit={openLimit}
+        perTrade={perTrade}
+        cards={scanCards}
+        onClosed={detailClosed}
+        onTab={(key) => {
+          pickTab(key);
+          detailFrom.current = document.getElementById(`acc-tab-${key}`);
+          setDetail(null);
+        }}
+        onNewTrade={() => {
+          detailFrom.current = null;
+          setDetail(null);
+          setFlow(true);
+        }}
+        onReview={(id) => {
+          detailFrom.current = null;
+          setDetail(null);
+          reviewProposal(id);
+        }}
+      />
 
       <dialog
         ref={review}

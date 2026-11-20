@@ -1085,6 +1085,25 @@ def test_a_watched_stop_sells_at_market_when_the_price_reaches_it(
     assert by_tag(f"{trade['ref']}-M1")["side"] == "SELL"
 
 
+def test_a_held_trade_has_no_exits_until_a_stop_is_set(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trade = opened(pot)
+    done = pot.hold(trade["ref"])
+    assert (done["status"], done["exits"]) == ("open", "held")
+    assert by_tag(f"{trade['ref']}-X1T")["status"] == "CANCELED"
+    assert Decimal(pot.view()["openRisk"]) == ZERO
+    sent = len(demo.EXCHANGE.orders)
+    monkeypatch.setattr(pot, "prices", at("150"))  # far under the old stop: nothing sells it
+    pot.sync()
+    assert len(demo.EXCHANGE.orders) == sent
+    assert pot.view()["trades"][0]["status"] == "open"
+    monkeypatch.setattr(pot, "prices", at("212.4"))
+    armed = pot.move_stop({"ref": trade["ref"], "stop": "180"})  # lower than before: allowed
+    assert (armed["stop"], armed["exits"]) == ("180", "both")
+    assert Decimal(pot.view()["openRisk"]) > ZERO
+
+
 def test_a_trade_kept_as_a_holding_sells_nothing_and_leaves_the_account(pot: Pot) -> None:
     trade = opened(pot)
     cash = Decimal(pot.view()["cash"])
@@ -1103,6 +1122,14 @@ def test_a_trade_kept_as_a_holding_sells_nothing_and_leaves_the_account(pot: Pot
     assert pot.view()["trades"][0]["status"] == "closed"
     with pytest.raises(Refused, match="Only an open trade"):
         pot.keep(trade["ref"])
+
+
+def test_a_stop_binance_wont_hold_is_refused_before_the_trade(pot: Pot) -> None:
+    band(pot, ask_down="0.96")  # 190 is 5% under the 200 entry; this pair holds 4% at most
+    with pytest.raises(Refused, match="Binance holds no stop more than 4% under the price"):
+        pot.place(SOL)
+    band(pot, ask_down="0.9")
+    assert pot.place(SOL)["status"] == "waiting"
 
 
 def test_a_stop_on_alone_is_replaced_when_the_stop_moves(

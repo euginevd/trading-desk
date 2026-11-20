@@ -7,6 +7,7 @@ import type {
   RiskBoard,
   PotJudge,
   PotPreview,
+  PotScanProgress,
   PotScreen,
   PotStyleKey,
   PotStyles,
@@ -377,6 +378,7 @@ export const movePotStop = (ref: string, stop: string) =>
   call<PotTrade>("POST", "/pot/trades/stop", { ref, stop });
 export const closePotTrade = (ref: string) => call<PotTrade>("POST", "/pot/trades/close", { ref });
 export const keepPotTrade = (ref: string) => call<PotTrade>("POST", "/pot/trades/keep", { ref });
+export const holdPotTrade = (ref: string) => call<PotTrade>("POST", "/pot/trades/hold", { ref });
 export const enterPotTradeNow = (ref: string, override = false) =>
   call<PotTrade>("POST", "/pot/trades/enter-now", { ref, ...(override ? { override } : {}) });
 export const addToPotTrade = (ref: string, usdc: string, override = false) =>
@@ -388,6 +390,7 @@ export const movePotTarget = (ref: string, target: string) =>
 export const notePotTrade = (ref: string, text: string) =>
   call<PotTrade>("POST", "/pot/trades/note", { ref, text });
 export const scanPot = () => call<PotView>("POST", "/pot/scan");
+export const getPotScanProgress = () => call<PotScanProgress>("GET", "/pot/scan/progress");
 export const getPotStyles = () => call<PotStyles>("GET", "/pot/styles");
 
 // The Backtest page (decision 87): runs Freqtrade through the worker, reads its results.
