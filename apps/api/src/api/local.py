@@ -128,12 +128,11 @@ class Local(BaseHTTPRequestHandler):
 
 
 def watch(stop: threading.Event) -> None:
-    """Every 30 seconds: places exits for filled buys, records trades that closed, and steps
-    each DCA and grid bot (decisions 37 and 38), and follows the trading pot's orders."""
+    """Every 30 seconds: follows the DCA book's and the Trading account's orders, and steps each
+    DCA and grid bot (decisions 37 and 38)."""
     while not stop.wait(WATCH_SECONDS):
         try:
             with live_trading() as desk:
-                desk.watch()
                 DcaBook(desk).sync()
                 Pot(desk).sync()
             with live_bots() as bots:

@@ -1,5 +1,5 @@
-"""Smart trades, limits, the kill switch, the watchlist, signals and account value history,
-kept in a local SQLite file (decisions 13 and 18)."""
+"""Limits, the kill switch, the watchlist, signals and account value history, and the old smart
+trades (read only, decision 95), kept in a local SQLite file (decisions 13 and 18)."""
 
 import json
 import sqlite3
@@ -237,23 +237,6 @@ CREATE TABLE IF NOT EXISTS pot_orders (
     updated INTEGER NOT NULL
 );
 """
-FIELDS = (
-    "status",
-    "buy_id",
-    "qty",
-    "entry_price",
-    "exit_kind",
-    "exit_id",
-    "exit_price",
-    "note",
-    "updated",
-)
-# Every column a trade can change, written out whole: no SQL is built from strings.
-UPDATE = (
-    "UPDATE trades SET status = :status, buy_id = :buy_id, qty = :qty, "
-    "entry_price = :entry_price, exit_kind = :exit_kind, exit_id = :exit_id, "
-    "exit_price = :exit_price, note = :note, updated = :updated WHERE id = :id"
-)
 
 
 class Store:
@@ -285,50 +268,6 @@ class Store:
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (key, value),
             )
-
-    def claim(self, trade: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-        """Records a new trade as placing; the same client_id again returns the first one."""
-        try:
-            with self._db:
-                cursor = self._db.execute(
-                    "INSERT INTO trades (client_id, created, symbol, entry, limit_price, spend, "
-                    "take_profit, stop_loss, status, updated) "
-                    "VALUES (:client_id, :created, :symbol, :entry, :limit_price, :spend, "
-                    ":take_profit, :stop_loss, 'placing', :created)",
-                    trade,
-                )
-        except sqlite3.IntegrityError:
-            row = self._db.execute(
-                "SELECT * FROM trades WHERE client_id = ?", (trade["client_id"],)
-            ).fetchone()
-            return dict(row), False
-        return self.trade(int(cursor.lastrowid or 0)), True
-
-    def trade(self, trade_id: int) -> dict[str, Any]:
-        row = self._db.execute("SELECT * FROM trades WHERE id = ?", (trade_id,)).fetchone()
-        if row is None:
-            raise LookupError(trade_id)
-        return dict(row)
-
-    def update(self, trade_id: int, **changes: Any) -> dict[str, Any]:
-        unknown = set(changes) - set(FIELDS)
-        if unknown:
-            raise ValueError(unknown)
-        row = {**self.trade(trade_id), **changes}
-        with self._db:
-            self._db.execute(UPDATE, {field: row[field] for field in (*FIELDS, "id")})
-        return self.trade(trade_id)
-
-    def trades(self, limit: int = 50) -> list[dict[str, Any]]:
-        rows = self._db.execute("SELECT * FROM trades ORDER BY created DESC LIMIT ?", (limit,))
-        return [dict(r) for r in rows]
-
-    def open_trades(self) -> list[dict[str, Any]]:
-        rows = self._db.execute(
-            "SELECT * FROM trades "
-            "WHERE status IN ('placing', 'waiting', 'needs_exits', 'protected', 'open')"
-        )
-        return [dict(r) for r in rows]
 
     def spent_since(self, since_ms: int) -> Decimal:
         """Today's spend against the daily limit: smart trades, and the DCA and grid bots' buys

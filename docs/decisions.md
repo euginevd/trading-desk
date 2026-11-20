@@ -43,3 +43,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 92. Keep as a holding moves a trade's coins out unsold; risk 2% a trade, open risk 6%. [Record](decisions/from-58.md)
 93. No stop wider than Binance holds: capped at 18% under entry, refused outside the pair's band. [Record](decisions/from-58.md)
 94. Hold with no stop: a trade stays in Positions with no exits until a stop is set. [Record](decisions/from-58.md)
+95. The old smart trades are deleted; the Trading account places trades. [Record](decisions/from-58.md)

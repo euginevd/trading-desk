@@ -321,33 +321,32 @@ def call(store: Store, audit: Audit, monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 def buy(**fields: Any) -> dict[str, Any]:
-    return {
-        "clientId": "a1b2c3d4-0000-0000-0000-000000000001",
-        "symbol": "BTCUSDT",
-        "side": "buy",
-        "price": "90000",
-        "amount": "0.001",
-    } | fields
+    """A DCA limit buy: one of the owner's own buys, so the pre-trade check sees it."""
+    return {"coin": "BTC", "spend": "90", "price": "90000", "source": "named"} | fields
 
 
 def test_a_buy_over_the_monthly_cap_needs_a_second_confirm(
     call: Any, store: Store, audit: Audit
 ) -> None:
     call("PUT", "/limits", {"perOrder": "100000", "perDay": "100000"})
+    plan = {
+        "start": "2026-11-06",
+        "weeks": 156,
+        "orders": [{"coin": "BTC", "spend": "40", "odds": 70}],
+    }
+    assert call("PUT", "/dca/plan", plan)[0] == 200  # noqa: PLR2004
     profile.save_section(store, audit, "rules", {"per_trade_aud": "100000"}, now=NOW)
-    assert call("POST", "/orders", buy())[0] == 200  # noqa: PLR2004 - no cap set: not checked
+    assert call("POST", "/dca/orders", buy())[0] == 200  # noqa: PLR2004 - no cap set: not checked
     page = profile.save_section(store, audit, "rules", {"monthly_deposit_cap_aud": "200"}, now=NOW)
     assert page["version"] == 2  # noqa: PLR2004
-    big = buy(clientId="a1b2c3d4-0000-0000-0000-000000000002", amount="0.002")
-    status, held_back = call("POST", "/orders", big)  # A$270 on top of A$135 this month
+    big = buy(spend="180")
+    status, held_back = call("POST", "/dca/orders", big)  # A$270 on top of A$135 this month
     assert status == 409  # noqa: PLR2004
     assert held_back["ruleBreaks"][0]["label"] == "Monthly deposit cap"
     assert "over your A$200 cap" in held_back["ruleBreaks"][0]["message"]
-    status, _ = call("POST", "/orders", big | {"override": True})
+    status, _ = call("POST", "/dca/orders", big | {"override": True})
     assert status == 200  # noqa: PLR2004
     assert profile_ai.overrides(store)[0]["rules"] == ["monthly_deposit_cap_aud"]
-    sell = big | {"side": "sell", "clientId": "a1b2c3d4-0000-0000-0000-000000000003"}
-    assert call("POST", "/orders", sell)[0] != 409  # noqa: PLR2004 - sales aren't checked
 
 
 def test_a_bot_holds_a_buy_that_breaks_a_rule(store: Store, audit: Audit) -> None:

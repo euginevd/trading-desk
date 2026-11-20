@@ -42,10 +42,8 @@ import type {
   AiSettings,
   Interval,
   Market,
-  OrderRequest,
   Portfolio,
   Settings,
-  Terminal,
   Ticker,
   Watchlist,
   FyDeposits,
@@ -119,8 +117,6 @@ export const getDeposits = () => call<FyDeposits>("GET", "/deposits");
 export const getSentiment = () => call<Sentiment>("GET", "/sentiment");
 export const getGlobal = () => call<MarketGlobal>("GET", "/global");
 export const getSentimentDetail = () => call<SentimentDetail>("GET", "/sentiment/detail");
-export const getTerminal = (symbol: string) =>
-  call<Terminal>("GET", `/trade?symbol=${encodeURIComponent(symbol)}`);
 export const getSettings = () => call<Settings>("GET", "/settings");
 export const getAiSettings = () => call<AiSettings>("GET", "/settings/ai");
 export const setAiSettings = (
@@ -155,8 +151,6 @@ export const getMarket = (coin: string, interval: Interval) =>
     "GET",
     `/market?symbol=${encodeURIComponent(coin)}&interval=${encodeURIComponent(interval)}`,
   );
-export const placeOrder = (request: OrderRequest) =>
-  call<{ message: string }>("POST", "/orders", request);
 // The owner's average cost for a holding with no trades here; null clears it (decision 27).
 export const setCost = (source: string, asset: string, averageCost: string | null) =>
   call<{ averageCost: string | null }>("PUT", "/cost", { source, asset, averageCost });

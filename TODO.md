@@ -34,6 +34,7 @@ Your requirements, features and ideas, numbered, in your own words. In `producti
 29. Chat with dca-agent on Telegram: I type to the bot ("move ETH and SOL lower, I can wait till Wednesday"), dca-agent answers with revised orders through the DCA book's chat, and each comes back as a button to approve; only my linked chat is read, nothing is placed without a tap, and the tap runs the desk's checks. *(Asked 20 Nov 2026.)*
 30. A notification bell on the desk: exchange alerts like a stop Binance refused or a trade left with no stop show there and go to Telegram, and from Telegram I can resolve them. *(Asked 20 Nov 2026, after the NEAR trade held no stop for two days, decision 91. To decide first: which alerts, and what Resolve may do from Telegram.)*
 31. A minimum of 20 USDC a trade. *(Asked 20 Nov 2026; my lean: refuse a smaller trade, never size it up.)*
+32. Features only the old Trade page used, unreachable since the Trading account replaced it (decision 95): the trading agent's step-by-step Analyse (feature 65), price alerts, the Trade page's watchlists and coin ranking, and smart trades as one-off DCA deals (feature 47). Their api routes still answer. To decide: bring each back on a page, or delete it like the smart trades. *(Found 21 Nov 2026 in the audit's #6.)*
 
 Later, from the project ideas doc, not started until listed above:
 

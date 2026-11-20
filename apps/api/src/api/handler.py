@@ -532,13 +532,9 @@ POT_ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/pot/coins"): lambda desk, _q, _b: account_coins.snapshot(Pot(desk)),
 }
 ROUTES: dict[tuple[str, str], Route] = {
-    ("GET", "/trade"): lambda desk, q, _: desk.terminal(coin_symbol(q.get("symbol") or "BTC")),
     ("GET", "/settings"): lambda desk, _q, _b: desk.settings(),
     ("PUT", "/limits"): lambda desk, _, b: desk.set_limits(b.get("perOrder"), b.get("perDay")),
     ("PUT", "/trading"): lambda desk, _, b: _set_trading(desk, b.get("on") is True),
-    ("POST", "/trades"): lambda desk, _, b: desk.place(b),
-    ("POST", "/orders"): lambda desk, _, b: desk.place_order(b),
-    ("POST", "/orders/ladder"): lambda desk, _, b: desk.ladder_order(b),
     ("POST", "/orders/edit"): lambda desk, _, b: desk.edit_order(b),
     ("POST", "/orders/cancel"): lambda desk, _, b: desk.cancel_order(
         b.get("symbol"), b.get("orderId")
@@ -580,9 +576,6 @@ def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
 # The Trading account's trades are the owner's own buys too (decision 78); the DCA close-out is
 # not, as it finishes a week the owner already approved.
 BUYS = (
-    "/trades",
-    "/orders",
-    "/orders/ladder",
     "/dca/orders",
     "/pot/trades",
     "/pot/trades/add",
@@ -597,10 +590,6 @@ def _spend_of(path: str, body: dict[str, Any]) -> Decimal | None:
     try:
         if path == "/dca/orders" and body.get("side", "buy") != "buy":
             return None
-        if path == "/orders":
-            if body.get("side") != "buy":
-                return None
-            return Decimal(str(body.get("price"))) * Decimal(str(body.get("amount")))
         return Decimal(str(body.get("spend")))
     except (InvalidOperation, ValueError):
         return None
@@ -702,23 +691,14 @@ def _trading_route(  # noqa: PLR0913, PLR0917 - each factory is a seam the tests
     trading: TradingFactory,
     portfolio: Portfolio,
 ) -> dict[str, object] | None:
-    action = re.fullmatch(r"/trades/(\d+)/(cancel|close)", path)
     route = ROUTES.get((method, path))
-    if route is None and not (method == "POST" and action):
+    if route is None:
         return None
     with trading() as desk:
-        if route is not None:
-            held = _pretrade(desk, path, _body(event), portfolio)
-            if held is not None:
-                return held
-            data = route(desk, params, _body(event))
-            if path == "/trade" and _demo():
-                data["demo"] = True
-            return _reply(200, data)
-        assert action is not None  # noqa: S101 - checked above
-        trade_id = int(action.group(1))
-        done = desk.cancel(trade_id) if action.group(2) == "cancel" else desk.close(trade_id)
-        return _reply(200, done)
+        held = _pretrade(desk, path, _body(event), portfolio)
+        if held is not None:
+            return held
+        return _reply(200, route(desk, params, _body(event)))
 
 
 def _tickers(binance: Binance, coins: str) -> dict[str, Any]:

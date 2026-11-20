@@ -78,53 +78,6 @@ export interface Settings {
   leftToday: string;
 }
 
-export type TradeStatus =
-  | "placing"
-  | "waiting"
-  | "needs_exits"
-  | "protected"
-  | "open"
-  | "closed_tp"
-  | "closed_sl"
-  | "closed_market"
-  | "cancelled";
-
-export interface SmartTrade {
-  id: number;
-  ref: string;
-  created: number;
-  pair: string;
-  entry: "market" | "limit";
-  entryPrice: Num;
-  amount: Num;
-  spend: string;
-  takeProfit: Num;
-  stopLoss: Num;
-  status: TradeStatus;
-  exitPrice: Num;
-  profit: Num;
-  note: Num;
-}
-
-export interface Terminal {
-  demo?: boolean;
-  symbol: string;
-  pair: string;
-  pairs: { symbol: string; pair: string }[];
-  price: string;
-  change24h: string;
-  base: string;
-  quote: string;
-  quoteFree: string;
-  baseFree: string;
-  step: string;
-  tick: string;
-  minOrder: string;
-  settings: Settings;
-  trades: SmartTrade[];
-  openOrders: Order[];
-}
-
 // The AI desk (TODO 3): tickers, the watchlist, charts and signals (apps/api/src/api/handler.py).
 export interface Ticker {
   coin: string;
@@ -405,18 +358,6 @@ export interface Market {
   levels?: { name: string; price: string }[];
 }
 
-export interface OrderRequest {
-  clientId: string;
-  symbol: string;
-  side: "buy" | "sell";
-  price: string;
-  amount: string;
-  takeProfit?: string;
-  stopLoss?: string;
-  override?: boolean;
-}
-
-// Ladder buys (decision 39): limit buys from top to bottom, each a smart trade.
 // The api's /deposits reply (apps/api/src/api/deposits.py, decision 31).
 export interface FyDeposits {
   fy: string;
