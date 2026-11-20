@@ -1192,3 +1192,24 @@ def test_cancelling_an_entry_binance_has_cancels_it_there(
     pot.cancel(trade["ref"])
     assert by_tag(f"{trade['ref']}-E")["status"] == "CANCELED"
     assert pot.view()["trades"][0]["status"] == "cancelled"
+
+
+def test_a_target_that_part_filled_before_its_exits_came_off_is_never_sold_twice(
+    pot: Pot,
+) -> None:
+    """Audit 4: Close takes the OCO off; what its target already sold is recorded first, and
+    only the rest is sold at market."""
+    trade = opened(pot)  # 0.05 SOL, its target at 230
+    target = by_tag(f"{trade['ref']}-X1T")
+    target |= {"status": "PARTIALLY_FILLED", "executedQty": "0.02", "cummulativeQuoteQty": "4.6"}
+    with pytest.raises(Refused, match="Part of it sold on Binance"):
+        pot.close(trade["ref"])
+    assert by_tag(f"{trade['ref']}-X1T")["status"] == "CANCELED"
+    assert not any(
+        o.get("clientOrderId") == f"{trade['ref']}-M1" for o in demo.EXCHANGE.orders.values()
+    )
+    part = pot.view()["trades"][0]
+    assert part["status"] == "open"
+    closed = pot.close(trade["ref"])
+    assert by_tag(f"{trade['ref']}-M1")["origQty"] == "0.03"  # the rest, not the full 0.05
+    assert (closed["status"], closed["exitKind"]) == ("closed", "market")

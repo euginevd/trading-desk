@@ -1065,6 +1065,15 @@ class Pot:
             return
         if listed.get("listOrderStatus") != "ALL_DONE":
             return
+        if self._legs_sold(order, trade):
+            return
+        self._save_order(order, {"status": "cancelled"})
+        if trade["status"] == "open":  # the next sync puts them back
+            self._save_trade(trade, {"note": "Its stop and target were cancelled on Binance."})
+
+    def _legs_sold(self, order: dict[str, Any], trade: dict[str, Any]) -> bool:
+        """A finished OCO's sale, in whole or in part, into the trade (only one leg can sell);
+        False when neither leg sold anything."""
         symbol = f"{trade['coin']}{QUOTE}"
         for leg in json.loads(order["legs"] or "[]"):
             sent = self._binance.order(symbol, int(leg))
@@ -1085,10 +1094,8 @@ class Pot:
             )
             kind = "target" if str(sent.get("type")) in ("LIMIT_MAKER", "LIMIT") else "stop"
             self._close(trade, executed, quote, Decimal(trade["fees_usd"]) + fee, kind)
-            return
-        self._save_order(order, {"status": "cancelled"})
-        if trade["status"] == "open":  # the next sync puts them back
-            self._save_trade(trade, {"note": "Its stop and target were cancelled on Binance."})
+            return True
+        return False
 
     def _refresh(self, order: dict[str, Any]) -> None:
         if order["kind"] == "oco":
@@ -1208,6 +1215,15 @@ class Pot:
             raise Refused(
                 "Binance didn't take its stop and target off, so nothing changed. Try again."
             ) from None
+        # A target can part-fill before the cancel: that sale is recorded, and the caller's copy
+        # of the trade is stale, so it must not sell or re-protect the old amount (audit 4).
+        trade = self._trade(trade["ref"])
+        self._rules_of(trade["coin"])  # read before any save, as in _check_exit
+        if self._legs_sold(live, trade):
+            raise Refused(
+                "Part of it sold on Binance a moment ago (its stop or target), so nothing "
+                "changed. Look again."
+            )
         self._save_order(live, {"status": "cancelled"})
 
     def _pull_stop(self, trade: dict[str, Any], live: dict[str, Any]) -> None:
