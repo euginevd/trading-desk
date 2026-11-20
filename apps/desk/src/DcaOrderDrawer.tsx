@@ -286,6 +286,9 @@ export default function DcaOrderDrawer({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // Whether the owner typed an amount: untouched, a change sends none and the api keeps what's
+  // left now, so a part that fills while the drawer is open is never bought again (audit 11).
+  const [typed, setTyped] = useState(false);
 
   useEffect(() => {
     let on = true;
@@ -319,7 +322,7 @@ export default function DcaOrderDrawer({
   const at = Number(editing ? price : live ? order.price : (order.avgPrice ?? order.price));
   const off = away(at, now);
   const filled = Number(order.filledQuote) > 0;
-  const spend = editing ? Number(usdc) : left(order);
+  const spend = editing && typed ? Number(usdc) : left(order);
   const pos = book.positions.find((p) => p.coin === order.coin);
   const others = book.orders.filter(
     (o) => o.coin === order.coin && o.ref !== order.ref && isOpen(o) && o.kind === "limit",
@@ -428,10 +431,12 @@ export default function DcaOrderDrawer({
     ]);
 
   const setFromUsdc = (v: string) => {
+    setTyped(true);
     setUsdc(v);
     if (Number(price) > 0 && Number(v) > 0) setQty((Number(v) / Number(price)).toFixed(8));
   };
   const setFromQty = (v: string) => {
+    setTyped(true);
     setQty(v);
     if (Number(price) > 0 && Number(v) > 0) setUsdc((Number(v) * Number(price)).toFixed(2));
   };
@@ -442,8 +447,8 @@ export default function DcaOrderDrawer({
     if (buy && Number(usdc) > 0) setQty((Number(usdc) / Number(v)).toFixed(8));
     if (!buy && Number(qty) > 0) setUsdc((Number(qty) * Number(v)).toFixed(2));
   };
-  const amountChanged = Math.abs(Number(usdc) - left(order)) >= 0.005;
-  const qtyChanged = Math.abs(Number(qty) - qtyOf(order)) > 1e-9;
+  const amountChanged = typed && Math.abs(Number(usdc) - left(order)) >= 0.005;
+  const qtyChanged = typed && Math.abs(Number(qty) - qtyOf(order)) > 1e-9;
   const changed = Number(price) !== Number(order.price) || (buy ? amountChanged : qtyChanged);
   const save = () => {
     setBusy(true);

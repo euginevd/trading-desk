@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DcaBookPage from "./DcaBookPage";
+import DcaOrderDrawer from "./DcaOrderDrawer";
 import DcaWidget from "./DcaWidget";
 import { toCsv } from "./dcaFormat";
 import type { DcaBook, DcaOrder, DcaWeekPlan, FundsPlan } from "./types";
@@ -441,6 +442,30 @@ describe("DCA book page", () => {
     expect(
       await screen.findByText("DCA-BTC-26W47-1 cancelled; now DCA-BTC-26W47-2 at 63,837.40."),
     ).toBeTruthy();
+  });
+
+  it("never buys again what filled while Modify was open (audit 11)", async () => {
+    const fetch = serve(book());
+    const props = {
+      book: book(),
+      editing: true,
+      onClose: () => undefined,
+      onCancel: () => undefined,
+      onOpen: () => undefined,
+      onDone: () => undefined,
+    };
+    const { rerender } = render(<DcaOrderDrawer {...props} order={order({})} />);
+    // The 30-second reload brings a part fill: $20 of the $49.79 bought while the drawer is open.
+    rerender(
+      <DcaOrderDrawer {...props} order={order({ filledQty: "0.0003", filledQuote: "20" })} />,
+    );
+    fireEvent.change(screen.getByLabelText("Limit price"), { target: { value: "63500.37" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders/amend")).toHaveLength(1));
+    expect(JSON.parse(String(sent(fetch, "/dca/orders/amend")[0]?.[1]?.body))).toEqual({
+      ref: "DCA-BTC-26W47-1",
+      price: "63500.37", // no amount, no raise: the api keeps what's left now
+    });
   });
 
   it("asks before cancelling, and says what happens to the reference and the money", async () => {
