@@ -1,5 +1,5 @@
 // The Trade page: the trading account, run by trading-agent (docs/plan-trade.md). Money first
-// (available, in trades, value, this month) and the risk rules in a line; then the market and
+// (value, unrealized, realized) and the two risk limits as gauges; then the market and
 // Scan now, what trading-agent proposes, the trades in tabs (positions, orders, history,
 // stats, the ledger) and, at the foot, the watchlist (AccountWatchlist.tsx).
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
@@ -41,6 +41,34 @@ import "./pot.css";
 // Dollars without empty cents: $1, $0.81, $10.
 const cash = (v: string | number) => dollars(v).replace(/\.00$/, "");
 const REGIME = { bull: "Bull", neutral: "Neutral", bear: "Bear" } as const;
+
+// A risk limit as a tile: how much is used of it, with a bar that warns from three quarters.
+function Gauge({
+  name,
+  value,
+  limit,
+  note,
+}: {
+  name: string;
+  value: number;
+  limit: number;
+  note: string;
+}) {
+  const share = limit > 0 ? Math.min(1, value / limit) : 0;
+  const level = share >= 1 ? " is-full" : share >= 0.75 ? " is-near" : "";
+  return (
+    <div className={`acc-gauge${level}`}>
+      <dt>{name}</dt>
+      <dd className="num">
+        {cash(value)} <span className="pot-of">of {cash(limit)}</span>
+      </dd>
+      <span className="acc-meter" aria-hidden="true">
+        <i style={{ "--w": `${share * 100}%` } as CSSProperties} />
+      </span>
+      <small className="acc-month">{note}</small>
+    </div>
+  );
+}
 const TAB_KEY = "desk.account.tab";
 const TABS = [
   ["positions", "Positions"],
@@ -252,7 +280,7 @@ function ScanCards({ cards, onReview }: { cards: PotScanCard[]; onReview: (id: s
           <header>
             <b>{c.name}</b>
             <span className={`pot-tag ${take ? "is-live" : c.close ? "is-wait" : "is-quiet"}`}>
-              {take ? "Take" : c.close ? "Close" : "Nothing near"}
+              {take ? "Take" : c.close ? "Near" : "Nothing near"}
             </span>
           </header>
           {take ? (
@@ -532,7 +560,6 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
   }
 
   const putIn = Number(pot.putIn);
-  const result = Number(pot.result);
   const on = pot.trades.filter(live);
   const done = pot.trades.filter((t) => !live(t));
   const monthStart = new Date();
@@ -557,6 +584,11 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
   const openLimit = (Number(pot.value) * 3) / 100;
   const short = Number(pot.backing?.short ?? 0);
   const used = Math.max(0, -Number(pot.monthResult));
+  // What one trade may lose: the percent, or the cap when the cap is what holds it.
+  const capped =
+    pot.config.maxRisk !== undefined &&
+    Number(pot.config.maxRisk) < (Number(pot.value) * Number(pot.config.riskPct)) / 100;
+  const perTrade = capped ? "the cap" : `${pot.config.riskPct}%`;
   const openTrade = pot.trades.find((t) => t.ref === openRef) ?? null;
 
   const scan = () => {
@@ -711,20 +743,14 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
           <section className="acc-head" aria-label="The account">
             <dl className="acc-money">
               <div>
-                <dt>Available</dt>
-                <dd className="num">
-                  <Live value={pot.cash}>{dollars(pot.cash)}</Live>
-                </dd>
-              </div>
-              <div>
-                <dt>In trades</dt>
-                <dd className="num">{dollars(inTrades)}</dd>
-              </div>
-              <div>
                 <dt>Value</dt>
                 <dd className="num">
                   <Live value={pot.value}>{dollars(pot.value)}</Live>
                 </dd>
+                <small className="acc-month num">
+                  <Live value={pot.cash}>{dollars(pot.cash)}</Live> available
+                  {inTrades > 0 && ` · ${dollars(inTrades)} in trades`}
+                </small>
               </div>
               <div>
                 <dt>Unrealized</dt>
@@ -732,6 +758,11 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
                   {dollars(unrealUsd, true)}{" "}
                   {unrealPct !== null && <span className="pot-of">{percent(unrealPct)}</span>}
                 </dd>
+                <small className="acc-month">
+                  {on.length === 0
+                    ? "No trades on"
+                    : `${on.length} ${on.length === 1 ? "trade" : "trades"} on`}
+                </small>
               </div>
               <div>
                 <dt>Realized</dt>
@@ -739,35 +770,33 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
                   {dollars(realUsd, true)}{" "}
                   {realPct !== null && <span className="pot-of">{percent(realPct)}</span>}
                 </dd>
-                <small className={`acc-month num ${tone(monthUsd)}`}>
-                  {dollars(monthUsd, true)} this month
+                <small className={`acc-month num ${monthUsd !== realUsd ? tone(monthUsd) : ""}`}>
+                  {closedAll.length === 0
+                    ? "None closed yet"
+                    : monthUsd === realUsd
+                      ? "All this month"
+                      : `${dollars(monthUsd, true)} this month`}
                 </small>
               </div>
+              <Gauge
+                name="Open risk"
+                value={Number(pot.openRisk)}
+                limit={openLimit}
+                note={`${dollars(pot.allowedRisk ?? "0")} a trade, ${perTrade}`}
+              />
+              <Gauge
+                name="Month's loss"
+                value={used}
+                limit={Number(pot.monthLimit)}
+                note="Trading stops at the limit"
+              />
             </dl>
-            <div className="acc-sub">
+            {pot.proposals.length > 0 && (
               <p className="acc-said">
-                {pot.proposals.length > 0
-                  ? `${pot.proposals.length} ${pot.proposals.length === 1 ? "setup is" : "setups are"} waiting for you.`
-                  : on.length === 0
-                    ? "No trades on: trading-agent waits for its setup."
-                    : `${on.length} ${on.length === 1 ? "trade" : "trades"} on${result !== 0 ? `, ${result > 0 ? "up" : "down"} ${dollars(Math.abs(result))} from trading` : ""}.`}
+                {pot.proposals.length} {pot.proposals.length === 1 ? "setup is" : "setups are"}{" "}
+                waiting for you.
               </p>
-              <ul className="acc-chips num" aria-label="The risk rules">
-                <li title="Sized from the stop">
-                  Risk a trade <b>{dollars(pot.allowedRisk ?? "0")}</b>
-                  <small>
-                    {pot.config.riskPct}%
-                    {pot.config.maxRisk ? `, at most ${cash(pot.config.maxRisk)}` : ""}
-                  </small>
-                </li>
-                <li>
-                  Open risk <b>{dollars(pot.openRisk)}</b> <small>of {dollars(openLimit)}</small>
-                </li>
-                <li>
-                  Month's loss <b>{dollars(used)}</b> <small>of {dollars(pot.monthLimit)}</small>
-                </li>
-              </ul>
-            </div>
+            )}
           </section>
         ) : (
           <p className="acc-said">Put money in to start; it's kept apart from the DCA book.</p>
@@ -809,9 +838,12 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
               >
                 {scanning
                   ? "Scanning the market…"
-                  : pot.lastScan
-                    ? `${when(pot.lastScan.at)}: ${pot.lastScan.line}`
-                    : "Not scanned yet"}
+                  : !pot.lastScan
+                    ? "Not scanned yet"
+                    : pot.lastScan.styles
+                      ? // The cards below say what each style found; the strip says only when.
+                        `Scanned ${when(pot.lastScan.at)} · ${pot.scansOnItsOwn ? `next ${when(pot.nextScan)}` : "scans paused"}`
+                      : `${when(pot.lastScan.at)}: ${pot.lastScan.line}`}
               </span>
               <div className="acc-acts">
                 <button type="button" className="btn" disabled={scanning} onClick={scan}>
