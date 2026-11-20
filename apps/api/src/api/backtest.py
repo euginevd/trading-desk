@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import time
+import zipfile
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -59,8 +60,8 @@ class Backtests:
         if key not in _cache:
             try:
                 _cache[key] = summary(load(path))
-            except (OSError, ValueError, KeyError, StopIteration):
-                _cache[key] = None  # a result Freqtrade was still writing, or not ours
+            except (OSError, ValueError, KeyError, TypeError, StopIteration, zipfile.BadZipFile):
+                _cache[key] = None  # a result Freqtrade was still writing, cut off, or not ours
         return _cache[key]
 
     @staticmethod
@@ -112,8 +113,12 @@ class Backtests:
             tail = []
         cancelling = (self.jobs / f"{job}.cancel").exists()
         named = state.get("state", "queued")
+        error = state.get("error")
         if named == "queued" and cancelling:
             named = "cancelled"  # the worker will say the same when it reaches it
+        if named == "running" and not self._worker_on():
+            # The worker died mid-run; it says the same when it starts again.
+            named, error = "failed", "The backtest worker stopped mid-run. Start it and run again."
         return {
             "id": job,
             "style": request.get("style"),
@@ -125,7 +130,7 @@ class Backtests:
             "step": state.get("step"),
             "started": state.get("started"),
             "finished": state.get("finished"),
-            "error": state.get("error"),
+            "error": error,
             "result": state.get("result"),
             "cancelling": cancelling and named == "running",
             "log": tail,
@@ -145,6 +150,10 @@ class Backtests:
         seen = (_read(self.jobs / "worker.json") or {}).get("seen")
         return seen if isinstance(seen, int) else None
 
+    def _worker_on(self) -> bool:
+        seen = self._worker_seen()
+        return seen is not None and self.now() - seen < WORKER_STALE_MS
+
     def view(self) -> dict[str, Any]:
         seen = self._worker_seen()
         return {
@@ -162,10 +171,7 @@ class Backtests:
             ],
             "runs": self.runs(),
             "job": self._last_job(),
-            "worker": {
-                "seen": seen,
-                "on": seen is not None and self.now() - seen < WORKER_STALE_MS,
-            },
+            "worker": {"seen": seen, "on": self._worker_on()},
         }
 
     def start(self, body: dict[str, Any]) -> dict[str, Any]:
@@ -174,7 +180,10 @@ class Backtests:
         last = self._last_job()
         if last is not None and last["state"] in OPEN:
             raise BadRun("A run is already going: wait for it, or cancel it first.")
-        self.jobs.mkdir(parents=True, exist_ok=True)
+        if not self.jobs.exists():
+            # The worker runs as another user and must write here too (known-mistakes 13c).
+            self.jobs.mkdir(parents=True)
+            self.jobs.chmod(0o777)  # noqa: S103 - local/ on the owner's machine; no secrets
         stamp = datetime.fromtimestamp(self.now() / 1000, UTC).strftime("%Y%m%d-%H%M%S")
         job = f"job-{stamp}-{secrets.token_hex(3)}"
         request = {

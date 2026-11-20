@@ -327,7 +327,8 @@ function Progress({
     <section className="panel bt-progress" aria-live="polite" aria-labelledby="bt-job">
       <div className="panel-head">
         <h2 id="bt-job">
-          {runName(job.style, job.ai)} · {day(new Date(job.from))} to {day(new Date(job.to))}
+          {runName(job.style, job.ai)} · {day(new Date(`${job.from}T12:00:00Z`))} to{" "}
+          {day(new Date(`${job.to}T12:00:00Z`))}
         </h2>
         <span className="muted num">{elapsed(job.started ?? job.created, now)}</span>
       </div>
@@ -527,6 +528,8 @@ export default function BacktestPage() {
         setOpenId((id) => id ?? v.runs[0]?.id ?? null);
         // The run just finished: open its result.
         const job = v.job;
+        // A run going when the page opened is watched too, so its result opens when done.
+        if (job && (job.state === "queued" || job.state === "running")) watched.current = job.id;
         if (job && watched.current === job.id && job.state === "done" && job.result) {
           watched.current = null;
           setOpenId(job.result);
@@ -648,7 +651,7 @@ export default function BacktestPage() {
       )}
 
       {failed && (
-        <section className="panel bt-failed" role="alert" aria-labelledby="bt-failed">
+        <section className="panel bt-failed" aria-labelledby="bt-failed">
           <div className="panel-head">
             <h2 id="bt-failed">
               {runName(failed.style, failed.ai)} failed
@@ -659,6 +662,7 @@ export default function BacktestPage() {
             <button
               type="button"
               className="btn btn-small"
+              disabled={busy}
               onClick={() =>
                 start({ style: failed.style, ai: failed.ai, from: failed.from, to: failed.to })
               }

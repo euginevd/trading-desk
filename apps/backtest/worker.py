@@ -6,6 +6,7 @@ same download and backtest commands as run.sh, as argument lists, and writes
 `jobs/<id>.cancel` file stops it. It never reads keys or the desk's database, and opens no port.
 """
 
+import contextlib
 import json
 import os
 import re
@@ -15,7 +16,8 @@ import time
 from pathlib import Path
 from typing import Any
 
-from api.backtest_runs import BadRun, check, commands
+from api.backtest_report import load, strategy_of
+from api.backtest_runs import BadRun, Run, check, commands
 
 DATA = Path(os.environ.get("BACKTEST_DIR", "/freqtrade/user_data"))
 JOBS = DATA / "jobs"
@@ -33,14 +35,22 @@ def write(path: Path, data: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
+def read(path: Path) -> dict[str, Any] | None:
+    """A job file as a dict, or None when it's missing or not one (the folder is shared)."""
+    try:
+        found: object = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return found if isinstance(found, dict) else None  # pyright: ignore[reportUnknownVariableType]
+
+
 def beat() -> None:
     write(JOBS / "worker.json", {"seen": int(time.time() * 1000)})
 
 
 def status(job: str, **fields: Any) -> None:
-    path = JOBS / f"{job}.status.json"
-    old = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"id": job}
-    write(path, {**old, **fields})
+    old = read(JOBS / f"{job}.status.json") or {"id": job}
+    write(JOBS / f"{job}.status.json", {**old, **fields})
 
 
 def now() -> int:
@@ -54,48 +64,52 @@ def pending() -> list[str]:
         job = path.name.removesuffix(".request.json")
         if not JOB_ID.fullmatch(job):
             continue
-        done = JOBS / f"{job}.status.json"
-        state = json.loads(done.read_text(encoding="utf-8")).get("state") if done.exists() else None
+        state = (read(JOBS / f"{job}.status.json") or {}).get("state")
         if state in {None, "queued", "running"}:
             found.append(job)
     return found
 
 
-def _newest_result(since: float) -> str | None:
+def _result_for(run: Run, since: float) -> str | None:
+    """The result Freqtrade wrote for this run: newer than its start, and its strategy."""
     last = RESULTS / ".last_result.json"
     if not last.exists() or last.stat().st_mtime < since:
         return None
-    name = str(json.loads(last.read_text(encoding="utf-8"))["latest_backtest"])
-    return name.removesuffix(".zip") if (RESULTS / name).exists() else None
+    name = str((read(last) or {}).get("latest_backtest", ""))
+    path = RESULTS / name
+    if not name.endswith(".zip") or not path.exists():
+        return None
+    found = strategy_of(load(path))
+    return name.removesuffix(".zip") if found and found[0] == run.strategy else None
 
 
 def _step(job: str, cmd: list[str], log: Path) -> str | None:
-    """Runs one command; 'cancelled', 'failed' or None when it finished cleanly."""
+    """Runs one command; 'cancelled', 'stopped', 'failed' or None when it finished cleanly."""
     with log.open("a", encoding="utf-8") as out:
         out.write(f"\n$ {' '.join(cmd)}\n")
         out.flush()
         proc = subprocess.Popen(cmd, stdout=out, stderr=subprocess.STDOUT)  # noqa: S603 - a fixed argument list
         while proc.poll() is None:
             beat()
-            if (JOBS / f"{job}.cancel").exists() or not running:
+            cancelled = (JOBS / f"{job}.cancel").exists()
+            if cancelled or not running:
                 proc.terminate()
                 try:
                     proc.wait(timeout=15)
                 except subprocess.TimeoutExpired:
                     proc.kill()
-                return "cancelled"
+                return "cancelled" if cancelled else "stopped"
             time.sleep(POLL_SECONDS)
     return None if proc.returncode == 0 else "failed"
 
 
 def run(job: str) -> None:
     started = time.time()
-    request = json.loads((JOBS / f"{job}.request.json").read_text(encoding="utf-8"))
     if (JOBS / f"{job}.cancel").exists():
         status(job, state="cancelled", finished=now())
         return
     try:
-        wanted = check(request)
+        wanted = check(read(JOBS / f"{job}.request.json") or {})
     except BadRun as e:
         status(job, state="failed", error=str(e), finished=now())
         return
@@ -107,15 +121,14 @@ def run(job: str) -> None:
         if ended == "cancelled":
             status(job, state="cancelled", finished=now())
             return
-        if ended == "failed":
-            status(
-                job,
-                state="failed",
-                finished=now(),
-                error=f"Freqtrade stopped while {step.lower()}.",
-            )
+        if ended is not None:
+            why = "The worker was stopped" if ended == "stopped" else "Freqtrade stopped"
+            status(job, state="failed", finished=now(), error=f"{why} while {step.lower()}.")
             return
-    result = _newest_result(started)
+    try:
+        result = _result_for(wanted, started)
+    except (OSError, ValueError, KeyError, StopIteration):
+        result = None
     if result is None:
         status(job, state="failed", finished=now(), error="Freqtrade finished without a result.")
         return
@@ -130,12 +143,13 @@ def stop(_signum: int, _frame: object) -> None:
 def main() -> None:
     signal.signal(signal.SIGTERM, stop)
     JOBS.mkdir(parents=True, exist_ok=True)
-    # The api runs as another user and writes the requests here (known-mistakes 13c).
-    JOBS.chmod(0o777)  # noqa: S103 - local/ on the owner's machine; holds no secrets
+    # The api runs as another user and writes the requests here (known-mistakes 13c); if the api
+    # made the folder first, it opened it itself.
+    with contextlib.suppress(PermissionError):
+        JOBS.chmod(0o777)  # noqa: S103 - local/ on the owner's machine; holds no secrets
     # A run cut off by a restart can't be resumed: say so rather than leave it running.
     for job in pending():
-        path = JOBS / f"{job}.status.json"
-        if path.exists() and json.loads(path.read_text(encoding="utf-8")).get("state") == "running":
+        if (read(JOBS / f"{job}.status.json") or {}).get("state") == "running":
             status(job, state="failed", finished=now(), error="The worker restarted mid-run.")
     print("Backtest worker: watching", JOBS, flush=True)
     while running:

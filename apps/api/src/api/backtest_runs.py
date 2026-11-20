@@ -25,6 +25,7 @@ class Style:
     ai_strategy: str | None = None
     ai_timeframes: tuple[str, ...] = ()
     ai_warmup: int = 0  # FreqAI trains on the days before each stretch it tests
+    longest: int = 0  # the most days one run may test: candles and time grow with it
 
 
 # The same choices as run.sh.
@@ -33,15 +34,15 @@ STYLES: dict[str, Style] = {
     for s in (
         Style("scalp", "Scalp", "5-minute, 1-hour trend", 150, "several minutes",
               "DeskScalp", ("5m", "1h", "1d"), 30,
-              "DeskScalpAI", ("5m", "15m", "1h", "1d"), 40),
+              "DeskScalpAI", ("5m", "15m", "1h", "1d"), 40, longest=365),
         Style("day", "Day trade", "15-minute, 4-hour trend", 365, "several minutes",
               "DeskDay", ("15m", "4h", "1d"), 35,
-              "DeskDayAI", ("15m", "1h", "4h", "1d"), 75),
+              "DeskDayAI", ("15m", "1h", "4h", "1d"), 75, longest=730),
         Style("swing", "Swing", "daily", 1095, "under a minute",
               "DeskSwing", ("1d",), 405,
-              "DeskSwingAI", ("1d",), 1205),
+              "DeskSwingAI", ("1d",), 1205, longest=2920),
         Style("position", "Position", "weekly", 1095, "under a minute",
-              "DeskPosition", ("1w", "1d"), 1105),
+              "DeskPosition", ("1w", "1d"), 1105, longest=3300),
     )
 }  # fmt: skip
 
@@ -89,6 +90,11 @@ def check(body: dict[str, Any], today: date | None = None) -> Run:
         raise BadRun("To can't be later than yesterday: today's candles aren't closed.")
     if start >= end:
         raise BadRun("From must be before To.")
+    if (end - start).days > style.longest:
+        years = round(style.longest / 365)
+        raise BadRun(
+            f"{style.name} tests at most {years} year{'s' if years > 1 else ''} at a time."
+        )
     return Run(style, ai, start, end)
 
 

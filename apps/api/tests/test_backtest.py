@@ -86,6 +86,7 @@ def test_a_run_is_checked_before_it_is_queued() -> None:
         {"style": "swing", "from": "2016-01-01", "to": "2025-01-01"},
         {"style": "swing", "from": "2024-01-01", "to": "2026-11-20"},
         {"style": "swing", "from": "2025-01-01", "to": "2024-01-01"},
+        {"style": "scalp", "ai": True, "from": "2017-09-01", "to": "2026-11-19"},  # too long
     ]
     for body in bad:
         with pytest.raises(BadRun):
@@ -123,6 +124,28 @@ def test_the_page_lists_runs_queues_one_at_a_time_and_cancels(tmp_path: Path) ->
     assert desk.cancel({"id": job["id"]})["job"]["state"] == "cancelled"
     with pytest.raises(BadRun):
         desk.cancel({"id": "../../etc/passwd"})
+
+
+def test_a_run_the_worker_dropped_shows_as_failed_and_frees_the_queue(tmp_path: Path) -> None:
+    jobs = tmp_path / "jobs"
+    jobs.mkdir()
+    job = "job-20261120-070402-58edab"
+    (jobs / f"{job}.request.json").write_text(json.dumps({"style": "swing"}))
+    (jobs / f"{job}.status.json").write_text(json.dumps({"state": "running"}))
+    (jobs / "worker.json").write_text(json.dumps({"seen": 1}))  # long ago
+    desk = Backtests(tmp_path, now=lambda: 1_800_000_000_000)  # after the dropped job
+    shown = desk.view()["job"]
+    assert shown["state"] == "failed"
+    assert "stopped mid-run" in shown["error"]
+    yesterday = desk.view()["styles"][2]["to"]
+    assert desk.start({"style": "swing", "from": "2024-01-01", "to": yesterday})["job"]["id"] != job
+
+
+def test_a_cut_off_result_is_skipped_not_fatal(tmp_path: Path) -> None:
+    results = tmp_path / "backtest_results"
+    _zip(results)
+    (results / "backtest-result-2026-11-21_00-00-00.zip").write_bytes(b"PK\x03\x04 cut off")
+    assert len(Backtests(tmp_path).runs()) == 1
 
 
 def test_a_run_is_read_only_by_its_own_id(tmp_path: Path) -> None:
@@ -193,11 +216,13 @@ def test_the_worker_runs_a_job_and_records_its_result(
     monkeypatch.setattr(worker, "commands", lambda _run: fake)  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
     monkeypatch.setattr(worker, "POLL_SECONDS", 0.01)
     yesterday = Backtests(tmp_path).view()["styles"][0]["to"]
-    request = {"style": "swing", "ai": False, "from": "2024-01-01", "to": yesterday}
+    # The stand-in result is DeskSwingAI's, so the run asks for swing with the AI filter.
+    request = {"style": "swing", "ai": True, "from": "2024-01-01", "to": yesterday}
     (worker.JOBS / "job-20261120-000000-abcdef.request.json").write_text(json.dumps(request))
     (worker.JOBS / "job-20261120-000001-abcdef.request.json").write_text(
         json.dumps({**request, "style": "$(reboot)"})
     )
+    (worker.JOBS / "job-20261120-000002-abcdef.request.json").write_text("[1, 2]")
     for job in worker.pending():
         worker.run(job)
     done = json.loads((worker.JOBS / "job-20261120-000000-abcdef.status.json").read_text())
@@ -206,4 +231,6 @@ def test_the_worker_runs_a_job_and_records_its_result(
     refused = json.loads((worker.JOBS / "job-20261120-000001-abcdef.status.json").read_text())
     assert refused["state"] == "failed"
     assert "Pick" in refused["error"]
+    garbled = json.loads((worker.JOBS / "job-20261120-000002-abcdef.status.json").read_text())
+    assert garbled["state"] == "failed"
     assert worker.pending() == []

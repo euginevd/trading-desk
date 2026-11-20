@@ -135,9 +135,11 @@ def summary(data: dict[str, Any]) -> dict[str, Any] | None:
     trades = sorted(result.get("trades", []), key=lambda t: t["open_timestamp"])
     rated = [(t, r) for t in trades if (r := r_of(t)) is not None]
     rs = [r for _, r in rated]
+    # The curve and its worst run both follow the order trades closed in.
+    closed = sorted(rated, key=lambda tr: tr[0]["close_timestamp"])
     curve: list[list[float]] = []
     level = 0.0
-    for t, r in sorted(rated, key=lambda tr: tr[0]["close_timestamp"]):
+    for t, r in closed:
         level += r
         curve.append([int(t["close_timestamp"]), round(level, 3)])
     return {
@@ -148,7 +150,7 @@ def summary(data: dict[str, Any]) -> dict[str, Any] | None:
         "to": int(result.get("backtest_end_ts", 0)),
         "pairs": len(result.get("pairlist", [])),
         "all": _row("All", rs) if rs else None,
-        "worstRun": worst_run(rs),
+        "worstRun": worst_run([r for _, r in closed]),
         "curve": curve,
         "bySetup": _groups(rated, "setup"),
         "byExit": _groups(rated, "exit"),

@@ -96,8 +96,12 @@ function Stepper({ step }: { step: Step }) {
 // A style's newest plain backtest (the Backtest page, decision 85), as one line on its card.
 function testedLine(run: BacktestRunLine | undefined): string | null {
   if (!run?.all) return null;
-  const years = Math.max(1, Math.round((run.to - run.from) / (365 * 86_400_000)));
-  return `Backtest, ${years} yr${years === 1 ? "" : "s"}: ${run.all.trades} trades, ${inR(run.all.avg, 2)} a trade`;
+  const days = (run.to - run.from) / 86_400_000;
+  const span =
+    days >= 330
+      ? `${Math.round(days / 365)} yr${Math.round(days / 365) === 1 ? "" : "s"}`
+      : `${Math.max(1, Math.round(days / 30))} mo`;
+  return `Backtest, ${span}: ${run.all.trades} trades, ${inR(run.all.avg, 2)} a trade`;
 }
 
 function StyleCard({
