@@ -2203,8 +2203,17 @@ dialog.in-place .detail-head {
   border: 1px solid var(--line-2);
   border-radius: 10px;
 }
+/* Fields and buttons take the card's type, not the browser's larger default. */
+.settings-input input,
+.settings-btn,
+.settings .link {
+  font: inherit;
+  font-size: 13px;
+}
+/* Wide enough for "09:30 AM" and the clock icon, in the dark picker. */
 .settings-input input.settings-time {
-  flex: 0 0 120px;
+  flex: 0 0 136px;
+  color-scheme: dark;
 }
 .settings-value {
   flex: 1 1 auto;

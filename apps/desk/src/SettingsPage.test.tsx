@@ -140,5 +140,18 @@ describe("Settings", () => {
     expect(await screen.findByText("Connected to @sam")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Send a test" }));
     expect(await screen.findByText("Test summary sent")).toBeTruthy();
+    // The day it went, as the desk writes dates, and the time in am and pm.
+    expect(screen.getByText("15 Nov 2026")).toBeTruthy();
+    expect(screen.getByText(/goes to Telegram at 7:30 am\./)).toBeTruthy();
+  });
+});
+
+describe("amPm", () => {
+  it("writes a 24-hour time in am and pm", async () => {
+    const { amPm } = await import("./SettingsPage");
+    expect(amPm("09:30")).toBe("9:30 am");
+    expect(amPm("00:05")).toBe("12:05 am");
+    expect(amPm("12:00")).toBe("12:00 pm");
+    expect(amPm("19:45")).toBe("7:45 pm");
   });
 });
