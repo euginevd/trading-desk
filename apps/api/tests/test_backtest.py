@@ -83,6 +83,22 @@ def test_each_trade_is_measured_in_r_by_setup_exit_and_year() -> None:
     assert "Worst run from a high" in backtest_report.text(RESULT)
 
 
+def test_a_trade_sold_in_part_is_measured_on_what_it_bought() -> None:
+    # Bought 10 at 100 (1,000 staked), half sold at the target, the rest at break-even: Freqtrade
+    # leaves the 5 still held as the amount, but the stop's risk was on all 10.
+    parted = {**_trade(0, "Sweep and reclaim", 100.0, "trailing_stop_loss"), "amount": 5.0}
+    r = backtest_report.r_of({**parted, "max_stake_amount": 1000.0})
+    assert r == pytest.approx(100 / 101.9, abs=0.01)
+    # Without max_stake_amount (an older result), the amount left is all there is: twice the R.
+    assert backtest_report.r_of(parted) == pytest.approx(100 / 50.95, abs=0.01)
+
+
+def test_a_strategy_without_setup_stops_is_reported_without_r() -> None:
+    trade = {**_trade(0, "x", 5.0, "exit_signal"), "enter_tag": "long 1"}
+    nfi = {"strategy": {"NostalgiaForInfinityX8": {"trades": [trade], "pairlist": ["BTC/USDT"]}}}
+    assert "no setup stop, so no R" in backtest_report.text(nfi)
+
+
 def test_a_run_is_checked_before_it_is_queued() -> None:
     good = {"style": "swing", "coin": "SOL", "from": "2026-10-19", "to": "2026-11-19"}
     ok = check({**good, "from": "2026-08-19"}, TOP, TODAY)

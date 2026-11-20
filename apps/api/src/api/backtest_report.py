@@ -52,7 +52,10 @@ def r_of(trade: dict[str, Any]) -> float | None:
     if tag is None:
         return None
     stop = tag[2]
-    rate, amount = float(trade["open_rate"]), float(trade["amount"])
+    rate = float(trade["open_rate"])
+    # The amount bought, not what's left at the last exit after a part was sold at the target.
+    bought = float(trade.get("max_stake_amount") or 0) / rate if rate > 0 else 0.0
+    amount = bought or float(trade["amount"])
     risk = amount * (rate - stop) + amount * (rate + stop) * FEE
     return float(trade["profit_abs"]) / risk if risk > 0 else None
 
@@ -183,6 +186,12 @@ def text(data: dict[str, Any]) -> str:
         f"{str(result.get('backtest_start', ''))[:10]} to "
         f"{str(result.get('backtest_end', ''))[:10]}, pairs {found['pairs']}"
     ]
+    if found["all"] is None and result.get("trades"):
+        lines.append(
+            "  Not a desk strategy: its trades carry no setup stop, so no R. Compare its total"
+            " profit %, drawdown and the market change (buy and hold) in Freqtrade's tables above."
+        )
+        return "\n".join(lines)
     if found["all"] is None:
         lines.append("  No trades: the rule found no setups it could fill in this period.")
         return "\n".join(lines)
