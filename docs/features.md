@@ -21,6 +21,7 @@ Every page follows [design-system.md](design-system.md) 18 to 22. Features 1 to 
 | 112 | No stop wider than Binance holds: every style's stop is at most 18% under entry (position tightens to it, swing skips wider), and a trade whose stop is outside the pair's band is refused with the lowest it takes (owner, 20 Nov 2026; decision 93) | Done | |
 | 114 | Hold with no stop: an open trade kept in Positions with no stop or target and no risk counted, until a stop is set from the panel or trading-agent's chat (owner, 20 Nov 2026; decision 94) | Done | |
 | 113 | Trade page cards: the market as cards (regime, BTC against its averages, Fear & Greed and dominance, the scan), every tile and card opening its figures, and Scan now showing each style's steps as they run, foldable (owner, 20 Nov 2026) | Done | |
+| 115 | Trading limits in Settings: the per-order and daily limits shown with what is left today, set there, and a raise confirmed once more; until set, nothing buys (audit 15, 21 Nov 2026; feature 6, its old screen gone with decision 95) | Done | |
 
 ## `api`
 

@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AiSettings } from "./types";
 
@@ -26,6 +26,16 @@ const setAiSettings = vi.fn(
 const saveAiKey = vi.fn((key: string) => key && Promise.resolve({ ...saved, apiKeySet: true }));
 const startSignIn = vi.fn(() => Promise.resolve({ url: LINK }));
 const finishSignIn = vi.fn((code: string) => code && Promise.resolve({ ...saved, tokenSet: true }));
+const limits = {
+  tradingOn: true,
+  perOrder: "100",
+  perDay: "500",
+  spentToday: "40",
+  leftToday: "460",
+};
+const setLimits = vi.fn((perOrder: string, perDay: string) =>
+  Promise.resolve({ ...limits, perOrder, perDay }),
+);
 vi.mock("./api", () => ({
   getTelegram: () =>
     Promise.resolve({ tokenSet: false, chatFound: false, time: "07:30", lastSent: null }),
@@ -54,6 +64,8 @@ vi.mock("./api", () => ({
   getProfile: () => Promise.resolve({ name: "" }),
   setProfile: (name: string) => Promise.resolve({ name }),
   getAiSettings: () => Promise.resolve(saved),
+  getSettings: () => Promise.resolve(limits),
+  setLimits: (perOrder: string, perDay: string) => setLimits(perOrder, perDay),
   // Effort only when the page sends one, as the real call leaves it out.
   setAiSettings: (mode: AiSettings["mode"], fallback: boolean, model: string, effort?: string) =>
     effort === undefined
@@ -69,6 +81,28 @@ const { default: SettingsPage } = await import("./SettingsPage");
 afterEach(cleanup);
 
 describe("Settings", () => {
+  it("shows the trading limits, and asks once more before raising them (audit 15)", async () => {
+    render(<SettingsPage />);
+    const section = (await screen.findByRole("heading", { name: "Trading limits" })).closest(
+      "section",
+    );
+    if (!section) throw new Error("No limits section.");
+    const box = within(section);
+    expect(box.getByText("$460.00 left today")).toBeTruthy();
+    expect(box.getByLabelText("Per order ($)")).toHaveProperty("value", "100");
+    fireEvent.change(box.getByLabelText("Per day ($)"), { target: { value: "800" } });
+    fireEvent.click(box.getByRole("button", { name: "Save limits" }));
+    expect(setLimits).not.toHaveBeenCalled();
+    expect(box.getByText(/Raise to \$100\.00 an order and \$800\.00 a day\?/)).toBeTruthy();
+    fireEvent.click(box.getByRole("button", { name: "Raise the limits" }));
+    expect(setLimits).toHaveBeenCalledWith("100", "800");
+    expect(await box.findByText("Limits saved")).toBeTruthy();
+    // Lowering takes less risk: saved without asking.
+    fireEvent.change(box.getByLabelText("Per order ($)"), { target: { value: "50" } });
+    fireEvent.click(box.getByRole("button", { name: "Save limits" }));
+    expect(setLimits).toHaveBeenLastCalledWith("50", "800");
+  });
+
   it("switches to the subscription and offers the fall back", async () => {
     render(<SettingsPage />);
     const key = await screen.findByRole("radio", { name: "API key (pay per use)" });
