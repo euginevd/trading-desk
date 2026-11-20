@@ -21,7 +21,7 @@ from decimal import Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from api.ai_signal import MODEL, MODELS, STEP, Ask, SignalError, Signals, chosen_model
+from api.ai_signal import EFFORT, MODEL, MODELS, STEP, Ask, SignalError, Signals, chosen_model
 from api.audit import Audit
 from api.store import Store
 from api.trading import Refused
@@ -78,6 +78,7 @@ def view(store: Store, signals: Signals) -> dict[str, Any]:
         "tokenSet": bool(os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "").strip()),
         "model": model(store),
         "models": [{"id": key, "name": m.name} for key, m in MODELS.items()],
+        "effort": EFFORT,
         "budget": signals.budget(),
     }
 
@@ -174,7 +175,7 @@ async def _run(  # noqa: PLR0913, PLR0917 - the call's parts, each needed
             setting_sources=[],
             strict_mcp_config=True,
             max_turns=searches + 4,
-            effort="medium",
+            effort=EFFORT,
             output_format={"type": "json_schema", "schema": shape},
             cwd=home,
             env=_env(token, home),

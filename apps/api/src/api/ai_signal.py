@@ -54,6 +54,10 @@ class Model:
     search: str
 
 
+# How hard every model thinks before it answers, on the API key and the subscription alike;
+# Settings says it under the models.
+EFFORT = "medium"
+
 MODELS = {
     "claude-opus-5-5": Model("Claude Opus 5.5", Decimal(4), Decimal(20), "web_search_20260209"),
     "claude-sonnet-5-5": Model("Claude Sonnet 5.5", Decimal(2), Decimal(10), "web_search_20260209"),
@@ -521,7 +525,7 @@ def _create(
             messages=messages,
             tools=tools,
             output_config={
-                "effort": "medium",
+                "effort": EFFORT,
                 "format": {"type": "json_schema", "schema": shape},
             },
         )

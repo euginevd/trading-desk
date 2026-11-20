@@ -233,8 +233,10 @@ export default function SettingsPage() {
               </div>
             </fieldset>
             <p className="settings-note muted">
-              Applies to every AI feature: the coach, the desk&apos;s agents, Analyse and the
-              Profile&apos;s command bar. What you enter is saved to .env and never shown again.
+              Each model answers at <strong className="settings-effort">{ai.effort} effort</strong>:
+              how hard it thinks before answering. Applies to every AI feature: the coach, the
+              desk&apos;s agents, Analyse and the Profile&apos;s command bar. What you enter is
+              saved to .env and never shown again.
             </p>
           </>
         )}

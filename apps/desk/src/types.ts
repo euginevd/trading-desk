@@ -727,6 +727,7 @@ export interface AiSettings {
   tokenSet: boolean;
   model: string;
   models: { id: string; name: string }[];
+  effort: string; // how hard every model thinks before answering: low, medium or high
   budget: { spent: string; cap: string };
 }
 

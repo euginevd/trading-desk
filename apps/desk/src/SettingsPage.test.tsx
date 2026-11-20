@@ -13,6 +13,7 @@ const saved: AiSettings = {
     { id: "claude-sonnet-5-5", name: "Claude Sonnet 5.5" },
     { id: "claude-haiku-5-5", name: "Claude Haiku 5.5" },
   ],
+  effort: "medium",
   budget: { spent: "4.1", cap: "20" },
 };
 const LINK = "https://claude.com/cai/oauth/authorize?code=true";
@@ -82,6 +83,8 @@ describe("Settings", () => {
     const opus = (await screen.findByRole("radio", { name: "Opus 5.5" })) as HTMLInputElement;
     expect(opus.checked).toBe(true);
     expect(screen.getByText("The cheapest and fastest")).toBeTruthy();
+    // The effort every model answers at, as the api reports it.
+    expect(screen.getByText("medium effort")).toBeTruthy();
     fireEvent.click(screen.getByRole("radio", { name: "Haiku 5.5" }));
     expect(setAiSettings).toHaveBeenLastCalledWith("api_key", false, "claude-haiku-5-5");
     await waitFor(() =>

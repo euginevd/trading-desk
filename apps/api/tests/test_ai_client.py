@@ -263,6 +263,7 @@ def test_the_settings_choice_overrides_env_and_shows_no_secret(
     env.setenv("ANTHROPIC_API_KEY", "made-up-key")
     try:
         assert ai_client.view(store, signals)["mode"] == "api_key"
+        assert ai_client.view(store, signals)["effort"] == "medium"  # said on Settings
         shown = ai_client.choose(store, audit, signals, {"mode": "subscription", "fallback": False})
         assert shown["mode"] == "subscription"
         assert ai_client.mode(store) == "subscription"
