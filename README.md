@@ -17,21 +17,19 @@ Runs locally in Docker, against your own accounts or on demo data. Nothing is ho
 | Journal | Every trade with tags and notes |
 | Trade | The Trading account, run by trading-agent: 1% of the pot a trade, New trade by style (scalp, day, swing, position) from a code screener over the top 100 USDC coins, an odds check on each pick, Scan now across all four styles, managing a trade (add, reduce, move the stop), P&L in dollars and percent |
 | Risk | risk-agent's board of limits, the biggest risks to your holdings, a daily check and a weekly review |
-| Bots | Accumulation (the long-term DCA book, run by dca-agent, every order with an ID), Opportunities (short-term DCA bots) and Grid bots |
+| Bots | Accumulation (the long-term DCA book, run by dca-agent, every order with an ID; a Monday close-out on Telegram that keeps open limits unless you choose), Opportunities (short-term DCA bots) and Grid bots |
 | Profile | Your Investment Policy Statement, versioned, with a command bar, a pre-trade check and My agents: each agent a versioned profile file, woken by a scheduler |
 | Settings | Keys, the AI provider (API key or your Claude subscription), Telegram, and a switch per page (feature flags). The kill switch sits in the side panel on every page |
-| Backtests | `apps/backtest`: Freqtrade runs each style's own screener rule on years of Binance candles and reports in R; FreqAI filters setups; one style can paper-trade on live prices |
+| Backtest | Pick a style, one top-100 USDC coin and up to 3 months, and an always-on `backtest-worker` runs Freqtrade on Binance candles, reported in R. From the terminal, `apps/backtest` also tests each style's unbuilt exits, a NostalgiaForInfinity benchmark, FreqAI filters and paper trading |
 
 ### In progress
 
-| Work | Branch | State |
-|---|---|---|
-| The Backtest page: pick a style, one top-100 USDC coin and up to 3 months, run from the desk by an always-on `backtest-worker` container (feature 103) | `backtest-page` | Built, not yet a PR |
-| Each style's exits in backtests (trailing, time stops, close stop), a NostalgiaForInfinity benchmark, and BTC-only runs | `backtest-exits` | Being tested |
+Nothing on a branch right now.
 
 ### Planned
 
-- Each style's backtest result on its Scan now card (TODO 26), once the Backtest page is on `main`.
+- Each style's backtest result on its Scan now card (TODO 27).
+- Chat with dca-agent on Telegram: ask for revised orders and approve each with a tap (TODO 29).
 - Each style's exits after the fill on live trades: half at target, trailing, time stops, the close stop (TODO 24). Drop or rework the setups that lose in backtests.
 - Trading account fixes left from the 20 Nov audit: dust from part-fills, open risk after a reduce, proposal expiry, the daily limit (TODO 25).
 - dca-agent run by the desk: proposing the week, fill odds, the events calendar, approvals by Telegram (TODO 10, 11).
@@ -69,7 +67,7 @@ The risks and their controls: [docs/threat-model.md](docs/threat-model.md). The 
 | [apps/api/](apps/api/) | The api in Python: the exchange and wallet, the books, the agents, the scheduler and orders |
 | [apps/desk/](apps/desk/) | The desk: React pages served by nginx, which passes `/api` to the api |
 | [apps/backtest/](apps/backtest/README.md) | Freqtrade backtests and paper trading of the desk's styles, calling the api's own screener |
-| [docker-compose.yml](docker-compose.yml) | The api and desk on your machine; `backtest` and `paper` on demand |
+| [docker-compose.yml](docker-compose.yml) | The api, the desk and the `backtest-worker` on your machine; `backtest` and `paper` on demand |
 | [.github/workflows/](.github/workflows/) | App checks, security and image scans; the Terraform workflow idles until hosting comes back |
 | [infra/aws/bootstrap/](infra/aws/bootstrap/) | One stack per AWS account, deployed by the owner: GitHub sign-in, the deploy roles, the state bucket and a budget alert |
 | [scripts/](scripts/) | Setup for a fresh clone, repo protection and PR findings |
@@ -92,7 +90,7 @@ docker compose up --build
 
 Open http://127.0.0.1:5180 (or the `DESK_PORT` you set). Set your limits before it will trade. Every outside call, order and settings change is logged in `local/audit.jsonl`; the books, watchlists and settings are kept in `local/desk.sqlite`. Your agents' profiles live in `local/agents/`. The Backtest page runs Freqtrade on years of Binance candles through the `backtest-worker` container, which starts with the rest; results are kept in `local/backtest/` ([apps/backtest](apps/backtest/README.md)).
 
-Backtests run on demand, with no keys and never an order: `bash apps/backtest/run.sh swing` (or `scalp`, `day`, `position`, `swing-ai`, `all`). Results go to `local/backtest/`; paper trading and the rest are in [apps/backtest](apps/backtest/README.md).
+The Backtest page runs through the `backtest-worker`, which starts with the rest. Backtests use no keys and never place an order; from the terminal, `bash apps/backtest/run.sh swing` (or `scalp`, `day`, `position`, `swing-ai`, `all`). Results go to `local/backtest/`; paper trading and the rest are in [apps/backtest](apps/backtest/README.md).
 
 To work on the code instead, once per clone `bash scripts/setup.sh` and `cd apps/desk && npm ci`, then in two terminals from the repo root `uv run python -m api.local` and `cd apps/desk && npm run dev`.
 
