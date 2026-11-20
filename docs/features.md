@@ -23,7 +23,7 @@ Every page follows [design-system.md](design-system.md) 18 to 22. Features 1 to 
 | 107 | The Monday close-out sees the whole week: every DCA buy counts toward its week whichever button placed it (Weekly DCA, Add funds, a single order); Monday's Telegram message shows bought, open limits and not placed yet, with Keep them open (the default) and Buy the rest at market, which also buys each coin's plan share never placed and names any coin it couldn't; the 3-year ticks show a week bought, part bought or missed (TODO 28, owner, 20 Nov 2026; decision 90) | Done | |
 | 108 | Exits Binance won't take yet: a stop or target outside its price band is watched by the desk or placed as the stop alone, then placed in full once in range; the Positions row says Desk-watched stop, Stop only or No stop on Binance (owner, 20 Nov 2026; decision 91) | Done | |
 | 109 | Trading account stats by style and setup, with an equity curve in R (owner, 20 Nov 2026) | Done | |
-| 110 | Trade page tidy: scan cards say Nearest, the scan line is a count, the positions ladder labels the price now and the distance to the stop, and the watchlist is compact rows with setups first (owner, 20 Nov 2026) | Done | |
+| 110 | Trade page tidy: the positions ladder labels the price now and the distance to the stop, and the watchlist is compact rows with setups first (owner, 20 Nov 2026) | Done | |
 
 ## `api`
 

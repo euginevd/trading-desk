@@ -41,7 +41,9 @@ MAX_ALTS = 2
 JUDGE_AFTER = 30
 BAND = "PERCENT_PRICE"  # Binance's refusal of a limit too far from the price
 BAND_ROOM = Decimal("0.9")  # the band follows a 5-minute average, so the target waits for room
-STOP_ROOM = Decimal("1.03")  # and so does the stop, on the band's lower edge
+RETRY_MS = 10 * 60_000  # a refused stop is watched this long before Binance is asked again
+TARGET_RETRY_MS = 60 * 60_000  # a live stop is taken off for its target this often at most
+PAST = "Past its "  # _through's note when its market sell at the stop or target was refused
 WATCHED = "The desk is watching its stop."
 SCAN_HOUR, SCAN_MINUTE = 11, 15
 LIVE = ("placing", "waiting", "open")
@@ -783,16 +785,26 @@ class Pot:
     def _exit(self, trade: dict[str, Any], *, fallback: bool = True) -> None:
         """The stop and target on Binance as one OCO sell, so they hold with the desk off. If
         Binance refuses it because the price is already through the stop or the target, the
-        rest is sold at market, as that leg would have (decision 86)."""
+        rest is sold at market, as that leg would have (decision 86). Levels outside Binance's
+        price band are watched by the desk, or the stop placed alone (decision 91)."""
         qty = self._rest(trade)
         if qty <= ZERO:
             return
+        if str(trade["note"] or "").startswith(WATCHED) and self._refused_lately(trade, RETRY_MS):
+            if fallback:  # Binance refused these levels minutes ago: watched, not sent again
+                self._through(trade, qty)
+            return
         fits = self._fits(trade)
-        if fits == "none" or (fits == "stop" and not self._stop_alone(trade, qty)):
+        if fits == "none":
             self._watched(trade, qty, fallback=fallback)
             return
         if fits == "stop":
+            self._lone(trade, qty, fallback=fallback)
             return
+        self._oco(trade, qty, fallback=fallback)
+
+    def _oco(self, trade: dict[str, Any], qty: Decimal, *, fallback: bool) -> None:
+        """The stop and target sent to Binance as one OCO, and what a refusal leads to."""
         ref = self._exit_ref(trade["ref"])
         order: dict[str, Any] = {
             "ref": ref,
@@ -821,9 +833,8 @@ class Pot:
                 self._save_trade(trade, {"note": "Waiting for Binance to confirm its exits."})
                 return
             self._save_order(saved, {"status": "cancelled"})
-            if BAND in error.message:
-                if not self._stop_alone(trade, qty):
-                    self._watched(trade, qty, fallback=fallback)
+            if BAND in error.message:  # the desk's reading of the band was off: the stop alone
+                self._lone(trade, qty, fallback=fallback)
                 return
             self._save_trade(
                 trade, {"note": f"Its stop and target aren't on Binance yet: {error.message}"}
@@ -844,11 +855,29 @@ class Pot:
         now = self.prices([trade["coin"]]).get(trade["coin"])
         if now is None:
             return "both"
-        if rules.ask_down is not None and Decimal(trade["stop"]) < now * rules.ask_down * STOP_ROOM:
+        if rules.ask_down is not None and Decimal(trade["stop"]) < now * rules.ask_down:
             return "none"
-        if rules.ask_up is not None and Decimal(trade["target"]) > now * rules.ask_up * BAND_ROOM:
+        if rules.ask_up is not None and Decimal(trade["target"]) > now * rules.ask_up:
             return "stop"
         return "both"
+
+    def _refused_lately(self, trade: dict[str, Any], within_ms: int, kind: str = "") -> bool:
+        """Binance refused an exit at these same levels a short while ago (of one kind, or
+        any): the memory that stops the desk sending it again on every sync."""
+        last = next(
+            (
+                o
+                for o in reversed(self._store.pot_orders())
+                if o["trade_ref"] == trade["ref"] and _never_placed(o) and kind in ("", o["kind"])
+            ),
+            None,
+        )
+        return (
+            last is not None
+            and last["stop"] == trade["stop"]
+            and last["price"] in (None, trade["target"])
+            and self._now() - int(last["created"]) < within_ms
+        )
 
     def _watched(self, trade: dict[str, Any], qty: Decimal, *, fallback: bool) -> None:
         """Binance takes no stop for the trade yet, so the desk holds it: every sync it sells
@@ -859,21 +888,38 @@ class Pot:
             f"market if the price reaches {trade['stop']}, while it is running. The stop goes "
             "on Binance once the price is closer."
         )
-        if trade["note"] != said:
+        if not str(trade["note"] or "").startswith((WATCHED, PAST)):
             self._save_trade(trade, {"note": said})
-            self._audit.record("pot", f"{trade['ref']}: stop out of Binance's range", "watched")
         if not any(n["text"] == said for n in self._store.pot_notes(trade["ref"])):
-            self._log(trade["ref"], said)
+            self._log(trade["ref"], said)  # and audited with it: once, not on every sync
+            self._audit.record("pot", f"{trade['ref']}: stop out of Binance's range", "watched")
         if fallback:
             self._through(self._trade(trade["ref"]), qty)
 
-    def _stop_alone(self, trade: dict[str, Any], qty: Decimal) -> bool:
+    def _lone(self, trade: dict[str, Any], qty: Decimal, *, fallback: bool) -> None:
+        """The stop placed alone; refused, the trade is watched (Binance's band) or says
+        Binance's own reason, and either way the desk still sells at the stop itself."""
+        refused = self._stop_alone(trade, qty)
+        if refused is None:
+            return
+        if BAND in refused:
+            self._watched(trade, qty, fallback=fallback)
+            return
+        if refused:
+            fresh = self._trade(trade["ref"])
+            self._save_trade(fresh, {"note": f"Its stop isn't on Binance yet: {refused}"})
+        if fallback:
+            self._through(self._trade(trade["ref"]), qty)
+
+    def _stop_alone(self, trade: dict[str, Any], qty: Decimal) -> str | None:
         """Binance takes no limit sell far above the price, so a far target had the whole OCO
         refused and the trade left with no stop. The stop goes on alone; the sync adds the
-        target once the price is close enough (_target_back). False: nothing was placed."""
+        target once the price is close enough (_target_back). None: placed, or sent without
+        an answer yet. Else Binance's reason for refusing it; empty when the price is unknown
+        or already at the stop, and nothing was sent."""
         now = self.prices([trade["coin"]]).get(trade["coin"])
         if now is None or now <= Decimal(trade["stop"]):  # past the stop: _through's to sell
-            return False
+            return ""
         ref = self._exit_ref(trade["ref"])
         order: dict[str, Any] = {
             "ref": ref,
@@ -896,9 +942,9 @@ class Pot:
         except BinanceError as error:
             if unknown(error):  # it may be on Binance: the next sync looks it up by its id
                 self._save_trade(trade, {"note": "Waiting for Binance to confirm its stop."})
-                return True
+                return None
             self._save_order(saved, {"status": "cancelled"})
-            return False
+            return error.message or "Refused"
         self._save_order(saved, {"order_id": int(sent["orderId"]), "status": "open"})
         said = (
             f"Its stop is on Binance alone: the target ({trade['target']}) is further above "
@@ -908,16 +954,19 @@ class Pot:
         if not any(n["text"] == said for n in self._store.pot_notes(trade["ref"])):
             self._log(trade["ref"], said)  # once, not on every replacement
         self._audit.record("pot", f"{trade['ref']}: target out of Binance's range", "stop alone")
-        return True
+        return None
 
     def _target_back(self, trade: dict[str, Any]) -> None:
-        """A trade holding its stop alone gets its stop and target as one OCO again, once the
-        target is inside what Binance accepts, with room to spare so it isn't refused again."""
+        """A trade holding its stop alone gets its stop and target as one OCO again, but only
+        when Binance would take both: a live stop is never taken off for less. The target
+        waits for room inside the band, and a refused try isn't repeated for an hour."""
+        if self._refused_lately(trade, TARGET_RETRY_MS, "oco"):
+            return
         ask_up = self._rules_of(trade["coin"]).ask_up
         now = self.prices([trade["coin"]]).get(trade["coin"])
-        if ask_up is None or now is None:
+        if now is None or self._fits(trade) != "both":
             return
-        if Decimal(trade["target"]) > now * ask_up * BAND_ROOM:
+        if ask_up is not None and Decimal(trade["target"]) > now * ask_up * BAND_ROOM:
             return
         try:
             self._pull_exit(trade)
@@ -950,7 +999,7 @@ class Pot:
         try:
             self._sell(trade, qty, fallback=False)
         except BinanceError as error:
-            note = f"Past its {past}, but Binance refused the market sell: {error.message}"
+            note = f"{PAST}{past}, but Binance refused the market sell: {error.message}"
             self._save_trade(self._trade(trade["ref"]), {"note": note})
             said = note + ". The desk tries again every 30 seconds."
             if not any(n["text"] == said for n in self._store.pot_notes(trade["ref"])):
@@ -1124,24 +1173,44 @@ class Pot:
         self._save_order(live, {"status": "cancelled"})
 
     def _pull_stop(self, trade: dict[str, Any], live: dict[str, Any]) -> None:
-        """Takes a stop placed alone off Binance; refuses if it has filled meanwhile."""
+        """Takes a stop placed alone off Binance. Refuses if it filled meanwhile, in whole or
+        in part: the caller's copy of the trade is stale then, and must not be acted on."""
+        symbol = f"{trade['coin']}{QUOTE}"
+        moved = Refused("Its stop sold on Binance a moment ago, so nothing changed. Look again.")
+        before = (trade["status"], trade["exit_qty"])
         if live["order_id"] is None:  # sent without an answer: looked up by its id first
             self._refresh(live)
+            after = self._trade(trade["ref"])
+            if (after["status"], after["exit_qty"]) != before:
+                raise moved
             live = self._order(live["ref"])
             if live["status"] not in ("placing", "open"):
-                return
+                return  # Binance never took it
             if live["order_id"] is None:
                 raise Refused("Binance hasn't confirmed its stop yet, so nothing changed.")
         try:
-            self._binance.cancel(f"{trade['coin']}{QUOTE}", int(live["order_id"]))
+            done = self._binance.cancel(symbol, int(live["order_id"]))
         except BinanceError:
             self._refresh(live)
-            if self._trade(trade["ref"])["status"] == "closed":
-                raise Refused("Its stop filled a moment ago; the trade is closed.") from None
+            after = self._trade(trade["ref"])
+            if (after["status"], after["exit_qty"]) != before:
+                raise moved from None
             raise Refused(
                 "Binance didn't take its stop off, so nothing changed. Try again."
             ) from None
+        if Decimal(str(done.get("executedQty", "0"))) > ZERO:  # part sold before the cancel
+            self._follow(live, done)
+            raise moved
         self._save_order(live, {"status": "cancelled"})
+
+    def _keeps_stop(self, trade: dict[str, Any], levels: dict[str, str]) -> None:
+        """Refuses a change that would take the trade's exits off Binance and get none back:
+        with these levels its stop is further under the price than Binance accepts."""
+        if self._live_exit(trade["ref"]) is not None and self._fits(trade | levels) == "none":
+            raise Refused(
+                "Binance wouldn't take its stop back at this price (it is too far under it), "
+                "so nothing changed: the stop stays on Binance as it is."
+            )
 
     @locked
     def move_stop(self, body: dict[str, Any]) -> dict[str, Any]:
@@ -1158,6 +1227,7 @@ class Pot:
             raise Refused(f"There's no {trade['coin']}/{QUOTE} price on Binance to check it by.")
         if stop >= now:
             raise Refused(f"A stop at or above the price ({plain(now)}) would sell straight away.")
+        self._keeps_stop(trade, {"stop": plain(stop)})
         self._pull_exit(trade)
         old = trade["stop"]
         trade = self._save_trade(trade, {"stop": plain(stop)})
@@ -1255,6 +1325,7 @@ class Pot:
                 f"Only a trade in profit can be added to: {coin} is at {plain(now)}, at or under "
                 f"its average entry of {plain(round(cost, 8))}. No averaging down."
             )
+        self._keeps_stop(trade, {})
         rules = self._rules_of(coin)
         qty = rules.amount(number(body.get("usdc"), "The amount") / now)
         spend = qty * now
@@ -1392,6 +1463,7 @@ class Pot:
             self._rr_rule(n)
         old = trade["target"]
         if trade["status"] == "open":
+            self._keeps_stop(trade, {"target": plain(target)})
             self._pull_exit(trade)
         trade = self._save_trade(trade, {"target": plain(target)})
         if trade["status"] == "open":
@@ -1464,8 +1536,9 @@ class Pot:
         fill_qty = Decimal(row["fill_qty"])
         exit_qty = Decimal(row["exit_qty"])
         orders = [o for o in self._store.pot_orders() if o["trade_ref"] == row["ref"]]
-        refused = [o for o in orders if _never_placed(o)]
-        orders = [o for o in orders if o not in refused[:-1]]  # the latest refusal says it all
+        refused = [o["ref"] for o in orders if _never_placed(o)]
+        hidden = set(refused[:-1])  # the latest refusal says it all
+        orders = [o for o in orders if o["ref"] not in hidden]
         live = next((o for o in orders if o["role"] == "exit" and o["status"] == "open"), None)
         return {
             "exits": None

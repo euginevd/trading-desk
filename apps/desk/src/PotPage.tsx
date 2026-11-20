@@ -302,6 +302,13 @@ function TradeRow({ trade, onOpen }: { trade: PotTrade; onOpen: () => void }) {
                   </small>
                   <span id={stopGapId} className="visually-hidden">
                     {stopGap.long}
+                    {trade.exits === "none"
+                      ? " No stop on Binance."
+                      : trade.exits === "desk"
+                        ? " The desk is watching its stop; none is on Binance."
+                        : trade.exits === "stop"
+                          ? " Its stop is on Binance without its target."
+                          : ""}
                   </span>
                 </>
               )}

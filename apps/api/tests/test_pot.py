@@ -1,4 +1,5 @@
 import json
+import sys
 from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import replace
@@ -915,27 +916,128 @@ def test_a_target_binance_wont_take_leaves_the_stop_on_alone(
     assert (done["status"], done["exitKind"]) == ("closed", "stop")
 
 
-def test_the_target_goes_back_on_once_binance_takes_it(
+def band(pot: Pot, **edges: str) -> None:
+    """Binance's price band for SOL: a sell's stop and limit as multiples of the price."""
+    symbol = f"SOL{QUOTE}"
+    rules = pot.binance.filters(symbol)
+    pot.binance._filters[symbol] = replace(rules, **{k: Decimal(v) for k, v in edges.items()})  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+
+
+def test_the_target_goes_back_on_once_binance_takes_it(pot: Pot) -> None:
+    band(pot, ask_up="1.05")  # 230 is over 212.40 x 1.05: the desk knows, and sends no OCO
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    pot.sync()
+    live = pot.view()["trades"][0]
+    assert live["exits"] == "stop"
+    assert [(o["role"], o["kind"]) for o in live["orders"]] == [
+        ("entry", "limit"),
+        ("exit", "stop"),
+    ]
+    band(pot, ask_up="1.1")
+    pot.sync()  # inside the band now, but without the room kept: still the stop alone
+    assert pot.view()["trades"][0]["exits"] == "stop"
+    band(pot, ask_up="1.3")
+    pot.sync()
+    live = pot.view()["trades"][0]
+    assert live["exits"] == "both"
+    assert live["note"] is None
+    assert by_tag(f"{trade['ref']}-X1")["status"] == "CANCELED"
+    assert by_tag(f"{trade['ref']}-X2T")["type"] == "LIMIT_MAKER"
+
+
+def test_a_stop_on_binance_is_never_taken_off_for_a_target_alone(pot: Pot) -> None:
+    """The price rose until the target fitted Binance's band, but by then the stop was too
+    far under it: the stop was cancelled for an OCO Binance would refuse, and nothing held."""
+    band(pot, ask_up="1.05", ask_down="0.85")
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    pot.sync()
+    assert pot.view()["trades"][0]["exits"] == "stop"
+    band(pot, ask_up="1.3", ask_down="0.9")  # the target fits now; 190 is over 10% under 212.40
+    pot.sync()
+    assert pot.view()["trades"][0]["exits"] == "stop"
+    assert by_tag(f"{trade['ref']}-X1")["status"] == "NEW"
+    with pytest.raises(Refused, match="wouldn't take its stop back"):
+        pot.move_target({"ref": trade["ref"], "target": "235"})
+    assert by_tag(f"{trade['ref']}-X1")["status"] == "NEW"
+
+
+def test_a_refused_target_isnt_tried_again_for_an_hour(
     pot: Pot, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     real = pot.binance.sell_oco
     trade = pot.place(SOL)
     fill(by_tag(f"{trade['ref']}-E")["orderId"])
     monkeypatch.setattr(pot.binance, "sell_oco", out_of_range)
-    pot.sync()
-    symbol = f"SOL{QUOTE}"
-    rules = pot.binance.filters(symbol)
-    pot.binance._filters[symbol] = replace(rules, ask_up=Decimal("1.1"))  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
-    pot.sync()  # 230 is over 212.40 x 1.1, less the room kept: still the stop alone
-    assert pot.view()["trades"][0]["exits"] == "stop"
-    pot.binance._filters[symbol] = replace(rules, ask_up=Decimal("1.3"))  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    pot.sync()  # the band unknown: Binance refused the OCO, so the stop went on alone
     monkeypatch.setattr(pot.binance, "sell_oco", real)
     pot.sync()
+    assert by_tag(f"{trade['ref']}-X2")["status"] == "NEW"  # left alone: no cancel every sync
+    monkeypatch.setattr(sys.modules[__name__], "NOW", NOW + 3601)
+    pot.sync()
+    assert pot.view()["trades"][0]["exits"] == "both"
+
+
+def test_a_stop_binance_refuses_too_is_watched_without_asking_every_sync(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    monkeypatch.setattr(pot.binance, "sell_oco", out_of_range)
+    monkeypatch.setattr(pot.binance, "sell_stop", out_of_range)
+    pot.sync()
+    rows = len(pot.store.pot_orders())
+    pot.sync()
+    pot.sync()
+    assert len(pot.store.pot_orders()) == rows  # watched: not sent again for ten minutes
+    assert pot.view()["trades"][0]["exits"] == "desk"
+    monkeypatch.setattr(pot, "prices", at("189"))
+    pot.sync()  # and the desk still sells at the stop itself
+    assert pot.view()["trades"][0]["status"] == "closed"
+    assert trade["ref"] == pot.view()["trades"][0]["ref"]
+
+
+def test_a_stop_refused_for_another_reason_says_binances_own(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def no_balance(*_args: Any) -> dict[str, Any]:
+        raise BinanceError(400, "Account has insufficient balance for requested action.")
+
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    monkeypatch.setattr(pot.binance, "sell_oco", out_of_range)
+    monkeypatch.setattr(pot.binance, "sell_stop", no_balance)
+    pot.sync()
     live = pot.view()["trades"][0]
-    assert live["exits"] == "both"
-    assert live["note"] is None
-    assert by_tag(f"{trade['ref']}-X2")["status"] == "CANCELED"
-    assert by_tag(f"{trade['ref']}-X3T")["type"] == "LIMIT_MAKER"
+    assert live["exits"] == "none"
+    assert "insufficient balance" in live["note"]
+    assert trade["ref"] == live["ref"]
+
+
+def test_a_lone_stop_that_filled_unseen_refuses_a_close(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Its reply never came, then it sold: Close went on with a stale trade and sold again."""
+    real = pot.binance.sell_stop
+
+    def lost_reply(*args: Any) -> dict[str, Any]:
+        real(*args)
+        raise BinanceError(0, "No answer")
+
+    band(pot, ask_up="1.05")
+    trade = pot.place(SOL)
+    fill(by_tag(f"{trade['ref']}-E")["orderId"])
+    monkeypatch.setattr(pot.binance, "sell_stop", lost_reply)
+    pot.sync()
+    stop = by_tag(f"{trade['ref']}-X1")
+    stop["price"] = "190"
+    fill(stop["orderId"])
+    with pytest.raises(Refused, match="sold on Binance a moment ago"):
+        pot.close(trade["ref"])
+    done = pot.view()["trades"][0]
+    assert (done["status"], done["exitKind"]) == ("closed", "stop")
+    assert not [o for o in done["orders"] if o["role"] == "close"]
 
 
 def test_a_stop_binance_wont_take_is_watched_by_the_desk(
