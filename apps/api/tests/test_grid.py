@@ -323,3 +323,57 @@ def test_a_grid_buy_the_kill_switch_couldnt_cancel_stays_open_and_is_tried_again
     grids.step()
     assert mine("BUY") == []
     assert grids.view()["grids"][0]["openBuys"] == 0
+
+
+def rows(grids: Grids, grid_id: int) -> list[str]:
+    return [r["status"] for r in grids._store.grid_orders(grid_id)]  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_grid_buy_met_with_a_5xx_is_looked_up_not_written_off(
+    grids: Grids, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a 5xx's outcome is unknown. The buy here reached Binance, so the row stays
+    placing and is found live, never cancelled and sent again."""
+    grids.trading.set_limits("60", "1000")
+    grid_id = grids.create(SETTINGS)["grids"][0]["id"]
+    real = grids._binance.buy_limit  # pyright: ignore[reportPrivateUsage]
+
+    def took_it_then_503(*args: Any, **kwargs: Any) -> Any:
+        real(*args, **kwargs)
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(grids._binance, "buy_limit", took_it_then_503)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(BinanceError):
+        grids.switch(grid_id, on=True, confirmed=True)
+    assert "placing" in rows(grids, grid_id)
+    assert "cancelled" not in rows(grids, grid_id)
+    monkeypatch.setattr(grids._binance, "buy_limit", real)  # pyright: ignore[reportPrivateUsage]
+    grids.step()
+    assert "placing" not in rows(grids, grid_id)
+    assert len(mine("BUY")) == len({o["clientOrderId"] for o in mine("BUY")})  # none sent twice
+
+
+def test_a_grid_lookup_only_sends_again_when_binance_says_it_isnt_there(
+    grids: Grids, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a clock out of step (-1021) proves nothing; only "Order does not exist" does."""
+    grids.trading.set_limits("60", "1000")
+    grid_id = grids.create(SETTINGS)["grids"][0]["id"]
+    real, lookup = grids._binance.buy_limit, grids._binance.order_by_client  # pyright: ignore[reportPrivateUsage]
+
+    def no_answer(*_a: object, **_k: object) -> None:
+        raise BinanceError(0, "Binance didn't answer.")
+
+    def out_of_step(*_a: object, **_k: object) -> None:
+        raise BinanceError(400, "Timestamp for this request is outside of the recvWindow.", -1021)
+
+    monkeypatch.setattr(grids._binance, "buy_limit", no_answer)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(BinanceError):
+        grids.switch(grid_id, on=True, confirmed=True)
+    monkeypatch.setattr(grids._binance, "buy_limit", real)  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(grids._binance, "order_by_client", out_of_step)  # pyright: ignore[reportPrivateUsage]
+    grids.step()
+    assert "placing" in rows(grids, grid_id)  # not put back to wanted on an error like that
+    monkeypatch.setattr(grids._binance, "order_by_client", lookup)  # pyright: ignore[reportPrivateUsage]
+    grids.step()  # the demo never got it: "Order does not exist" (-2013)
+    assert "placing" not in rows(grids, grid_id)

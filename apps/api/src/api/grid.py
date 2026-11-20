@@ -15,7 +15,7 @@ from typing import Any
 
 from api import profile, profile_live
 from api.audit import Audit
-from api.binance import Binance, BinanceError, Filters, plain
+from api.binance import Binance, BinanceError, Filters, missing, plain, unknown
 from api.bots import FEE, checked, checked_whole
 from api.indicators import Candle
 from api.locks import locked
@@ -629,11 +629,11 @@ class Grids:
                 else:
                     order = self._binance.limit_sell(symbol, qty, price, str(row["client_id"]))
             except BinanceError as error:
-                if error.status != 0:  # refused: never placed
+                if not unknown(error):  # refused: never placed
                     self._store.save_grid_order(
                         row | {"status": "cancelled", "updated": self._now()}
                     )
-                raise  # no answer: it stays "placing" and is looked up next time
+                raise  # it may be on Binance: it stays "placing" and is looked up next time
             self._store.save_grid_order(
                 row | {"order_id": int(order["orderId"]), "status": "open", "updated": self._now()}
             )
@@ -653,7 +653,7 @@ class Grids:
         try:
             found = self._binance.order_by_client(str(grid["symbol"]), str(row["client_id"]))
         except BinanceError as error:
-            if error.status == 0:
+            if not missing(error):  # it may be live: looked up again next time
                 raise
             back = row | {"status": "wanted", "updated": self._now()}
             self._store.save_grid_order(back)

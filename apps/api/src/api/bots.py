@@ -13,7 +13,7 @@ from typing import Any
 
 from api import profile, profile_live
 from api.audit import Audit
-from api.binance import Binance, BinanceError, Filters, plain
+from api.binance import Binance, BinanceError, Filters, missing, plain, unknown
 from api.indicators import Candle, bollinger
 from api.locks import locked
 from api.market import QUOTE, candles
@@ -782,9 +782,10 @@ class Bots:
             try:
                 self._place(bot, deal_id, Order(row["rung"], "buy", row["price"], row["qty"]))
             except BinanceError as error:
-                if error.status == 0:
-                    # No answer: that order may be live. The deal stays open and the order is
-                    # looked up next step; the rest of the ladder isn't placed (decision 47).
+                if unknown(error):
+                    # No answer, a rate limit or a 5xx: that order may be live. The deal stays
+                    # open and the order is looked up next step; the rest of its ladder isn't
+                    # placed (decision 47).
                     note = (
                         "Binance didn't answer while placing this deal: the orders sent are "
                         "checked and followed, the rest of its ladder isn't placed."
@@ -828,10 +829,10 @@ class Bots:
             else:
                 order = self._binance.limit_sell(symbol, qty, price, client_id)
         except BinanceError as error:
-            if error.status != 0:  # refused: never placed
+            if not unknown(error):  # refused: never placed
                 self._store.save_bot_order(saved)
-            # No answer (status 0): it may be on Binance. The row stays "placing" and the next
-            # step finds it by its client id (decision 47).
+            # No answer, a rate limit or a 5xx: it may be on Binance. The row stays "placing"
+            # and the next step finds it by its client id (decision 47).
             raise
         self._store.save_bot_order(saved | {"order_id": int(order["orderId"]), "status": "open"})
 
@@ -891,7 +892,7 @@ class Bots:
             else:
                 order = self._binance.order(symbol, int(row["order_id"]))
         except BinanceError as error:
-            if row["status"] != "placing" or error.status == 0:
+            if row["status"] != "placing" or not missing(error):
                 raise
             order = {"orderId": 0, "status": "REJECTED"}  # Binance never took it
         self._record(bot, row, order)
@@ -1013,9 +1014,22 @@ class Bots:
         self._place(bot, deal_id, Order(rung, "sell", price, qty))
 
     def _close(self, bot: dict[str, Any], deal_id: int) -> None:
+        """Ends a deal its take profit sold, once none of its buys is live on Binance; one the
+        cancel didn't take keeps the deal open and is tried again next step (audit 7)."""
+        live = 0
         for row in self._store.bot_orders(deal_id):
             if row["side"] == "buy":
-                self._cancel(bot, row)
+                try:
+                    live += self._cancel(bot, row)
+                except BinanceError:
+                    live += 1
+        if live:
+            note = (
+                f"Deal D-{deal_id} sold at take profit, but {live} of its buys are still live "
+                "on Binance: the desk tries to cancel them every 30 seconds."
+            )
+            self._store.save_bot(self._store.bot(int(bot["id"])) | {"note": note})
+            return
         position = self._position(deal_id)
         cost = (
             position["spent"] * position["sold"] / position["bought"]
@@ -1097,7 +1111,7 @@ class Bots:
         try:
             order = self._binance.sell_market(symbol, qty, client_id)
         except BinanceError as error:
-            if error.status != 0:
+            if not unknown(error):  # refused: never placed
                 self._store.save_bot_order(row | {"status": "cancelled", "updated": self._now()})
             raise
         self._record(bot, row, order)

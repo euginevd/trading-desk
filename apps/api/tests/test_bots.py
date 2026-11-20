@@ -452,3 +452,56 @@ def test_a_buy_the_kill_switch_couldnt_cancel_is_kept_and_tried_again(
     assert all(o["status"] == "CANCELED" for o in orders("BUY"))
     assert bots.view()["bots"][0]["deals"] == []
     assert bots.stop_all("Stopped by the kill switch.") == 0
+
+
+def test_a_buy_met_with_a_5xx_is_looked_up_not_written_off(
+    bots: Bots, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a 5xx's outcome is unknown. The buy here reached Binance, so it stays followed
+    and the kill switch still finds and cancels it."""
+    dip(bots, monkeypatch)
+    bots.trading.set_limits("50", "500")
+    bot_id = bots.create({**SETTINGS, "maxDcaOrders": "0"})["bots"][0]["id"]
+    bots.switch(bot_id, on=True, confirmed=True)
+    real = bots._binance.buy_limit  # pyright: ignore[reportPrivateUsage]
+
+    def took_it_then_503(*args: Any, **kwargs: Any) -> Any:
+        real(*args, **kwargs)
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(bots._binance, "buy_limit", took_it_then_503)  # pyright: ignore[reportPrivateUsage]
+    bots.step()
+    assert len(orders("BUY")) == 1
+    assert bots.view()["bots"][0]["enabled"]  # not paused as if Binance had refused it
+    bots.trading.set_trading(False)
+    bots.step()
+    assert all(o["status"] == "CANCELED" for o in orders("BUY"))
+
+
+def test_a_deal_stays_open_at_take_profit_while_a_buy_is_still_live(
+    bots: Bots, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a buy whose cancel didn't take can still fill, so its deal isn't ended."""
+    dip(bots, monkeypatch)
+    bots.trading.set_limits("50", "500")
+    bot_id = bots.create(SETTINGS)["bots"][0]["id"]
+    bots.switch(bot_id, on=True, confirmed=True)
+    bots.step()
+    fill(orders("BUY")[0]["orderId"])
+    bots.step()  # the take profit
+    fill(orders("SELL")[0]["orderId"])
+    real = bots._binance.cancel  # pyright: ignore[reportPrivateUsage]
+
+    def lost(*_a: object, **_k: object) -> None:
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(bots._binance, "cancel", lost)  # pyright: ignore[reportPrivateUsage]
+    bots.step()
+    view = bots.view()["bots"][0]
+    assert len(view["deals"]) == 1
+    assert "still live on Binance" in view["note"]
+    monkeypatch.setattr(bots._binance, "cancel", real)  # pyright: ignore[reportPrivateUsage]
+    bots.step()
+    view = bots.view()["bots"][0]
+    assert (view["deals"], view["closed"]) == ([], 1)
+    assert all(o["status"] == "CANCELED" for o in orders("BUY")[1:])

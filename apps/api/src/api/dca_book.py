@@ -14,7 +14,7 @@ from decimal import ROUND_FLOOR, Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from api.binance import BinanceError, plain
+from api.binance import BinanceError, missing, plain, unknown
 from api.locks import locked
 from api.market import QUOTE
 from api.trading import Refused, Trading, number
@@ -470,7 +470,7 @@ class DcaBook:
         try:
             order = self._send(saved, f"{coin}{QUOTE}")
         except BinanceError as error:
-            if error.status != 0:  # refused: never placed
+            if not unknown(error):  # refused: never placed
                 self._store.save_dca_order(saved | {"status": "cancelled", "updated": now})
             raise
         self._record(saved, order)
@@ -554,7 +554,7 @@ class DcaBook:
             else:
                 order = self._binance.order(symbol, int(row["order_id"]))
         except BinanceError as error:
-            if row["status"] != "placing" or error.status == 0:
+            if row["status"] != "placing" or not missing(error):
                 raise
             order = {"orderId": 0, "status": "REJECTED"}  # Binance never took it
         self._record(row, order)
@@ -686,7 +686,7 @@ class DcaBook:
         try:
             self._record(saved, self._send(saved, f"{coin}{QUOTE}"))
         except BinanceError as error:
-            if error.status != 0:
+            if not unknown(error):  # refused: never placed
                 self._store.save_dca_order(saved | {"status": "cancelled", "updated": self._now()})
             raise
 

@@ -391,6 +391,50 @@ def test_a_cancel_that_didnt_take_places_nothing_in_its_place(
     assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["open"]
 
 
+def test_a_buy_met_with_a_5xx_is_looked_up_not_written_off(
+    book: DcaBook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: Binance's docs say a 5xx's outcome is unknown. The buy here did go through, so
+    the row stays placing and the sync finds it live, rather than calling it cancelled."""
+    real = book.binance.buy_limit
+
+    def took_it_then_503(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        real(*args, **kwargs)
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(book.binance, "buy_limit", took_it_then_503)
+    with pytest.raises(BinanceError):
+        book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+    assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["placing"]
+    monkeypatch.setattr(book.binance, "buy_limit", real)
+    book.sync()
+    assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["open"]
+
+
+def test_a_lookup_only_writes_an_order_off_when_binance_says_it_isnt_there(
+    book: DcaBook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a clock out of step (-1021) proves nothing; only "Order does not exist" does."""
+    lookup = book.binance.order_by_client
+
+    def no_answer(*_a: object, **_k: object) -> None:
+        raise BinanceError(0, "Binance didn't answer.")
+
+    monkeypatch.setattr(book.binance, "buy_limit", no_answer)
+    with pytest.raises(BinanceError):
+        book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+
+    def out_of_step(*_a: object, **_k: object) -> None:
+        raise BinanceError(400, "Timestamp for this request is outside of the recvWindow.", -1021)
+
+    monkeypatch.setattr(book.binance, "order_by_client", out_of_step)
+    book.sync()
+    assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["placing"]
+    monkeypatch.setattr(book.binance, "order_by_client", lookup)
+    book.sync()  # the demo never got it: "Order does not exist" (-2013)
+    assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["cancelled"]
+
+
 def test_a_dca_order_cant_be_changed_from_the_open_orders_list(
     book: DcaBook, desk: Trading, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -1194,6 +1194,31 @@ def test_cancelling_an_entry_binance_has_cancels_it_there(
     assert pot.view()["trades"][0]["status"] == "cancelled"
 
 
+def test_an_entry_is_only_written_off_when_binance_says_it_isnt_there(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a lookup refused for a clock out of step (-1021) proves nothing; only "Order
+    does not exist" shows the entry never reached Binance."""
+    real, lookup = pot.binance.buy_limit, pot.binance.order_by_client
+
+    def lost(*_args: Any) -> dict[str, Any]:
+        raise BinanceError(0, "Timed out")
+
+    def out_of_step(*_args: Any) -> dict[str, Any]:
+        raise BinanceError(400, "Timestamp for this request is outside of the recvWindow.", -1021)
+
+    monkeypatch.setattr(pot.binance, "buy_limit", lost)
+    with pytest.raises(BinanceError):
+        pot.place(SOL)
+    monkeypatch.setattr(pot.binance, "buy_limit", real)
+    monkeypatch.setattr(pot.binance, "order_by_client", out_of_step)
+    pot.sync()
+    assert pot.view()["trades"][0]["status"] == "placing"
+    monkeypatch.setattr(pot.binance, "order_by_client", lookup)
+    pot.sync()  # the demo never got it: "Order does not exist" (-2013)
+    assert pot.view()["trades"][0]["status"] == "cancelled"
+
+
 def test_a_target_that_part_filled_before_its_exits_came_off_is_never_sold_twice(
     pot: Pot,
 ) -> None:

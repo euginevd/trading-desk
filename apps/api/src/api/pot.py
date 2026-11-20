@@ -14,7 +14,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from api import my_agents, pot_stats, screener
-from api.binance import BinanceError, Filters, plain
+from api.binance import BinanceError, Filters, missing, plain, unknown
 from api.dca_book import binance_state
 from api.locks import locked
 from api.market import QUOTE
@@ -50,11 +50,6 @@ SCAN_HOUR, SCAN_MINUTE = 11, 15
 LIVE = ("placing", "waiting", "open")
 SETUP = re.compile(r"[\w ,.'()-]{1,60}")
 COINS_LINE = re.compile(r"^- (?:Fallback c|C)oins:\s*(.+)$", re.MULTILINE)
-
-
-def unknown(error: BinanceError) -> bool:
-    """No answer, or a 5xx: Binance may or may not have the order (its API docs say so)."""
-    return error.status == 0 or error.status >= 500  # noqa: PLR2004
 
 
 def ref_week(ms: int) -> str:
@@ -1110,7 +1105,7 @@ class Pot:
             else:
                 sent = self._binance.order(symbol, int(order["order_id"]))
         except BinanceError as error:
-            if order["status"] != "placing" or unknown(error):
+            if order["status"] != "placing" or not missing(error):
                 raise
             sent = {"orderId": 0, "status": "REJECTED"}  # Binance never took it
         self._follow(order, sent)
@@ -1121,7 +1116,7 @@ class Pot:
         try:
             sent = self._binance.order_list_by_client(order["ref"])
         except BinanceError as error:
-            if unknown(error):
+            if not missing(error):
                 raise
             self._save_order(order, {"status": "cancelled"})
             return False
