@@ -386,6 +386,24 @@ describe("DCA book page", () => {
     });
   });
 
+  it("keeps Add and Remove fixed while a plan is coming, and places it as it was planned", async () => {
+    const fetch = serve(book());
+    render(<DcaBookPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add funds" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Amount in USDC" }), {
+      target: { value: "100" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Plan it" }));
+    // Audit 12: switched mid-plan, a buy plan would have gone out as sells.
+    expect(screen.getByRole("button", { name: "Remove" })).toHaveProperty("disabled", true);
+    expect(await screen.findByText("Most to BTC, near last week's low.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Review \d limit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Place \d/ }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders").length).toBeGreaterThan(0));
+    for (const [, init] of sent(fetch, "/dca/orders"))
+      expect(JSON.parse(String(init?.body))).not.toHaveProperty("side", "sell");
+  });
+
   it("adds funds: the desk's split, a tick and a hand edit, then one limit per coin", async () => {
     const fetch = serve(book());
     render(<DcaBookPage />);

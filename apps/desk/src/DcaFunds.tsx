@@ -74,6 +74,8 @@ export default function DcaFunds({
   const [lines, setLines] = useState<Line[]>([]);
   const [message, setMessage] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
+  // The side on show now: a plan or chat reply asked for the other side is dropped (audit 12).
+  const showing = useRef(side);
 
   const selling = side === "remove";
   const total = rows.reduce((s, r) => s + (Number(r.usdc) || 0), 0);
@@ -82,9 +84,11 @@ export default function DcaFunds({
   const tooSmall = pending.filter((r) => Number(r.usdc) < MIN).map((r) => r.coin);
 
   const take = (p: FundsPlan) => {
+    if ((p.side === "sell") !== (showing.current === "remove")) return false;
     setPlan(p);
     setRows([...p.orders, ...(p.skipped ?? []).map((s) => ({ ...s, skipped: true }))]);
     setAmount(p.amount);
+    return true;
   };
   const [talking, setTalking] = useState(false);
   const analyse = () => {
@@ -123,8 +127,7 @@ export default function DcaFunds({
       message: text,
     }).then(
       (p) => {
-        take(p);
-        setLines((l) => [...l, { who: "agent", text: p.reply ?? p.note }]);
+        if (take(p)) setLines((l) => [...l, { who: "agent", text: p.reply ?? p.note }]);
         setBusy(null);
       },
       (e: unknown) => {
@@ -157,6 +160,8 @@ export default function DcaFunds({
   };
 
   const place = async (override = false) => {
+    // The plan's own side decides buy or sell, never the toggle (audit 12).
+    const sells = plan ? plan.side === "sell" : selling;
     setBusy("place");
     setHeld(null);
     const next = [...rows];
@@ -164,7 +169,7 @@ export default function DcaFunds({
       if (r.result || r.skipped || !(Number(r.usdc) > 0)) continue; // left-out coins stay out
       try {
         const placed = await placeDcaOrder(
-          selling
+          sells
             ? {
                 coin: r.coin,
                 side: "sell",
@@ -195,7 +200,7 @@ export default function DcaFunds({
     const done = next.filter((r) => r.result && !r.failed).length;
     if (done)
       onPlaced(
-        `${done} ${selling ? "limit sells" : "limit buys"} placed from ${two(asked)} ${quote}.`,
+        `${done} ${sells ? "limit sells" : "limit buys"} placed from ${two(asked)} ${quote}.`,
       );
   };
 
@@ -209,7 +214,9 @@ export default function DcaFunds({
               key={s}
               type="button"
               aria-pressed={side === s}
+              disabled={busy !== null}
               onClick={() => {
+                showing.current = s;
                 setSide(s);
                 setPlan(null);
                 setRows([]);
