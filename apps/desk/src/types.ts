@@ -76,6 +76,8 @@ export interface Settings {
   perDay: string;
   spentToday: string;
   leftToday: string;
+  /** After switching off: bot and grid buys the cancel didn't take yet (audit 3). */
+  stillLive?: number;
 }
 
 // The AI desk (TODO 3): tickers, the watchlist, charts and signals (apps/api/src/api/handler.py).
