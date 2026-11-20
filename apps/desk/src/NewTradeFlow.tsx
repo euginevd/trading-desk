@@ -93,7 +93,7 @@ function Stepper({ step }: { step: Step }) {
   );
 }
 
-// A style's newest plain backtest (the Backtest page, decision 85), as one line on its card.
+// A style's newest backtest from the Backtest page (decision 85), as one line on its card.
 function testedLine(run: BacktestRunLine | undefined): string | null {
   if (!run?.all) return null;
   const days = (run.to - run.from) / 86_400_000;
@@ -101,7 +101,8 @@ function testedLine(run: BacktestRunLine | undefined): string | null {
     days >= 330
       ? `${Math.round(days / 365)} yr${Math.round(days / 365) === 1 ? "" : "s"}`
       : `${Math.max(1, Math.round(days / 30))} mo`;
-  return `Backtest, ${span}: ${run.all.trades} trades, ${inR(run.all.avg, 2)} a trade`;
+  const on = run.coin ? ` on ${run.coin}` : "";
+  return `Backtest${on}, ${span}: ${run.all.trades} trades, ${inR(run.all.avg, 2)} a trade`;
 }
 
 function StyleCard({

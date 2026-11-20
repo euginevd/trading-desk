@@ -385,7 +385,7 @@ export const getBacktestRun = (id: string) =>
   call<BacktestRun>("GET", `/backtest/run?id=${encodeURIComponent(id)}`);
 export const startBacktest = (run: {
   style: BacktestStyleKey;
-  ai: boolean;
+  coin: string;
   from: string;
   to: string;
 }) => call<BacktestView>("POST", "/backtest/jobs", run);

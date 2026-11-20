@@ -1,6 +1,7 @@
-"""The Backtest page's side of the api (decision 85): the styles, every result Freqtrade has
-kept, one run in full, and the job queue the backtest worker reads. The api never starts a
-process: it writes a checked request into `local/backtest/jobs`, and the worker runs it."""
+"""The Backtest page's side of the api (decision 85): the styles and coins to pick from, the
+runs started from the desk, one run in full, and the job queue the backtest worker reads. The
+api never starts a process: it writes a checked request into `local/backtest/jobs`, and the
+worker runs it. Only the desk's own runs are listed, never run.sh's (owner, 20 Nov 2026)."""
 
 import json
 import os
@@ -14,7 +15,7 @@ from pathlib import Path
 from typing import Any, cast
 
 from api.backtest_report import load, summary
-from api.backtest_runs import STYLES, BadRun, check, default
+from api.backtest_runs import QUOTE, STYLES, BadRun, check, default
 
 RUN_ID = re.compile(r"backtest-result-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
 JOB_ID = re.compile(r"job-\d{8}-\d{6}-[0-9a-f]{6}")
@@ -43,11 +44,17 @@ def _read(path: Path) -> dict[str, Any] | None:
 
 
 class Backtests:
-    def __init__(self, base: Path | None = None, now: Callable[[], int] = _now_ms) -> None:
+    def __init__(
+        self,
+        base: Path | None = None,
+        now: Callable[[], int] = _now_ms,
+        coins: Callable[[], list[str]] = list,
+    ) -> None:
         self.base = base or root()
         self.results = self.base / "backtest_results"
         self.jobs = self.base / "jobs"
         self.now = now
+        self.coins = coins  # today's top 100 USDC coins, by volume, from the screener
 
     # Results
 
@@ -70,10 +77,13 @@ class Backtests:
         return int(stamp.replace(tzinfo=UTC).timestamp() * 1000)
 
     def runs(self) -> list[dict[str, Any]]:
-        """Every kept result, newest first, as one line each."""
+        """The runs started from the desk that finished, newest first, as one line each."""
         found: list[dict[str, Any]] = []
-        names = sorted((p.stem for p in self.results.glob("backtest-result-*.zip")), reverse=True)
-        for run_id in names:
+        for job in self._job_ids():
+            state = _read(self.jobs / f"{job}.status.json") or {}
+            run_id = state.get("result")
+            if state.get("state") != "done" or not isinstance(run_id, str):
+                continue
             if not RUN_ID.fullmatch(run_id):
                 continue
             s = self._summary(run_id)
@@ -85,6 +95,7 @@ class Backtests:
                     "created": self._created(run_id),
                     "style": s["style"],
                     "ai": s["ai"],
+                    "coin": s["coin"],
                     "strategy": s["strategy"],
                     "from": s["from"],
                     "to": s["to"],
@@ -102,6 +113,11 @@ class Backtests:
         return {"id": run_id, "created": self._created(run_id), **found}
 
     # Jobs
+
+    def _job_ids(self) -> list[str]:
+        """Every job the desk queued, newest first."""
+        names = (p.name.removesuffix(".request.json") for p in self.jobs.glob("job-*.request.json"))
+        return sorted((n for n in names if JOB_ID.fullmatch(n)), reverse=True)
 
     def _job(self, job: str) -> dict[str, Any]:
         request = _read(self.jobs / f"{job}.request.json") or {}
@@ -122,6 +138,7 @@ class Backtests:
         return {
             "id": job,
             "style": request.get("style"),
+            "coin": request.get("coin"),
             "ai": request.get("ai", False),
             "from": request.get("from"),
             "to": request.get("to"),
@@ -137,14 +154,8 @@ class Backtests:
         }
 
     def _last_job(self) -> dict[str, Any] | None:
-        names = sorted(
-            (p.name.removesuffix(".request.json") for p in self.jobs.glob("job-*.request.json")),
-            reverse=True,
-        )
-        for job in names:
-            if JOB_ID.fullmatch(job):
-                return self._job(job)
-        return None
+        ids = self._job_ids()
+        return self._job(ids[0]) if ids else None
 
     def _worker_seen(self) -> int | None:
         seen = (_read(self.jobs / "worker.json") or {}).get("seen")
@@ -155,28 +166,26 @@ class Backtests:
         return seen is not None and self.now() - seen < WORKER_STALE_MS
 
     def view(self) -> dict[str, Any]:
-        seen = self._worker_seen()
+        start, end = default()
         return {
             "styles": [
-                {
-                    "key": s.key,
-                    "name": s.name,
-                    "candles": s.candles,
-                    "takes": s.takes,
-                    "ai": s.ai_strategy is not None,
-                    "from": default(s)[0],
-                    "to": default(s)[1],
-                }
-                for s in STYLES.values()
+                {"key": s.key, "name": s.name, "candles": s.candles} for s in STYLES.values()
             ],
+            "coins": self.coins(),
+            "quote": QUOTE,
+            "from": start,
+            "to": end,
             "runs": self.runs(),
             "job": self._last_job(),
-            "worker": {"seen": seen, "on": self._worker_on()},
+            "worker": {"seen": self._worker_seen(), "on": self._worker_on()},
         }
 
     def start(self, body: dict[str, Any]) -> dict[str, Any]:
         """Queues a checked run; one at a time."""
-        wanted = check(body)
+        coins = self.coins()
+        if not coins:
+            raise BadRun("The desk hasn't read today's top 100 yet: scan on the Trade page first.")
+        wanted = check(body, coins)
         last = self._last_job()
         if last is not None and last["state"] in OPEN:
             raise BadRun("A run is already going: wait for it, or cancel it first.")
@@ -188,6 +197,7 @@ class Backtests:
         job = f"job-{stamp}-{secrets.token_hex(3)}"
         request = {
             "style": wanted.style.key,
+            "coin": wanted.coin,
             "ai": wanted.ai,
             "from": wanted.start.isoformat(),
             "to": wanted.end.isoformat(),
@@ -208,9 +218,10 @@ class Backtests:
         return self.view()
 
 
-ROUTES: dict[tuple[str, str], Callable[[dict[str, str], dict[str, Any]], dict[str, Any]]] = {
-    ("GET", "/backtest"): lambda _q, _b: Backtests().view(),
-    ("GET", "/backtest/run"): lambda q, _b: Backtests().run(q.get("id")),
-    ("POST", "/backtest/jobs"): lambda _q, b: Backtests().start(b),
-    ("POST", "/backtest/jobs/cancel"): lambda _q, b: Backtests().cancel(b),
+Route = Callable[[Backtests, dict[str, str], dict[str, Any]], dict[str, Any]]
+ROUTES: dict[tuple[str, str], Route] = {
+    ("GET", "/backtest"): lambda b, _q, _body: b.view(),
+    ("GET", "/backtest/run"): lambda b, q, _body: b.run(q.get("id")),
+    ("POST", "/backtest/jobs"): lambda b, _q, body: b.start(body),
+    ("POST", "/backtest/jobs/cancel"): lambda b, _q, body: b.cancel(body),
 }

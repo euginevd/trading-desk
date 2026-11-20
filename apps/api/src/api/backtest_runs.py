@@ -1,15 +1,22 @@
 """What a backtest run may be, and the Freqtrade commands for it (decision 85). Stdlib only:
 the api checks a request with it before queueing, and the worker (apps/backtest/worker.py)
-checks it again and builds the commands, as an argument list, never a shell string."""
+checks it again and builds the commands, as an argument list, never a shell string.
 
+A run is kept simple (owner, 20 Nov 2026): one style, one coin against USDC from the Trade
+screener's top 100, at most 3 months to yesterday."""
+
+import calendar
 import re
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
-FIRST_DAY = date(2017, 8, 17)  # Binance's first candles
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+COIN = re.compile(r"[A-Z0-9]{1,20}")  # as the screener names coins
 CONFIG = "/freqtrade/config"
+QUOTE = "USDC"
+LONGEST_DAYS = 92  # 3 months
 
 
 @dataclass(frozen=True)
@@ -17,32 +24,29 @@ class Style:
     key: str
     name: str
     candles: str
-    days: int  # the default test, ending yesterday
-    takes: str
     strategy: str
     timeframes: tuple[str, ...]
     warmup: int  # days of candles before the test starts, for the indicators
     ai_strategy: str | None = None
     ai_timeframes: tuple[str, ...] = ()
     ai_warmup: int = 0  # FreqAI trains on the days before each stretch it tests
-    longest: int = 0  # the most days one run may test: candles and time grow with it
 
 
 # The same choices as run.sh.
 STYLES: dict[str, Style] = {
     s.key: s
     for s in (
-        Style("scalp", "Scalp", "5-minute, 1-hour trend", 150, "several minutes",
+        Style("scalp", "Scalp", "5-minute, 1-hour trend",
               "DeskScalp", ("5m", "1h", "1d"), 30,
-              "DeskScalpAI", ("5m", "15m", "1h", "1d"), 40, longest=365),
-        Style("day", "Day trade", "15-minute, 4-hour trend", 365, "several minutes",
+              "DeskScalpAI", ("5m", "15m", "1h", "1d"), 40),
+        Style("day", "Day trade", "15-minute, 4-hour trend",
               "DeskDay", ("15m", "4h", "1d"), 35,
-              "DeskDayAI", ("15m", "1h", "4h", "1d"), 75, longest=730),
-        Style("swing", "Swing", "daily", 1095, "under a minute",
+              "DeskDayAI", ("15m", "1h", "4h", "1d"), 75),
+        Style("swing", "Swing", "daily",
               "DeskSwing", ("1d",), 405,
-              "DeskSwingAI", ("1d",), 1205, longest=2920),
-        Style("position", "Position", "weekly", 1095, "under a minute",
-              "DeskPosition", ("1w", "1d"), 1105, longest=3300),
+              "DeskSwingAI", ("1d",), 1205),
+        Style("position", "Position", "weekly",
+              "DeskPosition", ("1w", "1d"), 1105),
     )
 }  # fmt: skip
 
@@ -54,13 +58,18 @@ class BadRun(ValueError):
 @dataclass(frozen=True)
 class Run:
     style: Style
-    ai: bool
+    coin: str
     start: date
     end: date
+    ai: bool = False
 
     @property
     def strategy(self) -> str:
         return (self.style.ai_strategy if self.ai else None) or self.style.strategy
+
+    @property
+    def pair(self) -> str:
+        return f"{self.coin}/{QUOTE}"
 
 
 def _day(value: object, name: str) -> date:
@@ -72,11 +81,19 @@ def _day(value: object, name: str) -> date:
         raise BadRun(f"{name} isn't a real date.") from None
 
 
-def check(body: dict[str, Any], today: date | None = None) -> Run:
-    """The run asked for, or BadRun saying what to fix."""
+def check(
+    body: dict[str, Any], coins: Collection[str] | None = None, today: date | None = None
+) -> Run:
+    """The run asked for, or BadRun saying what to fix. The api passes today's top 100; the
+    worker, which can't read it, checks the coin's form."""
     style = STYLES.get(str(body.get("style", "")))
     if style is None:
-        raise BadRun("Pick scalp, day, swing or position.")
+        raise BadRun("Pick scalp, day trade, swing or position.")
+    coin = body.get("coin")
+    if not isinstance(coin, str) or not COIN.fullmatch(coin):
+        raise BadRun("Pick a coin.")
+    if coins is not None and coin not in coins:
+        raise BadRun(f"{coin} isn't in today's top 100 USDC coins on Binance.")
     ai = body.get("ai", False)
     if not isinstance(ai, bool):
         raise BadRun("The AI filter is on or off.")
@@ -84,37 +101,41 @@ def check(body: dict[str, Any], today: date | None = None) -> Run:
         raise BadRun(f"{style.name} has no AI filter: too few candles a coin to learn from.")
     start, end = _day(body.get("from"), "From"), _day(body.get("to"), "To")
     last = (today or datetime.now(UTC).date()) - timedelta(days=1)  # today's candles aren't closed
-    if start < FIRST_DAY:
-        raise BadRun("From can't be before 17 Aug 2017, Binance's first candles.")
     if end > last:
         raise BadRun("To can't be later than yesterday: today's candles aren't closed.")
     if start >= end:
         raise BadRun("From must be before To.")
-    if (end - start).days > style.longest:
-        years = round(style.longest / 365)
-        raise BadRun(
-            f"{style.name} tests at most {years} year{'s' if years > 1 else ''} at a time."
-        )
-    return Run(style, ai, start, end)
+    if (end - start).days > LONGEST_DAYS:
+        raise BadRun("A backtest covers 3 months at most.")
+    return Run(style, coin, start, end, ai)
 
 
-def default(style: Style, today: date | None = None) -> tuple[str, str]:
-    """The style's usual test: its days, ending yesterday."""
+def months_before(day: date, months: int) -> date:
+    """The same day of the month, months earlier (the month's last day when it's shorter)."""
+    year, month = divmod(day.year * 12 + day.month - 1 - months, 12)
+    last = calendar.monthrange(year, month + 1)[1]
+    return date(year, month + 1, min(day.day, last))
+
+
+def default(today: date | None = None) -> tuple[str, str]:
+    """The usual test (owner, 20 Nov 2026): the last month, ending yesterday."""
     end = (today or datetime.now(UTC).date()) - timedelta(days=1)
-    return (end - timedelta(days=style.days)).isoformat(), end.isoformat()
+    return months_before(end, 1).isoformat(), end.isoformat()
 
 
 def commands(run: Run) -> list[list[str]]:
-    """Download what's missing (newer, then older: known-mistakes 13b), then backtest."""
-    configs = ["--config", f"{CONFIG}/backtest.json"]
+    """Download what's missing (newer, then older: known-mistakes 13b), then backtest the one
+    pair, with BTC's candles beside it for the market's regime."""
+    configs = ["--config", f"{CONFIG}/backtest.json", "--config", f"{CONFIG}/usdc.json"]
     if run.ai:
         configs += ["--config", f"{CONFIG}/ai-{run.style.key}.json"]
     timeframes = run.style.ai_timeframes if run.ai else run.style.timeframes
     warmup = run.style.ai_warmup if run.ai else run.style.warmup
     first = (run.start - timedelta(days=warmup)).strftime("%Y%m%d")
     end = run.end.strftime("%Y%m%d")
+    pairs = [run.pair] if run.coin == "BTC" else [run.pair, f"BTC/{QUOTE}"]
     download = [
-        "freqtrade", "download-data", *configs,
+        "freqtrade", "download-data", *configs, "--pairs", *pairs,
         "--timerange", f"{first}-{end}", "--timeframes", *timeframes,
     ]  # fmt: skip
     return [
@@ -122,7 +143,7 @@ def commands(run: Run) -> list[list[str]]:
         [*download, "--prepend"],
         [
             "freqtrade", "backtesting", *configs,
-            "--strategy", run.strategy,
+            "--strategy", run.strategy, "--pairs", run.pair,
             "--timerange", f"{run.start.strftime('%Y%m%d')}-{end}",
             "--fee", "0.001", "--export", "trades", "--cache", "none",
         ],

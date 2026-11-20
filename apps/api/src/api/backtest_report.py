@@ -149,6 +149,10 @@ def summary(data: dict[str, Any]) -> dict[str, Any] | None:
         "from": int(result.get("backtest_start_ts", 0)),
         "to": int(result.get("backtest_end_ts", 0)),
         "pairs": len(result.get("pairlist", [])),
+        # A one-coin run names its coin.
+        "coin": str(result["pairlist"][0]).split("/")[0]
+        if len(result.get("pairlist", [])) == 1
+        else None,
         "all": _row("All", rs) if rs else None,
         "worstRun": worst_run([r for _, r in closed]),
         "curve": curve,

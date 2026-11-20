@@ -20,25 +20,13 @@
 .bt-runbar .views {
   margin: 0;
 }
-.bt-check {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 36px;
-}
-.bt-check input {
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
-}
-.bt-check:has(input:disabled) {
-  color: var(--dim);
-}
-.bt-date {
+/* Each choice: a small label over its control. */
+.bt-step {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
-.bt-date input,
+.bt-select,
 .bt-compare select {
   height: 36px;
   padding: 0 10px;
@@ -294,6 +282,40 @@
 }
 .bt-fill.is-down {
   background: var(--down);
+}
+
+/* Trades and Runs fold to their heading; the chevron turns, nothing else moves. */
+.bt-fold-head.is-folded {
+  margin-bottom: 0;
+}
+.bt-fold-head h2 {
+  margin: 0;
+}
+.bt-fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.bt-fold:hover {
+  color: var(--accent);
+}
+.bt-chevron {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: transform 200ms var(--ease);
+}
+.bt-fold[aria-expanded="false"] .bt-chevron {
+  transform: rotate(-90deg);
 }
 
 /* Tables: trades and runs. */

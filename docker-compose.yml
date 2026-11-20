@@ -66,6 +66,9 @@ services:
     <<: *freqtrade
     profiles: []
     entrypoint: ["python", "/freqtrade/worker.py"]
+    environment:
+      PYTHONPATH: /desk
+      DESK_QUOTE: USDC # one coin against USDC, as on the Trade page
     volumes:
       - ./local/backtest:/freqtrade/user_data
       - ./apps/backtest/strategies:/freqtrade/user_data/strategies:ro

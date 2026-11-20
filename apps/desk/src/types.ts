@@ -1705,10 +1705,6 @@ export interface BacktestStyle {
   key: BacktestStyleKey;
   name: string;
   candles: string;
-  takes: string;
-  ai: boolean; // whether FreqAI can filter it
-  from: string; // the style's usual test, ending yesterday
-  to: string;
 }
 export interface BacktestRow {
   name: string;
@@ -1722,6 +1718,7 @@ export interface BacktestRunLine {
   created: number;
   style: string;
   ai: boolean;
+  coin: string | null; // the one coin tested, against USDC
   strategy: string;
   from: number;
   to: number;
@@ -1753,6 +1750,7 @@ export type BacktestJobState = "queued" | "running" | "done" | "failed" | "cance
 export interface BacktestJob {
   id: string;
   style: BacktestStyleKey;
+  coin: string;
   ai: boolean;
   from: string;
   to: string;
@@ -1768,6 +1766,10 @@ export interface BacktestJob {
 }
 export interface BacktestView {
   styles: BacktestStyle[];
+  coins: string[]; // today's top 100 USDC coins on Binance, by volume (the screener's)
+  quote: string;
+  from: string; // the default test: the last month, ending yesterday
+  to: string;
   runs: BacktestRunLine[];
   job: BacktestJob | null;
   worker: { seen: number | null; on: boolean };

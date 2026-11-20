@@ -39,6 +39,7 @@ from api import (
     risk,
     risk_big,
     schedule,
+    screener,
     tax,
     telegram,
     trading_agent,
@@ -1401,9 +1402,20 @@ def _backtest_route(
     if route is None:
         return None
     try:
-        return _reply(200, route(params, _body(event)))
+        return _reply(200, route(backtest.Backtests(coins=_top_coins), params, _body(event)))
     except BadRun as error:
         return _reply(400, {"error": str(error)})
+
+
+def _top_coins() -> list[str]:
+    """Today's top 100 USDC coins as the screener last saved them, by volume (decision 80)."""
+    store = Store(store_path())
+    try:
+        raw = store.setting(screener.UNIVERSE_KEY, "")
+    finally:
+        store.close()
+    saved: dict[str, list[object]] = json.loads(raw) if raw else {}
+    return [str(c) for c in saved.get("coins", [])]
 
 
 def handler(  # noqa: PLR0913, PLR0917 - each factory is a seam the tests replace

@@ -241,6 +241,7 @@ function serve(reply: PotView, breaksRule = false, setups = true) {
             created: 1,
             style: "day",
             ai: false,
+            coin: "SOL",
             strategy: "DeskDay",
             from: 0,
             to: 365 * 86_400_000,
@@ -582,7 +583,9 @@ describe("the trading pot", () => {
     render(<PotPage />);
     fireEvent.click(await screen.findByRole("button", { name: "New trade" }));
     // Each style's newest backtest sits on its card (decision 85).
-    expect(await screen.findByText("Backtest, 1 yr: 12 trades, −0.40R a trade")).toBeTruthy();
+    expect(
+      await screen.findByText("Backtest on SOL, 1 yr: 12 trades, −0.40R a trade"),
+    ).toBeTruthy();
     expect(screen.getByRole("link", { name: "See every backtest →" })).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /^Day trade/ }));
     expect(await screen.findByText("One clean Asia sweep on SOL.")).toBeTruthy();
