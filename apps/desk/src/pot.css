@@ -1789,7 +1789,7 @@ dialog.ntf {
   flex: none;
 }
 
-/* Scan now: a card per style (feature 103). */
+/* Scan now: a card per style (feature 105). */
 .pot-scan {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

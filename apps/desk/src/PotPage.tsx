@@ -195,14 +195,9 @@ function TradeRow({ trade, onOpen }: { trade: PotTrade; onOpen: () => void }) {
   const n = Number(trade.result ?? 0);
   const gap =
     trade.now !== null ? ((Number(trade.now) / Number(trade.entry) - 1) * 100).toFixed(1) : null;
-  // How far the coin has moved from the fill, the way a chart reads it; the result when no price.
+  // How far the coin has moved from the fill, the way a chart reads it; R when there's no price.
   const fill = Number(trade.fillPrice ?? trade.entry);
-  const moved =
-    trade.now !== null && fill > 0
-      ? (Number(trade.now) / fill - 1) * 100
-      : Number(trade.spend) > 0
-        ? (n / Number(trade.spend)) * 100
-        : null;
+  const moved = trade.now !== null && fill > 0 ? (Number(trade.now) / fill - 1) * 100 : null;
   return (
     <li>
       <button
@@ -837,7 +832,10 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
             {!scanning && pot.lastScan?.styles && (
               <ScanCards
                 key={pot.lastScan.at}
-                cards={pot.lastScan.styles}
+                // A take placed, dismissed or expired since the scan has nothing left to review.
+                cards={pot.lastScan.styles.map(({ take, ...c }) =>
+                  take && pot.proposals.some((x) => x.id === take.id) ? { ...c, take } : c,
+                )}
                 onReview={(id) => {
                   const p = pot.proposals.find((x) => x.id === id);
                   if (!p) {

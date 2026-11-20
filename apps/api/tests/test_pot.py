@@ -13,7 +13,7 @@ from api.binance import Binance, BinanceError
 from api.handler import handler
 from api.market import QUOTE
 from api.pot import ZERO, Pot, ref_week, regime_of, trade_result
-from api.pot_agent import PotAgent, atr
+from api.pot_agent import MAX_PROPOSALS, PotAgent, atr
 from api.store import Store
 from api.trading import Refused, Trading
 
@@ -306,6 +306,53 @@ def test_scan_now_runs_every_style_and_leaves_a_card_for_each(
     assert cards["position"]["close"] == {"coin": "ADA", "why": "3% above its 20-day"}
     # The daily scan keeps its line alone.
     assert "styles" not in agent.scan()["lastScan"]
+
+
+def test_scan_now_ids_each_style_apart_and_caps_the_takes(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def last(key: str, *_a: object) -> dict[str, Any]:
+        shortlist: list[dict[str, Any]] = [
+            {"coin": "SOL", "setup": "Pullback", "facts": {}, "crowding": "Clear"}
+            | {"entry": "200", "stop": "190", "target": "240"}
+        ]
+        return {
+            "style": key,
+            "name": screener.STYLES[key].name,
+            "regime": {},
+            "warnings": [],
+            "counts": {},
+            "allowed": True,
+            "note": "",
+            "riskPct": "1",
+            "shortlist": shortlist,
+        }
+
+    monkeypatch.setattr(screener, "last_screen", last)
+    take = {"coin": "SOL", "setup": "Pullback", "grade": "B", "score": 7, "verdict": "take"}
+    take |= {"entry": "200", "stop": "190", "target": "240", "reason": "Back at its 20-day."}
+    take |= {"confluence": [], "against": [], "catalyst": "", "crowding": ""}
+    view = PotAgent(pot, Fake({"line": "One.", "picks": [take]})).scan(every=True)  # type: ignore[arg-type]
+    ids = [p["id"] for p in view["proposals"]]
+    assert len(ids) == MAX_PROPOSALS
+    assert len(set(ids)) == len(ids)  # scalp and swing both start with s
+    cards = {c["style"]: c for c in view["lastScan"]["styles"]}
+    assert [cards[k]["take"]["id"] for k in ("scalp", "day", "swing")] == ids
+    assert "take" not in cards["position"]  # past the cap: nothing to review
+
+
+def test_a_scan_that_judges_nothing_keeps_the_proposals_waiting(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    pot.set_proposals([{"id": "P1", "coin": "SOL"}])
+
+    def down(*_a: object) -> dict[str, Any]:
+        raise Refused("Binance didn't answer.")
+
+    monkeypatch.setattr(screener, "last_screen", down)
+    with pytest.raises(Refused, match="Binance didn't answer."):
+        PotAgent(pot, Fake({})).scan(every=True)  # type: ignore[arg-type]
+    assert [p["id"] for p in pot.proposals()] == ["P1"]
 
 
 def test_the_chat_checks_its_actions(pot: Pot) -> None:

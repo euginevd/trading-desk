@@ -582,6 +582,43 @@ describe("the trading pot", () => {
     );
   });
 
+  it("adds up realized P&L from closed trades against what went in, this month under it", async () => {
+    const closed = (ref: string, result: string, at: number) =>
+      trade({ ref, status: "closed", result, closed: at, now: null });
+    serve(
+      pot({
+        trades: [
+          trade({}),
+          closed("TRD-SOL-26W46-1", "3", NOW - 1000),
+          closed("TRD-ETH-26W40-1", "-1", NOW - 90 * 86_400_000),
+        ],
+      }),
+    );
+    render(<PotPage />);
+    await screen.findByRole("heading", { level: 1 });
+    const money = document.querySelector(".acc-money") as HTMLElement;
+    const real = within(money).getByText("Realized").parentElement as HTMLElement;
+    expect(real.textContent).toContain("+$2.00"); // 3 − 1
+    expect(real.textContent).toContain("+2.0%"); // of the $100 put in
+    expect(real.textContent).toContain("+$3.00 this month");
+  });
+
+  it("drops a scan card's take once its proposal is gone", async () => {
+    const styles = [
+      {
+        style: "swing",
+        name: "Swing",
+        line: "One pullback.",
+        take: { id: "gone", coin: "SUI", setup: "Pullback", grade: "B", entry: "3", rr: "2" },
+      },
+    ];
+    serve(pot({ lastScan: { at: NOW, line: "Scanned.", styles } }));
+    render(<PotPage />);
+    const cards = await screen.findByRole("list", { name: "Scan by style" });
+    expect(cards.textContent).toContain("Nothing near");
+    expect(within(cards).queryByRole("button", { name: "Review" })).toBeNull();
+  });
+
   it("starts an empty pot with money put in", async () => {
     const fetch = serve(
       pot({ putIn: "0", value: "0", result: "0", moves: [], trades: [], proposals: [] }),

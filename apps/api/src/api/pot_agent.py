@@ -242,6 +242,7 @@ class PotAgent:
         found: list[dict[str, Any]] = []
         said: list[str] = []
         cards: list[dict[str, Any]] = []
+        judged = 0
         keys = tuple(screener.STYLES) if every else ("swing", "position") if monday else ("swing",)
         for key in keys:
             try:
@@ -251,6 +252,7 @@ class PotAgent:
                 said.append(f"{name}: {why}")
                 cards.append({"style": key, "name": name, "line": str(why)[:200]})
                 continue
+            judged += 1
             misses = cast(list[dict[str, str]], seen.get("misses") or [])
             closest = "; ".join(f"{m['coin']} {m['why']}" for m in misses)
             said.append(
@@ -263,13 +265,15 @@ class PotAgent:
                     continue
                 kept = {k: v for k, v in pick.items() if k != "facts"}
                 proposal = kept | {
-                    "id": f"P{now}{key[0]}{n}",
+                    "id": f"P{now}{key}{n}",  # the whole key: scalp and swing share an s
                     "created": now,
                     "expires": seen["expires"],
                 }
                 found.append(proposal)
                 take = take or proposal
             cards.append(_card(key, seen, take, misses))
+        if not judged:  # nothing was judged: the proposals waiting stay, and the owner hears why
+            raise Refused(" ".join(said)[:300])
         kept_ids = {p["id"] for p in found[:MAX_PROPOSALS]}
         for card in cards:  # a take past the proposal cap has nothing to review
             if card.get("take") and card["take"]["id"] not in kept_ids:

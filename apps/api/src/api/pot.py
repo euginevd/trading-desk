@@ -1305,7 +1305,7 @@ class Pot:
 
     def set_last_scan(self, line: str, styles: list[dict[str, Any]] | None = None) -> None:
         """The scan's line; Scan now adds a card per style (pot_agent.scan)."""
-        last: dict[str, Any] = {"at": self._now(), "line": line[:300]}
+        last: dict[str, Any] = {"at": self._now(), "line": line[:600]}
         if styles is not None:
             last["styles"] = styles
         self._store.set_setting(SCAN_KEY, json.dumps(last))

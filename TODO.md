@@ -26,10 +26,9 @@ Your requirements, features and ideas, numbered, in your own words. In `producti
 22. Set up bot rules by typing them, after Public: the Profile command bar's diff and Accept, for rules like "an extra A$50 BTC buy on Fridays when Fear & Greed is under 30".
 23. Rethink the Risk agent around the biggest risks: funds left on Binance instead of cold storage (A$10K at most on the exchange); 70%+ of long-term holds on the Ledger; the Ledger's backup key kept securely; TAO as most of my crypto, in one high-conviction coin, and whether and when to diversify given its P&L. *(Approved 17 Nov 2026. Built: phase 1, the four on the Risk page. Next: Ledger addresses, then risk-agent's file; [plan-risk.md](docs/plan-risk.md).)*
 24. New trade by style: pick scalp, day trade, swing or position (one line each on its timeframe and candles); the coins are scanned in code first, then checked for confluence and upcoming catalysts online, rated, with entry, take profit, stop and reward to risk; Okay shows the order and Approve places it on Binance. *(Built: feature 95, decision 80, on test. Still to build: each style's exits after the fill (half at target, trailing, time stops, the close stop) (backtests: feature 100, `bash apps/backtest/run.sh`), each style's Not built yet list in local/agents/trading-agent.md.)*
-25. Scan now: show each style's backtest result in red on its card beside a take, once the Backtest page (branch `backtest-page`) is on main. *(Asked 20 Nov 2026; the cards are built, feature 105.)*
-
 
 25. Trading account, left from the 20 Nov 2026 audit (decision 86): an entry that part-fills under Binance's smallest order is held as an open trade with no exit, so close the dust as its own state; open risk and free cash should count what a reduce sold; a proposal's stored expiry should be re-checked on place, not only what the page sends; enter now near the daily limit counts the waiting limit's spend too.
+26. Scan now: show each style's backtest result in red on its card beside a take, once the Backtest page (branch `backtest-page`) is on main. *(Asked 20 Nov 2026; the cards are built, feature 105.)*
 
 Later, from the project ideas doc, not started until listed above:
 
