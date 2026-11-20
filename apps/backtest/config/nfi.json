@@ -1,0 +1,32 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "max_open_trades": 6,
+  "tradable_balance_ratio": 0.99,
+  "unfilledtimeout": {
+    "entry": 3,
+    "exit": 2,
+    "exit_timeout_count": 0,
+    "unit": "minutes"
+  },
+  "order_types": {
+    "entry": "limit",
+    "exit": "limit",
+    "emergency_exit": "limit",
+    "force_entry": "limit",
+    "force_exit": "limit",
+    "stoploss": "limit",
+    "stoploss_on_exchange": false
+  },
+  "entry_pricing": {
+    "price_side": "other",
+    "use_order_book": false,
+    "order_book_top": 1,
+    "price_last_balance": 0
+  },
+  "exit_pricing": {
+    "price_side": "other",
+    "use_order_book": false,
+    "order_book_top": 1,
+    "price_last_balance": 0
+  }
+}

@@ -104,7 +104,7 @@ export function trend(value: string | null): "up" | "down" | "flat" {
   return Number(value) > 0 ? "up" : "down";
 }
 
-function day(d: Date): string {
+export function day(d: Date): string {
   return d.toLocaleDateString("en-AU", {
     day: "numeric",
     month: "short",
@@ -160,6 +160,13 @@ export function ago(ms: number, now: number): string {
   if (minutes < 60) return `${minutes} min ago`;
   const hours = Math.round(minutes / 60);
   return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+}
+
+/** A result in R (the backtests' measure): signed, with a true minus, and no sign on zero. */
+export function inR(n: number, places = 1): string {
+  const shown = Math.abs(n).toFixed(places);
+  const sign = Number(shown) === 0 ? "" : n > 0 ? "+" : "−";
+  return `${sign}${shown}R`;
 }
 
 /** An error's own words, or the fallback when it has none. */

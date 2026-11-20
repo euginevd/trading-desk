@@ -32,6 +32,7 @@ import pandas as pd
 import talib.abstract as ta
 from api import screener
 from freqtrade.enums import RunMode
+from freqtrade.exchange import timeframe_to_prev_date
 from freqtrade.persistence import Trade
 from freqtrade.strategy import IStrategy, stoploss_from_absolute
 
@@ -305,6 +306,283 @@ class DeskPosition(DeskStyle):
     btc_tf = "1w"
     startup_candle_count = 120
     unfilledtimeout: ClassVar[dict[str, Any]] = {"entry": 14 * 1440, "exit": 10, "unit": "minutes"}
+
+
+class DeskExits(DeskStyle):
+    """The style with the exits trading-agent.md lists as Not built yet, built with Freqtrade's
+    own callbacks, for backtests only (`run.sh <style>-exits`), to compare with the plain
+    style's fixed stop and target. Every check reads closed candles only: in a backtest the
+    callbacks' dataframe ends at the candle before the one trading, and an exit fills at the
+    next open. run.sh runs these with --timeframe-detail (smaller candles inside each one), so
+    the stop and the partial's target inside a candle come in their real order.
+    - part: the share sold at the setup's target (a resting limit, not offered on a candle the
+      trade is leaving anyway); from the next candle the rest's stop moves to break-even after
+      fees, and the fixed target goes;
+    - close_stop_atr: a close under the setup's stop exits, with a hard stop this many ATR
+      lower, sized from the hard stop (R is still measured to the setup's stop, so a close
+      stop's loss can pass 1R);
+    - trail_atr: after the partial, a close this many ATR under the highest close since entry;
+    - trail_lows: after the partial, a close under the lowest low of these many candles before;
+    - under_sma: after the partial, a close under this SMA of the setup's candles;
+    - time_stop: (candles closed since the entry filled, R) - under that R at that close, exit;
+    - day_close: out by 23:45 UTC (10:45am Sydney in summer), before the daily close, and no
+      new entry from then."""
+
+    position_adjustment_enable = True
+    max_entry_position_adjustment = 0
+    use_exit_signal = True  # Freqtrade calls custom_exit only with it on; exit_long stays 0
+    part: float | None = None
+    close_stop_atr: float | None = None
+    trail_atr: float | None = None
+    trail_lows: int | None = None
+    under_sma: int | None = None
+    time_stop: tuple[int, float] | None = None
+    day_close = False
+
+    def populate_indicators(
+        self, dataframe: pd.DataFrame, metadata: dict[str, Any]
+    ) -> pd.DataFrame:
+        dataframe["atr"] = ta.ATR(dataframe, timeperiod=14)
+        if self.under_sma:
+            dataframe["sma"] = ta.SMA(dataframe, timeperiod=self.under_sma)
+        if self.trail_lows:
+            dataframe["lows"] = dataframe["low"].rolling(self.trail_lows).min()
+        return dataframe
+
+    def _closed(self, pair: str) -> pd.DataFrame:
+        df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
+        return df
+
+    def _hard(self, trade: Trade, stop: float) -> float:
+        """The hard stop under a close stop: the ATR of the signal's candle, kept once found."""
+        if not self.close_stop_atr:
+            return stop
+        kept = trade.get_custom_data("hard")
+        if kept is not None:
+            return float(kept)
+        df = self._closed(trade.pair)
+        before = df[df["date"] < trade.open_date_utc]
+        if before.empty or pd.isna(before["atr"].iloc[-1]):
+            return stop
+        hard = stop - self.close_stop_atr * float(before["atr"].iloc[-1])
+        trade.set_custom_data("hard", hard)
+        return hard
+
+    def custom_stake_amount(  # noqa: PLR0913, PLR0917 - Freqtrade's signature
+        self,
+        pair: str,
+        current_time: datetime,
+        current_rate: float,
+        proposed_stake: float,
+        min_stake: float | None,
+        max_stake: float,
+        leverage: float,
+        entry_tag: str | None,
+        side: str,
+        **kwargs: Any,
+    ) -> float:
+        """As the style, but from the hard stop when there's a close stop."""
+        plan = plan_of(entry_tag)
+        if not plan:
+            return 0.0
+        _, entry, stop, _ = plan
+        if self.close_stop_atr:
+            df = self._closed(pair)
+            a = float(df["atr"].iloc[-1]) if not df.empty else float("nan")
+            if not np.isnan(a):
+                stop -= self.close_stop_atr * a
+        if stop <= 0 or stop >= entry:
+            return 0.0
+        pot = self.wallets.get_total_stake_amount() if self.wallets else 1000.0
+        risk = min(pot * RISK, MAX_RISK)
+        per_unit = (entry - stop) / entry + 2 * FEE
+        return max(0.0, min(risk / per_unit, pot * MAX_SPEND, max_stake))
+
+    def custom_stoploss(  # noqa: PLR0913, PLR0917 - Freqtrade's signature
+        self,
+        pair: str,
+        trade: Trade,
+        current_time: datetime,
+        current_rate: float,
+        current_profit: float,
+        after_fill: bool,
+        **kwargs: Any,
+    ) -> float | None:
+        plan = plan_of(trade.enter_tag)
+        if not plan:
+            return None
+        level = self._hard(trade, plan[2])
+        sold = [o.order_filled_utc for o in trade.select_filled_orders(trade.exit_side)]
+        # Break-even from the candle after the part filled: on its own candle the low may have
+        # come first, so the stop it had still stands there.
+        if self.part and any(t is not None and t < current_time for t in sold):
+            level = max(level, trade.open_rate * (1 + FEE) / (1 - FEE))  # break-even after fees
+        return stoploss_from_absolute(level, current_rate=current_rate, is_short=False)
+
+    def custom_roi(  # noqa: PLR0913, PLR0917 - Freqtrade's signature
+        self,
+        pair: str,
+        trade: Trade,
+        current_time: datetime,
+        trade_duration: int,
+        entry_tag: str | None,
+        side: str,
+        **kwargs: Any,
+    ) -> float | None:
+        """The whole position at the target only when nothing is sold there in part."""
+        if self.part:
+            return None
+        return super().custom_roi(pair, trade, current_time, trade_duration, entry_tag, side)
+
+    def adjust_trade_position(  # noqa: PLR0913, PLR0917 - Freqtrade's signature
+        self,
+        trade: Trade,
+        current_time: datetime,
+        current_rate: float,
+        current_profit: float,
+        min_stake: float | None,
+        max_stake: float,
+        current_entry_rate: float,
+        current_exit_rate: float,
+        current_entry_profit: float,
+        current_exit_profit: float,
+        **kwargs: Any,
+    ) -> float | tuple[float | None, str | None] | None:
+        """The partial: a share of the position, offered at the target until it fills, and not
+        on a candle the trade is leaving anyway."""
+        if not self.part or trade.nr_of_successful_exits > 0 or trade.has_open_orders:
+            return None
+        if self._exit_reason(trade, current_time):
+            return None
+        return -trade.stake_amount * self.part, "Partial at target"
+
+    def custom_exit_price(  # noqa: PLR0913, PLR0917 - Freqtrade's signature
+        self,
+        pair: str,
+        trade: Trade,
+        current_time: datetime,
+        proposed_rate: float,
+        current_profit: float,
+        exit_tag: str | None,
+        **kwargs: Any,
+    ) -> float:
+        plan = plan_of(trade.enter_tag)
+        if exit_tag == "Partial at target" and plan:
+            return max(plan[3], proposed_rate)  # a limit at the target, or the open if past it
+        return proposed_rate
+
+    def custom_exit(  # noqa: PLR0913, PLR0917 - Freqtrade's signature
+        self,
+        pair: str,
+        trade: Trade,
+        current_time: datetime,
+        current_rate: float,
+        current_profit: float,
+        **kwargs: Any,
+    ) -> str | None:
+        return self._exit_reason(trade, current_time)
+
+    def confirm_trade_entry(  # noqa: PLR0913, PLR0917 - Freqtrade's signature
+        self,
+        pair: str,
+        order_type: str,
+        amount: float,
+        rate: float,
+        time_in_force: str,
+        current_time: datetime,
+        entry_tag: str | None,
+        side: str,
+        **kwargs: Any,
+    ) -> bool:
+        """No day trade from 23:45 UTC: the day close would take it straight out."""
+        if self.day_close and (current_time.hour, current_time.minute) >= (23, 45):
+            return False
+        return super().confirm_trade_entry(
+            pair, order_type, amount, rate, time_in_force, current_time, entry_tag, side, **kwargs
+        )
+
+    def _exit_reason(self, trade: Trade, current_time: datetime) -> str | None:
+        """Why the trade leaves at this candle's open, from the candles closed since its entry
+        filled (the time stop counts from the fill, not from when the limit was placed)."""
+        plan = plan_of(trade.enter_tag)
+        if self.day_close and plan and (current_time.hour, current_time.minute) >= (23, 45):
+            return "Day close"
+        bought = [o.order_filled_utc for o in trade.select_filled_orders(trade.entry_side)]
+        start = bought[0] if bought and bought[0] is not None else trade.open_date_utc
+        df = self._closed(trade.pair)
+        since = df[df["date"] >= timeframe_to_prev_date(self.timeframe, start)]
+        if not plan or since.empty:
+            return None
+        close = float(since["close"].iloc[-1])
+        stop = plan[2]
+        if self.close_stop_atr and close < stop:
+            return "Close stop"
+        after = self._after_part(df, since) if trade.nr_of_successful_exits > 0 else None
+        if self.time_stop and not after and len(since) == self.time_stop[0]:  # that close only
+            needed = trade.open_rate + self.time_stop[1] * (trade.open_rate - stop)
+            after = "Time stop" if close < needed else None
+        return after
+
+    def _after_part(self, df: pd.DataFrame, since: pd.DataFrame) -> str | None:
+        """The rest's exit once the part is sold, from the last closed candle."""
+        last = since.iloc[-1]
+        close = float(last["close"])
+        trail = (
+            float(since["close"].max()) - self.trail_atr * float(last["atr"])
+            if self.trail_atr and not pd.isna(last["atr"])
+            else None
+        )
+        lows = df["lows"].iloc[-2] if self.trail_lows and len(df) > 1 else None
+        if (trail is not None and close < trail) or (
+            lows is not None and not pd.isna(lows) and close < float(lows)
+        ):
+            return "Trail"
+        if self.under_sma and not pd.isna(last["sma"]) and close < float(last["sma"]):
+            return "Under the average"
+        return None
+
+
+class DeskScalpExits(DeskExits, DeskScalp):
+    """Not at the target after 30 minutes, sell; an unfilled entry goes after 10 minutes."""
+
+    time_stop = (6, 99.0)  # 6 five-minute candles; never at the target by then
+    unfilledtimeout: ClassVar[dict[str, Any]] = {"entry": 10, "exit": 10, "unit": "minutes"}
+
+
+class DeskDayExits(DeskExits, DeskDay):
+    """Half at the target, the stop to break-even, the rest trailed under the last hour's lows
+    (4 fifteen-minute candles, standing in for 15-minute swing lows); under +0.5R after 4 hours,
+    sell; out by 23:45 UTC; an unfilled entry goes after an hour."""
+
+    part = 0.5
+    trail_lows = 4
+    time_stop = (16, 0.5)
+    day_close = True
+    unfilledtimeout: ClassVar[dict[str, Any]] = {"entry": 60, "exit": 10, "unit": "minutes"}
+
+
+class DeskSwingExits(DeskExits, DeskSwing):
+    """A close stop with a hard stop 1 ATR lower; half at the 2R target, the stop to
+    break-even, the rest trailed 3 ATR under the highest close; the 10th daily close under
+    entry + 1R exits; an unfilled entry goes after 2 daily candles."""
+
+    part = 0.5
+    close_stop_atr = 1.0
+    trail_atr = 3.0
+    time_stop = (10, 1.0)
+    unfilledtimeout: ClassVar[dict[str, Any]] = {"entry": 2 * 1440, "exit": 10, "unit": "minutes"}
+
+
+class DeskPositionExits(DeskExits, DeskPosition):
+    """A weekly close stop with a hard stop 0.5 weekly ATR lower; a third at the 3R target, then
+    a weekly close under the 10-week SMA exits; under +1R after 8 weekly closes, exit; an
+    unfilled entry goes after 7 days."""
+
+    part = 1 / 3
+    close_stop_atr = 0.5
+    under_sma = 10
+    time_stop = (8, 1.0)
+    unfilledtimeout: ClassVar[dict[str, Any]] = {"entry": 7 * 1440, "exit": 10, "unit": "minutes"}
 
 
 def outcomes(df: pd.DataFrame, steps: int, atr_mult: float, rr: float) -> np.ndarray:

@@ -56,6 +56,16 @@ export const TradeIcon = () => (
   </svg>
 );
 
+// Backtest: a line of results over time, with a turn-back arrow.
+export const BacktestIcon = () => (
+  <svg {...base}>
+    <path d="M4 19h16" />
+    <path d="M6 15l4-4 3 3 5-6" />
+    <path d="M3 6.5A4.5 4.5 0 0 1 11 4" />
+    <path d="M3 3v3.5h3.5" />
+  </svg>
+);
+
 export const RiskIcon = () => (
   <svg {...base}>
     <path d="M12 3.5l7 2.8V11c0 4.4-2.9 7.8-7 9.5-4.1-1.7-7-5.1-7-9.5V6.3z" />

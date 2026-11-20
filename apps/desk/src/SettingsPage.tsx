@@ -15,7 +15,7 @@ import {
   setAiSettings,
   startSignIn,
 } from "./api";
-import { errorOf } from "./format";
+import { day, errorOf } from "./format";
 import { FEATURES, type FeatureInfo, featureOn, isNew, useFeatures } from "./features";
 import type { AiMode, AiSettings, TelegramSettings } from "./types";
 
@@ -38,6 +38,12 @@ const modelNote = (name: string) => MODEL_NOTES.find(([family]) => name.includes
 const shortName = (name: string) => name.replace("Claude ", "");
 
 type Tone = "up" | "wait" | "down" | "idle";
+
+/** "09:30" as the desk writes times (design-system 18): "9:30 am". */
+export function amPm(hhmm: string): string {
+  const [h = 0, m = 0] = hhmm.split(":").map(Number);
+  return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`;
+}
 
 // A status is a word with a dot (design-system 22, code-standards 26), never the colour alone.
 function Status({ tone, children }: { tone: Tone; children: ReactNode }) {
@@ -98,7 +104,7 @@ function Said({ ai, tg }: { ai: AiSettings | null; tg: TelegramSettings | null }
     : !tg.tokenSet
       ? "No morning summary yet."
       : tg.chatFound
-        ? `Your summary goes to Telegram at ${tg.time}.`
+        ? `Your summary goes to Telegram at ${amPm(tg.time)}.`
         : "Telegram is waiting for you to link your chat.";
   return (
     <section className="set-hero" aria-label="What the desk runs on">
@@ -636,7 +642,9 @@ function Telegram({ onRead }: { onRead: (tg: TelegramSettings) => void }) {
           <div className="settings-field">
             <span className="settings-label">Last summary</span>
             <div className="settings-input">
-              <span className="settings-value">{tg.lastSent ?? "None sent yet"}</span>
+              <span className="settings-value">
+                {tg.lastSent ? day(new Date(`${tg.lastSent}T12:00:00Z`)) : "None sent yet"}
+              </span>
               <button
                 type="button"
                 className="settings-btn"
@@ -686,7 +694,7 @@ function Pages() {
   };
 
   return (
-    <section className="set-section" aria-labelledby="settings-pages">
+    <section className="set-section set-wide" aria-labelledby="settings-pages">
       <CardHead id="settings-pages" title="Pages" />
       <p className="settings-intro muted">
         Choose what shows on your desk. A page that&apos;s off is hidden and its code isn&apos;t

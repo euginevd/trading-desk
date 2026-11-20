@@ -3,13 +3,14 @@
 // catalysts, and each pick shows its grade, entry, target, stop and reward to risk, sized by
 // the desk. Okay opens the review, where Approve places the order on Binance.
 import { useEffect, useRef, useState } from "react";
-import { getPotStyles, judgePot, screenPot } from "./api";
-import { errorOf } from "./format";
+import { getBacktests, getPotStyles, judgePot, screenPot } from "./api";
+import { errorOf, inR } from "./format";
 import AgentAvatar from "./AgentIcons";
 import CoinIcon from "./CoinIcon";
 import { dollars, qty as qtyWord } from "./dcaFormat";
 import { px } from "./PotPanel";
 import type {
+  BacktestRunLine,
   PotJudge,
   PotLean,
   PotOdds,
@@ -92,7 +93,28 @@ function Stepper({ step }: { step: Step }) {
   );
 }
 
-function StyleCard({ s, onPick }: { s: PotStyle; onPick: () => void }) {
+// A style's newest backtest from the Backtest page (decision 87), as one line on its card.
+function testedLine(run: BacktestRunLine | undefined): string | null {
+  if (!run?.all) return null;
+  const days = (run.to - run.from) / 86_400_000;
+  const span =
+    days >= 330
+      ? `${Math.round(days / 365)} yr${Math.round(days / 365) === 1 ? "" : "s"}`
+      : `${Math.max(1, Math.round(days / 30))} mo`;
+  const on = run.coin ? ` on ${run.coin}` : "";
+  return `Backtest${on}, ${span}: ${run.all.trades} trades, ${inR(run.all.avg, 2)} a trade`;
+}
+
+function StyleCard({
+  s,
+  tested,
+  onPick,
+}: {
+  s: PotStyle;
+  tested?: BacktestRunLine;
+  onPick: () => void;
+}) {
+  const record = testedLine(tested);
   return (
     <button
       type="button"
@@ -106,6 +128,11 @@ function StyleCard({ s, onPick }: { s: PotStyle; onPick: () => void }) {
       <small>
         Risk {s.riskPct}% · at least {s.minRr} : 1
       </small>
+      {record && (
+        <small className={`ntf-tested ${(tested?.all?.avg ?? 0) < 0 ? "down" : "up"}`}>
+          {record}
+        </small>
+      )}
       {s.note && <em className={s.allowed ? "" : "is-off"}>{s.note}</em>}
     </button>
   );
@@ -250,6 +277,7 @@ export default function NewTradeFlow({
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const [styles, setStyles] = useState<PotStyles | null>(null);
+  const [tested, setTested] = useState<Record<string, BacktestRunLine>>({});
   const [step, setStep] = useState<Step>("style");
   const [style, setStyle] = useState<PotStyle | null>(null);
   const [screen, setScreen] = useState<PotScreen | null>(null);
@@ -262,6 +290,15 @@ export default function NewTradeFlow({
     dialog.current?.showModal?.();
     getPotStyles().then(setStyles, (e: unknown) =>
       setError(errorOf(e, "The styles couldn't be read.")),
+    );
+    // Each style's newest plain backtest; the cards simply go without when there's none.
+    getBacktests().then(
+      (v) => {
+        const newest: Record<string, BacktestRunLine> = {};
+        for (const run of v.runs) if (!run.ai && !newest[run.style]) newest[run.style] = run;
+        setTested(newest);
+      },
+      () => setTested({}),
     );
   }, []);
   useEffect(() => {
@@ -334,11 +371,16 @@ export default function NewTradeFlow({
             {styles ? (
               <div className="ntf-styles">
                 {styles.styles.map((s) => (
-                  <StyleCard key={s.key} s={s} onPick={() => scan(s)} />
+                  <StyleCard key={s.key} s={s} tested={tested[s.key]} onPick={() => scan(s)} />
                 ))}
               </div>
             ) : (
               !error && <p className="muted">Reading the market…</p>
+            )}
+            {Object.keys(tested).length > 0 && (
+              <a className="link ntf-backtests" href="#/backtest">
+                See every backtest →
+              </a>
             )}
             <button type="button" className="link ntf-hand" onClick={onHand}>
               Set one up yourself →
