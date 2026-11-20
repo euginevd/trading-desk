@@ -206,6 +206,79 @@ describe("side panel", () => {
   });
 });
 
+describe("feature flags", () => {
+  it("hides switched-off pages, and a link to one opens the Dashboard saying why", async () => {
+    window.location.hash = "#/journal";
+    serve({
+      ...basics,
+      "GET /portfolio": () => [200, portfolio],
+      "GET /settings/features": () => [200, { flags: { journal: false, risk: false } }],
+    });
+    render(<App />);
+    expect(await screen.findByRole("status")).toHaveProperty(
+      "textContent",
+      "Journal is off, so this opened the Dashboard. Turn it on in Settings",
+    );
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    const links = Array.from(nav.querySelectorAll("a")).map((a) => a.textContent);
+    expect(links).toEqual(["Dashboard", "Portfolio", "Trade", "Bots", "Profile", "Settings"]);
+    expect(within(nav).getByRole("link", { name: "Dashboard" }).getAttribute("aria-current")).toBe(
+      "page",
+    );
+    expect(screen.queryByRole("heading", { level: 1, name: "Journal" })).toBeNull();
+  });
+
+  it("switches a page from Settings and the side panel follows", async () => {
+    window.location.hash = "#/settings";
+    let flags: Record<string, boolean> = {};
+    const fetch = serve({
+      ...basics,
+      "GET /settings/features": () => [200, { flags }],
+      "PUT /settings/features": (init) => {
+        const { id, on } = JSON.parse(String(init?.body)) as { id: string; on: boolean };
+        flags = { ...flags, [id]: on };
+        return [200, { flags }];
+      },
+    });
+    render(<App />);
+    const risk = await screen.findByRole("switch", { name: "Risk page" });
+    expect(risk.getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByRole("switch", { name: "Dashboard page" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("switch", { name: "Settings page" })).toHaveProperty("disabled", true);
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(within(nav).getByRole("link", { name: "Risk" })).toBeTruthy();
+
+    fireEvent.click(risk);
+    await waitFor(() => expect(within(nav).queryByRole("link", { name: "Risk" })).toBeNull());
+    expect(screen.getByRole("switch", { name: "Risk page" }).getAttribute("aria-checked")).toBe(
+      "false",
+    );
+    expect(screen.getByText("Your limits are still checked on every order")).toBeTruthy();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/settings/features",
+      expect.objectContaining({ method: "PUT", body: JSON.stringify({ id: "risk", on: false }) }),
+    );
+
+    fireEvent.click(screen.getByRole("switch", { name: "Risk page" }));
+    expect(await within(nav).findByRole("link", { name: "Risk" })).toBeTruthy();
+  });
+
+  it("says so when a switch isn't saved, and keeps the page as it was", async () => {
+    window.location.hash = "#/settings";
+    serve({
+      ...basics,
+      "GET /settings/features": () => [200, { flags: {} }],
+      "PUT /settings/features": () => [400, { error: "Not saved." }],
+    });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("switch", { name: "Journal page" }));
+    const pages = screen.getByRole("region", { name: "Pages" });
+    expect(await within(pages).findByRole("alert")).toHaveProperty("textContent", "Not saved.");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    expect(within(nav).getByRole("link", { name: "Journal" })).toBeTruthy();
+  });
+});
+
 describe("portfolio page", () => {
   beforeEach(() => {
     window.location.hash = "#/portfolio"; // today's content, moved off the Dashboard

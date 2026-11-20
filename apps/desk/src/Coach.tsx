@@ -2,6 +2,7 @@
 // going, then the weekly DCA shows the buying window and where this week's buy stands. Every
 // figure comes from the api; the words are the model's when it has written them.
 import DcaWidget from "./DcaWidget";
+import { Feature } from "./features";
 import { useCallback, useEffect, useState } from "react";
 import { getCoach, writeCoach } from "./api";
 import { km, Live } from "./Figures";
@@ -87,7 +88,10 @@ export default function Coach() {
         <>
           <Hero coach={coach} fetched={fetched} loading={loading} onRefresh={refresh} />
           <DepositStrip deposits={coach.deposits} />
-          <DcaWidget />
+          {/* The DCA book is on the Bots page: hidden with it (decision 85). */}
+          <Feature id="bots">
+            <DcaWidget />
+          </Feature>
           {/* Watch today, Ask the desk and the weekly recap are off until the desk's new
               agents arrive (TODO 10); the Dashboard is the day and the weekly DCA. */}
         </>
@@ -148,9 +152,11 @@ function Hero({
         ))}
         {message.outOfDate && <OutOfDate />}
         {message.link === "trade" && (
-          <p>
-            <a href="#/trade">Go to Trade</a>
-          </p>
+          <Feature id="trade">
+            <p>
+              <a href="#/trade">Go to Trade</a>
+            </p>
+          </Feature>
         )}
       </div>
     </section>

@@ -363,6 +363,14 @@ def test_the_routes_serve_tax_drift_and_the_journal(call: Any) -> None:
     assert call("GET", "/settings/telegram")[1]["chatFound"] is False
 
 
+def test_the_routes_keep_the_feature_switches(call: Any) -> None:
+    assert call("GET", "/settings/features") == (200, {"flags": {}})
+    status, kept = call("PUT", "/settings/features", {"id": "journal", "on": False})
+    assert (status, kept["flags"]) == (200, {"journal": False})
+    assert call("PUT", "/settings/features", {"id": "settings", "on": False})[0] == 400  # noqa: PLR2004
+    assert call("GET", "/settings/features")[1]["flags"] == {"journal": False}
+
+
 def test_the_morning_summary_goes_once_and_a_failure_is_recorded(
     call: Any, store: Store, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

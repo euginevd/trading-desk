@@ -1,5 +1,5 @@
-// Settings (decisions 50, 51 and 65): how the desk connects and behaves, said in a sentence, then
-// how it answers (Claude) and the morning summary (Telegram) as hairline sections. Sign in or
+// Settings (decisions 50, 51, 65 and 85): how the desk connects and behaves, said in a sentence, then
+// how it answers (Claude), the morning summary (Telegram) and which pages show, as hairline sections. Sign in or
 // paste a key here, as in Claude Code; the api saves it to .env and this page only ever shows
 // whether each is set. Your name lives in the Profile.
 import { type ReactNode, useEffect, useState } from "react";
@@ -16,6 +16,7 @@ import {
   startSignIn,
 } from "./api";
 import { errorOf } from "./format";
+import { FEATURES, type FeatureInfo, featureOn, isNew, useFeatures } from "./features";
 import type { AiMode, AiSettings, TelegramSettings } from "./types";
 
 const MODES: Record<AiMode, { name: string; title: string; sub: string }> = {
@@ -233,6 +234,7 @@ export default function SettingsPage() {
         )}
       </section>
       <Telegram onRead={setTg} />
+      <Pages />
     </main>
   );
 }
@@ -651,6 +653,95 @@ function Telegram({ onRead }: { onRead: (tg: TelegramSettings) => void }) {
             </p>
           )}
         </>
+      )}
+    </section>
+  );
+}
+
+// Which pages and features show on the desk (decision 85). Off only hides one and skips loading
+// it: what it runs keeps running, said beside its switch.
+function Pages() {
+  const { flags, switchFeature } = useFeatures();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [said, setSaid] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const flip = (info: FeatureInfo, on: boolean) => {
+    setBusy(info.id);
+    setSaid(null);
+    switchFeature(info.id, on).then(
+      () => {
+        setBusy(null);
+        setSaid({
+          ok: true,
+          text: on
+            ? `${info.name} is on your desk.`
+            : `${info.name} is off. Turn it on here any time.`,
+        });
+      },
+      (e: unknown) => {
+        setBusy(null);
+        setSaid({ ok: false, text: errorOf(e, `${info.name} wasn't switched.`) });
+      },
+    );
+  };
+
+  return (
+    <section className="set-section" aria-labelledby="settings-pages">
+      <CardHead id="settings-pages" title="Pages" />
+      <p className="settings-intro muted">
+        Choose what shows on your desk. A page that&apos;s off is hidden and its code isn&apos;t
+        loaded. Its orders, bots, checks and agents keep running: the kill switch stops trading, not
+        this. Features added later start off until you turn them on.
+      </p>
+      {flags === null ? (
+        <p className="muted settings-loading" aria-busy="true">
+          Loading…
+        </p>
+      ) : (
+        <ul className="feature-rows">
+          {FEATURES.map((info) => {
+            const on = featureOn(flags, info.id);
+            return (
+              <li key={info.id} className={`feature-row${on ? "" : " off"}`}>
+                <div>
+                  <strong>{info.name}</strong>
+                  {info.always && <span className="settings-tag is-fixed">Always on</span>}
+                  {isNew(flags, info) && <span className="settings-tag">New</span>}
+                  <span className="muted feature-what">
+                    {info.what}
+                    {!on && info.keeps && (
+                      <>
+                        {" · "}
+                        <span className="feature-keeps">{info.keeps}</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={on}
+                  aria-label={`${info.name} page`}
+                  className="feature-switch"
+                  disabled={info.always || busy !== null}
+                  onClick={() => flip(info, !on)}
+                >
+                  <span className={`switch${on ? " on" : ""}`} aria-hidden="true">
+                    <i />
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {said && (
+        <p
+          className={said.ok ? "settings-hint muted" : "settings-error"}
+          role={said.ok ? "status" : "alert"}
+        >
+          {said.text}
+        </p>
       )}
     </section>
   );
