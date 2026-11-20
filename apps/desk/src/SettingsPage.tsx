@@ -36,6 +36,14 @@ const MODEL_NOTES: [string, string][] = [
 ];
 const modelNote = (name: string) => MODEL_NOTES.find(([family]) => name.includes(family))?.[1];
 const shortName = (name: string) => name.replace("Claude ", "");
+// Effort, as Claude Code offers it: one level for whichever model is chosen.
+const EFFORT_NAMES: Record<string, [string, string]> = {
+  low: ["Low", "Quickest and cheapest; fine for routine answers"],
+  medium: ["Medium", "The default: a balance of depth, speed and cost"],
+  high: ["High", "Thinks harder; slower and costs more"],
+  xhigh: ["Extra high", "For hard calls; slower again"],
+  max: ["Max", "The deepest thinking; slowest and most expensive"],
+};
 
 type Tone = "up" | "wait" | "down" | "idle";
 
@@ -231,6 +239,30 @@ export default function SettingsPage() {
                   );
                 })}
               </div>
+            </fieldset>
+            <fieldset className="settings-group">
+              <legend className="settings-label">Effort</legend>
+              <div className="views settings-efforts" role="radiogroup" aria-label="Effort">
+                {ai.efforts.map((level) => (
+                  <button
+                    key={level}
+                    type="button"
+                    role="radio"
+                    aria-checked={ai.effort === level}
+                    disabled={saving}
+                    onClick={() =>
+                      ai.effort !== level &&
+                      void run(
+                        () => setAiSettings(ai.mode, ai.fallback, ai.model, level),
+                        "Not saved.",
+                      )
+                    }
+                  >
+                    {EFFORT_NAMES[level]?.[0] ?? level}
+                  </button>
+                ))}
+              </div>
+              <p className="settings-hint muted">{EFFORT_NAMES[ai.effort]?.[1]}</p>
             </fieldset>
             <p className="settings-note muted">
               Applies to every AI feature: the coach, the desk&apos;s agents, Analyse and the

@@ -54,6 +54,11 @@ class Model:
     search: str
 
 
+# How hard the chosen model thinks before it answers, picked on Settings like Claude Code's
+# effort; every current model takes all five levels. Medium unless the owner changes it.
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
+EFFORT = "medium"
+
 MODELS = {
     "claude-opus-5-5": Model("Claude Opus 5.5", Decimal(4), Decimal(20), "web_search_20260209"),
     "claude-sonnet-5-5": Model("Claude Sonnet 5.5", Decimal(2), Decimal(10), "web_search_20260209"),
@@ -473,7 +478,11 @@ class Signals:
         return self.last(coin) or signal
 
 
-def claude(client: Any, model: Callable[[], str] = lambda: MODEL) -> Ask:
+def claude(
+    client: Any,
+    model: Callable[[], str] = lambda: MODEL,
+    effort: Callable[[], str] = lambda: EFFORT,
+) -> Ask:
     """The real Ask: the chosen Claude model with web search, through the Anthropic SDK."""
 
     def ask(system: str, text: str, shape: dict[str, Any]) -> tuple[dict[str, Any], Decimal]:
@@ -482,7 +491,7 @@ def claude(client: Any, model: Callable[[], str] = lambda: MODEL) -> Ask:
         cost = Decimal(0)
         response: Any = None
         for _ in range(3):  # a long search turn can pause; send it back to carry on
-            response = _create(client, system, messages, shape, chosen)
+            response = _create(client, system, messages, shape, chosen, effort())
             cost += usage_cost(response.usage, chosen)
             if response.stop_reason != "pause_turn":
                 break
@@ -501,8 +510,13 @@ def claude(client: Any, model: Callable[[], str] = lambda: MODEL) -> Ask:
     return ask
 
 
-def _create(
-    client: Any, system: str, messages: list[dict[str, Any]], shape: dict[str, Any], model: str
+def _create(  # noqa: PLR0913, PLR0917 - the call's parts, each needed
+    client: Any,
+    system: str,
+    messages: list[dict[str, Any]],
+    shape: dict[str, Any],
+    model: str,
+    effort: str = EFFORT,
 ) -> Any:
     """One call, with the SDK's errors turned into words the owner can act on."""
     import anthropic  # noqa: PLC0415 - only needed with a key
@@ -521,7 +535,7 @@ def _create(
             messages=messages,
             tools=tools,
             output_config={
-                "effort": "medium",
+                "effort": effort,
                 "format": {"type": "json_schema", "schema": shape},
             },
         )
