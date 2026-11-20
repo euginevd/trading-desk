@@ -1945,6 +1945,24 @@ dialog.in-place .detail-head {
   gap: 22px;
   max-width: 820px;
 }
+/* Wide screens (owner, 20 Nov 2026: more compact, less scrolling): the sentence across the top,
+   How the desk answers beside the Morning summary, then Pages across as a grid of switches. */
+@media (min-width: 1100px) {
+  .settings {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: 14px;
+    max-width: 1320px;
+  }
+  .settings > .set-hero,
+  .settings > .set-wide {
+    grid-column: 1 / -1;
+  }
+  .settings .feature-rows {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  }
+}
 .set-headline {
   margin: 0 0 6px;
   font-size: 30px;
@@ -2185,8 +2203,17 @@ dialog.in-place .detail-head {
   border: 1px solid var(--line-2);
   border-radius: 10px;
 }
+/* Fields and buttons take the card's type, not the browser's larger default. */
+.settings-input input,
+.settings-btn,
+.settings .link {
+  font: inherit;
+  font-size: 13px;
+}
+/* Wide enough for "09:30 AM" and the clock icon, in the dark picker. */
 .settings-input input.settings-time {
-  flex: 0 0 120px;
+  flex: 0 0 136px;
+  color-scheme: dark;
 }
 .settings-value {
   flex: 1 1 auto;

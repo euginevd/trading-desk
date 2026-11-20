@@ -19,6 +19,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 13. A saved Profile version keeps its typed fields: after a parser change, profile.md needs a real edit or new version.
 13a. Git Bash rewrites container paths in `docker compose run` and `exec` arguments (`/tmp/x` became `C:/.../Temp/x`): prefix the command with `MSYS_NO_PATHCONV=1`.
 13b. Freqtrade: FreqAI backtests refuse an open-ended `--timerange`, and `download-data --days` only adds candles newer than those kept: give an end date, and run it again with `--prepend` for older history.
+13c. Containers sharing a `local/` folder run as different users (api 10001, Freqtrade 1000), and Docker Desktop keeps the mode: the folder's maker opens it (`chmod 0o777`, `worker.py`) or the other's writes fail.
 13a. A cloud session's git config can name Claude as author (rule 29): commit with `git -c user.name=… -c user.email=…` from the last human commit, and check `git log -1 --format=%an` before pushing.
 
 ## CI
@@ -50,11 +51,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 ## Python and Postgres
 
-26a. Services creating the same tables at start race on Postgres's catalog: retry setup on `UniqueViolation`, `DuplicateTable` and `DuplicateObject`.
-27. Semgrep blocks `urllib` and `http.client` calls to a variable URL, even with the scheme checked: use `httpx`.
-27a. Appending to a log file per line lost lines under threads on Windows: keep one shared handle under the lock (`audit.py`, `test_audit.py`).
-27b. A second reader of a rate-limited source tripped Taostats' 429 and showed the wallet empty: keep and fall back to the last good reading (`tao.py`).
-27c. `KeyError` is a `LookupError`: signal missing config with its own class (`MissingKey`).
+26a to 27f, on Postgres, Semgrep, logs, rate limits, errors and Freqtrade: [known-mistakes/python.md](known-mistakes/python.md).
 
 ## Pull requests
 

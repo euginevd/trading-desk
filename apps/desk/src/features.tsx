@@ -8,7 +8,15 @@
 import { createContext, type ReactNode, useContext } from "react";
 
 export type FeatureId =
-  "dashboard" | "portfolio" | "journal" | "trade" | "risk" | "bots" | "profile" | "settings";
+  | "dashboard"
+  | "portfolio"
+  | "journal"
+  | "trade"
+  | "backtest"
+  | "risk"
+  | "bots"
+  | "profile"
+  | "settings";
 
 export type FeatureInfo = {
   id: FeatureId;
@@ -38,6 +46,12 @@ export const FEATURES: FeatureInfo[] = [
     what: "The Trading account and New trade",
     startsOn: true,
     keeps: "Open trades keep their stops and targets",
+  },
+  {
+    id: "backtest",
+    name: "Backtest",
+    what: "Test a style on one coin's past candles, up to 3 months",
+    startsOn: true,
   },
   {
     id: "risk",

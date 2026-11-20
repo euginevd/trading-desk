@@ -25,6 +25,7 @@ import type { BotsTab } from "./BotsHome";
 import { FEATURES, type FeatureId, FeaturesContext, type Flags, featureOn } from "./features";
 import SettingsPage from "./SettingsPage";
 import {
+  BacktestIcon,
   CollapseIcon,
   DashboardIcon,
   DcaIcon,
@@ -49,6 +50,7 @@ type Page =
   | "portfolio"
   | "journal"
   | "trade"
+  | "backtest"
   | "risk"
   | "bots"
   | "settings"
@@ -60,6 +62,7 @@ const PotPage = lazy(() => import("./PotPage"));
 const RiskPage = lazy(() => import("./RiskPage"));
 const ProfilePage = lazy(() => import("./ProfilePage"));
 const Portfolio = lazy(() => import("./Portfolio"));
+const BacktestPage = lazy(() => import("./BacktestPage"));
 
 // A page that fails to load (an old tab after the desk was rebuilt, its file gone) says so in its
 // place; the side panel, and the kill switch in it, stay up.
@@ -94,6 +97,7 @@ const FEATURE_OF: Record<Page, FeatureId> = {
   bots: "bots",
   settings: "settings",
   "dca-book": "bots",
+  backtest: "backtest",
 };
 const TICK_MS = 30_000;
 const CURRENCY_KEY = "desk.currency";
@@ -119,6 +123,7 @@ const PAGES: { page: Page; hash: string; name: string; Icon: () => React.JSX.Ele
   { page: "portfolio", hash: "#/portfolio", name: "Portfolio", Icon: PortfolioIcon },
   { page: "journal", hash: "#/journal", name: "Journal", Icon: JournalIcon },
   { page: "trade", hash: "#/trade", name: "Trade", Icon: TradeIcon },
+  { page: "backtest", hash: "#/backtest", name: "Backtest", Icon: BacktestIcon },
   { page: "risk", hash: "#/risk", name: "Risk", Icon: RiskIcon },
 ];
 // DCA and grid bots share one page (decision 68); the old links open it filtered.
@@ -575,6 +580,8 @@ export default function App() {
                 <PotPage tradingOn={settings ? settings.tradingOn : null} />
               ) : current === "bots" || current === "dca-book" ? (
                 <BotsHome tab={botsTab} />
+              ) : current === "backtest" ? (
+                <BacktestPage />
               ) : current === "risk" ? (
                 <RiskPage />
               ) : current === "settings" ? (

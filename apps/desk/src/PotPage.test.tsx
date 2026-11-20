@@ -233,6 +233,25 @@ function serve(reply: PotView, breaksRule = false, setups = true) {
         },
         regime: { state: "neutral", words: "" },
       });
+    if (path === "/backtest")
+      return json({
+        styles: [],
+        runs: [
+          {
+            id: "backtest-result-2026-11-20_06-48-02",
+            created: 1,
+            style: "day",
+            ai: false,
+            coin: "SOL",
+            strategy: "DeskDay",
+            from: 0,
+            to: 365 * 86_400_000,
+            all: { name: "All", trades: 12, won: 0.25, avg: -0.4, total: -4.8 },
+          },
+        ],
+        job: null,
+        worker: { seen: null, on: false },
+      });
     if (path === "/pot/styles")
       return json({
         regime: { state: "bull", words: "BTC above its 200-day" },
@@ -688,6 +707,11 @@ describe("the trading pot", () => {
     const fetch = serve(pot({ proposals: [], trades: [] }));
     render(<PotPage />);
     fireEvent.click(await screen.findByRole("button", { name: "New trade" }));
+    // Each style's newest backtest sits on its card (decision 87).
+    expect(
+      await screen.findByText("Backtest on SOL, 1 yr: 12 trades, −0.40R a trade"),
+    ).toBeTruthy();
+    expect(screen.getByRole("link", { name: "See every backtest →" })).toBeTruthy();
     fireEvent.click(await screen.findByRole("button", { name: /^Day trade/ }));
     expect(await screen.findByText("One clean Asia sweep on SOL.")).toBeTruthy();
     expect(screen.getByText(/Late in the crypto day/)).toBeTruthy();

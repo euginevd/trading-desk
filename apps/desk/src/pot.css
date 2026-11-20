@@ -1371,6 +1371,18 @@ dialog.ntf {
 .ntf-hand {
   font-size: 13px;
 }
+/* A style's newest backtest (decision 87): red when it lost on average, green when it made. */
+.ntf-style small.ntf-tested.down {
+  color: var(--down);
+}
+.ntf-style small.ntf-tested.up {
+  color: var(--up);
+}
+.ntf-backtests {
+  display: block;
+  margin: 0 0 10px;
+  font-size: 13px;
+}
 .ntf-h {
   display: flex;
   align-items: center;

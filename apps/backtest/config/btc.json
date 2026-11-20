@@ -1,0 +1,6 @@
+{
+  "$schema": "https://schema.freqtrade.io/schema.json",
+  "exchange": {
+    "pair_whitelist": ["BTC/USDT"]
+  }
+}

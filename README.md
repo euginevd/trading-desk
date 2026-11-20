@@ -90,7 +90,7 @@ Then:
 docker compose up --build
 ```
 
-Open http://127.0.0.1:5180 (or the `DESK_PORT` you set). Set your limits before it will trade. Every outside call, order and settings change is logged in `local/audit.jsonl`; the books, watchlists and settings are kept in `local/desk.sqlite`. Your agents' profiles live in `local/agents/`.
+Open http://127.0.0.1:5180 (or the `DESK_PORT` you set). Set your limits before it will trade. Every outside call, order and settings change is logged in `local/audit.jsonl`; the books, watchlists and settings are kept in `local/desk.sqlite`. Your agents' profiles live in `local/agents/`. The Backtest page runs Freqtrade on years of Binance candles through the `backtest-worker` container, which starts with the rest; results are kept in `local/backtest/` ([apps/backtest](apps/backtest/README.md)).
 
 Backtests run on demand, with no keys and never an order: `bash apps/backtest/run.sh swing` (or `scalp`, `day`, `position`, `swing-ai`, `all`). Results go to `local/backtest/`; paper trading and the rest are in [apps/backtest](apps/backtest/README.md).
 
