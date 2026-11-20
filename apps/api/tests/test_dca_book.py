@@ -10,7 +10,7 @@ import httpx
 import pytest
 from api import demo
 from api.audit import Audit
-from api.binance import Binance
+from api.binance import Binance, BinanceError
 from api.dca_book import (
     SYDNEY,
     DcaBook,
@@ -364,3 +364,28 @@ def test_a_change_spends_no_more_than_is_left_unless_raised(book: DcaBook) -> No
     with pytest.raises(Refused, match="per-order"):
         book.amend({"ref": raised["ref"], "price": "95000", "spend": "150", "raise": True})
     assert next(o for o in book.view()["orders"] if o["ref"] == raised["ref"])["status"] == "open"
+
+
+def test_a_cancel_that_didnt_take_places_nothing_in_its_place(
+    book: DcaBook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 1: a limit still live on Binance must never be followed by a second buy."""
+    first = book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+
+    def lost(*_a: object, **_k: object) -> None:
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(book.binance, "cancel", lost)
+    sent = len(demo.EXCHANGE.orders)
+    with pytest.raises(Refused, match="still live on Binance"):
+        book.cancel(first["ref"])
+    with pytest.raises(Refused, match="still live on Binance"):
+        book.amend({"ref": first["ref"], "price": "2900"})
+    closed = book.close_out()
+    assert closed["closed"] == ["BTC 40", "SOL 20"]  # the others still bought
+    assert closed["missed"] == [
+        f"ETH ({first['ref']} is still live on Binance: the cancel "
+        "didn't take. Nothing new was placed; try again in a minute.)"
+    ]
+    assert len(demo.EXCHANGE.orders) == sent + 2  # BTC and SOL only: no second ETH buy
+    assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["open"]

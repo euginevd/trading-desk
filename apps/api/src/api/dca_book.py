@@ -570,6 +570,8 @@ class DcaBook:
                     continue
 
     def _cancel(self, row: dict[str, Any]) -> dict[str, Any]:
+        """The order cancelled and its final fills recorded; refused when Binance still has it
+        live, so nothing is placed in its place while it can still fill."""
         if row["status"] == "placing":
             self._refresh(row)
             row = self._row(int(row["id"]))
@@ -583,7 +585,13 @@ class DcaBook:
         if str(order.get("status")) == "CANCELED":
             order = self._binance.order(symbol, int(row["order_id"]))  # its final fills
         self._record(row, order)
-        return self._row(int(row["id"]))
+        done = self._row(int(row["id"]))
+        if done["status"] in ("placing", "open"):
+            raise Refused(
+                f"{row['ref']} is still live on Binance: the cancel didn't take. "
+                "Nothing new was placed; try again in a minute."
+            )
+        return done
 
     @locked
     def cancel(self, ref: object) -> dict[str, Any]:
