@@ -29,6 +29,8 @@ Your requirements, features and ideas, numbered, in your own words. In `producti
 
 25. Trading account, left from the 20 Nov 2026 audit (decision 86): an entry that part-fills under Binance's smallest order is held as an open trade with no exit, so close the dust as its own state; open risk and free cash should count what a reduce sold; a proposal's stored expiry should be re-checked on place, not only what the page sends; enter now near the daily limit counts the waiting limit's spend too.
 26. Scan now: show each style's backtest result in red on its card beside a take, once the Backtest page (branch `backtest-page`) is on main. *(Asked 20 Nov 2026; the cards are built, feature 105.)*
+27. The Monday close-out sees the whole week: every open DCA buy from this week, whatever button placed it, plus what's left of the week's amount not yet placed; Keep them open (the default), Buy the rest at market, or Choose per coin on the desk; nothing is cancelled unless I choose. The progress bar shows a week bought, partly bought or not bought by what filled. *(Asked 20 Nov 2026, from the DCA audit: this week's orders are all Add funds, so Monday would say "nothing to close out".)*
+28. Chat with dca-agent on Telegram: I type to the bot ("move ETH and SOL lower, I can wait till Wednesday"), dca-agent answers with revised orders through the DCA book's chat, and each comes back as a button to approve; only my linked chat is read, nothing is placed without a tap, and the tap runs the desk's checks. *(Asked 20 Nov 2026.)*
 
 Later, from the project ideas doc, not started until listed above:
 
