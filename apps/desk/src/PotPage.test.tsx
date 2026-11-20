@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import PotPage from "./PotPage";
+import { rewardOf, rr } from "./PotPanel";
 import type { PotProposal, PotTrade, PotView } from "./types";
 
 // Made-up figures only (known-mistakes 7).
@@ -401,6 +402,52 @@ describe("the trading pot", () => {
       proposal: "p1",
     });
     expect(await screen.findByText(/TRD-SUI-26W47-1 placed/)).toBeTruthy();
+  });
+
+  it("says when trading is off, from the side panel's switch", async () => {
+    serve(pot());
+    const { rerender } = render(<PotPage tradingOn={false} />);
+    expect(await screen.findByText(/Trading is off: every new order is refused/)).toBeTruthy();
+    rerender(<PotPage tradingOn />);
+    expect(screen.queryByText(/Trading is off/)).toBeNull();
+  });
+
+  it("drops a late price-now reply once Limit is picked again", async () => {
+    const fetch = serve(pot());
+    const real = fetch.getMockImplementation();
+    if (!real) throw new Error("serve() set no reply");
+    let release = () => {};
+    fetch.mockImplementation((url: string, init?: RequestInit) =>
+      url === "/api/pot/preview"
+        ? new Promise<Response>((done) => {
+            release = () => void real(url, init).then(done);
+          })
+        : real(url, init),
+    );
+    render(<PotPage />);
+    const card = await screen.findByRole("article", { name: "Proposal: SUI, trend pullback" });
+    fireEvent.click(within(card).getByRole("button", { name: "Review" }));
+    fireEvent.click(screen.getByRole("radio", { name: /^Market now/ }));
+    fireEvent.click(screen.getByRole("radio", { name: /^Limit at/ }));
+    release(); // the price now arrives after the owner chose Limit
+    await waitFor(() => expect(sent(fetch, "/pot/preview").length).toBeGreaterThan(0));
+    await new Promise((r) => setTimeout(r, 20));
+    release();
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.getByRole("radio", { name: /^Limit at/ }).getAttribute("aria-checked")).toBe(
+      "true",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Place the trade" }));
+    await waitFor(() => expect(sent(fetch, "/pot/trades")).toHaveLength(1));
+    expect(JSON.parse(String(sent(fetch, "/pot/trades")[0]?.[1]?.body))).not.toHaveProperty(
+      "market",
+    );
+  });
+
+  it("says reward to risk after fees, as the api checks it", () => {
+    // 100 in, 95 stop, 110.5 target: 2.1 before fees, under 2 after them.
+    expect(rr({ entry: "100", stop: "95", target: "110.5" })).toBe("2.0");
+    expect(rewardOf({ entry: "100", stop: "95", target: "110.5", qty: "1" })).toBeCloseTo(10.29);
   });
 
   it("holds a trade that breaks a Profile rule until it's placed anyway", async () => {

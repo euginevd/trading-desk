@@ -36,9 +36,22 @@ export const rWord = (r: string | null) => {
   return `${n > 0 ? "+" : n < 0 ? "−" : ""}${Math.abs(n).toFixed(1)}R`;
 };
 export const tone = (n: number) => (n > 0 ? "up" : n < 0 ? "down" : "");
-export const rr = (t: { entry: string; stop: string; target: string }) => {
-  const risk = Number(t.entry) - Number(t.stop);
-  return risk > 0 ? ((Number(t.target) - Number(t.entry)) / risk).toFixed(1) : "—";
+// Binance's spot fee each side, as the api's pot.FEE: risk and reward are after fees there, so the
+// confirm says the same reward to risk the api checks.
+const FEE = 0.001;
+type Prices = { entry: string; stop: string; target: string };
+// What one coin bought at the entry loses at the stop, and makes at the target, after fees.
+const perCoin = (t: Prices) => {
+  const [entry, stop, target] = [Number(t.entry), Number(t.stop), Number(t.target)];
+  return {
+    risk: entry - stop + (entry + stop) * FEE,
+    reward: target - entry - (entry + target) * FEE,
+  };
+};
+export const rewardOf = (t: Prices & { qty: string }) => perCoin(t).reward * Number(t.qty);
+export const rr = (t: Prices) => {
+  const { risk, reward } = perCoin(t);
+  return Number(t.entry) > Number(t.stop) ? (reward / risk).toFixed(1) : "—";
 };
 
 const ROLE: Record<PotTrade["orders"][number]["role"], string> = {
@@ -89,6 +102,13 @@ export default function PotPanel({
   useEffect(() => {
     dialog.current?.showModal?.();
   }, []);
+  // The page reads the account every 30 seconds: the panel follows, so a fill or a new price
+  // shows here and the actions offered match the trade as it is now.
+  const [from, setFrom] = useState(trade);
+  if (from !== trade) {
+    setFrom(trade);
+    setShown(trade);
+  }
 
   const t = shown;
   const open = t.status === "open";
@@ -243,7 +263,7 @@ export default function PotPanel({
         </div>
         <div>
           <dt>Reward to risk</dt>
-          <dd className="num">{rr(t)} : 1</dd>
+          <dd className="num">{rr({ ...t, entry: t.fillPrice ?? t.entry })} : 1</dd>
         </div>
         <div>
           <dt>Fees</dt>

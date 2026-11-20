@@ -1,10 +1,28 @@
 import "./dca.css";
-import { useCallback, useEffect, useState } from "react";
-import { getGlobal, getPortfolio, getSentiment, getSettings, getTickers, setTrading } from "./api";
+import {
+  Component,
+  lazy,
+  Suspense,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  getFeatures,
+  getGlobal,
+  getPortfolio,
+  getSentiment,
+  getSettings,
+  getTickers,
+  setFeature,
+  setTrading,
+} from "./api";
 import { percent, trend, usdShort } from "./format";
 import Coach from "./Coach";
-import Journal from "./Journal";
-import BotsHome, { type BotsTab } from "./BotsHome";
+import type { BotsTab } from "./BotsHome";
+import { FEATURES, type FeatureId, FeaturesContext, type Flags, featureOn } from "./features";
 import SettingsPage from "./SettingsPage";
 import {
   CollapseIcon,
@@ -20,11 +38,7 @@ import {
   RiskIcon,
   WalletIcon,
 } from "./icons";
-import ProfilePage from "./ProfilePage";
-import Portfolio from "./Portfolio";
 import { CURRENCIES, type Currency, money } from "./money";
-import PotPage from "./PotPage";
-import RiskPage from "./RiskPage";
 import type { MarketGlobal, Sentiment, Settings, TaoWallet, Ticker } from "./types";
 import { FearPanel } from "./WidgetDetails";
 import type { Status } from "./ui";
@@ -39,6 +53,48 @@ type Page =
   | "bots"
   | "settings"
   | "dca-book";
+// A page that can be switched off loads its code only when it opens (decision 85).
+const Journal = lazy(() => import("./Journal"));
+const BotsHome = lazy(() => import("./BotsHome"));
+const PotPage = lazy(() => import("./PotPage"));
+const RiskPage = lazy(() => import("./RiskPage"));
+const ProfilePage = lazy(() => import("./ProfilePage"));
+const Portfolio = lazy(() => import("./Portfolio"));
+
+// A page that fails to load (an old tab after the desk was rebuilt, its file gone) says so in its
+// place; the side panel, and the kill switch in it, stay up.
+class PageFailed extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <main className="wrap">
+        <div className="alert" role="alert">
+          <span>This page couldn&apos;t load. The desk may have been updated.</span>
+          <button type="button" className="btn btn-small" onClick={() => window.location.reload()}>
+            Reload
+          </button>
+        </div>
+      </main>
+    );
+  }
+}
+
+// The switch each page answers to; the DCA book is part of Bots.
+const FEATURE_OF: Record<Page, FeatureId> = {
+  dashboard: "dashboard",
+  profile: "profile",
+  portfolio: "portfolio",
+  journal: "journal",
+  trade: "trade",
+  risk: "risk",
+  bots: "bots",
+  settings: "settings",
+  "dca-book": "bots",
+};
 const TICK_MS = 30_000;
 const CURRENCY_KEY = "desk.currency";
 function readCurrency(): Currency {
@@ -225,6 +281,15 @@ export default function App() {
       // private window: the choice lasts for this visit only
     }
   };
+  const [flags, setFlags] = useState<Flags | null>(null);
+  const features = useMemo(
+    () => ({
+      flags,
+      switchFeature: (id: FeatureId, on: boolean) =>
+        setFeature(id, on).then((next) => setFlags(next.flags)),
+    }),
+    [flags],
+  );
   const [folded, setFolded] = useState(readFolded);
   const [drawer, setDrawer] = useState(false);
 
@@ -240,6 +305,11 @@ export default function App() {
 
   useEffect(() => {
     getSettings().then(setSettings, () => setSettings(null));
+    // Unreadable, every feature is as it starts: today's pages on, new ones off.
+    getFeatures().then(
+      (r) => setFlags(r.flags),
+      () => setFlags({}),
+    );
     const tick = () => {
       getTickers(["BTC"]).then(
         (r) => setTickers(r.tickers),
@@ -295,19 +365,25 @@ export default function App() {
     saveFolded(!folded);
   };
 
-  const link = ({ page: target, hash, name, Icon }: (typeof PAGES)[number]) => (
-    <a
-      key={target}
-      href={hash}
-      aria-current={
-        page === target || (target === "bots" && page === "dca-book") ? "page" : undefined
-      }
-      title={folded ? name : undefined}
-    >
-      <Icon />
-      <span className="side-word">{name}</span>
-    </a>
-  );
+  const shows = (target: Page) => flags !== null && featureOn(flags, FEATURE_OF[target]);
+  // A page switched off opens the Dashboard, saying why; null while the switches load.
+  const hidden = flags === null ? null : shows(page) ? false : FEATURE_OF[page];
+  const current: Page = hidden ? "dashboard" : page;
+
+  const link = ({ page: target, hash, name, Icon }: (typeof PAGES)[number]) =>
+    shows(target) && (
+      <a
+        key={target}
+        href={hash}
+        aria-current={
+          current === target || (target === "bots" && current === "dca-book") ? "page" : undefined
+        }
+        title={folded ? name : undefined}
+      >
+        <Icon />
+        <span className="side-word">{name}</span>
+      </a>
+    );
 
   const binance = BINANCE[status];
   const wallet = taoPill(tao);
@@ -476,23 +552,45 @@ export default function App() {
             </button>
           )}
         </header>
-        {page === "trade" ? (
-          <PotPage />
-        ) : page === "bots" || page === "dca-book" ? (
-          <BotsHome tab={botsTab} />
-        ) : page === "risk" ? (
-          <RiskPage />
-        ) : page === "settings" ? (
-          <SettingsPage />
-        ) : page === "profile" ? (
-          <ProfilePage />
-        ) : page === "journal" ? (
-          <Journal />
-        ) : page === "portfolio" ? (
-          <Portfolio onStatus={onStatus} onTao={onTao} currency={currency} />
-        ) : (
-          <Coach />
-        )}
+        <FeaturesContext.Provider value={features}>
+          {hidden && (
+            <p className="feature-off" role="status">
+              {FEATURES.find((f) => f.id === hidden)?.name} is off, so this opened the Dashboard.{" "}
+              <a href="#/settings">Turn it on in Settings</a>
+            </p>
+          )}
+          <PageFailed key={current}>
+            <Suspense
+              fallback={
+                <main className="wrap" aria-busy="true">
+                  <p className="muted">Loading…</p>
+                </main>
+              }
+            >
+              {hidden === null && page !== "dashboard" && page !== "settings" ? (
+                <main className="wrap" aria-busy="true">
+                  <p className="muted">Loading…</p>
+                </main>
+              ) : current === "trade" ? (
+                <PotPage tradingOn={settings ? settings.tradingOn : null} />
+              ) : current === "bots" || current === "dca-book" ? (
+                <BotsHome tab={botsTab} />
+              ) : current === "risk" ? (
+                <RiskPage />
+              ) : current === "settings" ? (
+                <SettingsPage />
+              ) : current === "profile" ? (
+                <ProfilePage />
+              ) : current === "journal" ? (
+                <Journal />
+              ) : current === "portfolio" ? (
+                <Portfolio onStatus={onStatus} onTao={onTao} currency={currency} />
+              ) : (
+                <Coach />
+              )}
+            </Suspense>
+          </PageFailed>
+        </FeaturesContext.Provider>
       </div>
     </div>
   );

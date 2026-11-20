@@ -22,7 +22,7 @@ import { Live } from "./Figures";
 import PotChat, { usePotChat } from "./PotChat";
 import PotNewTrade from "./PotNewTrade";
 import NewTradeFlow, { OddsLine } from "./NewTradeFlow";
-import PotPanel, { px, rWord, rr, tone } from "./PotPanel";
+import PotPanel, { px, rewardOf, rWord, rr, tone } from "./PotPanel";
 import { RuleBreakBanner } from "./RuleMarks";
 import type {
   PotAction,
@@ -384,7 +384,9 @@ function Checked({ found }: { found: PotCheck }) {
   );
 }
 
-export default function PotPage() {
+// tradingOn: the side panel's kill switch, from App, so this page says at once when it changes;
+// null while unknown (and in tests that render the page alone).
+export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | null }) {
   const [pot, setPot] = useState<PotView | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [said, setSaid] = useState<string | null>(null);
@@ -411,6 +413,9 @@ export default function PotPage() {
   // Bumped after a scan, so the watchlist reads its coins again.
   const [coinsVersion, setCoinsVersion] = useState(0);
   const review = useRef<HTMLDialogElement>(null);
+  // Bumped on each ask for the price now and when the review closes: a late reply is dropped,
+  // so it can't switch a closed or changed review to market.
+  const marketAsk = useRef(0);
   const chat = usePotChat();
 
   const load = useCallback(() => {
@@ -552,7 +557,10 @@ export default function PotPage() {
           setRuleHold({ of: pending, breaks: e.ruleBreaks });
           return;
         }
-        setPlaceError(errorOf(e, "The trade wasn't placed."));
+        // Closed while placing: say it as a toast, or it's lost with the dialog.
+        const failed = errorOf(e, "The trade wasn't placed.");
+        if (review.current?.open === false) setSaid(failed);
+        else setPlaceError(failed);
       },
     );
   };
@@ -588,11 +596,12 @@ export default function PotPage() {
           risk: market.trade.risk,
         }
       : pending;
-  const reward = shown ? (Number(shown.target) - Number(shown.entry)) * Number(shown.qty) : 0;
+  const reward = shown ? rewardOf(shown) : 0;
   const marketBlocked =
     atMarket === "loading" || (market !== null && (!market.trade || market.problems.length > 0));
   const chooseMarket = (on: boolean) => {
     setPlaceError(null);
+    const ask = ++marketAsk.current;
     if (!on || !pending) {
       setAtMarket(null);
       return;
@@ -604,8 +613,12 @@ export default function PotPage() {
         previewPotTrade({ coin, entry: seen.now ?? "", stop, target, ...(style ? { style } : {}) }),
       )
       .then(
-        (seen) => setAtMarket({ now: seen.now ?? "", trade: seen.trade, problems: seen.problems }),
+        (seen) => {
+          if (ask !== marketAsk.current) return;
+          setAtMarket({ now: seen.now ?? "", trade: seen.trade, problems: seen.problems });
+        },
         (e: unknown) => {
+          if (ask !== marketAsk.current) return;
           setAtMarket(null);
           setPlaceError(errorOf(e, "The price now couldn't be read."));
         },
@@ -616,6 +629,22 @@ export default function PotPage() {
     <main className={`wrap dcb pot${chatOpen ? " has-chat" : ""}`}>
       <div className="dcb-main">
         <h1 className="visually-hidden">Trading account</h1>
+        {tradingOn === false && (
+          <div className="alert" role="status">
+            <span>
+              Trading is off: every new order is refused until you switch it on in the side panel.
+              Stops and targets already on Binance still hold.
+            </span>
+          </div>
+        )}
+        {error && (
+          <div className="alert" role="alert">
+            <span>{error} These figures are from the last read.</span>
+            <button type="button" className="btn btn-small" onClick={load}>
+              Try again
+            </button>
+          </div>
+        )}
         {putIn > 0 ? (
           <section className="acc-head" aria-label="The account">
             <dl className="acc-money">
@@ -1013,6 +1042,7 @@ export default function PotPage() {
         ref={review}
         aria-labelledby="pot-review-title"
         onClose={() => {
+          marketAsk.current += 1;
           setPending(null);
           setPlaceError(null);
           setAtMarket(null);

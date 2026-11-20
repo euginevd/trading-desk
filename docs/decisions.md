@@ -33,3 +33,5 @@ To add one: its line here, and its record, in the same form, at the end of the n
 82. The odds check: each pick's rule re-run on past candles and simulated from them, a warning not a gate; the record decides once it has 8 decided signals. [Record](decisions/from-58.md)
 83. Freqtrade 2026.10 backtests and paper-trades the styles, calling the desk's own screener rule; it never trades, the desk keeps placing orders. [Record](decisions/from-58.md)
 84. The AI parts: FreqAI filters setups in backtests; trading-agent judges only in paper trading, through a new single-setup endpoint the paper container may call by service name. [Record](decisions/from-58.md)
+85. Feature flags: one registry of the desk's pages and features, each switched on or off in Settings, kept in the api's store; off only hides and skips loading; new features arrive off. [Record](decisions/from-58.md)
+86. An exit Binance refuses with the price already past the stop or target sells the rest at market, once per try; the Trade page audit's other fixes. [Record](decisions/from-58.md)
