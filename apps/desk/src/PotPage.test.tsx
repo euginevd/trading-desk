@@ -346,6 +346,11 @@ describe("the trading pot", () => {
     const money = document.querySelector(".acc-money") as HTMLElement;
     expect(within(money).getByText("Available")).toBeTruthy();
     expect(within(money).getByText("In trades")).toBeTruthy();
+    // Open trades' result against what they cost, in dollars and percent.
+    const unreal = within(money).getByText("Unrealized").parentElement as HTMLElement;
+    expect(unreal.textContent).toContain("+$0.19");
+    expect(unreal.textContent).toContain("+1.9%");
+    expect(within(money).getByText("Realized")).toBeTruthy();
     // Free USDC short of what the account holds: warned, never blocked.
     expect(screen.getByRole("alert").textContent).toContain(
       "is $10 short of the account's available $90",
@@ -361,10 +366,9 @@ describe("the trading pot", () => {
         .getByRole("tab", { name: /Positions/ })
         .getAttribute("aria-selected"),
     ).toBe("true");
-    expect(
-      screen.getByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" }),
-    ).toBeTruthy();
-    expect(screen.getByText("+0.6R")).toBeTruthy();
+    // The row shows how far the coin has moved from its fill, not R.
+    const row = screen.getByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" });
+    expect(within(row).getByText("+1.9%")).toBeTruthy();
     fireEvent.click(within(tabs).getByRole("tab", { name: "Ledger" }));
     expect(screen.getByRole("table", { name: "The account's ledger" }).textContent).toContain(
       "POT-IN-1",

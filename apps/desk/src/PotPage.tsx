@@ -13,7 +13,7 @@ import {
   putInPot,
   scanPot,
 } from "./api";
-import { errorOf } from "./format";
+import { errorOf, percent } from "./format";
 import AgentAvatar from "./AgentIcons";
 import AccountWatchlist from "./AccountWatchlist";
 import CoinIcon from "./CoinIcon";
@@ -194,6 +194,14 @@ function TradeRow({ trade, onOpen }: { trade: PotTrade; onOpen: () => void }) {
   const n = Number(trade.result ?? 0);
   const gap =
     trade.now !== null ? ((Number(trade.now) / Number(trade.entry) - 1) * 100).toFixed(1) : null;
+  // How far the coin has moved from the fill, the way a chart reads it; the result when no price.
+  const fill = Number(trade.fillPrice ?? trade.entry);
+  const moved =
+    trade.now !== null && fill > 0
+      ? (Number(trade.now) / fill - 1) * 100
+      : Number(trade.spend) > 0
+        ? (n / Number(trade.spend)) * 100
+        : null;
   return (
     <li>
       <button
@@ -221,7 +229,9 @@ function TradeRow({ trade, onOpen }: { trade: PotTrade; onOpen: () => void }) {
             </span>
           ) : (
             <>
-              <b className={`pot-r num ${tone(n)}`}>{rWord(trade.r)}</b>
+              <b className={`pot-r num ${tone(moved ?? n)}`}>
+                {moved === null ? rWord(trade.r) : percent(String(moved))}
+              </b>
               <small className={`num ${tone(n)}`}>{dollars(trade.result, true)}</small>
             </>
           )}
@@ -487,9 +497,17 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
   const thisMonth = done.filter(
     (t) => t.status === "closed" && (t.closed ?? 0) >= monthStart.getTime(),
   );
-  const monthR = thisMonth.reduce((s, t) => s + Number(t.r ?? 0), 0);
   const monthUsd = thisMonth.reduce((s, t) => s + Number(t.result ?? 0), 0);
   const held = on.filter((t) => t.status === "open");
+  const sum = (ts: PotTrade[], k: "result" | "spend") =>
+    ts.reduce((s, t) => s + Number(t[k] ?? 0), 0);
+  const ofBase = (usd: number, base: number) => (base > 0 ? String((usd / base) * 100) : null);
+  // Unrealized: open trades against what they cost. Realized: closed trades against what went in.
+  const unrealUsd = sum(held, "result");
+  const unrealPct = ofBase(unrealUsd, sum(held, "spend"));
+  const closedAll = done.filter((t) => t.status === "closed");
+  const realUsd = sum(closedAll, "result");
+  const realPct = ofBase(realUsd, putIn);
   const waiting = on.filter((t) => t.status !== "open");
   const inTrades = Math.max(0, Number(pot.value) - Number(pot.cash));
   const openLimit = (Number(pot.value) * 3) / 100;
@@ -665,10 +683,21 @@ export default function PotPage({ tradingOn = null }: { tradingOn?: boolean | nu
                 </dd>
               </div>
               <div>
-                <dt>This month</dt>
-                <dd className={`num ${monthUsd > 0 ? "up" : monthUsd < 0 ? "down" : ""}`}>
-                  {dollars(monthUsd, true)} <span className="pot-of">{rWord(String(monthR))}</span>
+                <dt>Unrealized</dt>
+                <dd className={`num ${tone(unrealUsd)}`}>
+                  {dollars(unrealUsd, true)}{" "}
+                  {unrealPct !== null && <span className="pot-of">{percent(unrealPct)}</span>}
                 </dd>
+              </div>
+              <div>
+                <dt>Realized</dt>
+                <dd className={`num ${tone(realUsd)}`}>
+                  {dollars(realUsd, true)}{" "}
+                  {realPct !== null && <span className="pot-of">{percent(realPct)}</span>}
+                </dd>
+                <small className={`acc-month num ${tone(monthUsd)}`}>
+                  {dollars(monthUsd, true)} this month
+                </small>
               </div>
             </dl>
             <div className="acc-sub">
