@@ -241,6 +241,14 @@ CREATE TABLE IF NOT EXISTS pot_orders (
 """
 
 
+# Columns added after the first databases were made, each with its fixed statement: no SQL is
+# built from strings.
+ADDED_COLUMNS = (
+    ("bots", "deleted", "ALTER TABLE bots ADD COLUMN deleted INTEGER"),
+    ("grids", "deleted", "ALTER TABLE grids ADD COLUMN deleted INTEGER"),
+)
+
+
 class Store:
     def __init__(self, path: Path) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -249,8 +257,8 @@ class Store:
         self._db.executescript(SCHEMA)
         # Added after the first databases were made: a deleted bot or grid is hidden, its
         # orders kept for today's spend, the monthly cap and the ledger (audit 8).
-        for table in ("bots", "grids"):
-            self._add_column(table, "deleted", "INTEGER")
+        for table, column, statement in ADDED_COLUMNS:
+            self._add_column(table, column, statement)
         # The Markdown made from the Profile on each save, beside the database it came from.
         self.profile_md = path.parent / (
             "profile.md" if path.stem == "desk" else f"{path.stem}-profile.md"
@@ -260,11 +268,11 @@ class Store:
             "trade.md" if path.stem == "desk" else f"{path.stem}-trade.md"
         )
 
-    def _add_column(self, table: str, column: str, kind: str) -> None:
-        names = {str(r["name"]) for r in self._db.execute(f"PRAGMA table_info({table})")}
-        if column not in names:
+    def _add_column(self, table: str, column: str, statement: str) -> None:
+        rows = self._db.execute("SELECT name FROM pragma_table_info(?)", (table,))
+        if column not in {str(r["name"]) for r in rows}:
             with self._db:
-                self._db.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
+                self._db.execute(statement)  # one of ADDED_COLUMNS' fixed statements
 
     def close(self) -> None:
         self._db.close()
