@@ -702,6 +702,8 @@ class PotAgent:
         }
         levels = {k: str(item.get(k) or found[k]) for k in ("entry", "stop", "target")}
         same = all(levels[k] == found[k] for k in levels)
+        # The screen's own levels when trading-agent moved them, so the one-tap says so (audit 21).
+        pick["screened"] = None if same else {k: found[k] for k in levels}
         pick["odds"] = found.get("odds") if same else screener.odds_for(style.key, coin, **levels)
         try:
             sized = self._pot.size({"coin": coin, "style": style.key, **levels})

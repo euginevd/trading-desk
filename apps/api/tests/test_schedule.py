@@ -272,3 +272,23 @@ def test_the_close_out_message_shows_the_whole_week() -> None:
 def test_keep_them_open_changes_nothing(services: Services) -> None:
     said = jobs.act(services, {"kind": "dca-keep", "arg": "26W46"}, TUESDAY_NOON)
     assert said.startswith("Kept open")
+
+
+def test_a_setup_says_when_trading_agent_moved_the_screens_levels() -> None:
+    """Audit 21: the one-tap places what it shows; it shows whose levels they are."""
+    p = {
+        "coin": "SOL",
+        "setup": "Pullback",
+        "reason": "Holding its 20-day.",
+        "entry": "195",
+        "stop": "185",
+        "stopPct": "5.1",
+        "target": "230",
+        "spend": "390",
+        "risk": "20",
+        "rr": "3.2",
+        "crowding": "calm",
+    }
+    assert "Levels moved" not in jobs.proposal_text(p | {"screened": None})
+    moved = jobs.proposal_text(p | {"screened": {"entry": "200", "stop": "188", "target": "220"}})
+    assert "Levels moved by trading-agent: the screen had entry 200, stop 188, target 220." in moved
