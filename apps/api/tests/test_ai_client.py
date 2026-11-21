@@ -359,3 +359,36 @@ def test_the_model_is_chosen_on_settings_priced_and_passed_on(
     assert query.options is not None
     assert query.options.model == "claude-sonnet-5-5"
     assert query.options.effort == "max"
+
+
+def test_a_call_billed_but_unusable_still_counts_toward_the_cap(tmp_path: Path) -> None:
+    """Audit 20: Claude answered, and was paid, but the answer couldn't be used."""
+    from api.ai_signal import claude  # noqa: PLC0415
+
+    class Usage:
+        input_tokens = 1_000_000
+        output_tokens = 1_000_000
+        server_tool_use = None
+
+    class Reply:
+        stop_reason = "end_turn"
+        usage = Usage()
+        content = [type("Text", (), {"type": "text", "text": "not JSON"})()]
+
+    class Messages:
+        def create(self, **_request: Any) -> Reply:
+            return Reply()
+
+    client = type("Client", (), {"beta": type("Beta", (), {"messages": Messages()})()})()
+    store = Store(tmp_path / "desk.sqlite")
+    try:
+        signals = Signals(
+            claude(client, lambda: "claude-haiku-5-5", lambda: "low"),
+            store,
+            Audit(tmp_path / "audit.jsonl"),
+        )
+        with pytest.raises(SignalError, match="expected shape"):
+            signals.write("system", "the facts", SHAPE, "a note")
+        assert signals.spent() == Decimal("0.6")  # Haiku's price for the tokens it used
+    finally:
+        store.close()
