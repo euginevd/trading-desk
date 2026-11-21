@@ -23,7 +23,12 @@ DATA = Path(os.environ.get("BACKTEST_DIR", "/freqtrade/user_data"))
 JOBS = DATA / "jobs"
 RESULTS = DATA / "backtest_results"
 JOB_ID = re.compile(r"job-\d{8}-\d{6}-[0-9a-f]{6}")
-STEPS = ("Downloading candles", "Downloading older candles", "Testing")
+STEPS = (
+    "Downloading candles",
+    "Downloading older candles",
+    "Downloading BTC's daily candles",  # the Bear filter's 200-day history (audit 22)
+    "Testing",
+)
 POLL_SECONDS = 1.0
 running = True
 
