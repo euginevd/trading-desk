@@ -25,6 +25,27 @@ export function dollars(value: string | number | null | undefined, sign = false)
   return `${lead}$${body}`;
 }
 
+// Whole dollars, for the book's headline, figures and cards: "$159", "−$3", "+$1".
+export function wholeDollars(value: string | number | null | undefined, sign = false): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return "—";
+  const lead = n < 0 ? "−" : sign && n > 0 ? "+" : "";
+  return `${lead}$${Math.abs(n).toLocaleString(AU)}`;
+}
+
+// A price to read at a glance: whole from 100 up ("61,037"), cents from 1 ("67.43"), and four
+// significant figures under 1 ("0.6323", "0.002356"). Order tables keep limit() for the exact
+// figure.
+export function roundPrice(value: string | number | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const n = Number(value);
+  if (!Number.isFinite(n)) return "—";
+  if (n >= 100) return Math.round(n).toLocaleString(AU);
+  if (n >= 1) return n.toLocaleString(AU, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Number(n.toPrecision(4)).toString();
+}
+
 // "+12.40" or "−3.10", with a real minus sign.
 export function signed(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === "") return "—";

@@ -8,19 +8,10 @@
 import { Fragment, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { amendDcaOrder, cancelDcaOrder, fundsOdds } from "./api";
 import { errorOf } from "./format";
+import { FoldHead, useFold } from "./Fold";
 import CoinIcon from "./CoinIcon";
 import DcaOrderDrawer, { away, left, pct, qtyOf } from "./DcaOrderDrawer";
-import {
-  SOURCE,
-  STATUS,
-  amountOf,
-  isOpen,
-  limit,
-  qty as fmtQty,
-  two,
-  weeklyTotal,
-  when,
-} from "./dcaFormat";
+import { SOURCE, STATUS, amountOf, isOpen, limit, qty as fmtQty, two, when } from "./dcaFormat";
 import type { DcaBook, DcaOrder } from "./types";
 
 type State = "open" | "filled" | "cancelled" | "all";
@@ -86,15 +77,21 @@ export default function DcaOrders({
   onBuyBack,
   tools,
   below,
+  coin,
 }: {
   book: DcaBook;
   onChanged: (said: string) => void;
   onBuyBack: (o: DcaOrder) => void;
   tools?: ReactNode;
   below?: ReactNode;
+  // One coin's orders, in its panel (owner, 21 Nov 2026: the page-wide list moved there).
+  coin?: string;
 }) {
   const quote = book.quote;
+  const orders = coin ? book.orders.filter((o) => o.coin === coin) : book.orders;
   const [f, setF] = useState<Filters>(readFilters);
+  const [folded, toggleExpanded] = useFold("dco");
+  const expanded = coin ? true : folded;
   const [search, setSearch] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<string | null>(null);
@@ -116,12 +113,12 @@ export default function DcaOrders({
     [book.positions],
   );
   const coins = book.positions.map((p) => p.coin);
-  const sources = [...new Set(book.orders.map((o) => o.source))];
-  const weeks = [...new Set(book.orders.map((o) => o.week))].sort().reverse();
+  const sources = [...new Set(orders.map((o) => o.source))];
+  const weeks = [...new Set(orders.map((o) => o.week))].sort().reverse();
   const recent = new Set(weeks.filter((w) => w <= book.week.key).slice(0, 4));
-  const open = book.orders.filter(isOpen);
+  const open = orders.filter(isOpen);
   const groups = samePrice(open.filter((o) => o.kind === "limit"));
-  const backed = new Set(book.orders.filter((o) => o.source === "buy-back").map((o) => o.link));
+  const backed = new Set(orders.filter((o) => o.source === "buy-back").map((o) => o.link));
 
   // The 24-hour odds of each open limit, from the desk's own count (no model).
   const oddsKey = open
@@ -130,7 +127,7 @@ export default function DcaOrders({
     .join(",");
   useEffect(() => {
     let on = true;
-    for (const o of book.orders.filter(canEdit)) {
+    for (const o of orders.filter(canEdit)) {
       fundsOdds(o.coin, o.price ?? "0", o.side === "sell" ? "remove" : "add").then(
         (r) => on && setOdds((all) => ({ ...all, [`${o.ref}@${o.price}`]: r.pct })),
         () => undefined,
@@ -145,9 +142,9 @@ export default function DcaOrders({
 
   // Every filter but the state, so each state chip can say how many it holds.
   const needle = search.trim().toUpperCase();
-  const base = book.orders.filter(
+  const base = orders.filter(
     (o) =>
-      (f.coin === "all" || o.coin === f.coin) &&
+      (coin !== undefined || f.coin === "all" || o.coin === f.coin) &&
       (f.source === "all" || o.source === f.source) &&
       (f.week === "all" || (f.week === "this" ? o.week === book.week.key : recent.has(o.week))) &&
       (!needle || o.ref.toUpperCase().includes(needle)),
@@ -172,10 +169,9 @@ export default function DcaOrders({
     .map((o) => ({ o, off: away(Number(o.price), prices[o.coin] ?? 0) }))
     .filter((x) => x.off !== null)
     .sort((a, b) => Math.abs(a.off ?? 0) - Math.abs(b.off ?? 0))[0];
-  const weekly = weeklyTotal(book);
-  const boughtThisWeek = book.week.orders
-    .filter((o) => o.side === "buy" && o.source !== "buy-back")
-    .reduce((s, o) => s + Number(o.filledQuote || 0), 0);
+  // The plan as a running total (decision 96).
+  const planned = Number(book.week.state.planned);
+  const planBought = Number(book.week.state.bought);
   const known = open
     .filter(canEdit)
     .map(oddsOf)
@@ -216,7 +212,7 @@ export default function DcaOrders({
     setMoving(false);
     onChanged(words);
   };
-  const shownOrder = book.orders.find((o) => o.ref === viewing?.ref) ?? null;
+  const shownOrder = orders.find((o) => o.ref === viewing?.ref) ?? null;
 
   const chip = (label: string, on: boolean, onClick: () => void, n?: number) => (
     <button type="button" aria-pressed={on} onClick={onClick}>
@@ -226,319 +222,368 @@ export default function DcaOrders({
   );
 
   return (
-    <section className="dcb-section dco" aria-labelledby="dco-title">
-      <div className="dcb-section-head">
-        <h2 id="dco-title">Orders</h2>
-        <span className="muted num">
-          {open.length} open, ${two(waiting)} {quote} waiting
-          {nearest ? `, nearest ${nearest.o.coin} ${pct(nearest.off)}` : ""}
-        </span>
-      </div>
-      <p className="dco-insight">
-        {weekly > 0 && (
-          <span>
-            This week: <b className="num">${two(boughtThisWeek)}</b> of ${two(weekly)} bought
-          </span>
-        )}
-        {known.length > 0 && (
-          <span>
-            Likely to fill in 24h:{" "}
-            <b className="num">
-              {likely} of {known.length}
-            </b>
-          </span>
-        )}
-        {groups.length > 0 && (
-          <span>
-            {groups.reduce((s, g) => s + g.length, 0)} at the same price{" "}
-            <button type="button" className="link" onClick={() => setDeduping(true)}>
-              Dedupe
-            </button>
-          </span>
-        )}
-      </p>
-
-      <div className="dco-filters">
-        <div className="dcb-filters" role="group" aria-label="State">
-          {(["open", "filled", "cancelled", "all"] as State[]).map((s) =>
-            chip(s === "all" ? "All" : STATUS[s], f.state === s, () => set({ state: s }), count(s)),
-          )}
-        </div>
-        <div className="dcb-filters" role="group" aria-label="Coin">
-          {chip("All coins", f.coin === "all", () => set({ coin: "all" }))}
-          {coins.map((c) => chip(c, f.coin === c, () => set({ coin: c })))}
-        </div>
-        <div className="dco-selects">
-          <label>
-            <span className="visually-hidden">Source</span>
-            <select value={f.source} onChange={(e) => set({ source: e.target.value })}>
-              <option value="all">Every source</option>
-              {sources.map((s) => (
-                <option key={s} value={s}>
-                  {SOURCE[s]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            <span className="visually-hidden">Week</span>
-            <select value={f.week} onChange={(e) => set({ week: e.target.value as Week })}>
-              <option value="this">This week</option>
-              <option value="last4">Last 4 weeks</option>
-              <option value="all">Every week</option>
-            </select>
-          </label>
-          <label>
-            <span className="visually-hidden">Group</span>
-            <select value={f.group} onChange={(e) => set({ group: e.target.value as Group })}>
-              <option value="none">No grouping</option>
-              <option value="coin">By coin</option>
-              <option value="week">By week</option>
-            </select>
-          </label>
-          <input
-            type="search"
-            className="dco-search"
-            placeholder="Find a reference"
-            aria-label="Find a reference"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+    <section
+      className={`dcb-section dco${expanded ? "" : " is-folded"}`}
+      aria-labelledby="dco-title"
+    >
+      {!coin && (
+        <div className="dcb-section-head">
+          <FoldHead
+            id="dco"
+            open={expanded}
+            onToggle={toggleExpanded}
+            title="Orders"
+            summary={
+              <>
+                {open.length} open, ${two(waiting)} {quote} waiting
+                {nearest ? `, nearest ${nearest.o.coin} ${pct(nearest.off)}` : ""}
+              </>
+            }
           />
-          {tools}
-        </div>
-      </div>
-      {below}
-
-      {shown.length === 0 ? (
-        <p className="muted dco-empty">
-          No {f.state === "all" ? "" : `${STATUS[f.state].toLowerCase()} `}orders match.{" "}
-          {f.state === "open" && openElsewhere > 0 && (
-            <button
-              type="button"
-              className="link"
-              onClick={() => set({ week: "all", coin: "all", source: "all" })}
-            >
-              Show {openElsewhere} open from other filters
-            </button>
-          )}
-        </p>
-      ) : (
-        <div className="dcb-scroll">
-          <table className="dcb-table dco-table" aria-label="Orders">
-            <thead>
-              <tr>
-                <th className="dco-tick">
-                  <input
-                    type="checkbox"
-                    aria-label="Select every open order shown"
-                    checked={allPicked}
-                    disabled={pickable.length === 0}
-                    onChange={() =>
-                      setPicked(allPicked ? new Set() : new Set(pickable.map((o) => o.ref)))
-                    }
-                  />
-                </th>
-                <th>Order</th>
-                <th className="r">Price</th>
-                <th className="r">From now</th>
-                <th className="r">24h odds</th>
-                <th className="r">{quote}</th>
-                <th className="r dcb-hide">Quantity</th>
-                <th className="dcb-hide">Placed</th>
-                <th>State</th>
-                <th className="dco-more">
-                  <span className="visually-hidden">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((g) => (
-                <Fragment key={g.head ?? "all"}>
-                  {g.head && (
-                    <tr className="dco-grp">
-                      <th colSpan={10} scope="colgroup">
-                        {f.group === "coin" && <CoinIcon coin={g.head} />} {g.head}
-                        <span className="muted num">
-                          {" "}
-                          {g.orders.length} {g.orders.length === 1 ? "order" : "orders"}, $
-                          {two(
-                            g.orders.reduce(
-                              (s, o) => s + Number(isOpen(o) ? left(o) : amountOf(o)),
-                              0,
-                            ),
-                          )}
-                        </span>
-                      </th>
-                    </tr>
-                  )}
-                  {g.orders.map((o) => {
-                    const live = isOpen(o);
-                    const at = Number(o.avgPrice ?? o.price);
-                    const off = away(at, prices[o.coin] ?? 0);
-                    const p = canEdit(o) ? oddsOf(o) : null;
-                    const buyBack =
-                      o.source === "trim" && o.status === "filled" && !backed.has(o.ref);
-                    return (
-                      <tr
-                        key={o.ref}
-                        className={`dco-row ${picked.has(o.ref) ? "is-picked" : ""} ${live ? "" : "is-closed"}`}
-                        onClick={(e) => {
-                          if ((e.target as HTMLElement).closest("button,input,a,label,[role=menu]"))
-                            return;
-                          setViewing({ ref: o.ref, edit: false });
-                        }}
-                      >
-                        <td className="dco-tick">
-                          {canEdit(o) && (
-                            <input
-                              type="checkbox"
-                              aria-label={`Select ${o.ref}`}
-                              checked={picked.has(o.ref)}
-                              onChange={() => toggle(o.ref)}
-                            />
-                          )}
-                        </td>
-                        <td>
-                          <span className="dcb-coin">
-                            <CoinIcon coin={o.coin} />
-                            {o.coin}
-                            <span className={`tag ${o.side === "sell" ? "sell" : "buy"}`}>
-                              {o.side === "sell" ? "Sell" : "Buy"}
-                            </span>
-                          </span>
-                          <small className="dcb-id">
-                            {o.ref} · {SOURCE[o.source]}
-                            {o.link ? ` · for ${o.link}` : ""}
-                          </small>
-                        </td>
-                        <td className="r num">
-                          {o.kind === "market" && !o.avgPrice ? "Market" : limit(at)}
-                        </td>
-                        <td className={`r num ${live ? "muted" : ""}`}>
-                          {live ? (
-                            pct(off)
-                          ) : off === null ? (
-                            "—"
-                          ) : (
-                            <span
-                              className={-off >= 0 ? "up" : "down"}
-                              title="The price now against its fill"
-                            >
-                              {pct(-off)}
-                            </span>
-                          )}
-                        </td>
-                        <td className="r num">
-                          {p === null ? (
-                            <span className="muted">—</span>
-                          ) : (
-                            <span className="dco-odds" title={`${p}% likely to fill in 24 hours`}>
-                              <span className="dco-odds-bar" aria-hidden="true">
-                                <i style={{ width: `${p}%` }} className={p < 50 ? "is-low" : ""} />
-                              </span>
-                              {p}%
-                            </span>
-                          )}
-                        </td>
-                        <td className="r num">${two(live ? left(o) : amountOf(o))}</td>
-                        <td className="r num muted dcb-hide">{fmtQty(qtyOf(o).toFixed(8))}</td>
-                        <td className="num muted dcb-hide">{when(o.created)}</td>
-                        <td>
-                          <span className={`dcb-tag is-${o.status}`}>{STATUS[o.status]}</span>
-                        </td>
-                        <td className="dco-more">
-                          <div className="dco-menu">
-                            <button
-                              type="button"
-                              className="dco-dots"
-                              aria-label={`Actions for ${o.ref}`}
-                              aria-haspopup="menu"
-                              aria-expanded={menu === o.ref}
-                              onClick={() => setMenu(menu === o.ref ? null : o.ref)}
-                            >
-                              ⋯
-                            </button>
-                            {menu === o.ref && (
-                              <div role="menu" aria-label={`${o.ref} actions`}>
-                                <button
-                                  type="button"
-                                  role="menuitem"
-                                  onClick={() => {
-                                    setMenu(null);
-                                    setViewing({ ref: o.ref, edit: false });
-                                  }}
-                                >
-                                  View on chart
-                                </button>
-                                {canEdit(o) && (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => {
-                                      setMenu(null);
-                                      setViewing({ ref: o.ref, edit: true });
-                                    }}
-                                  >
-                                    Modify
-                                  </button>
-                                )}
-                                {live && (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    className="danger"
-                                    onClick={() => {
-                                      setMenu(null);
-                                      setCancelling([o]);
-                                    }}
-                                  >
-                                    Cancel
-                                  </button>
-                                )}
-                                {buyBack && (
-                                  <button
-                                    type="button"
-                                    role="menuitem"
-                                    onClick={() => {
-                                      setMenu(null);
-                                      onBuyBack(o);
-                                    }}
-                                  >
-                                    Buy back
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
+      {expanded && (
+        <div id="dco-body">
+          <p className="dco-insight">
+            {planned > 0 && !coin && (
+              <span className="dco-week">
+                Plan to date: <b className="num">${two(planBought)}</b> of ${two(planned)} bought
+                <span
+                  className="dco-split"
+                  role="img"
+                  aria-label={`${two(planBought)} bought and ${two(book.week.state.waiting)} in open limits, of ${two(planned)} planned to date.`}
+                >
+                  <i
+                    className="is-bought"
+                    style={{ width: `${Math.min(100, (planBought / planned) * 100)}%` }}
+                  />
+                  <i
+                    className="is-limits"
+                    style={{
+                      width: `${Math.min(100, (Number(book.week.state.waiting) / planned) * 100)}%`,
+                    }}
+                  />
+                </span>
+              </span>
+            )}
+            {known.length > 0 && (
+              <span>
+                Likely to fill in 24h:{" "}
+                <b className="num">
+                  {likely} of {known.length}
+                </b>
+              </span>
+            )}
+            {groups.length > 0 && (
+              <span>
+                {groups.reduce((s, g) => s + g.length, 0)} at the same price{" "}
+                <button type="button" className="link" onClick={() => setDeduping(true)}>
+                  Dedupe
+                </button>
+              </span>
+            )}
+          </p>
 
-      {chosen.length > 0 && (
-        <div className="dco-bulk" role="region" aria-label="Selected orders">
-          <span className="num">
-            {chosen.length} selected, ${two(chosen.reduce((s, o) => s + left(o), 0))} {quote}
-          </span>
-          <button
-            type="button"
-            className="btn btn-danger-quiet"
-            onClick={() => setCancelling(chosen)}
-          >
-            Cancel {chosen.length}
-          </button>
-          <button type="button" className="btn" onClick={() => setMoving(true)}>
-            Move by %
-          </button>
-          <button type="button" className="link" onClick={() => setPicked(new Set())}>
-            Clear
-          </button>
+          <div className="dco-filters">
+            <div className="dcb-filters" role="group" aria-label="State">
+              {(["open", "filled", "cancelled", "all"] as State[]).map((s) =>
+                chip(
+                  s === "all" ? "All" : STATUS[s],
+                  f.state === s,
+                  () => set({ state: s }),
+                  count(s),
+                ),
+              )}
+            </div>
+            {!coin && (
+              <div className="dcb-filters" role="group" aria-label="Coin">
+                {chip("All coins", f.coin === "all", () => set({ coin: "all" }))}
+                {coins.map((c) => chip(c, f.coin === c, () => set({ coin: c })))}
+              </div>
+            )}
+            <div className="dco-selects">
+              <label>
+                <span className="visually-hidden">Source</span>
+                <select value={f.source} onChange={(e) => set({ source: e.target.value })}>
+                  <option value="all">Every source</option>
+                  {sources.map((s) => (
+                    <option key={s} value={s}>
+                      {SOURCE[s]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span className="visually-hidden">Week</span>
+                <select value={f.week} onChange={(e) => set({ week: e.target.value as Week })}>
+                  <option value="this">This week</option>
+                  <option value="last4">Last 4 weeks</option>
+                  <option value="all">Every week</option>
+                </select>
+              </label>
+              <label>
+                <span className="visually-hidden">Group</span>
+                <select value={f.group} onChange={(e) => set({ group: e.target.value as Group })}>
+                  <option value="none">No grouping</option>
+                  <option value="coin">By coin</option>
+                  <option value="week">By week</option>
+                </select>
+              </label>
+              <input
+                type="search"
+                className="dco-search"
+                placeholder="Find a reference"
+                aria-label="Find a reference"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              {tools}
+            </div>
+          </div>
+          {below}
+
+          {shown.length === 0 ? (
+            <p className="muted dco-empty">
+              No {f.state === "all" ? "" : `${STATUS[f.state].toLowerCase()} `}orders match.{" "}
+              {f.state === "open" && openElsewhere > 0 && (
+                <button
+                  type="button"
+                  className="link"
+                  onClick={() => set({ week: "all", coin: "all", source: "all" })}
+                >
+                  Show {openElsewhere} open from other filters
+                </button>
+              )}
+            </p>
+          ) : (
+            <div className="dcb-scroll">
+              <table className="dcb-table dco-table" aria-label="Orders">
+                <thead>
+                  <tr>
+                    <th className="dco-tick">
+                      <input
+                        type="checkbox"
+                        aria-label="Select every open order shown"
+                        checked={allPicked}
+                        disabled={pickable.length === 0}
+                        onChange={() =>
+                          setPicked(allPicked ? new Set() : new Set(pickable.map((o) => o.ref)))
+                        }
+                      />
+                    </th>
+                    <th>Order</th>
+                    <th className="r">Price</th>
+                    <th className="r">From now</th>
+                    <th className="r">24h odds</th>
+                    <th className="r">{quote}</th>
+                    <th className="r dcb-hide">Quantity</th>
+                    <th className="dcb-hide">Placed</th>
+                    <th>State</th>
+                    <th className="dco-more">
+                      <span className="visually-hidden">Actions</span>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((g) => (
+                    <Fragment key={g.head ?? "all"}>
+                      {g.head && (
+                        <tr className="dco-grp">
+                          <th colSpan={10} scope="colgroup">
+                            {f.group === "coin" && <CoinIcon coin={g.head} />} {g.head}
+                            <span className="muted num">
+                              {" "}
+                              {g.orders.length} {g.orders.length === 1 ? "order" : "orders"}, $
+                              {two(
+                                g.orders.reduce(
+                                  (s, o) => s + Number(isOpen(o) ? left(o) : amountOf(o)),
+                                  0,
+                                ),
+                              )}
+                            </span>
+                          </th>
+                        </tr>
+                      )}
+                      {g.orders.map((o) => {
+                        const live = isOpen(o);
+                        const at = Number(o.avgPrice ?? o.price);
+                        const off = away(at, prices[o.coin] ?? 0);
+                        const p = canEdit(o) ? oddsOf(o) : null;
+                        const buyBack =
+                          o.source === "trim" && o.status === "filled" && !backed.has(o.ref);
+                        return (
+                          <tr
+                            key={o.ref}
+                            className={`dco-row ${picked.has(o.ref) ? "is-picked" : ""} ${live ? "" : "is-closed"}`}
+                            onClick={(e) => {
+                              if (
+                                (e.target as HTMLElement).closest(
+                                  "button,input,a,label,[role=menu]",
+                                )
+                              )
+                                return;
+                              setViewing({ ref: o.ref, edit: false });
+                            }}
+                          >
+                            <td className="dco-tick">
+                              {canEdit(o) && (
+                                <input
+                                  type="checkbox"
+                                  aria-label={`Select ${o.ref}`}
+                                  checked={picked.has(o.ref)}
+                                  onChange={() => toggle(o.ref)}
+                                />
+                              )}
+                            </td>
+                            <td>
+                              <span className="dcb-coin">
+                                <CoinIcon coin={o.coin} />
+                                {o.coin}
+                                <span className={`tag ${o.side === "sell" ? "sell" : "buy"}`}>
+                                  {o.side === "sell" ? "Sell" : "Buy"}
+                                </span>
+                              </span>
+                              <small className="dcb-id">
+                                {o.ref} · {SOURCE[o.source]}
+                                {o.link ? ` · for ${o.link}` : ""}
+                              </small>
+                            </td>
+                            <td className="r num">
+                              {o.kind === "market" && !o.avgPrice ? "Market" : limit(at)}
+                            </td>
+                            <td className={`r num ${live ? "muted" : ""}`}>
+                              {live ? (
+                                pct(off)
+                              ) : off === null ? (
+                                "—"
+                              ) : (
+                                <span
+                                  className={-off >= 0 ? "up" : "down"}
+                                  title="The price now against its fill"
+                                >
+                                  {pct(-off)}
+                                </span>
+                              )}
+                            </td>
+                            <td className="r num">
+                              {p === null ? (
+                                <span className="muted">—</span>
+                              ) : (
+                                <span
+                                  className="dco-odds"
+                                  title={`${p}% likely to fill in 24 hours`}
+                                >
+                                  <span className="dco-odds-bar" aria-hidden="true">
+                                    <i
+                                      style={{ width: `${p}%` }}
+                                      className={p < 50 ? "is-low" : ""}
+                                    />
+                                  </span>
+                                  {p}%
+                                </span>
+                              )}
+                            </td>
+                            <td className="r num">${two(live ? left(o) : amountOf(o))}</td>
+                            <td className="r num muted dcb-hide">{fmtQty(qtyOf(o).toFixed(8))}</td>
+                            <td className="num muted dcb-hide">{when(o.created)}</td>
+                            <td>
+                              <span className={`dcb-tag is-${o.status}`}>{STATUS[o.status]}</span>
+                            </td>
+                            <td className="dco-more">
+                              <div className="dco-menu">
+                                <button
+                                  type="button"
+                                  className="dco-dots"
+                                  aria-label={`Actions for ${o.ref}`}
+                                  aria-haspopup="menu"
+                                  aria-expanded={menu === o.ref}
+                                  onClick={() => setMenu(menu === o.ref ? null : o.ref)}
+                                >
+                                  ⋯
+                                </button>
+                                {menu === o.ref && (
+                                  <div role="menu" aria-label={`${o.ref} actions`}>
+                                    <button
+                                      type="button"
+                                      role="menuitem"
+                                      onClick={() => {
+                                        setMenu(null);
+                                        setViewing({ ref: o.ref, edit: false });
+                                      }}
+                                    >
+                                      View on chart
+                                    </button>
+                                    {canEdit(o) && (
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        onClick={() => {
+                                          setMenu(null);
+                                          setViewing({ ref: o.ref, edit: true });
+                                        }}
+                                      >
+                                        Modify
+                                      </button>
+                                    )}
+                                    {live && (
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        className="danger"
+                                        onClick={() => {
+                                          setMenu(null);
+                                          setCancelling([o]);
+                                        }}
+                                      >
+                                        Cancel
+                                      </button>
+                                    )}
+                                    {buyBack && (
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        onClick={() => {
+                                          setMenu(null);
+                                          onBuyBack(o);
+                                        }}
+                                      >
+                                        Buy back
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {chosen.length > 0 && (
+            <div className="dco-bulk" role="region" aria-label="Selected orders">
+              <span className="num">
+                {chosen.length} selected, ${two(chosen.reduce((s, o) => s + left(o), 0))} {quote}
+              </span>
+              <button
+                type="button"
+                className="btn btn-danger-quiet"
+                onClick={() => setCancelling(chosen)}
+              >
+                Cancel {chosen.length}
+              </button>
+              <button type="button" className="btn" onClick={() => setMoving(true)}>
+                Move by %
+              </button>
+              <button type="button" className="link" onClick={() => setPicked(new Set())}>
+                Clear
+              </button>
+            </div>
+          )}
         </div>
       )}
 

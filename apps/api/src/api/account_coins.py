@@ -8,6 +8,9 @@ import time
 from decimal import Decimal
 from typing import Any
 
+import httpx
+
+from api import perp, screener
 from api.binance import Binance, BinanceError, plain
 from api.market import QUOTE
 from api.pot import Pot
@@ -95,6 +98,21 @@ def watchlist(pot: Pot) -> tuple[int, list[str]]:
     return list_id, coins
 
 
+def _change(candles: list[list[Any]], days: int) -> str | None:
+    """The change over the last `days` daily closes, in percent."""
+    if len(candles) <= days:
+        return None
+    then, now = Decimal(str(candles[-days - 1][4])), Decimal(str(candles[-1][4]))
+    return plain(((now / then - 1) * 100).quantize(Decimal("0.1"))) if then else None
+
+
+def _from_high(candles: list[list[Any]], price: Decimal) -> str | None:
+    """How far the price sits under its 30-day high, in percent (0 or less)."""
+    highs = [Decimal(str(r[2])) for r in candles[-30:]]
+    top = max(highs, default=Decimal(0))
+    return plain(((price / top - 1) * 100).quantize(Decimal("0.1"))) if top else None
+
+
 def snapshot(pot: Pot) -> dict[str, Any]:
     binance: Binance = pot.binance
     list_id, watched = watchlist(pot)
@@ -108,18 +126,26 @@ def snapshot(pot: Pot) -> dict[str, Any]:
     live = {
         t["coin"] for t in pot.view()["trades"] if t["status"] in ("placing", "waiting", "open")
     }
+    with httpx.Client(timeout=10) as http:  # read once a day, then from memory
+        caps = screener.market_caps(http)
     coins: list[dict[str, Any]] = []
     for coin in watched:
         row = listed.get(f"{coin}{QUOTE}")
-        if row is None:
-            continue  # no pair with the quote: not one the desk can price or trade
+        source = "spot"
+        candles: list[list[Any]] = []
+        if row is None:  # not on spot: a USDT perpetual's price, watch only
+            row = perp.ticker(coin)
+            if row is None:
+                continue  # neither: not one the desk can price
+            source = "futures"
+            candles = perp.klines(coin, DAYS)
+        else:
+            try:
+                candles = binance.klines(f"{coin}{QUOTE}", "1d", DAYS)
+            except BinanceError:
+                candles = []
         price = Decimal(str(row["lastPrice"]))
         amount = held.get(coin, Decimal(0))
-        candles: list[list[Any]]
-        try:
-            candles = binance.klines(f"{coin}{QUOTE}", "1d", DAYS)
-        except BinanceError:
-            candles = []
         facts = coin_facts(coin, candles, None) if len(candles) > SPARK else None
         coins.append(
             {
@@ -129,9 +155,13 @@ def snapshot(pot: Pot) -> dict[str, Any]:
                 "value": plain((amount * price).quantize(Decimal("0.01"))),
                 "change24hPct": str(row.get("priceChangePercent", "0")),
                 "change30dPct": facts["change30dPct"] if facts else None,
+                "marketCap": f"{caps[coin]:.0f}" if coin in caps else None,
+                "change7dPct": _change(candles, 7),
+                "fromHighPct": _from_high(candles, price),
                 "spark": [str(r[4]) for r in candles[-SPARK:]],
                 "insight": insight(facts) if facts else None,
-                "tradable": coin in tradable,
+                "tradable": coin in tradable and source == "spot",
+                "source": source,
                 "watching": coin in watching,
                 "inTrade": coin in live,
             }

@@ -51,7 +51,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 ## Python and Postgres
 
-26a to 27f, on Postgres, Semgrep, logs, rate limits, errors and Freqtrade: [known-mistakes/python.md](known-mistakes/python.md).
+26a to 27g, on Postgres, Semgrep, logs, rate limits, errors, Freqtrade and DCA weeks: [known-mistakes/python.md](known-mistakes/python.md).
 
 ## Pull requests
 

@@ -60,8 +60,9 @@ def _by_source(portfolio: dict[str, Any] | None, rate: Decimal) -> dict[str, Dec
         return None
     found = {"TAO wallet": ZERO, "Binance": ZERO}
     for h in portfolio["holdings"]:
-        if h["source"] in found:
-            found[h["source"]] += Decimal(h.get("value") or "0") * rate
+        source = "Binance" if h["source"] == "Binance Alpha" else h["source"]  # one exchange
+        if source in found:
+            found[source] += Decimal(h.get("value") or "0") * rate
     return found
 
 

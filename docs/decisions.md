@@ -43,3 +43,6 @@ To add one: its line here, and its record, in the same form, at the end of the n
 92. Keep as a holding moves a trade's coins out unsold; risk 2% a trade, open risk 6%. [Record](decisions/from-58.md)
 93. No stop wider than Binance holds: capped at 18% under entry, refused outside the pair's band. [Record](decisions/from-58.md)
 94. Hold with no stop: a trade stays in Positions with no exits until a stop is set. [Record](decisions/from-58.md)
+95. trading-agent judges the near misses too, watch only: Wait or Pass, never Take; "Near" tags gone. [Record](decisions/from-58.md)
+96. The DCA plan is a running total; Monday buys what has no order yet and limits a week old, within free USDC that isn't the Trading account's. [Record](decisions/from-58.md)
+97. The owner's own trades warn past the account's soft rules; no cap on the Trading account; ladders with optional stops; the scan reads macro, mood and dominance as context. [Record](decisions/from-58.md)

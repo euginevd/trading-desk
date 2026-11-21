@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ladder trades mockup</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<!-- Mockup: positional ladder trades on the Trade page, warnings instead of hard gates on the
+     owner's own trades, the real USDC available, and a clearer BTC card. Every figure is made up
+     (known-mistakes 7). -->
+<style>
+:root {
+  --field: #05080a; --frame: #0a1013; --panel: #0d1418; --panel-2: #121b20;
+  --line: #172228; --line-2: #213038; --text: #e9eff1; --body: #c2ccd1; --muted: #8b99a2;
+  --accent: #50d2c1; --accent-ink: #04110f; --accent-soft: rgba(80,210,193,.12);
+  --up: #2ebd85; --down: #f0616d; --down-soft: rgba(240,97,109,.14);
+  --wait: #e8b04b; --wait-soft: rgba(232,176,75,.12);
+  --layer-1: rgba(255,255,255,.035); --edge: rgba(255,255,255,.07);
+  --sheen: inset 0 1px 0 rgba(255,255,255,.045); --lift: 0 24px 48px -28px rgba(0,0,0,.85);
+  --ease: cubic-bezier(.2,0,0,1); --serif: Newsreader, Georgia, serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--field); color: var(--body); }
+body { font: 14px/1.5 Inter, system-ui, sans-serif; }
+.num { font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); } .up { color: var(--up); } .down { color: var(--down); } .wait { color: var(--wait); }
+button { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line-2); border-radius: 10px; padding: 8px 16px; cursor: pointer; box-shadow: var(--sheen); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button.link { background: none; border: 0; box-shadow: none; color: var(--accent); padding: 2px 4px; }
+button.small { padding: 5px 12px; font-size: 13px; }
+input, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line-2); border-radius: 8px; padding: 6px 10px; width: 100%; }
+@keyframes grow { from { transform: scaleX(0); } }
+@keyframes settle { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+.frame { max-width: 1180px; margin: 20px auto; background: var(--frame); border: 1px solid var(--edge); border-radius: 28px; padding: 28px 32px 40px; box-shadow: var(--lift); }
+@media (max-width: 720px) { .frame { margin: 0; border-radius: 0; padding: 20px 16px 40px; } }
+.callout { font-size: 11px; color: var(--wait); text-transform: uppercase; letter-spacing: .08em; margin: 30px 0 8px; }
+.callout:first-child { margin-top: 0; }
+.panel { background: var(--layer-1); border: 1px solid var(--edge); border-radius: 18px; box-shadow: var(--sheen); }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 760px) { .row2 { grid-template-columns: 1fr; } }
+
+/* 1 · Value tile and BTC card */
+.tile { padding: 14px 16px; }
+.tile small { display: block; color: var(--muted); font-size: 12px; }
+.tile b { display: block; font-size: 26px; font-weight: 600; color: var(--text); }
+.split { display: flex; height: 6px; border-radius: 999px; overflow: hidden; background: var(--panel-2); margin: 8px 0 6px; }
+.split i { display: block; transform-origin: left; animation: grow .7s var(--ease) both; }
+.key { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.key i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+.avg { display: grid; grid-template-columns: 64px 1fr 90px; gap: 10px; align-items: center; font-size: 13px; margin-top: 6px; }
+.avg .bar { height: 5px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+.avg .bar i { display: block; height: 100%; background: var(--down); transform-origin: left; animation: grow .7s var(--ease) both; }
+.avg span:last-child { text-align: right; }
+.say { margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+
+/* 2 · New trade: the ladder */
+.sheet { padding: 20px 22px; }
+.sheet h2 { margin: 0 0 4px; font-family: var(--serif); font-weight: 400; font-size: 24px; color: var(--text); }
+.kinds { display: inline-flex; gap: 4px; padding: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin: 10px 0 16px; }
+.kinds button { border: 0; box-shadow: none; background: none; padding: 6px 14px; color: var(--muted); }
+.kinds button.on { background: var(--panel-2); color: var(--text); }
+.top { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 12px; }
+@media (max-width: 760px) { .top { grid-template-columns: 1fr; } }
+label small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+
+.strip { position: relative; height: 92px; margin: 22px 4px 8px; }
+.strip .line { position: absolute; left: 0; right: 0; top: 40px; height: 2px; background: var(--line-2); }
+.strip .mark { position: absolute; top: 0; transform: translateX(-50%); text-align: center; font-size: 12px; white-space: nowrap; animation: settle .5s var(--ease) both; }
+.strip .mark i { display: block; width: 2px; height: 22px; margin: 4px auto 0; }
+.strip .now i { background: var(--text); height: 30px; }
+.strip .rung { top: 46px; } .strip .rung i { background: var(--accent); margin: 0 auto 4px; height: 16px; }
+.strip .stop { top: 46px; } .strip .stop i { background: var(--down); margin: 0 auto 4px; height: 16px; }
+.strip .sup { top: 30px; color: var(--muted); font-size: 11px; }
+
+table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+th { text-align: left; font-weight: 500; color: var(--muted); font-size: 12px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td { padding: 6px 8px; border-bottom: 1px solid var(--line); }
+td input { max-width: 120px; }
+.odds { display: inline-flex; align-items: center; gap: 6px; }
+.odds .bar { width: 54px; height: 5px; background: var(--panel-2); border-radius: 999px; overflow: hidden; }
+.odds .bar i { display: block; height: 100%; background: var(--accent); }
+.sum { display: flex; gap: 24px; flex-wrap: wrap; margin: 14px 0 0; font-size: 13px; }
+.sum b { color: var(--text); font-weight: 600; }
+
+.exits { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+@media (max-width: 760px) { .exits { grid-template-columns: 1fr; } }
+.opt { padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+.opt header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; color: var(--text); }
+.switch { width: 34px; height: 20px; border-radius: 999px; background: var(--accent); position: relative; }
+.switch::after { content: ""; position: absolute; right: 3px; top: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--accent-ink); }
+.switch.off { background: var(--line-2); } .switch.off::after { right: auto; left: 3px; background: var(--muted); }
+
+.warns { margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--wait-soft); border: 1px solid rgba(232,176,75,.3); }
+.warns p { margin: 0 0 6px; color: var(--wait); font-weight: 600; }
+.warns ul { margin: 0; padding-left: 18px; }
+.warns li { margin: 2px 0; }
+.foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+.foot label { display: flex; gap: 8px; align-items: center; }
+.foot input { width: auto; }
+
+/* 3 · The ladder once placed */
+.card { padding: 16px 18px; }
+.card header { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.card h3 { margin: 0; color: var(--text); font-size: 16px; }
+.tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--panel-2); color: var(--muted); margin-left: 6px; }
+.tag.warn { background: var(--wait-soft); color: var(--wait); }
+.fill { display: flex; height: 8px; border-radius: 999px; overflow: hidden; background: var(--panel-2); margin: 12px 0 6px; }
+.fill i { display: block; transform-origin: left; animation: grow .7s var(--ease) both; }
+.rungs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+@media (max-width: 760px) { .rungs { grid-template-columns: 1fr 1fr; } }
+.r { padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); font-size: 13px; }
+.r.done { border-color: rgba(80,210,193,.4); background: var(--accent-soft); }
+.r b { display: block; color: var(--text); }
+.acts { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+.note { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+</style>
+</head>
+<body>
+<main class="frame">
+
+<p class="callout">1 · What's really free, and the BTC card in words</p>
+<div class="row2">
+  <section class="panel tile">
+    <small>Value</small>
+    <b class="num">$997</b>
+    <div class="split" aria-hidden="true">
+      <i style="width:59%;background:var(--accent)"></i>
+      <i style="width:38%;background:var(--muted);opacity:.45"></i>
+      <i style="width:3%;background:var(--wait)"></i>
+    </div>
+    <div class="key num">
+      <span><i style="background:var(--accent)"></i>$589 USDC available</span>
+      <span><i style="background:var(--muted);opacity:.45"></i>$380 in DCA limits</span>
+      <span><i style="background:var(--wait)"></i>$28 in trades</span>
+    </div>
+    <p class="say">Available is what Binance can spend now. The DCA ladders use the same USDC; as they fill or close, it comes back.</p>
+  </section>
+  <section class="panel tile">
+    <small>BTC against its averages</small>
+    <b class="num">$59,014</b>
+    <div class="avg num"><span>50-day</span><span class="bar"><i style="width:96%"></i></span><span class="down">−24.0%</span></div>
+    <div class="avg num"><span>200-day</span><span class="bar"><i style="width:75%"></i></span><span class="down">−18.7%</span></div>
+    <p class="say num">Under both: the 50-day is $77,647, the 200-day $72,546. A long way under the trend: cheap, but still falling.</p>
+  </section>
+</div>
+
+<p class="callout">2 · New trade → Ladder: suggested rungs you can edit, stop optional, warnings not blocks</p>
+<section class="panel sheet">
+  <h2>New trade</h2>
+  <div class="kinds" role="tablist">
+    <button>By style</button><button class="on">Ladder</button><button>Single order</button>
+  </div>
+  <div class="top">
+    <label><small>Coin</small><select><option>ETH · $1,616 · −7.2% today</option></select></label>
+    <label><small>Total to spend</small><input class="num" value="$300"></label>
+    <label><small>Rungs</small><select><option>4 rungs, deepest weighted most</option><option>3 rungs</option><option>2 rungs</option></select></label>
+  </div>
+
+  <div class="strip num" aria-label="Price strip: now, the rungs and the stop">
+    <div class="line"></div>
+    <div class="mark now" style="left:92%">Now $1,616<i></i></div>
+    <div class="mark sup" style="left:60%">year low</div>
+    <div class="mark rung" style="left:78%"><i></i>$1,552</div>
+    <div class="mark rung" style="left:64%"><i></i>$1,501</div>
+    <div class="mark rung" style="left:48%"><i></i>$1,437</div>
+    <div class="mark rung" style="left:30%"><i></i>$1,368</div>
+    <div class="mark stop" style="left:12%"><i></i>Stop $1,289</div>
+  </div>
+
+  <table class="num">
+    <thead><tr><th>Rung</th><th>Price</th><th>Under now</th><th>Spend</th><th>Fill odds, 7 days</th><th>Why here</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td><input value="1,552.07"></td><td>−4.0%</td><td><input value="$45"></td><td><span class="odds"><span class="bar"><i style="width:72%"></i></span>72%</span></td><td class="muted">Last week's low</td></tr>
+      <tr><td>2</td><td><input value="1,501.13"></td><td>−7.1%</td><td><input value="$60"></td><td><span class="odds"><span class="bar"><i style="width:55%"></i></span>55%</span></td><td class="muted">Just above 1,500</td></tr>
+      <tr><td>3</td><td><input value="1,437.42"></td><td>−11.1%</td><td><input value="$85"></td><td><span class="odds"><span class="bar"><i style="width:34%"></i></span>34%</span></td><td class="muted">Year low, volume node</td></tr>
+      <tr><td>4</td><td><input value="1,368.15"></td><td>−15.3%</td><td><input value="$110"></td><td><span class="odds"><span class="bar"><i style="width:18%"></i></span>18%</span></td><td class="muted">2 ATR under the year low</td></tr>
+    </tbody>
+  </table>
+  <button class="link small">+ Add a rung</button>
+
+  <div class="sum num">
+    <span>If every rung fills: <b>$300</b> at an average of <b>$1,432</b>, 11% under now</span>
+    <span>Likely in 7 days: about <b>$130</b></span>
+  </div>
+
+  <div class="exits">
+    <div class="opt">
+      <header><span>Stop</span><span class="switch" aria-label="Stop on"></span></header>
+      <input class="num" value="1,289.00">
+      <p class="note num">Under the deepest rung. If all fill, you'd lose $30 (10%). The desk watches it when Binance won't hold it.</p>
+    </div>
+    <div class="opt">
+      <header><span>Target</span><span class="switch off" aria-label="Target off"></span></header>
+      <p class="note">No target: you decide when to sell. Turn on to sell part or all at a price.</p>
+    </div>
+  </div>
+
+  <div class="warns" role="alert">
+    <p>3 things the rules would normally block</p>
+    <ul>
+      <li>Position trades are for a Bull regime; BTC is Neutral.</li>
+      <li>An ETH trade would make three alt trades; the rule is two (alts move with BTC).</li>
+      <li>$300 is over your $250 per-order limit in Settings. <b>This one still blocks:</b> raise it in Settings, or split the ladder.</li>
+    </ul>
+  </div>
+
+  <div class="foot">
+    <label><input type="checkbox" checked> Place anyway: I've read the warnings</label>
+    <div style="display:flex;gap:8px"><button>Cancel</button><button class="primary">Place 4 limits</button></div>
+  </div>
+</section>
+
+<p class="callout">3 · The ladder on the Trade page once placed</p>
+<section class="panel card">
+  <header>
+    <h3>ETH ladder <span class="tag">Position</span><span class="tag warn">Placed past 2 warnings</span></h3>
+    <span class="muted num">TRD-ETH-26W47-2 · placed 21 Nov</span>
+  </header>
+  <div class="fill" aria-hidden="true">
+    <i style="width:35%;background:var(--accent)"></i>
+    <i style="width:65%;background:var(--line-2)"></i>
+  </div>
+  <div class="sum num" style="margin-top:0">
+    <span><b>$105</b> of $300 bought, average <b>$1,523</b></span>
+    <span>Now $1,616 · <span class="up">+$6.40 (+6.1%)</span></span>
+    <span>Stop $1,289 · at risk <b>$16</b> now, $30 if all fill</span>
+  </div>
+  <div class="rungs num">
+    <div class="r done"><b>$1,552.07 ✓</b>$45 bought</div>
+    <div class="r done"><b>$1,501.13 ✓</b>$60 bought</div>
+    <div class="r"><b>$1,437.42</b>$85 · 34% odds</div>
+    <div class="r"><b>$1,368.15</b>$110 · 18% odds</div>
+  </div>
+  <div class="acts">
+    <button class="small">Move a rung</button>
+    <button class="small">Add a rung</button>
+    <button class="small">Cancel the rest</button>
+    <button class="small">Sell…</button>
+  </div>
+  <p class="note">Rungs stay open until you cancel them; no weekly close-out like the DCA. A filled rung sets the stop for what's bought.</p>
+</section>
+
+</main>
+</body>
+</html>

@@ -1,6 +1,6 @@
 // The Trading account's watchlist, at the foot of the page and folded away when not wanted: a
-// row per coin (price, day, 30 days as a line, the one thing to do about it and what's held),
-// the coins in a trade or with a setup first, Edit to add
+// table row per coin (price, day, 30 days, its line, the one thing to do about it and what's
+// held), sorted by any column like the Portfolio's, coins in a trade first until then, Edit to add
 // or remove coins, and a panel per coin with its daily chart, the desk's read and, when asked,
 // trading-agent's (one model call per ask), then New trade on it.
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -8,11 +8,12 @@ import { analysePotCoin, getAccountCoins, getMarket, unwatchCoin, watchCoin } fr
 import { errorOf } from "./format";
 import { type Average, BotChart, type Level } from "./BotKit";
 import CoinIcon from "./CoinIcon";
-import { day, dollars, limit } from "./dcaFormat";
+import { day, dollars, limit, roundPrice } from "./dcaFormat";
 import type { AccountCoin, Interval, Market, PotAnalysis } from "./types";
 
 const OPEN_KEY = "desk.account.watchlist";
-const signed = (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%`;
+// Moves in whole percent ("−21%"): a watchlist is read at a glance.
+const signed = (v: number) => `${Math.round(v) > 0 ? "+" : ""}${Math.round(v)}%`;
 const toneOf = (v: number) => (v > 0 ? "up" : v < 0 ? "down" : "");
 
 function readOpen(): boolean {
@@ -23,24 +24,78 @@ function readOpen(): boolean {
   }
 }
 
-// What to do about a coin, in a word: the row's tag.
-const ACTION: Record<"watch" | "wait" | "none", string> = {
-  watch: "Analyse",
-  wait: "Wait",
-  none: "No setup",
-};
-// A coin's tag, and its place in the list: in a trade, proposed, worth an Analyse, waiting,
-// then the coins with no setup.
+// A coin's place in the list until a header is clicked: in a trade, proposed, worth an
+// Analyse, waiting, then the coins with no setup.
 const TAGS = ["trade", "proposed", "watch", "wait", "none"] as const;
 const tagOf = (c: AccountCoin): (typeof TAGS)[number] =>
   c.inTrade ? "trade" : c.watching ? "proposed" : (c.insight?.status ?? "none");
-const tagWord = (c: AccountCoin): string => {
-  const tag = tagOf(c);
-  return tag === "trade" ? "In a trade" : tag === "proposed" ? "Proposed" : ACTION[tag];
+
+// The table's order: by tag until a header is clicked, then by that column; figures high to
+// low on the first click, the coin A to Z.
+type SortKey = "tag" | "coin" | "price" | "day" | "week" | "month" | "high" | "cap";
+const figure = (c: AccountCoin, key: SortKey): number | string | null => {
+  switch (key) {
+    case "tag":
+      return TAGS.indexOf(tagOf(c));
+    case "coin":
+      return c.coin;
+    case "price":
+      return Number(c.price);
+    case "day":
+      return Number(c.change24hPct);
+    case "week":
+      return c.change7dPct == null ? null : Number(c.change7dPct);
+    case "high":
+      return c.fromHighPct == null ? null : Number(c.fromHighPct);
+    case "month":
+      return c.change30dPct === null ? null : Number(c.change30dPct);
+    case "cap":
+      return c.marketCap ? Number(c.marketCap) : null;
+  }
 };
-// Sorted by tag; coins with the same tag keep the watchlist's own order.
-const byTag = (coins: AccountCoin[]): AccountCoin[] =>
-  [...coins].sort((a, b) => TAGS.indexOf(tagOf(a)) - TAGS.indexOf(tagOf(b)));
+const SORT_KEY = "desk.account.watchlist.sort";
+const KEYS: SortKey[] = ["tag", "coin", "price", "day", "week", "month", "high", "cap"];
+// A market cap in round figures: $1.2T, $45B, $820M.
+function cap(value: string | null | undefined): string {
+  const n = Number(value);
+  if (!value || !Number.isFinite(n) || n <= 0) return "—";
+  const [div, unit] = n >= 1e12 ? [1e12, "T"] : n >= 1e9 ? [1e9, "B"] : [1e6, "M"];
+  const v = n / div;
+  return `$${v >= 10 ? Math.round(v) : v.toFixed(1)}${unit}`;
+}
+function readSort(): { key: SortKey; down: boolean } {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(SORT_KEY) ?? "null") as {
+      key?: SortKey;
+      down?: boolean;
+    } | null;
+    if (v && v.key && KEYS.includes(v.key)) return { key: v.key, down: Boolean(v.down) };
+  } catch {
+    // unreadable: the default
+  }
+  return { key: "tag", down: false };
+}
+function keepSort(sort: { key: SortKey; down: boolean }) {
+  try {
+    window.localStorage.setItem(SORT_KEY, JSON.stringify(sort));
+  } catch {
+    // not kept: the default next time
+  }
+}
+
+function sorted(coins: AccountCoin[], key: SortKey, down: boolean): AccountCoin[] {
+  return [...coins].sort((a, b) => {
+    const x = figure(a, key);
+    const y = figure(b, key);
+    if (x === null || y === null || Number.isNaN(x) || Number.isNaN(y)) {
+      const xNone = x === null || Number.isNaN(x);
+      const yNone = y === null || Number.isNaN(y);
+      return xNone === yNone ? 0 : xNone ? 1 : -1;
+    }
+    const order = typeof x === "string" ? x.localeCompare(String(y)) : x - Number(y);
+    return order * (down ? -1 : 1);
+  });
+}
 
 function Spark({ closes }: { closes: string[] }) {
   if (closes.length < 2) return null;
@@ -82,6 +137,33 @@ export default function AccountWatchlist({
   const [adding, setAdding] = useState("");
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState<string | null>(null);
+  const [sort, setSortNow] = useState(readSort);
+  const setSort = (next: (s: { key: SortKey; down: boolean }) => { key: SortKey; down: boolean }) =>
+    setSortNow((s) => {
+      const v = next(s);
+      keepSort(v);
+      return v;
+    });
+  const sortable = (key: SortKey, label: string, right = true) => (
+    <th
+      className={right ? "r" : undefined}
+      aria-sort={sort.key === key ? (sort.down ? "descending" : "ascending") : "none"}
+    >
+      <button
+        type="button"
+        className="sort-btn"
+        onClick={() =>
+          setSort((s) => ({
+            key,
+            down: s.key === key ? !s.down : key !== "coin" && key !== "tag",
+          }))
+        }
+      >
+        {label}
+        <span aria-hidden="true">{sort.key === key ? (sort.down ? " ↓" : " ↑") : ""}</span>
+      </button>
+    </th>
+  );
 
   // Daily candles: read once, after each scan and after an edit, never on a timer.
   const load = useCallback(() => {
@@ -126,9 +208,14 @@ export default function AccountWatchlist({
   };
   const shown = coins?.find((c) => c.coin === viewing) ?? null;
   const ready = coins?.filter((c) => c.insight?.status === "watch").length ?? 0;
+  // Every coin on the folded line, the biggest fall first.
+  const byDay = [...(coins ?? [])].sort((a, b) => Number(a.change24hPct) - Number(b.change24hPct));
 
   return (
-    <section className="dcb-section acc-watch" aria-labelledby="acc-watch-title">
+    <section
+      className={`dcb-section acc-watch${open ? "" : " is-folded"}`}
+      aria-labelledby="acc-watch-title"
+    >
       <div className="dcb-section-head">
         <button
           type="button"
@@ -138,10 +225,22 @@ export default function AccountWatchlist({
           onClick={toggle}
         >
           <h2 id="acc-watch-title">Watchlist</h2>
-          <span className="muted">
-            {coins === null
-              ? "Reading…"
-              : `${coins.length} ${coins.length === 1 ? "coin" : "coins"}${ready ? `, ${ready} worth an Analyse` : ", no setups now"}`}
+          <span className="fold-sum num" hidden={open}>
+            {coins === null ? (
+              "Reading…"
+            ) : (
+              <>
+                <span className="fold-chip">
+                  {coins.length} {coins.length === 1 ? "coin" : "coins"}
+                </span>
+                {byDay.map((c) => (
+                  <span key={c.coin} className={`fold-chip ${toneOf(Number(c.change24hPct))}`}>
+                    {c.coin} {signed(Number(c.change24hPct))}
+                  </span>
+                ))}
+                {ready > 0 && <span className="fold-chip up">{ready} worth an Analyse</span>}
+              </>
+            )}
           </span>
         </button>
         {open && list && (
@@ -201,38 +300,62 @@ export default function AccountWatchlist({
             <p className="muted">Nothing on the watchlist. Edit adds a coin.</p>
           )}
           {coins && coins.length > 0 && (
-            <ul className="acc-coins" aria-label="Watchlist coins">
-              {byTag(coins).map((c) => {
-                const day = Number(c.change24hPct);
-                const isHeld = Number(c.value) > 0;
-                return (
-                  <li key={c.coin}>
-                    <button
-                      type="button"
-                      className="acc-coin"
-                      onClick={() => setViewing(c.coin)}
-                      aria-label={`${c.coin}: ${c.insight?.setup ?? "no read yet"} Open its chart`}
-                    >
-                      <span className="dcb-coin">
-                        <CoinIcon coin={c.coin} />
-                        {c.coin}
-                      </span>
-                      <span className="acc-coin-px num">{limit(c.price)}</span>
-                      <small className={`acc-coin-day num ${toneOf(day)}`}>{signed(day)}</small>
-                      <span className="acc-coin-spark">
-                        <Spark closes={c.spark} />
-                      </span>
-                      <span className="acc-coin-end">
-                        <span className={`acc-act is-${tagOf(c)}`}>{tagWord(c)}</span>
-                        <small className={`acc-coin-held num${isHeld ? "" : " is-zero"}`}>
-                          {isHeld ? `${dollars(c.value)} held` : "—"}
-                        </small>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            <div className="dcb-scroll">
+              <table className="dcb-table acc-table" aria-label="Watchlist coins">
+                <thead>
+                  <tr>
+                    {sortable("coin", "Coin", false)}
+                    {sortable("price", "Price")}
+                    {sortable("day", "24h")}
+                    {sortable("week", "7 days")}
+                    {sortable("month", "30 days")}
+                    <th className="acc-th-spark">30-day chart</th>
+                    {sortable("high", "From 30d high")}
+                    {sortable("cap", "Market cap")}
+                  </tr>
+                </thead>
+                <tbody>
+                  {sorted(coins, sort.key, sort.down).map((c) => {
+                    const day = Number(c.change24hPct);
+                    const month = c.change30dPct === null ? null : Number(c.change30dPct);
+                    return (
+                      <tr key={c.coin} className="dcb-row-open">
+                        <td>
+                          <button
+                            type="button"
+                            className="dcb-expand"
+                            onClick={() => setViewing(c.coin)}
+                            aria-label={`${c.coin}: ${c.insight?.setup ?? "no read yet"} Open its chart`}
+                          >
+                            <span className="dcb-coin">
+                              <CoinIcon coin={c.coin} />
+                              {c.coin}
+                            </span>
+                          </button>
+                        </td>
+                        <td className="r num">{roundPrice(c.price)}</td>
+                        <td className={`r num ${toneOf(day)}`}>{signed(day)}</td>
+                        <td
+                          className={`r num ${c.change7dPct == null ? "" : toneOf(Number(c.change7dPct))}`}
+                        >
+                          {c.change7dPct == null ? "—" : signed(Number(c.change7dPct))}
+                        </td>
+                        <td className={`r num ${month === null ? "" : toneOf(month)}`}>
+                          {month === null ? "—" : signed(month)}
+                        </td>
+                        <td className="acc-td-spark">
+                          <Spark closes={c.spark} />
+                        </td>
+                        <td className="r num muted">
+                          {c.fromHighPct == null ? "—" : signed(Number(c.fromHighPct))}
+                        </td>
+                        <td className="r num">{cap(c.marketCap)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       )}
@@ -318,6 +441,7 @@ function CoinDrawer({
   const [error, setError] = useState("");
   useEffect(() => {
     let on = true;
+    if (coin.source === "futures") return; // no spot pair to chart
     getMarket(`${coin.coin}${quote}`, tf).then(
       (m) => on && setMarket(m),
       () => on && setMarket(null),
@@ -325,7 +449,7 @@ function CoinDrawer({
     return () => {
       on = false;
     };
-  }, [coin.coin, quote, tf]);
+  }, [coin.coin, coin.source, quote, tf]);
 
   const ask = () => {
     setAsking(true);
@@ -411,7 +535,12 @@ function CoinDrawer({
         ))}
         <span className="muted">{TF_WHY[tf]}</span>
       </div>
-      {market && market.interval === tf && market.candles.length > 1 ? (
+      {coin.source === "futures" ? (
+        <p className="muted">
+          Binance lists {coin.coin} only as a USDT perpetual, so this is its futures price and the
+          desk can't trade it. To buy it: Bybit, Kraken or Coinbase.
+        </p>
+      ) : market && market.interval === tf && market.candles.length > 1 ? (
         <BotChart
           candles={market.candles}
           levels={levels}

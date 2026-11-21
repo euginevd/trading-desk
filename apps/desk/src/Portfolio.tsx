@@ -2,13 +2,15 @@
 // targets, then the ledgers: targets, money in, and the holdings with orders, trades and tax.
 import { DriftCard, TaxTab } from "./Tax";
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, cancelOrder, getDrift, getPortfolio, setCost } from "./api";
+import { ApiError, cancelOrder, getDcaBook, getDrift, getPortfolio, setCost } from "./api";
+import { toCsv } from "./dcaFormat";
 import CoinIcon from "./CoinIcon";
 import ConfirmCancel from "./ConfirmCancel";
 import OrderDetail from "./OrderDetail";
 import Deposits from "./Deposits";
 import { Live } from "./Figures";
 import {
+  BoltIcon,
   ClockIcon,
   CoinsIcon,
   ExchangeIcon,
@@ -47,6 +49,7 @@ const SOURCE_ICON: Record<Source, () => React.JSX.Element> = {
   all: LayersIcon,
   Binance: ExchangeIcon,
   "TAO wallet": PillWalletIcon,
+  "Binance Alpha": BoltIcon,
 };
 // `#/portfolio?source=binance` or `?source=wallet` opens on that source; anything else shows all.
 export function sourceFromHash(): Source {
@@ -57,10 +60,16 @@ export function sourceFromHash(): Source {
   return "all";
 }
 
+// Binance Alpha is part of the Binance account (owner, 21 Nov 2026): it shows under Binance,
+// its row tagged Alpha.
+const inSource = (h: Holding, source: Source) =>
+  h.source === source || (source === "Binance" && h.source === "Binance Alpha");
+
 const SOURCE_WORD: Record<Source, string> = {
   all: "all sources",
   Binance: "Binance",
   "TAO wallet": "Wallet",
+  "Binance Alpha": "Alpha",
 };
 
 // How much of the holding the trades account for, as a share.
@@ -91,7 +100,7 @@ export function totals(data: Data, source: Source): Totals {
   let value = 0;
   let change = 0;
   let profit = 0;
-  for (const h of data.holdings.filter((x) => x.source === source)) {
+  for (const h of data.holdings.filter((x) => inSource(x, source))) {
     const v = Number(h.value ?? 0);
     const pct = Number(h.change24h ?? 0);
     value += v;
@@ -462,6 +471,13 @@ function Tables({
             </table>
           </div>
         ))}
+      {tab === "ord" && (
+        <p className="port-ord-tools">
+          <button type="button" className="link" onClick={exportDcaCsv}>
+            Export the DCA book's orders (CSV)
+          </button>
+        </p>
+      )}
       {tab === "ord" &&
         (data.openOrders.length === 0 ? (
           <p className="empty">No open orders.</p>
@@ -776,6 +792,22 @@ export function Strip({
 
 let lastSeen: Data | null = null;
 
+// Every order the DCA book placed, as a spreadsheet (moved here from the DCA page, owner,
+// 21 Nov 2026).
+function exportDcaCsv() {
+  getDcaBook().then(
+    (book) => {
+      const blob = new Blob([toCsv(book.orders, book.quote)], { type: "text/csv" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `dca-book-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    },
+    () => undefined,
+  );
+}
+
 export default function Portfolio({
   onStatus,
   onTao,
@@ -846,10 +878,10 @@ export default function Portfolio({
   const data = state.kind === "ready" ? state.data : state.last;
   const valueOf = (where: Holding["source"]) =>
     (data?.holdings ?? [])
-      .filter((h) => h.source === where)
+      .filter((h) => inSource(h, where))
       .reduce((s, h) => s + Number(h.value ?? 0), 0);
   const held = data?.holdings.filter((h) => !isDust(h)) ?? [];
-  const shown = held.filter((h) => source === "all" || h.source === source);
+  const shown = held.filter((h) => source === "all" || inSource(h, source));
   const sum = data ? totals(data, source) : null;
   const m = money(
     currency,

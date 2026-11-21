@@ -2856,3 +2856,61 @@ body::after {
     transform: translateY(-4px);
   }
 }
+
+/* The Trade page details open from the tile or card that was clicked, growing out of it; a
+   phone gets a sheet from the bottom. */
+dialog.detail-panel.pot-detail {
+  position: fixed;
+  margin: 0;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.6);
+}
+dialog.detail-panel.pot-detail::backdrop {
+  background: rgba(0, 0, 0, 0.3);
+}
+dialog.detail-panel.pot-detail.is-sheet {
+  inset: auto 0 0 0;
+  width: 100%;
+  max-width: none;
+  max-height: 85vh;
+  border-radius: 18px 18px 0 0;
+}
+@media (prefers-reduced-motion: no-preference) {
+  dialog.detail-panel.pot-detail[open] {
+    animation: pot-detail-grow 180ms var(--ease);
+  }
+  dialog.detail-panel.pot-detail.is-sheet[open] {
+    animation: pot-detail-rise 220ms var(--ease);
+  }
+  dialog.detail-panel.pot-detail[open]::backdrop {
+    animation: pot-detail-fade 180ms var(--ease);
+  }
+  @keyframes pot-detail-grow {
+    from {
+      opacity: 0;
+      transform: scale(0.94);
+    }
+  }
+  @keyframes pot-detail-rise {
+    from {
+      transform: translateY(40px);
+      opacity: 0;
+    }
+  }
+  @keyframes pot-detail-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}
+dialog.detail-panel.pot-detail.is-below {
+  right: auto;
+  bottom: auto;
+}
+dialog.detail-panel.pot-detail.is-above {
+  top: auto;
+  right: auto;
+}
+.detail-rule {
+  margin: 14px 0 0;
+  font-size: 12px;
+}

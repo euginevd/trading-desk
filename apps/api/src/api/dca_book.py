@@ -22,6 +22,7 @@ from api.trading import Refused, Trading, number
 SYDNEY = ZoneInfo("Australia/Sydney")
 ZERO = Decimal(0)
 PLAN_KEY = "dca_plan"
+SKIP_KEY = "dca_skipped_weeks"  # weeks the owner skipped: their amount leaves the plan to date
 RATE_KEY = "aud_per_usd"  # the desk's remembered A$ per US$ (profile_live)
 SOURCES = ("weekly", "named", "close-out", "trim", "buy-back", "desk")
 MIN_ORDER = Decimal(10)  # the agent's rule: 10 USDC a coin at least
@@ -48,6 +49,10 @@ MAX_WEEKS = 520
 # already counts toward the coming Friday's buy.
 
 
+def _why(error: Exception) -> str:
+    return getattr(error, "message", None) or str(error)
+
+
 def week_of(ms: int) -> tuple[str, datetime]:
     # Four days on from Monday 7pm is Friday 7pm: shifting by four days turns a week that
     # changes over at the close-out into one that changes over at its Friday.
@@ -60,6 +65,15 @@ def week_of(ms: int) -> tuple[str, datetime]:
     friday = friday.replace(tzinfo=SYDNEY)
     year, week, _ = friday.isocalendar()
     return f"{year % 100:02d}W{week:02d}", friday
+
+
+def first_friday(start: datetime) -> datetime:
+    """A plan's first week: the first whose Friday falls on or after its start date, so a plan
+    started on a Monday begins that Friday, not with a week already gone."""
+    _, friday = week_of(int(start.timestamp() * 1000))
+    if friday.date() < start.date():
+        friday += timedelta(days=7)
+    return friday
 
 
 def close_out_of(friday: datetime) -> datetime:
@@ -273,6 +287,10 @@ class DcaBook:
     @property
     def store(self) -> Any:
         return self._store
+
+    @property
+    def desk(self) -> Trading:
+        return self._desk
 
     def now_ms(self) -> int:
         return self._now()
@@ -615,42 +633,113 @@ class DcaBook:
             target[slot["coin"]] = target.get(slot["coin"], ZERO) + Decimal(slot["spend"])
         return target
 
-    def week_state(self) -> dict[str, Any]:
-        """This week against the plan, by coin: bought, waiting in open limits, and not placed
-        yet. What Monday's close-out shows; nothing here places or cancels."""
+    # The plan as a running total (decision 96): every week of the plan adds its amount, skipped
+    # weeks aside; what's bought and what waits in open limits, from any week, count against
+    # it; the rest has no order yet. A deposit missed shows as more to place, never as nothing.
+
+    def skipped(self) -> set[str]:
+        raw = self._store.setting(SKIP_KEY, "")
+        return set(json.loads(raw)) if raw else set()
+
+    def skip(self, week: object) -> dict[str, Any]:
+        """Skip this week: its amount leaves the plan to date, so nothing is owed for it. Open
+        limits are left alone."""
+        current, _ = week_of(self._now())
+        if str(week) != current:
+            raise Refused("Too late: the week turned over at 7pm. The DCA book shows what's open.")
+        kept = self.skipped() | {current}
+        self._store.set_setting(SKIP_KEY, json.dumps(sorted(kept)))
+        self._audit.record("dca", f"Week {current} skipped", "Its amount left the plan to date.")
+        return self.week_state()
+
+    def _plan_weeks(self) -> tuple[list[str], list[str]]:
+        """The plan's weeks from its start to this one: all of them (what's bought in any of
+        them counts), and those that owe their amount (skipped weeks left out)."""
+        plan = self.plan()
+        if not plan:
+            return [], []
+        start = datetime.fromisoformat(plan["start"]).replace(tzinfo=SYDNEY)
+        first = first_friday(start)
+        _, current = week_of(self._now())
+        count = min((current - first).days // 7 + 1, int(plan["weeks"]))
+        skipped = self.skipped()
+        keys = [
+            week_of(int((first + timedelta(days=7 * i)).timestamp() * 1000))[0]
+            for i in range(max(count, 0))
+        ]
+        return keys, [k for k in keys if k not in skipped]
+
+    def free_for_dca(self) -> Decimal | None:
+        """Free USDC on Binance less what the Trading account holds: what the DCA may spend
+        without touching trading money. None when Binance can't be read."""
+        from api.pot import Pot  # noqa: PLC0415 - the pot reads the DCA book's prices
+
+        pot = Pot(self._desk)
+        try:
+            free = pot.free_quote()
+        except BinanceError:
+            return None
+        return max(free - max(pot.cash(), ZERO), ZERO)
+
+    def week_state(self, *, funds: bool = True) -> dict[str, Any]:
+        """The plan to date against what's done, by coin: bought, waiting in open limits (any
+        week's), and no order yet; and how much of that has no money on Binance yet. What
+        Monday's close-out shows; nothing here places or cancels."""
         week, _ = week_of(self._now())
         target = self._shares()
+        _, weeks = self._plan_weeks()
+        to_date = {c: t * len(weeks) for c, t in target.items()}
         bought: dict[str, Decimal] = {}
         waiting: dict[str, Decimal] = {}
         opened: list[dict[str, Any]] = []
         for r in self._store.dca_orders():
-            if r["week"] != week or r["side"] != "buy" or r["source"] not in WEEK_BUYS:
+            if r["side"] != "buy" or r["source"] not in WEEK_BUYS:
                 continue
             coin = r["coin"]
+            live = r["status"] in ("placing", "open")
+            # Every plan buy counts, whichever week placed it, a skipped one included.
             bought[coin] = bought.get(coin, ZERO) + Decimal(r["executed_quote"])
-            if r["status"] in ("placing", "open"):
+            if live:
                 left = max(Decimal(r["spend"] or "0") - Decimal(r["executed_quote"]), ZERO)
                 waiting[coin] = waiting.get(coin, ZERO) + left
                 if r["kind"] != "limit":
                     continue  # a market buy whose reply hasn't come: waiting, not a limit
                 opened.append(
-                    {"ref": r["ref"], "coin": coin, "price": r["price"], "left": plain(left)}
+                    {
+                        "ref": r["ref"],
+                        "coin": coin,
+                        "price": r["price"],
+                        "left": plain(left),
+                        "week": r["week"],
+                        "carried": r["week"] != week,
+                    }
                 )
-        # What's left of each coin's share; under the smallest order it's rounding, not a gap.
-        gaps = {c: t - bought.get(c, ZERO) - waiting.get(c, ZERO) for c, t in target.items()}
+        # What's left of each coin's plan to date; under the smallest order it's rounding.
+        gaps = {c: t - bought.get(c, ZERO) - waiting.get(c, ZERO) for c, t in to_date.items()}
         to_place = {c: v for c, v in gaps.items() if v >= MIN_ORDER}
+        total = sum(to_place.values(), ZERO)
+        free = self.free_for_dca() if funds and total > ZERO else None
 
         def cents(v: Decimal) -> str:
             return plain(round(v, 2))
 
         return {
             "week": week,
-            "planned": cents(sum(target.values(), ZERO)),
+            "weekly": cents(sum(target.values(), ZERO)),
+            "weeks": len(weeks),
+            "planned": cents(sum(to_date.values(), ZERO)),
             "bought": cents(sum(bought.values(), ZERO)),
             "waiting": cents(sum(waiting.values(), ZERO)),
-            "toPlace": cents(sum(to_place.values(), ZERO)),
+            "toPlace": cents(total),
             "open": opened,
             "toPlaceByCoin": {c: cents(v) for c, v in to_place.items()},
+            "plannedByCoin": {c: cents(v) for c, v in to_date.items()},
+            "boughtByCoin": {c: cents(v) for c, v in bought.items()},
+            "waitingByCoin": {c: cents(v) for c, v in waiting.items()},
+            # Free USDC the DCA may use, and what of "no order yet" it can't cover.
+            "free": cents(free) if free is not None else None,
+            "needsDeposit": cents(max(total - free, ZERO)) if free is not None else "0",
+            "skipped": week in self.skipped(),
         }
 
     def _market_buy(self, coin: str, week: str, spend: Decimal, link: str | None) -> None:
@@ -682,19 +771,6 @@ class DcaBook:
                 self._store.save_dca_order(saved | {"status": "cancelled", "updated": self._now()})
             raise
 
-    def _bought(self, week: str, coin: str) -> Decimal:
-        return sum(
-            (
-                Decimal(r["executed_quote"])
-                for r in self._store.dca_orders()
-                if r["week"] == week
-                and r["coin"] == coin
-                and r["side"] == "buy"
-                and r["source"] in WEEK_BUYS
-            ),
-            ZERO,
-        )
-
     def _window(self, asked: object) -> str:
         """The week Buy the rest may act on, or why not: trading on, inside the week's window,
         and still the week the owner was shown."""
@@ -708,68 +784,103 @@ class DcaBook:
             raise Refused(f"This week's buying window opens {opens} at 7pm; nothing to buy yet.")
         return week
 
-    def _finish(self, row: dict[str, Any], week: str, share: Decimal) -> Decimal | None:
-        """One open buy, cancelled and what it didn't buy bought at market, up to the coin's
-        share of the plan; None when its share is bought already (the limit stays open)."""
+    def _finish(self, row: dict[str, Any], week: str) -> Decimal | None:
+        """One open buy, cancelled and what it didn't buy bought at market; None when what's
+        left is under Binance's smallest order (the limit is cancelled all the same)."""
         coin = row["coin"]
-        if share - self._bought(week, coin) < MIN_ORDER:
-            return None
         # The kill switch and the limits first: refused, the limit stays working.
         before = Decimal(row["spend"] or "0") - Decimal(row["executed_quote"])
-        room = share - self._bought(week, coin)
-        self._check_buy(min(before, room), before if self._today(row) else ZERO)
+        self._check_buy(before, before if self._today(row) else ZERO)
         done = self._cancel(row)
         left = Decimal(done["spend"] or "0") - Decimal(done["executed_quote"])
-        spend = min(left, share - self._bought(week, coin))
-        if spend < self._binance.filters(f"{coin}{QUOTE}").min_notional:
+        if left < self._binance.filters(f"{coin}{QUOTE}").min_notional:
             return None
-        self._market_buy(coin, week, spend, done["ref"])
-        return spend
+        self._market_buy(coin, week, left, done["ref"])
+        return left
+
+    def open_buys(self) -> list[dict[str, Any]]:
+        """Every plan buy still waiting, from any week."""
+        return [
+            r
+            for r in self._store.dca_orders()
+            if r["source"] in WEEK_BUYS
+            and r["side"] == "buy"
+            and r["status"] in ("placing", "open")
+        ]
 
     @locked
-    def close_out(self, asked: object = None) -> dict[str, Any]:
-        """Buy the rest at market, only when the owner chooses it, inside the week's window
-        (Friday 7pm to Monday 7pm) and only for the week the owner was shown (`asked`, its key):
-        this week's open buys are cancelled and what they didn't buy is bought at market, each
-        coin up to its share of the plan (limits beyond it are left open), then each coin's share
-        never placed. One coin refused (a limit, Binance) never stops the others; it is named once
-        in `missed`, and a limit refused before its cancel stays working."""
+    def close_out(self, asked: object = None, *, auto: bool = False) -> dict[str, Any]:
+        """The close-out (decision 96), inside the week's window and only for the week shown
+        (`asked`, its key). The owner's Buy everything now (auto False) cancels every open plan
+        buy and buys what it didn't at market. Monday's own run (auto True) does that only for
+        limits placed in an earlier week, which have had their extra week; this week's wait one
+        more. Then the plan to date's money with no order yet is bought at market, up to the
+        free USDC that isn't the Trading account's; the rest waits for a deposit (`short`). One
+        coin refused (a limit, Binance) never stops the others; it is named once in `missed`,
+        and a limit refused before its cancel stays working."""
         week = self._window(asked)
-        target = self._shares()
         bought: list[str] = []
         missed: list[str] = []
-        failed: set[str] = set()
-
-        def reason(error: Exception) -> str:
-            return getattr(error, "message", None) or str(error)
-
-        for row in self.open_week():
-            coin = row["coin"]
-            if coin in failed:
-                continue
-            try:
-                spend = self._finish(row, week, target.get(coin, ZERO))
-            except (Refused, BinanceError) as error:
-                failed.add(coin)
-                missed.append(f"{coin} ({reason(error)})")
-                continue
-            if spend is not None:
-                bought.append(f"{coin} {plain(round(spend, 2))}")
-        for coin, raw in self.week_state()["toPlaceByCoin"].items():
-            if coin in failed:
-                continue
-            spend = Decimal(raw)
-            try:
-                self._check_buy(spend)
-                self._market_buy(coin, week, spend, None)
-                bought.append(f"{coin} {plain(round(spend, 2))}")
-            except (Refused, BinanceError) as error:
-                missed.append(f"{coin} ({reason(error)})")
+        failed = self._finish_limits(week, auto, bought, missed)
+        short = self._buy_unplaced(week, failed, bought, missed)
         said = ", ".join(bought) or "nothing bought"
         if missed:
             said += f"; not bought: {', '.join(missed)}"
-        self._audit.record("dca", f"Close-out {week}", said)
-        return {"closed": bought, "missed": missed}
+        if short > ZERO:
+            said += f"; {plain(round(short, 2))} {QUOTE} waits for a deposit"
+        self._audit.record("dca", f"Close-out {week}{' (Monday)' if auto else ''}", said)
+        return {"closed": bought, "missed": missed, "short": plain(round(short, 2))}
+
+    def _finish_limits(
+        self, week: str, auto: bool, bought: list[str], missed: list[str]
+    ) -> set[str]:
+        """The open plan buys due: every one, or on Monday's own run only an earlier week's.
+        The coins refused, so the rest of the close-out leaves them alone."""
+        failed: set[str] = set()
+        for row in self.open_buys():
+            coin = row["coin"]
+            if coin in failed or (auto and row["week"] == week):
+                continue
+            try:
+                spend = self._finish(row, week)
+            except (Refused, BinanceError) as error:
+                failed.add(coin)
+                missed.append(f"{coin} ({_why(error)})")
+                continue
+            if spend is not None:
+                bought.append(f"{coin} {plain(round(spend, 2))}")
+        return failed
+
+    def _buy_unplaced(
+        self, week: str, failed: set[str], bought: list[str], missed: list[str]
+    ) -> Decimal:
+        """The plan to date's money with no order yet, at market, up to the free USDC that
+        isn't the Trading account's; short of money, each coin gets its share of what's free.
+        What couldn't be covered, waiting for a deposit."""
+        state = self.week_state(funds=False)
+        wanted = {c: Decimal(v) for c, v in state["toPlaceByCoin"].items() if c not in failed}
+        total = sum(wanted.values(), ZERO)
+        if total <= ZERO:
+            return ZERO
+        free = self.free_for_dca()
+        if free is None:
+            missed.append("the rest (Binance's balance couldn't be read)")
+            return ZERO
+        scale = min(Decimal(1), free / total)
+        spent = ZERO
+        for coin, need in wanted.items():
+            spend = (need * scale).quantize(Decimal("0.01"), rounding=ROUND_FLOOR)
+            if spend < MIN_ORDER:
+                continue
+            try:
+                self._check_buy(spend)
+                self._market_buy(coin, week, spend, None)
+            except (Refused, BinanceError) as error:
+                missed.append(f"{coin} ({_why(error)})")
+                continue
+            bought.append(f"{coin} {plain(spend)}")
+            spent += spend
+        return max(total - spent, ZERO) if scale < 1 else ZERO
 
     # Changing an open order: the old one is cancelled (its fills kept) and a new one placed
     # under a new reference, linked to it, so the book keeps both.
@@ -1029,7 +1140,7 @@ class DcaBook:
         if not plan:
             return None
         start = datetime.fromisoformat(plan["start"]).replace(tzinfo=SYDNEY)
-        _, first = week_of(int(start.timestamp() * 1000))
+        first = first_friday(start)
         _, current = week_of(now)
         this = (current - first).days // 7
         weekly = sum((Decimal(o["spend"]) for o in plan["orders"]), ZERO)

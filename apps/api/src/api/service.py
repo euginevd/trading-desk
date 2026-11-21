@@ -10,9 +10,12 @@ from typing import Any
 
 import httpx
 
+from api import perp
 from api.binance import Binance, plain
 from api.portfolio import STABLES, build
 from api.tao import TaoError
+
+ALPHA = "Binance Alpha"  # a holding's source, beside "Binance" and "TAO wallet"
 
 FX_URL = "https://api.frankfurter.dev/v1/latest?base=USD&symbols=AUD,INR"
 LIVE_FX_URL = (
@@ -112,6 +115,24 @@ class CostRules:
 
     entered: dict[tuple[str, str], str] = field(default_factory=dict[tuple[str, str], str])
     from_ms: int = 0
+    # Coins held on Binance Alpha, which Binance's spot API doesn't show: (coin, amount), as
+    # the owner entered them (owner, 21 Nov 2026), priced from Binance's USDT perpetual.
+    alpha: tuple[tuple[str, str], ...] = ()
+
+
+def _with_alpha(
+    balances: list[dict[str, Any]],
+    tickers: dict[str, dict[str, str]],
+    alpha: tuple[tuple[str, str], ...],
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, str]]]:
+    """The Binance Alpha holdings as balances of their own source, each priced from spot if
+    Binance has it there, else from its USDT perpetual."""
+    for coin, amount in alpha:
+        found = tickers.get(f"{coin}USDT") or perp.ticker(coin)
+        if found is not None:
+            tickers = {**tickers, f"{coin}USDT": found}
+        balances = [*balances, {"asset": coin, "free": amount, "locked": "0", "source": ALPHA}]
+    return balances, tickers
 
 
 def fetch(
@@ -179,6 +200,7 @@ def fetch(
             "covers": plain(tao["total"]),
         }
         balances = [*balances, {**wallet_row, "source": "TAO wallet"}]
+    balances, tickers = _with_alpha(balances, tickers, rules.alpha)
     if costs:
         balances = [
             {**b, "cost": entered}

@@ -1,7 +1,7 @@
 // The figures behind a tile or card on the Trade page, in the Dashboard's details panel
 // (WidgetDetails.tsx, decision 42): one dialog, its content by what was clicked. Everything
 // comes from the account's own view; nothing is fetched here.
-import { useEffect, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { percent, usdShort } from "./format";
 import CoinIcon from "./CoinIcon";
 import { dated, day, dollars, when } from "./dcaFormat";
@@ -46,12 +46,12 @@ type Shared = {
   openLimit: number;
   perTrade: string;
   cards: PotScanCard[] | undefined;
-  onTab: (tab: "positions" | "history" | "ledger") => void;
+  onTab: (tab: "positions" | "history") => void;
   onNewTrade: () => void;
   onReview: (id: string) => void;
 };
 
-function Money({ pot, onTab }: Shared) {
+function Money({ pot }: Shared) {
   const closed = pot.trades.filter((t) => t.status === "closed");
   const held = pot.trades.filter((t) => t.status === "open");
   const moved = (kind: "in" | "out") =>
@@ -87,11 +87,6 @@ function Money({ pot, onTab }: Shared) {
           v={`${m.kind === "in" ? "+" : "−"}${px(m.usdc)}`}
         />
       ))}
-      <div className="dlg-btns">
-        <button type="button" className="btn" onClick={() => onTab("ledger")}>
-          See the ledger
-        </button>
-      </div>
     </>
   );
 }
@@ -236,36 +231,50 @@ function Month({ pot }: Shared) {
   );
 }
 
-function Regime({ pot, first }: Shared & { first: "rule" | "figures" }) {
+// The regime and BTC's averages open the same panel: the verdict in one sentence, the two
+// averages with how far BTC is from each, and the rule in small print. The card already shows
+// BTC's price, so it isn't repeated.
+function Regime({ pot }: Shared) {
   const { regime } = pot;
-  const against = (average: string | undefined) => {
-    const gap = gapPct(regime.btc, average);
-    const far =
-      gap === null ? "" : ` · BTC ${Math.abs(gap).toFixed(1)}% ${gap >= 0 ? "above" : "under"}`;
-    return `${dollars(average)}${far}`;
-  };
-  const rule = (
-    <p className="detail-summary" key="rule">
-      Bull: BTC is above its 200-day average and the 50-day is above the 200-day. Bear: both are
-      under. Anything else is Neutral. In Bear the desk takes no new trades.
-    </p>
-  );
-  const figures = (
-    <div key="figures">
-      <Row k="Regime now" v={regime.state ? REGIME[regime.state] : "—"} />
+  const average = (name: string, value: string | undefined) => {
+    const gap = gapPct(regime.btc, value);
+    return (
       <Row
-        k="New trades"
-        v={regime.state === null ? "—" : regime.state === "bear" ? "None" : "Allowed"}
+        k={name}
+        v={
+          <>
+            {dollars(value)}
+            {gap !== null && (
+              <span className={gap >= 0 ? "up" : "down"}>
+                {" "}
+                {gap >= 0 ? "+" : "−"}
+                {Math.abs(gap).toFixed(1)}%
+              </span>
+            )}
+          </>
+        }
       />
-      <Row k="BTC" v={dollars(regime.btc)} />
-      <Row k="50-day average" v={against(regime.sma50)} />
-      <Row k="200-day average" v={against(regime.sma200)} />
-    </div>
-  );
+    );
+  };
   return (
     <>
-      {first === "rule" ? [rule, figures] : [figures, rule]}
-      {regime.words && <p className="muted">BTC is {regime.words}.</p>}
+      <p className="detail-summary">
+        {regime.state ? (
+          <>
+            <b>{REGIME[regime.state]}</b>
+            {regime.words ? `: BTC is ${regime.words}.` : "."}
+          </>
+        ) : (
+          "The regime isn't known yet."
+        )}
+      </p>
+      <h3 className="detail-h">BTC against</h3>
+      {average("50-day average", regime.sma50)}
+      {average("200-day average", regime.sma200)}
+      <p className="muted detail-rule">
+        Two tests on BTC's daily closes: is BTC above its 200-day average, and is the 50-day above
+        the 200-day? Both yes: Bull. Both no: Bear. One of each: Neutral.
+      </p>
     </>
   );
 }
@@ -312,14 +321,26 @@ function Scan({ pot }: Shared) {
   );
 }
 
+// A style card's tag: trading-agent's word when it judged the closest coin (Take, Wait, Pass),
+// Closest when only the screener saw it, never "Near" (a coin is called NEAR).
+export function scanTag(card: PotScanCard): { cls: string; word: string } {
+  if (card.take) return { cls: "is-live", word: "Take" };
+  const close = card.close;
+  if (!close) return { cls: "is-quiet", word: "No setup" };
+  if (close.verdict === "wait") return { cls: "is-wait", word: "Wait" };
+  if (close.verdict === "pass") return { cls: "is-quiet", word: "Pass" };
+  return { cls: "is-quiet", word: "Closest" };
+}
+
 function Style({ card, onNewTrade, onReview }: Shared & { card: PotScanCard | undefined }) {
   if (!card) return <p className="muted">That style isn't in the last scan.</p>;
   const { take, close } = card;
+  const tag = scanTag(card);
   return (
     <>
       <p>
-        <span className={`pot-tag ${take ? "is-live" : close ? "is-wait" : "is-quiet"}`}>
-          {take ? "Take" : close ? "Near" : "Nothing near"}
+        <span className={`pot-tag ${tag.cls}`}>
+          {close?.verdict && !take ? `trading-agent: ${tag.word}` : tag.word}
         </span>
       </p>
       <p className="detail-summary">{card.line}</p>
@@ -354,6 +375,7 @@ function Style({ card, onNewTrade, onReview }: Shared & { card: PotScanCard | un
             }
           />
           <p>What's missing: {close.why}</p>
+          {close.watchFor && <p>Watch for: {close.watchFor}</p>}
         </>
       )}
       <p className="muted">
@@ -373,24 +395,64 @@ function Style({ card, onNewTrade, onReview }: Shared & { card: PotScanCard | un
   );
 }
 
+// The panel opens from what was clicked: under it, or over it when there's no room below, lined
+// up with its left edge and kept inside the window, and grows out of it. A phone gets a sheet
+// from the bottom.
+const WIDTH = 460;
+function anchored(from: HTMLElement | null): { style: CSSProperties; cls: string } {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  if (!from || vw < 640) return { style: {}, cls: "is-sheet" };
+  const at = from.getBoundingClientRect();
+  const width = Math.min(WIDTH, vw - 32);
+  const left = Math.min(Math.max(16, at.left), vw - width - 16);
+  const below = vh - at.bottom - 24;
+  const above = at.top - 24;
+  const originX = `${Math.min(width, Math.max(0, at.left + at.width / 2 - left))}px`;
+  if (below >= 320 || below >= above) {
+    return {
+      style: { left, top: at.bottom + 8, width, maxHeight: below, transformOrigin: `${originX} 0` },
+      cls: "is-below",
+    };
+  }
+  return {
+    style: {
+      left,
+      bottom: vh - at.top + 8,
+      width,
+      maxHeight: above,
+      transformOrigin: `${originX} 100%`,
+    },
+    cls: "is-above",
+  };
+}
+
 export default function PotDetail({
   detail,
+  from,
   onClosed,
   ...shared
-}: Shared & { detail: PotDetailOf | null; onClosed: () => void }) {
+}: Shared & { detail: PotDetailOf | null; from: HTMLElement | null; onClosed: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
+  const [place, setPlace] = useState<{ style: CSSProperties; cls: string }>({
+    style: {},
+    cls: "is-sheet",
+  });
+  useLayoutEffect(() => {
     const box = dialog.current;
     if (!box) return;
-    if (detail && !box.open) box.showModal?.();
-    else if (!detail && box.open) box.close?.();
-  }, [detail]);
+    if (detail && !box.open) {
+      setPlace(anchored(from));
+      box.showModal?.();
+    } else if (!detail && box.open) box.close?.();
+  }, [detail, from]);
   const card =
     detail?.kind === "style" ? shared.cards?.find((c) => c.style === detail.style) : undefined;
   return (
     <dialog
       ref={dialog}
-      className="detail-panel"
+      className={`detail-panel pot-detail ${place.cls}`}
+      style={place.style}
       aria-labelledby="pot-detail-title"
       onClose={onClosed}
     >
@@ -414,8 +476,8 @@ export default function PotDetail({
           {detail.kind === "realized" && <Realized {...shared} />}
           {detail.kind === "risk" && <Risk {...shared} />}
           {detail.kind === "month" && <Month {...shared} />}
-          {detail.kind === "regime" && <Regime {...shared} first="rule" />}
-          {detail.kind === "btc" && <Regime {...shared} first="figures" />}
+          {detail.kind === "regime" && <Regime {...shared} />}
+          {detail.kind === "btc" && <Regime {...shared} />}
           {detail.kind === "mood" && <Mood {...shared} />}
           {detail.kind === "scan" && <Scan {...shared} />}
           {detail.kind === "style" && <Style {...shared} card={card} />}

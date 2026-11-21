@@ -115,8 +115,25 @@ function book(over: Partial<DcaBook> = {}): DcaBook {
         bought: "19.85",
         waiting: "49.79",
         toPlace: "0",
-        open: [{ ref: "DCA-BTC-26W47-1", coin: "BTC", price: "63837.4", left: "49.79" }],
+        open: [
+          {
+            ref: "DCA-BTC-26W47-1",
+            coin: "BTC",
+            price: "63837.4",
+            left: "49.79",
+            week: "26W47",
+            carried: false,
+          },
+        ],
         toPlaceByCoin: {},
+        weekly: "70",
+        weeks: 1,
+        plannedByCoin: { BTC: "49.79", ETH: "20.21" },
+        boughtByCoin: { ETH: "19.85" },
+        waitingByCoin: { BTC: "49.79" },
+        free: "100",
+        needsDeposit: "0",
+        skipped: false,
       },
     },
     next: {
@@ -254,8 +271,13 @@ describe("DCA widget", () => {
     render(<DcaWidget now={START + 86_400_000} />);
     expect(
       await screen.findByText(
-        "19.85 of 70 USDC bought, 49.79 in open limits. Open limits stay open until you choose.",
+        (_, el) => el?.tagName === "P" && el.textContent === "$20 of $70 bought",
       ),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("img", {
+        name: "19.85 bought, 49.79 in open limits, 0.00 with no order yet, of 70 USDC.",
+      }),
     ).toBeTruthy();
     expect(
       screen.getByRole("img", {
@@ -263,8 +285,11 @@ describe("DCA widget", () => {
       }),
     ).toBeTruthy();
     const coins = screen.getByRole("list", { name: "This week's coins against their targets" });
-    expect(within(coins).getByText(/^\$[0-9]+ in open orders$/)).toBeTruthy();
-    expect(within(coins).getByText("0.0112 ETH, +1.56%")).toBeTruthy(); // its target met: held, with P&L
+    expect(within(coins).getByText(/^\$[0-9]+ limit at/)).toBeTruthy();
+    // ETH's target met: Done, what's held, with its P&L.
+    expect(within(coins).getByText("Done")).toBeTruthy();
+    expect(within(coins).getByText("0.0112 ETH")).toBeTruthy();
+    expect(within(coins).getByText("+1.56%")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Close out early" }));
     expect(sent(fetch, "/dca/close-out")).toHaveLength(0); // the confirm first
     fireEvent.click(screen.getByRole("button", { name: "Buy the rest at market" }));
@@ -284,7 +309,7 @@ describe("DCA widget", () => {
     expect(
       await screen.findByText("Next buy in 3 days: $70 USDC on 27 Nov (Fri) at 7pm."),
     ).toBeTruthy();
-    expect(screen.getByText("Last week: 19.85 USDC bought.")).toBeTruthy();
+    expect(screen.getByText("Last week: $20 bought.")).toBeTruthy();
   });
 
   it("opens a coin's position and orders in a panel, on the Dashboard too", async () => {
@@ -324,10 +349,11 @@ describe("DCA book page", () => {
   it("shows the positions with their lifelong IDs and every order", async () => {
     serve(book());
     render(<DcaBookPage />);
-    expect(await screen.findByText(/2 positions for life, week 2 of 156. Up 1.56%/)).toBeTruthy();
-    const positions = screen.getByRole("table", { name: "Positions" });
-    expect(within(positions).getByText(/DCA-ETH since/)).toBeTruthy();
-    expect(within(positions).getByText(/DCA-BTC, nothing bought yet/)).toBeTruthy();
+    expect(await screen.findByText(/Week 2 of 156./)).toBeTruthy();
+    // Cards by default; the table is a click away.
+    const positions = screen.getByRole("list", { name: "Positions" });
+    expect(within(positions).getByText("DCA-ETH")).toBeTruthy();
+    expect(within(positions).getByTitle("Nothing bought yet")).toBeTruthy();
     // A position opens to its own orders.
     fireEvent.click(within(positions).getByRole("button", { name: /ETH/ }));
     const eth = screen.getByRole("table", { name: "ETH orders" });

@@ -48,6 +48,9 @@ JOBS = (
     # The DCA week turns over at Monday 7pm (dca_book.week_of), so the close-out is offered at
     # 5pm and its button works until 7pm.
     Job("dca-close-out", "dca-agent", "the close-out", 0, 17, 0, timedelta(hours=2)),
+    # Unless skipped, the close-out then runs on its own before the turnover (decision 96):
+    # its grace ends before 7pm, so a late start never acts on the next week.
+    Job("dca-close-out-auto", "dca-agent", "the close-out run", 0, 18, 45, timedelta(minutes=14)),
     # risk-agent: the daily check is plain code and speaks only when a state gets worse; the
     # Sunday review is written by the model from the same figures.
     Job("risk-check", "risk-agent", "the risk check", DAILY, 21, 0, timedelta(hours=3)),

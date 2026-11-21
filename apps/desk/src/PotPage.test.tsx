@@ -380,7 +380,7 @@ describe("the trading pot", () => {
     expect(within(money).getByText("Realized")).toBeTruthy();
     // Free USDC short of what the account holds: warned, never blocked.
     expect(screen.getByRole("alert").textContent).toContain(
-      "is $10 short of the account's available $90",
+      "has $10 less free USDC than the account's $90 available",
     );
     expect(screen.getByText("Neutral")).toBeTruthy();
     // The watchlist, at the foot: one word on what to do, and a panel per coin.
@@ -610,7 +610,7 @@ describe("the trading pot", () => {
     expect(cards.textContent).toContain("Needs a 4-hour close over 3,200.");
     expect(cards.textContent).toContain("2.4 : 1");
     // A coin near a setup is tagged Near, not Close, which reads as a button.
-    expect(within(cards).getByText("Near")).toBeTruthy();
+    expect(within(cards).getByText("Closest")).toBeTruthy();
     // The scan's card says only when it scanned and what waits: the style cards say what each found.
     expect(screen.queryByText(/Scanned\.$/)).toBeNull();
     const market = screen.getByRole("list", { name: "The market today" });
@@ -664,7 +664,11 @@ describe("the trading pot", () => {
     const [regime, btc, mood, scan] = within(market).getAllByRole("listitem");
     expect(regime?.textContent).toContain("NeutralNew trades allowed");
     expect(btc?.textContent).toContain("$100,000");
-    expect(btc?.textContent).toContain("4.2% above its 50-day · 3.8% under its 200-day");
+    expect(
+      within(btc as HTMLElement).getByRole("img", {
+        name: "4.2% above its 50-day · 3.8% under its 200-day",
+      }),
+    ).toBeTruthy();
     expect(mood?.textContent).toContain("42 Fear");
     expect(mood?.textContent).toContain("BTC dominance 58.3%");
     expect(scan?.textContent).toContain("Neutral. Setup found: SUI.");
@@ -755,7 +759,7 @@ describe("the trading pot", () => {
     serve(pot({ lastScan: { at: NOW, line: "Scanned.", styles } }));
     render(<PotPage />);
     const cards = await screen.findByRole("list", { name: "Scan by style" });
-    expect(cards.textContent).toContain("Nothing near");
+    expect(cards.textContent).toContain("No setup");
     expect(within(cards).queryByRole("button", { name: "Review" })).toBeNull();
   });
 
