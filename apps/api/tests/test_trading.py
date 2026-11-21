@@ -142,3 +142,34 @@ def test_the_freqtrade_containers_reach_one_route_whatever_their_headers(
     assert allowed("POST", service, "/pot/judge-one", bot) is None
     assert allowed("POST", service, "/dca/orders", bot) == "Unknown host."
     assert allowed("POST", posing, "/dca/orders", "172.18.0.3") is None  # the desk's network
+
+
+def test_an_unexpected_error_is_a_plain_500_not_a_dropped_connection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit 23: the desk would otherwise say the api isn't running."""
+    import threading  # noqa: PLC0415 - only this test runs the real server
+    from http.server import ThreadingHTTPServer  # noqa: PLC0415
+
+    def broken(_event: object, _context: object) -> dict[str, object]:
+        raise ValueError("a bug")
+
+    monkeypatch.setattr(local, "handler", broken)
+    server = ThreadingHTTPServer(("127.0.0.1", 0), local.Local)
+    port = server.server_address[1]
+    monkeypatch.setattr(local, "HOSTS", {f"127.0.0.1:{port}"})
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        reply = httpx.get(f"http://127.0.0.1:{port}/settings")
+        assert reply.status_code == 500
+        assert reply.json()["error"].startswith("The api hit an error it didn't expect")
+        assert "ValueError" not in reply.text
+        big = "x" * 300_000  # a long Profile import is taken, not refused for its size
+        sent = httpx.post(
+            f"http://127.0.0.1:{port}/profile/import",
+            json={"markdown": big},
+        )
+        assert sent.status_code == 500  # reached the (broken) handler: not a 403 for the size
+    finally:
+        server.shutdown()
+        server.server_close()

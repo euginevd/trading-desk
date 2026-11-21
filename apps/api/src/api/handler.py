@@ -1160,9 +1160,9 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("PUT", "/journal/tags"): lambda s, _, b: journal.tag(s.store, b),
     ("PUT", "/journal/lists"): lambda s, _, b: journal.set_lists(s.store, b),
     ("GET", "/settings/features"): lambda s, _q, _b: features.view(s.store),
-    ("PUT", "/settings/features"): lambda s, _, b: features.switch(s.store, b),
+    ("PUT", "/settings/features"): lambda s, _, b: _switch_feature(s, b),
     ("GET", "/settings/telegram"): lambda s, _q, _b: telegram.view(s.store),
-    ("PUT", "/settings/telegram"): lambda s, _, b: telegram.set_time(s.store, b),
+    ("PUT", "/settings/telegram"): lambda s, _, b: _telegram_time(s, b),
     ("PUT", "/settings/telegram/token"): lambda s, _, b: _telegram_token(s, b),
     ("POST", "/settings/telegram/test"): lambda s, _q, _b: _telegram_test(s),
     ("POST", "/settings/telegram/link"): lambda s, _q, _b: _telegram_link(s),
@@ -1344,6 +1344,19 @@ def _telegram_token(s: Services, body: dict[str, Any]) -> dict[str, Any]:
     telegram.new_link(s.store)  # a new bot links afresh, by the code shown in Settings
     s.audit.record("settings", "Telegram bot token", "Saved to .env")
     return telegram.view(s.store)
+
+
+def _telegram_time(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    done = telegram.set_time(s.store, body)
+    s.audit.record("settings", "Morning summary time", str(done["time"]))  # audit 23
+    return done
+
+
+def _switch_feature(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    done = features.switch(s.store, body)
+    said = "On" if body.get("on") is True else "Off"
+    s.audit.record("settings", f"Page or feature: {body.get('id')}", said)  # audit 23
+    return done
 
 
 def _telegram_link(s: Services) -> dict[str, Any]:

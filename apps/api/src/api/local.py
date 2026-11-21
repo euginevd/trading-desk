@@ -34,7 +34,8 @@ HOST = os.environ.get("API_HOST", "127.0.0.1")
 PORT = 8000
 WATCH_SECONDS = 30
 AGENT_SECONDS = 15
-MAX_BODY = 10_000
+# Room for the largest import, a 200 KB Profile, once escaped as JSON (audit 23).
+MAX_BODY = 512_000
 # The desk's own pages, and the api itself. Anything else is refused, so a web page open in
 # another tab can't reach the api (cross-site requests) or rename itself to it (DNS rebinding).
 ORIGINS = {"http://127.0.0.1:5173", "http://localhost:5173"} | {
@@ -129,7 +130,18 @@ class Local(BaseHTTPRequestHandler):
                 "requestContext": {"http": {"method": self.command}},
                 "body": body,
             }
-            reply = handler(event, None)
+            try:
+                reply = handler(event, None)
+            except Exception as error:  # noqa: BLE001 - one bad request must not drop the connection
+                # The desk would otherwise say the api isn't running; the type is logged, not sent.
+                print(f"{self.command} {url.path}: unexpected {type(error).__name__}")
+                reply = {
+                    "statusCode": 500,
+                    "headers": {"content-type": "application/json"},
+                    "body": json.dumps(
+                        {"error": "The api hit an error it didn't expect. Try again; it's logged."}
+                    ),
+                }
         text = str(reply["body"])
         data = base64.b64decode(text) if reply.get("isBase64Encoded") else text.encode()
         self.send_response(int(str(reply["statusCode"])))

@@ -292,3 +292,17 @@ def test_a_setup_says_when_trading_agent_moved_the_screens_levels() -> None:
     assert "Levels moved" not in jobs.proposal_text(p | {"screened": None})
     moved = jobs.proposal_text(p | {"screened": {"entry": "200", "stop": "188", "target": "220"}})
     assert "Levels moved by trading-agent: the screen had entry 200, stop 188, target 220." in moved
+
+
+def test_the_summary_time_and_a_page_switch_are_in_the_audit_log(
+    services: Services, tmp_path: Path
+) -> None:
+    """Audit 23: every settings change writes an audit line."""
+    from api import handler  # noqa: PLC0415 - only this test needs the routes
+
+    handler._telegram_time(services, {"time": "08:15"})  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    handler._switch_feature(services, {"id": "journal", "on": False})  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    lines = [json.loads(x) for x in (tmp_path / "audit.jsonl").read_text().splitlines()]
+    said = [(x["kind"], x["action"], x["result"]) for x in lines if x["kind"] == "settings"]
+    assert ("settings", "Morning summary time", "08:15") in said
+    assert ("settings", "Page or feature: journal", "Off") in said
