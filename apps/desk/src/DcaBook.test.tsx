@@ -263,7 +263,7 @@ const sent = (fetch: ReturnType<typeof serve>, path: string) =>
 // A coin's orders live in its panel (owner, 21 Nov 2026): open its row, then Orders.
 async function ordersOf(coin: string): Promise<HTMLElement> {
   const positions = await screen.findByRole("table", { name: "Positions" });
-  fireEvent.click(within(positions).getByRole("button", { name: new RegExp(`^${coin}`) }));
+  fireEvent.click(within(positions).getByRole("button", { name: (name) => name.startsWith(coin) }));
   fireEvent.click(screen.getByRole("button", { name: /^Orders/ }));
   return screen.getByRole("dialog");
 }

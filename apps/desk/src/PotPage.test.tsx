@@ -674,7 +674,9 @@ describe("the trading pot", () => {
     render(<PotPage />);
     const table = await screen.findByRole("table", { name: "Watchlist coins" });
     for (const c of ["BTC", "ETH", "LINK", "SUI", "SOL"])
-      expect(within(table).getByRole("button", { name: new RegExp(`^${c}:`) })).toBeTruthy();
+      expect(
+        within(table).getByRole("button", { name: (name) => name.startsWith(`${c}:`) }),
+      ).toBeTruthy();
   });
 
   it("starts an empty pot with money put in", async () => {
