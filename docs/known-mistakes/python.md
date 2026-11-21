@@ -10,3 +10,4 @@ Part of [known-mistakes.md](../known-mistakes.md); the numbers stay as cited.
 27d. `zipfile.BadZipFile` is neither `OSError` nor `ValueError`: catch it by name when reading a file another process may be writing (`backtest.py`).
 27e. Freqtrade calls a strategy's `custom_exit` only with `use_exit_signal = True`: off, the exit never runs and a trade sat 518 days (`DeskExits`).
 27f. A Freqtrade backtest fills a partial exit before it checks the stop on the same candle: run exits with `--timeframe-detail`, and move a stop to break-even only from the candle after the partial fills.
+27g. `week_of` on a plan's start date gave the DCA week already under way (a Monday start fell in the week of the Friday before), so a running total counted a phantom week: find a plan's first week with `first_friday`, the first Friday on or after the start.

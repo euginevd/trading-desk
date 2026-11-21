@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -223,20 +223,51 @@ _UNIVERSE: dict[str, Any] = {}
 _SCREENS: dict[str, dict[str, Any]] = {}
 
 
-def _crypto(http: httpx.Client | None) -> list[dict[str, Any]] | None:
-    """CoinGecko's top 250 by market cap, less stablecoins and wrapped or staked tokens: what
-    counts as a crypto coin, so tokenized stocks and fiat on Binance stay out."""
+_CG: dict[str, Any] = {}  # CoinGecko's top 250, read once a UTC day (its free tier is slow)
+
+
+def _cg_rows(http: httpx.Client | None) -> list[dict[str, Any]] | None:
+    """CoinGecko's top 250 by market cap, as it sends them; kept for the UTC day, or 10
+    minutes after a failure before asking again."""
+    now = time.time()
+    day = datetime.fromtimestamp(now, UTC).strftime("%Y-%m-%d")
+    if _CG.get("day") == day or now < _CG.get("until", 0):
+        return _CG.get("rows")
     if http is None:
         return None
+    rows: list[dict[str, Any]] | None = None
     try:
         response = http.get(
             CG_URL,
             params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": 1},
         )
-        if response.status_code != 200:  # noqa: PLR2004
-            return None
-        rows = response.json()
+        if response.status_code == 200:  # noqa: PLR2004
+            rows = response.json()
     except (httpx.HTTPError, ValueError):
+        rows = None
+    if rows is None:
+        _CG.update({"until": now + RETRY_MS / 1000})
+        return _CG.get("rows")  # yesterday's, if there was one
+    _CG.clear()
+    _CG.update({"day": day, "rows": rows})
+    return rows
+
+
+def market_caps(http: httpx.Client | None) -> dict[str, float]:
+    """Each coin's market cap in US dollars, by its symbol; the bigger coin wins a shared one."""
+    caps: dict[str, float] = {}
+    for r in _cg_rows(http) or []:
+        coin = str(r.get("symbol") or "").upper()
+        if coin and coin not in caps and r.get("market_cap"):
+            caps[coin] = float(r["market_cap"])
+    return caps
+
+
+def _crypto(http: httpx.Client | None) -> list[dict[str, Any]] | None:
+    """CoinGecko's top 250 by market cap, less stablecoins and wrapped or staked tokens: what
+    counts as a crypto coin, so tokenized stocks and fiat on Binance stay out."""
+    rows = _cg_rows(http)
+    if rows is None:
         return None
     found: list[dict[str, Any]] = []
     for r in rows:
@@ -700,13 +731,15 @@ def _position(
     return _candidate(coin, found, stop=stop, style=style, score=score, facts=facts)
 
 
-Miss = tuple[float, str, str]  # how far from a setup (smaller is closer), the coin, and why
+# How far from a setup (smaller is closer), the coin, why, the funnel step it fell out at
+# (STAGES), and the price that would carry it past that step, if one does.
+Miss = tuple[float, str, str, str, float | None]
 Found = tuple[list[dict[str, Any]], list[Miss], str]  # picks, near misses, a block on them all
 
 
-def _under(coin: str, price: float, avg: float, name: str) -> Miss:
+def _under(coin: str, price: float, avg: float, name: str, stage: str = "trend") -> Miss:
     gap = (avg / price - 1) * 100
-    return (gap, coin, f"{_by(gap)} under its {name}")
+    return (gap, coin, f"{_by(gap)} under its {name}", stage, avg)
 
 
 def _by(gap: float) -> str:
@@ -722,8 +755,9 @@ def _intraday_miss(coin: str, rows: Rows, bias: Rows, style: Style) -> Miss:
         return _under(coin, hc[-1], e, f"{frame} 50 EMA")
     ratio = float(rows[-1][7]) / (avg_volume(rows) or 1)
     if style.key == "scalp" and ratio < 1.5:  # noqa: PLR2004
-        return ((1.5 - ratio) * 10, coin, f"quiet: volume {ratio:.1f}x its average, 1.5x needed")
-    return (5.0, coin, "trend and volume pass; no setup on the last candle")
+        why = f"quiet: volume {ratio:.1f}x its average, 1.5x needed"
+        return ((1.5 - ratio) * 10, coin, why, "volume", None)
+    return (5.0, coin, "trend and volume pass; no setup on the last candle", "setup", None)
 
 
 def _intraday(style: Style, liquid: list[dict[str, Any]], binance: Binance, now_ms: int) -> Found:
@@ -740,6 +774,13 @@ def _intraday(style: Style, liquid: list[dict[str, Any]], binance: Binance, now_
     btc_bias = closes_of(closed(bias_rows.get(f"BTC{QUOTE}", []), now_ms))
     btc_e = ema(btc_bias, 50)
     btc_ok = bool(btc_e and btc_bias[-1] > btc_e)
+    if btc_e and btc_bias:
+        _GATE[style.key] = {
+            "frame": "1-hour" if style.key == "scalp" else "4-hour",
+            "close": fmt(btc_bias[-1]),
+            "ema": fmt(btc_e),
+            "open": btc_ok,
+        }
     block = ""
     if btc_e and not btc_ok:
         frame = "1-hour" if style.key == "scalp" else "4-hour"
@@ -757,7 +798,9 @@ def _intraday(style: Style, liquid: list[dict[str, Any]], binance: Binance, now_
         bid, ask = books.get(sym, (Decimal(0), Decimal(0)))
         if bid > 0 and (ask - bid) / bid > widest:
             spread = float((ask - bid) / bid * 100)
-            misses.append((spread * 10, c["coin"], f"spread {spread:.3f}%, too wide"))
+            misses.append(
+                (spread * 10, c["coin"], f"spread {spread:.3f}%, too wide", "spread", None)
+            )
             continue
         rows = closed(setup_rows.get(sym, []), now_ms)
         bias = closed(bias_rows.get(sym, []), now_ms)
@@ -779,15 +822,16 @@ def _swing_miss(coin: str, rows: Rows, btc_month: float | None) -> Miss:
     month = change(closes, 30)
     if coin != "BTC" and month is not None and btc_month is not None and month <= btc_month:
         lag = btc_month - month
-        return (lag, coin, f"behind BTC by {lag:.1f} points over 30 days")
+        return (lag, coin, f"behind BTC by {lag:.1f} points over 30 days", "strength", None)
     a = atr(rows)
     below = [z for z in levels(rows, a) if z["price"] < price] if a else []
     if not below:
-        return (99.0, coin, "no setup, and no level under the price")
+        return (99.0, coin, "no setup, and no level under the price", "setup", None)
     z = below[-1]
     gap = (price / z["price"] - 1) * 100
     names = ", ".join(z["names"][:2])
-    return (gap, coin, f"no setup: {gap:.1f}% above its nearest level, {fmt(z['price'])} ({names})")
+    why = f"no setup: {gap:.1f}% above its nearest level, {fmt(z['price'])} ({names})"
+    return (gap, coin, why, "setup", float(z["price"]))
 
 
 def _swings(style: Style, liquid: list[dict[str, Any]], btc_daily: Rows) -> Found:
@@ -806,18 +850,18 @@ def _position_miss(coin: str, weekly: Rows, btc_q: float | None) -> Miss:
     wc = closes_of(weekly)
     price, s10, s40 = wc[-1], sma(wc, 10), sma(wc, 40)
     if len(weekly) < 104:  # noqa: PLR2004
-        return (99.0, coin, f"only {len(weekly)} weeks of history, 104 needed")
+        return (99.0, coin, f"only {len(weekly)} weeks of history, 104 needed", "history", None)
     if s40 and price <= s40:
         return _under(coin, price, s40, "40-week")
     if s10 and s40 and s10 <= s40:
         gap = (s40 / s10 - 1) * 100
-        return (gap, coin, f"its 10-week is {gap:.1f}% under its 40-week")
+        return (gap, coin, f"its 10-week is {gap:.1f}% under its 40-week", "trend", None)
     quarter = change(wc, 13)
     if coin != "BTC" and quarter is not None and btc_q is not None and quarter <= btc_q:
         lag = btc_q - quarter
-        return (lag, coin, f"behind BTC by {lag:.1f} points over 13 weeks")
+        return (lag, coin, f"behind BTC by {lag:.1f} points over 13 weeks", "strength", None)
     gap = (price / s10 - 1) * 100 if s10 else 99.0
-    return (abs(gap), coin, f"no setup: {gap:+.1f}% from its 10-week")
+    return (abs(gap), coin, f"no setup: {gap:+.1f}% from its 10-week", "setup", s10)
 
 
 def _positions(style: Style, liquid: list[dict[str, Any]], binance: Binance, now_ms: int) -> Found:
@@ -1038,6 +1082,132 @@ def odds_for(
     return odds.summary(sim, record, need, plan.horizon)
 
 
+# The scan's funnel: each style's steps after the liquidity filter, in order, as the owner
+# reads them; a near miss names the step it fell out at.
+STAGES: dict[str, list[tuple[str, str, str]]] = {
+    "scalp": [
+        ("spread", "Tight spread", "bid-ask gap 0.03% or less"),
+        ("trend", "Above its 1-hour 50 EMA", "the coin's own hourly trend is up"),
+        ("volume", "Volume picking up", "last 5-minute candle 1.5x its average"),
+        ("setup", "At a setup", "a 5-minute pattern at a level, 1.5 : 1 or better"),
+    ],
+    "day": [
+        ("spread", "Tight spread", "bid-ask gap 0.05% or less"),
+        ("trend", "Above its 4-hour 50 EMA", "the coin's own 4-hour trend is up"),
+        ("setup", "At a setup", "an opening-range break or a 15-minute pattern, 2 : 1"),
+    ],
+    "swing": [
+        ("trend", "In an uptrend", "daily close above its 50-day average"),
+        ("strength", "Beating BTC", "30-day change better than BTC's"),
+        ("setup", "At a setup", "a bounce off a level, a W bottom or a breakout retest, 2 : 1"),
+    ],
+    "position": [
+        ("history", "Two years listed", "104 weeks of history"),
+        ("trend", "Weekly uptrend", "above its 40-week, and the 10-week over the 40-week"),
+        ("strength", "Beating BTC", "13-week change better than BTC's"),
+        ("setup", "At a setup", "a pullback to the 10- or 20-week, or a base breakout, 3 : 1"),
+    ],
+}
+_GATE: dict[str, dict[str, Any]] = {}  # BTC's intraday trend at the last scalp and day screen
+SHOWN = 12  # coins named at a step; the rest are counted
+
+
+def btc_gate(binance: Binance, key: str, now_ms: int) -> dict[str, Any]:
+    """BTC's 1-hour (scalp) or 4-hour (day) close against its 50 EMA: the gate those styles
+    need open, and the price that opens it."""
+    style = STYLES[key]
+    rows = closed(binance.klines(f"BTC{QUOTE}", style.bias_tf, style.bias_n), now_ms)
+    closes = closes_of(rows)
+    e = ema(closes, 50)
+    if not closes or e is None:
+        return {}
+    return {
+        "frame": "1-hour" if key == "scalp" else "4-hour",
+        "close": fmt(closes[-1]),
+        "ema": fmt(e),
+        "open": closes[-1] > e,
+    }
+
+
+def _liquid_why(c: dict[str, Any], style: Style, days: int) -> str:
+    if c["rank"] > style.top:
+        return f"ranked {c['rank']} by volume, top {style.top} only"
+    if c["volume"] < style.volume_floor:
+        return f"${c['volume'] / 1e6:.0f}M a day, ${style.volume_floor / 1e6:.0f}M needed"
+    return f"{c['days']} days of history, {days} needed"
+
+
+def _price_of(c: dict[str, Any]) -> float | None:
+    rows = cast(Rows, c.get("daily") or [])
+    return float(rows[-1][4]) if rows else None
+
+
+def funnel(  # noqa: PLR0913 - the screen's parts, each needed
+    style: Style,
+    uni: dict[str, Any],
+    liquid: list[dict[str, Any]],
+    *,
+    misses: list[Miss],
+    found: list[dict[str, Any]],
+    days: int,
+) -> list[dict[str, Any]]:
+    """The screen as steps: how many coins passed each, the ones that fell out (closest
+    first) with why and the price that would carry them past it, and the ones still in."""
+    coins = cast(list[dict[str, Any]], uni["coins"])
+    price = {c["coin"]: _price_of(c) for c in coins}
+
+    def out_row(coin: str, why: str, trigger: float | None) -> dict[str, Any]:
+        now = price.get(coin)
+        row: dict[str, Any] = {"coin": coin, "why": why}
+        if trigger and now:
+            row |= {"trigger": fmt(trigger), "awayPct": f"{(trigger / now - 1) * 100:.1f}"}
+        return row
+
+    steps: list[dict[str, Any]] = [
+        {
+            "key": "universe",
+            "name": f"Top {TOP} by volume",
+            "rule": f"crypto in CoinGecko's top 250, ranked by {QUOTE} volume on Binance",
+            "count": len(coins),
+            "outCount": max(int(uni.get("listed") or 0) - len(coins), 0),
+            "out": [],
+        }
+    ]
+    kept = {c["coin"] for c in liquid}
+    dropped = [c for c in coins if c["coin"] not in kept]
+    steps.append(
+        {
+            "key": "liquid",
+            "name": "Liquid enough",
+            "rule": f"top {style.top}, ${style.volume_floor / 1e6:.0f}M+ a day, "
+            f"{days} days of history",
+            "count": len(liquid),
+            "outCount": len(dropped),
+            "out": [out_row(c["coin"], _liquid_why(c, style, days), None) for c in dropped][:SHOWN],
+        }
+    )
+    remaining = [c["coin"] for c in liquid]
+    picked = {f["coin"] for f in found}
+    for key, name, rule in STAGES[style.key]:
+        here = sorted(m for m in misses if m[3] == key)
+        gone = {m[1] for m in here}
+        remaining = [c for c in remaining if c not in gone]
+        if key == "setup":  # past the last step: only the setups found
+            remaining = [c for c in remaining if c in picked]
+        steps.append(
+            {
+                "key": key,
+                "name": name,
+                "rule": rule,
+                "count": len(remaining),
+                "outCount": len(here),
+                "out": [out_row(m[1], m[2], m[4]) for m in here[:SHOWN]],
+                "passed": remaining[:SHOWN],
+            }
+        )
+    return steps
+
+
 def screen(  # noqa: PLR0913 - the screen's parts, each needed
     style_key: str,
     *,
@@ -1094,10 +1264,34 @@ def screen(  # noqa: PLR0913 - the screen's parts, each needed
     else:
         found, misses, block = _intraday(style, liquid, binance, now_ms)
     out["block"] = block
-    out["misses"] = [{"coin": c, "why": why} for _, c, why in sorted(misses)[:3]]
+    price = {c["coin"]: _price_of(c) for c in uni["coins"]}
+    near: list[dict[str, Any]] = []
+    for _, c, why, stage, trigger in sorted(misses)[:3]:
+        miss: dict[str, Any] = {"coin": c, "why": why, "stage": stage}
+        now = price.get(c)
+        if trigger and now:
+            miss |= {"trigger": fmt(trigger), "awayPct": f"{(trigger / now - 1) * 100:.1f}"}
+        near.append(miss)
+    out["misses"] = near
+    out["funnel"] = funnel(style, uni, liquid, misses=misses, found=found, days=days)
+    if style.key in _GATE:
+        out["gate"] = _GATE[style.key]
     found.sort(key=lambda f: -f["score"])
     out["counts"]["setups"] = len(found)
     out["shortlist"] = found[: style.shortlist]
+    out["funnel"].append(
+        {
+            "key": "shortlist",
+            "name": "Best few",
+            "rule": f"the top {style.shortlist} by score go on to the odds check and the AI",
+            "count": len(out["shortlist"]),
+            "outCount": max(len(found) - style.shortlist, 0),
+            "out": [{"coin": f["coin"], "why": "lower score"} for f in found[style.shortlist :]][
+                :SHOWN
+            ],
+            "passed": [f["coin"] for f in out["shortlist"]],
+        }
+    )
     daily = {c["coin"]: c["daily"] for c in uni["coins"]}
     _ODDS[style.key] = _odds_context(
         style, out["shortlist"], daily=daily, binance=binance, now_ms=now_ms

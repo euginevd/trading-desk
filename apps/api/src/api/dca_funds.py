@@ -10,7 +10,7 @@ import json
 from decimal import ROUND_DOWN, ROUND_FLOOR, Decimal
 from typing import Any, cast
 
-from api import my_agents
+from api import macro, my_agents
 from api.ai_signal import MODELS, SignalError, Signals
 from api.binance import plain
 from api.dca_book import DAY_MS, MIN_ORDER, DcaBook, positions
@@ -213,7 +213,16 @@ class Funds:
                     "heat": heat(self._binance.klines(f"{coin}{QUOTE}", "1d", 60), now),
                 }
             )
-        return {"side": side, "quote": QUOTE, "targetOdds": TARGET_ODDS, "coins": rows}
+        # The macro calendar trading-agent's scan keeps (api/macro.py): read, never fetched
+        # here, so dca-agent can set a deeper limit before a CPI or FOMC day.
+        events = macro.events(self._store, None, None, self._book.now_ms())
+        return {
+            "side": side,
+            "quote": QUOTE,
+            "targetOdds": TARGET_ODDS,
+            "coins": rows,
+            "macro": [{"title": e["title"], "when": e["when"]} for e in events[:6]],
+        }
 
     # The desk's own plan: what stands when the model can't be reached.
 

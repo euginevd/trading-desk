@@ -1,5 +1,6 @@
 import type { Flags } from "./features";
 import type {
+  DcaWeekState,
   AccountCoin,
   PotAction,
   PotCheck,
@@ -71,6 +72,12 @@ import type {
   BacktestRun,
   BacktestStyleKey,
   BacktestView,
+  LadderPreview,
+  LadderRequest,
+  StrategizeReply,
+  StrategizeRequest,
+  TakeProfitPreview,
+  TakeProfitRequest,
 } from "./types";
 
 export class ApiError extends Error {
@@ -312,7 +319,9 @@ export const placeDcaOrder = (order: DcaOrderRequest) =>
 export const cancelDcaOrder = (ref: string) =>
   call<DcaOrder>("POST", "/dca/orders/cancel", { ref });
 export const closeOutDca = (week: string) =>
-  call<{ closed: string[]; missed: string[] }>("POST", "/dca/close-out", { week });
+  call<{ closed: string[]; missed: string[]; short: string }>("POST", "/dca/close-out", { week });
+// Skip this week: its amount leaves the plan to date (decision 96).
+export const skipDcaWeek = (week: string) => call<DcaWeekState>("POST", "/dca/skip", { week });
 // The desk's own plan at once; dca-agent's only when asked.
 export const analyseFunds = (side: "add" | "remove", amount: string, agent = false) =>
   call<FundsPlan>("POST", "/dca/funds/analyse", { side, amount, agent });
@@ -367,6 +376,29 @@ export const analysePotCoin = (body: {
   target?: string;
 }) => call<PotAnalysis>("POST", "/pot/analyse", body);
 export const placePotTrade = (body: PotTradeRequest) => call<PotTrade>("POST", "/pot/trades", body);
+// A ladder trade (owner, 21 Nov 2026): suggested rungs when none are given, then placed.
+export const previewLadder = (body: LadderRequest) =>
+  call<LadderPreview>("POST", "/pot/ladders/preview", body);
+export const placeLadder = (body: LadderRequest & { anyway: boolean; override: boolean }) =>
+  call<PotView>("POST", "/pot/ladders", body);
+export const previewTakeProfit = (body: TakeProfitRequest) =>
+  call<TakeProfitPreview>("POST", "/pot/take-profit/preview", body);
+export const placeTakeProfit = (body: TakeProfitRequest & { anyway: boolean }) =>
+  call<PotView>("POST", "/pot/take-profit", body);
+export const cancelTakeProfit = (ref: string) =>
+  call<PotView>("POST", "/pot/take-profit/cancel", { ref });
+// The DCA book's take profit (trims) and add funds (owner, 21 Nov 2026), as on the Trade page.
+export const previewDcaSell = (body: Omit<TakeProfitRequest, "position"> & { coin: string }) =>
+  call<TakeProfitPreview>("POST", "/dca/sell/preview", body);
+export const placeDcaSell = (
+  body: Omit<TakeProfitRequest, "position"> & { coin: string; anyway: boolean },
+) => call<DcaBook>("POST", "/dca/sell", body);
+export const previewDcaAdd = (body: LadderRequest) =>
+  call<LadderPreview>("POST", "/dca/add/preview", body);
+export const placeDcaAdd = (body: LadderRequest & { anyway: boolean; override: boolean }) =>
+  call<DcaBook>("POST", "/dca/add", body);
+export const strategize = (body: StrategizeRequest) =>
+  call<StrategizeReply>("POST", "/strategize", body);
 export const cancelPotTrade = (ref: string) =>
   call<PotTrade>("POST", "/pot/trades/cancel", { ref });
 export const movePotStop = (ref: string, stop: string) =>

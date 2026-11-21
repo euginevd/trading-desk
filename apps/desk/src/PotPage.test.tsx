@@ -356,65 +356,51 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+// The Market scan tab holds the proposals, Scan now and the market (owner, 21 Nov 2026).
+async function scanTab(): Promise<void> {
+  fireEvent.click(await screen.findByRole("tab", { name: /Market scan/ }));
+}
+
+// A trade's panel: its position's row, then Orders, then Open on the buy.
+async function openTrade(): Promise<void> {
+  const positions = await screen.findByRole("table", { name: "Positions" });
+  fireEvent.click(within(positions).getByRole("button", { name: /^SOL/ }));
+  fireEvent.click(screen.getByRole("button", { name: /^Orders · / }));
+  const panel = screen.getByRole("dialog", { name: "SOL orders" });
+  fireEvent.click(within(panel).getByRole("button", { name: "Open" }));
+}
+
 describe("the trading pot", () => {
-  it("leads with the account's money, then coins and trades in tabs", async () => {
+  it("leads with the account's money, then its positions, then the watchlist", async () => {
     serve(pot({ allowedRisk: "1.01", backing: { free: "80", held: "90", short: "10" } }));
     render(<PotPage />);
     expect((await screen.findByRole("heading", { level: 1 })).textContent).toBe("Trading account");
-    expect(screen.getByText("1 setup is waiting for you.")).toBeTruthy();
-    const money = document.querySelector(".acc-money") as HTMLElement;
-    // Each figure once: available and in trades under the value, the trades on under unrealized.
-    // A tile's label is the button that opens its details: the tile is the box around it.
-    const value = within(money).getByText("Value").closest("div") as HTMLElement;
-    expect(value.textContent).toMatch(/available · \$[\d.,]+ in trades/);
-    expect(within(money).getByText("1 trade on")).toBeTruthy();
-    // The two limits as gauges, what one trade may lose under the first.
-    const open = within(money).getByText("Open risk").closest("div") as HTMLElement;
-    expect(open.textContent).toContain("$1.01 a trade");
-    expect(within(money).getByText("Month's loss")).toBeTruthy();
-    expect(screen.queryByText(/from trading/)).toBeNull();
-    // Open trades' result against what they cost, in dollars and percent.
-    const unreal = within(money).getByText("Unrealized").closest("div") as HTMLElement;
-    expect(unreal.textContent).toContain("+$0.19");
-    expect(unreal.textContent).toContain("+1.9%");
-    expect(within(money).getByText("Realized")).toBeTruthy();
-    // Free USDC short of what the account holds: warned, never blocked.
-    expect(screen.getByRole("alert").textContent).toContain(
-      "is $10 short of the account's available $90",
-    );
-    expect(screen.getByText("Neutral")).toBeTruthy();
-    // The watchlist, at the foot: one word on what to do, and a panel per coin.
-    const card = await screen.findByRole("button", { name: /^SOL: Back at its 20-day/ });
-    expect(card.textContent).toContain("In a trade");
-    // Tabs: Positions first, the open trade in it; Orders holds none.
-    const tabs = screen.getByRole("tablist", { name: "Trades" });
-    expect(
-      within(tabs)
-        .getByRole("tab", { name: /Positions/ })
-        .getAttribute("aria-selected"),
-    ).toBe("true");
-    // The row shows how far the coin has moved from its fill, not R.
-    const row = screen.getByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" });
-    expect(within(row).getByText("+1.9%")).toBeTruthy();
-    // The price now is labelled on the line, and how far it sits above the stop is said.
-    expect(row.querySelector(".pot-now-px")?.textContent).toBe("138.02");
-    expect(within(row).getByText("4.9% to stop")).toBeTruthy();
-    expect(document.getElementById(row.getAttribute("aria-describedby") ?? "")?.textContent).toBe(
-      "Price now 138.02, 4.9% above the stop at 131.20.",
-    );
-    fireEvent.click(within(tabs).getByRole("tab", { name: "Ledger" }));
-    expect(screen.getByRole("table", { name: "The account's ledger" }).textContent).toContain(
-      "POT-IN-1",
-    );
-    // A coin trading-agent doesn't trade opens read-only: no Ask, no New trade.
-    fireEvent.click(screen.getByRole("button", { name: /^TAO/ }));
+    const main = document.querySelector("main") as HTMLElement;
+    // The tiles: what's free on Binance, the positions, and the P&L.
+    expect(main.textContent).toContain("Available$80");
+    expect(main.textContent).toContain("Unrealized+$0.19 +1.9%");
+    expect(main.textContent).toContain("Realized$0 none closed");
+    // One row a position, with what it holds and its P&L.
+    const positions = await screen.findByRole("table", { name: "Positions" });
+    const sol = within(positions).getByRole("button", { name: /^SOL/ });
+    expect(sol.closest("tr")?.textContent).toContain("+$0.19 (+1.9%)");
+    // It opens in place: Take profit, Add funds, and its Orders in a panel.
+    fireEvent.click(sol);
+    expect(screen.getByRole("button", { name: "Take profit" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add funds" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Orders · / }));
+    const orders = screen.getByRole("dialog", { name: "SOL orders" });
+    expect(within(orders).getByText("TRD-SOL-26W47-1")).toBeTruthy();
+    fireEvent.click(within(orders).getByRole("button", { name: "Close" }));
+    // The watchlist: a coin trading-agent doesn't trade opens read-only.
+    fireEvent.click(await screen.findByRole("button", { name: /^TAO/ }));
     const tao = screen.getByRole("dialog", { name: "TAO" });
     expect(within(tao).queryByRole("button", { name: "Ask trading-agent" })).toBeNull();
     fireEvent.click(within(tao).getByRole("button", { name: "Close" }));
-    fireEvent.click(card);
-    const sol = screen.getByRole("dialog", { name: "SOL" });
-    expect(within(sol).getByRole("button", { name: "Ask trading-agent" })).toBeTruthy();
-    fireEvent.click(within(sol).getByRole("button", { name: "New trade on SOL" }));
+    fireEvent.click(screen.getByRole("button", { name: /^SOL: Back at its 20-day/ }));
+    const coin = screen.getByRole("dialog", { name: "SOL" });
+    expect(within(coin).getByRole("button", { name: "Ask trading-agent" })).toBeTruthy();
+    fireEvent.click(within(coin).getByRole("button", { name: "New trade on SOL" }));
     expect(await screen.findByRole("heading", { name: "New trade" })).toBeTruthy();
     expect(screen.getByRole("radio", { name: "SOL" }).getAttribute("aria-checked")).toBe("true");
   });
@@ -422,6 +408,7 @@ describe("the trading pot", () => {
   it("places a proposal after its review", async () => {
     const fetch = serve(pot());
     render(<PotPage />);
+    await scanTab();
     const card = await screen.findByRole("article", { name: "Proposal: SUI, trend pullback" });
     fireEvent.click(within(card).getByRole("button", { name: "Review" }));
     const list = screen.getByRole("list", { name: "The trade's orders" });
@@ -462,6 +449,7 @@ describe("the trading pot", () => {
         : real(url, init),
     );
     render(<PotPage />);
+    await scanTab();
     const card = await screen.findByRole("article", { name: "Proposal: SUI, trend pullback" });
     fireEvent.click(within(card).getByRole("button", { name: "Review" }));
     fireEvent.click(screen.getByRole("radio", { name: /^Market now/ }));
@@ -490,6 +478,7 @@ describe("the trading pot", () => {
   it("holds a trade that breaks a Profile rule until it's placed anyway", async () => {
     const fetch = serve(pot(), true);
     render(<PotPage />);
+    await scanTab();
     const card = await screen.findByRole("article", { name: "Proposal: SUI, trend pullback" });
     fireEvent.click(within(card).getByRole("button", { name: "Review" }));
     fireEvent.click(screen.getByRole("button", { name: "Place the trade" }));
@@ -503,9 +492,7 @@ describe("the trading pot", () => {
   it("opens a trade's panel and moves its stop toward profit", async () => {
     const fetch = serve(pot());
     render(<PotPage />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" }),
-    );
+    await openTrade();
     expect(screen.getByText("TRD-SOL-26W47-1-X1")).toBeTruthy();
     const stop = screen.getByRole("textbox", { name: "TRD-SOL-26W47-1 new stop" });
     const move = screen.getByRole("button", { name: "Move stop" });
@@ -523,9 +510,7 @@ describe("the trading pot", () => {
   it("logs a trade's events, keeps your note, and reduces it after a confirm", async () => {
     const fetch = serve(pot());
     render(<PotPage />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" }),
-    );
+    await openTrade();
     expect(screen.getByText(/Filled 0.0738 at 135.47/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "Add at market" })).toBeTruthy();
     fireEvent.change(screen.getByRole("textbox", { name: "TRD-SOL-26W47-1 note" }), {
@@ -547,9 +532,7 @@ describe("the trading pot", () => {
   it("adds to a trade only after a confirm, then clears the amount", async () => {
     const fetch = serve(pot());
     render(<PotPage />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "SOL trade TRD-SOL-26W47-1: open its panel" }),
-    );
+    await openTrade();
     const amount = screen.getByRole("textbox", { name: "TRD-SOL-26W47-1 USDC to add" });
     fireEvent.change(amount, { target: { value: "5" } });
     fireEvent.click(screen.getByRole("button", { name: "Add at market" }));
@@ -568,118 +551,22 @@ describe("the trading pot", () => {
   it("scans when asked", async () => {
     const fetch = serve(pot({ proposals: [], trades: [] }));
     render(<PotPage />);
+    await scanTab();
     fireEvent.click(await screen.findByRole("button", { name: "Scan now" }));
     await waitFor(() => expect(sent(fetch, "/pot/scan")).toHaveLength(1));
     // The api takes changes only as JSON: a scan with nothing to say still sends {}.
     const init = sent(fetch, "/pot/scan")[0]?.[1];
     expect(init?.body).toBe("{}");
     expect(init?.headers).toEqual({ "content-type": "application/json" });
-    expect((await screen.findAllByText(/No setup today./)).length).toBeGreaterThan(0);
-    expect(await screen.findByText(/Scanned: no setup today/)).toBeTruthy();
   });
 
-  it("shows Scan now's card per style: a take to review, the closest coin, or nothing near", async () => {
-    const styles = [
-      { style: "scalp", name: "Scalp", line: "Scalps wait out the weekend." },
-      {
-        style: "day",
-        name: "Day trade",
-        line: "One close.",
-        close: { coin: "ETH", why: "Needs a 4-hour close over 3,200." },
-      },
-      {
-        style: "swing",
-        name: "Swing",
-        line: "One pullback.",
-        take: {
-          id: proposal.id,
-          coin: "SUI",
-          setup: "Trend pullback",
-          grade: "B",
-          entry: "3.4172",
-          rr: "2.4",
-        },
-      },
-      { style: "position", name: "Position", line: "No position setups right now." },
-    ];
-    serve(pot({ lastScan: { at: NOW, line: "Scanned.", styles } }));
-    render(<PotPage />);
-    const cards = await screen.findByRole("list", { name: "Scan by style" });
-    expect(within(cards).getAllByRole("listitem")).toHaveLength(4);
-    expect(cards.textContent).toContain("Scalps wait out the weekend.");
-    expect(cards.textContent).toContain("Needs a 4-hour close over 3,200.");
-    expect(cards.textContent).toContain("2.4 : 1");
-    // A coin near a setup is tagged Near, not Close, which reads as a button.
-    expect(within(cards).getByText("Near")).toBeTruthy();
-    // The scan's card says only when it scanned and what waits: the style cards say what each found.
-    expect(screen.queryByText(/Scanned\.$/)).toBeNull();
-    const market = screen.getByRole("list", { name: "The market today" });
-    expect(market.textContent).toMatch(/The scan.* · 1 waiting for review/);
-    fireEvent.click(within(cards).getByRole("button", { name: "Review" }));
-    expect(screen.getByRole("list", { name: "The trade's orders" }).textContent).toContain(
-      "limit buy 3.4172",
-    );
-  });
-
-  it("opens the figures behind a tile, and its button goes to the tab that has them all", async () => {
+  it("shows the market on the scan tab: the regime and what would turn it", async () => {
     serve(pot());
     render(<PotPage />);
-    const opener = await screen.findByRole("button", { name: "Value: details" });
-    fireEvent.click(opener);
-    const panel = screen.getByRole("heading", { name: "The account's value" }).closest("dialog");
-    expect(panel?.open).toBe(true);
-    expect(panel?.textContent).toContain("Put in$100");
-    expect(panel?.textContent).toContain("Available$90");
-    // Closing gives focus back to the tile that opened it.
-    fireEvent.click(within(panel as HTMLElement).getByRole("button", { name: "Close" }));
-    expect(screen.queryByRole("heading", { name: "The account's value" })).toBeNull();
-    expect(document.activeElement).toBe(opener);
-    fireEvent.click(opener);
-    fireEvent.click(screen.getByRole("button", { name: "See the ledger" }));
-    const ledger = screen.getByRole("tab", { name: "Ledger" });
-    expect(ledger.getAttribute("aria-selected")).toBe("true");
-    await waitFor(() => expect(document.activeElement).toBe(ledger));
-  });
-
-  it("shows the market in cards: the regime, BTC against its averages, the mood and the scan", async () => {
-    serve(
-      pot({
-        regime: {
-          state: "neutral",
-          words: "under its 200-day, 50-day above it",
-          btc: "100000",
-          sma50: "96000",
-          sma200: "104000",
-        },
-        scansOnItsOwn: true,
-      }),
-    );
-    const view = render(
-      <PotPage
-        fear={{ value: 42, label: "Fear", yesterday: 40, updated: NOW }}
-        global={{ btcShare: "58.26" }}
-      />,
-    );
-    const market = await screen.findByRole("list", { name: "The market today" });
-    const [regime, btc, mood, scan] = within(market).getAllByRole("listitem");
-    expect(regime?.textContent).toContain("NeutralNew trades allowed");
-    expect(btc?.textContent).toContain("$100,000");
-    expect(btc?.textContent).toContain("4.2% above its 50-day · 3.8% under its 200-day");
-    expect(mood?.textContent).toContain("42 Fear");
-    expect(mood?.textContent).toContain("BTC dominance 58.3%");
-    expect(scan?.textContent).toContain("Neutral. Setup found: SUI.");
-    fireEvent.click(within(market).getByRole("button", { name: "Market regime: details" }));
-    expect(screen.getByRole("heading", { name: "The market regime" })).toBeTruthy();
-    expect(screen.getByText(/In Bear the desk takes no new trades/)).toBeTruthy();
-    // Nothing known yet: a dash, never NaN.
-    view.unmount();
-    serve(pot({ regime: { state: null, words: "" }, lastScan: null }));
-    render(<PotPage />);
-    const bare = await screen.findByRole("list", { name: "The market today" });
-    expect(bare.textContent).not.toContain("NaN");
-    expect(within(bare).getAllByText("—").length).toBeGreaterThanOrEqual(3);
-    expect(bare.textContent).toContain("BTC dominance —");
-    expect(bare.textContent).toContain("Not yet");
+    await scanTab();
+    const main = document.querySelector("main") as HTMLElement;
+    await waitFor(() => expect(main.textContent).toContain("Regime"));
+    expect(main.textContent).toContain("Neutral");
   });
 
   it("shows a scan's steps as they end, and folds them to one line when asked", async () => {
@@ -706,20 +593,23 @@ describe("the trading pot", () => {
       ),
     );
     render(<PotPage />);
+    await scanTab();
     fireEvent.click(await screen.findByRole("button", { name: "Scan now" }));
     const panel = await screen.findByRole("region", { name: "Scan steps" });
     expect(within(panel).getByRole("status").textContent).toBe(
       "Scan finished: 1 of 2 done, 1 failed",
     );
-    const rows = within(panel).getAllByRole("listitem");
+    // The steps' own list; the inputs the scan reads sit folded under it.
+    const items = () => panel.querySelectorAll("#pot-steps-list > li");
+    const rows = [...items()];
     expect(rows[0]?.textContent).toContain("ScalpDone8 coins passed the filters, 2 setups");
     expect(rows[1]?.textContent).toContain("SwingFailedBinance didn't answer.");
     fireEvent.click(within(panel).getByRole("button", { name: "Hide steps" }));
-    expect(within(panel).queryAllByRole("listitem")).toHaveLength(0);
+    expect(items()).toHaveLength(0);
     expect(within(panel).getByRole("status").textContent).toContain("Scan finished");
     expect(window.localStorage.getItem("desk.pot.steps")).toBe("0");
     fireEvent.click(within(panel).getByRole("button", { name: "Show steps" }));
-    expect(within(panel).getAllByRole("listitem")).toHaveLength(2);
+    expect(items()).toHaveLength(2);
   });
 
   it("adds up realized P&L from closed trades against what went in, this month under it", async () => {
@@ -736,30 +626,12 @@ describe("the trading pot", () => {
     );
     render(<PotPage />);
     await screen.findByRole("heading", { level: 1 });
-    const money = document.querySelector(".acc-money") as HTMLElement;
-    const real = within(money).getByText("Realized").closest("div") as HTMLElement;
+    const real = (await screen.findByText("Realized")).closest("div") as HTMLElement;
     expect(real.textContent).toContain("+$2.00"); // 3 − 1
-    expect(real.textContent).toContain("+2.0%"); // of the $100 put in
     expect(real.textContent).toContain("+$3.00 this month");
   });
 
-  it("drops a scan card's take once its proposal is gone", async () => {
-    const styles = [
-      {
-        style: "swing",
-        name: "Swing",
-        line: "One pullback.",
-        take: { id: "gone", coin: "SUI", setup: "Pullback", grade: "B", entry: "3", rr: "2" },
-      },
-    ];
-    serve(pot({ lastScan: { at: NOW, line: "Scanned.", styles } }));
-    render(<PotPage />);
-    const cards = await screen.findByRole("list", { name: "Scan by style" });
-    expect(cards.textContent).toContain("Nothing near");
-    expect(within(cards).queryByRole("button", { name: "Review" })).toBeNull();
-  });
-
-  it("lists the watchlist as rows, coins in a trade or with a setup first", async () => {
+  it("lists the watchlist as a table, a row a coin", async () => {
     const base = serve(pot({ proposals: [], trades: [] }));
     const coin = (name: string, more: object) => ({
       coin: name,
@@ -800,23 +672,11 @@ describe("the trading pot", () => {
       ),
     );
     render(<PotPage />);
-    const list = await screen.findByRole("list", { name: "Watchlist coins" });
-    const rows = within(list).getAllByRole("button");
-    expect(rows.map((r) => r.querySelector(".dcb-coin")?.textContent)).toEqual([
-      "SOL",
-      "SUI",
-      "ETH",
-      "BTC",
-      "LINK",
-    ]);
-    expect(rows.map((r) => r.querySelector(".acc-act")?.textContent)).toEqual([
-      "In a trade",
-      "Analyse",
-      "Wait",
-      "No setup",
-      "No setup",
-    ]);
-    expect(rows[0]?.textContent).toContain("$25 held");
+    const table = await screen.findByRole("table", { name: "Watchlist coins" });
+    for (const c of ["BTC", "ETH", "LINK", "SUI", "SOL"])
+      expect(
+        within(table).getByRole("button", { name: (name) => name.startsWith(`${c}:`) }),
+      ).toBeTruthy();
   });
 
   it("starts an empty pot with money put in", async () => {

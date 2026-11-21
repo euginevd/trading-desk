@@ -198,7 +198,7 @@ def test_the_week_counts_every_buy_whichever_button_placed_it(book: DcaBook) -> 
 def test_close_out_buys_open_limits_and_what_was_never_placed(book: DcaBook) -> None:
     book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "named"})
     closed = book.close_out()
-    assert closed == {"closed": ["ETH 19.98", "BTC 40", "SOL 20"], "missed": []}
+    assert closed == {"closed": ["ETH 19.98", "BTC 40", "SOL 20"], "missed": [], "short": "0"}
     orders = book.view()["week"]["orders"]
     assert [(o["source"], o["status"]) for o in orders] == [
         ("named", "cancelled"),
@@ -219,13 +219,16 @@ def test_a_refused_coin_never_stops_the_rest_of_the_close_out(book: DcaBook, des
     assert closed["missed"][0].startswith("BTC (That's over your per-order limit")
 
 
-def test_buy_the_rest_keeps_to_the_plan_and_buys_nothing_twice(book: DcaBook) -> None:
+def test_buy_everything_buys_every_open_limit_and_nothing_twice(book: DcaBook) -> None:
+    # Decision 96: Buy everything now cancels every open plan buy and buys what it didn't.
     book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "named"})
     extra = book.place({"coin": "ETH", "spend": "20", "price": "2900", "source": "named"})
-    assert book.close_out("26W45")["closed"] == ["ETH 19.98", "BTC 40", "SOL 20"]
-    still = next(o for o in book.view()["orders"] if o["ref"] == extra["ref"])
-    assert still["status"] == "open"  # beyond ETH's share of the plan: left open, not bought
-    assert book.close_out("26W45") == {"closed": [], "missed": []}
+    closed = book.close_out("26W45")["closed"]
+    assert closed[:2] == ["ETH 19.98", "ETH 19.98"]
+    assert sorted(closed[2:]) == ["BTC 40", "SOL 20"]
+    gone = next(o for o in book.view()["orders"] if o["ref"] == extra["ref"])
+    assert gone["status"] == "cancelled"
+    assert book.close_out("26W45") == {"closed": [], "missed": [], "short": "0"}
 
 
 def test_buy_the_rest_only_inside_the_week_it_was_asked_for(book: DcaBook) -> None:
@@ -475,3 +478,27 @@ def test_a_dca_order_cant_be_changed_from_the_open_orders_list(
         desk.edit_order(edit)
     assert order["status"] == "NEW"
     assert book.view()["orders"][0]["status"] == "open"
+
+
+# Take profit and Add funds on a DCA coin (owner, 21 Nov 2026), as on the Trade page.
+
+
+def test_dca_take_profit_sells_as_trims_and_add_funds_places_limits(book: DcaBook) -> None:
+    from api.dca_moves import DcaMoves  # noqa: PLC0415
+
+    book.place({"coin": "SOL", "spend": "40", "kind": "market", "source": "desk"})
+    moves = DcaMoves(book)
+    seen = moves.sell_preview({"coin": "SOL", "pct": "50", "market": True})
+    assert seen["problems"] == []
+    assert "50" in seen["pcts"]
+    moves.sell({"coin": "SOL", "pct": "50", "market": True, "anyway": True})  # fees: a loss
+    trims = [o for o in book.view()["orders"] if o["source"] == "trim"]
+    assert [(o["side"], o["status"]) for o in trims] == [("sell", "filled")]
+    plan = moves.add_preview({"coin": "SOL", "total": "20"})
+    assert plan["problems"] == []
+    assert sum(Decimal(r["spend"]) for r in plan["rungs"]) >= Decimal(20)
+    moves.add({"coin": "SOL", "rungs": plan["rungs"]})
+    limits = [o for o in book.view()["orders"] if o["source"] == "desk" and o["kind"] == "limit"]
+    assert len(limits) == len(plan["rungs"])
+    with pytest.raises(Refused, match="isn't in your DCA plan"):
+        moves.add_preview({"coin": "DOGE", "total": "20"})

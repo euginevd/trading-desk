@@ -265,6 +265,8 @@ export default function PotNewTrade({
 
   const sized = complete ? (seen?.trade ?? null) : null;
   const problems = complete ? (seen?.problems ?? []) : [];
+  // Rules you may trade past on your own trade (owner, 21 Nov 2026): shown, never blocking.
+  const warnings = complete ? (seen?.warnings ?? []) : [];
   const e = Number(entry);
   const s = Number(stop);
   const now = seen?.now ? Number(seen.now) : null;
@@ -640,6 +642,18 @@ export default function PotNewTrade({
                   ))}
                 </ul>
               )}
+            </div>
+          )}
+          {sized && warnings.length > 0 && (
+            <div className="pnt-rules is-warned" role="status">
+              <p>
+                <b>The rules would say wait.</b> It's your trade: Review places it anyway.
+              </p>
+              <ul aria-label="Rules it goes past">
+                {warnings.map((w) => (
+                  <li key={w}>{w}</li>
+                ))}
+              </ul>
             </div>
           )}
           {!sized && problems.length > 0 && (

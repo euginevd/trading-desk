@@ -302,12 +302,18 @@ def test_scan_now_runs_every_style_and_leaves_a_card_for_each(
     # With no take, the closest: trading-agent's wait, else the screener's near miss.
     agent = PotAgent(pot, Fake({"line": "Close.", "picks": [wait]}))  # type: ignore[arg-type]
     cards = {c["style"]: c for c in agent.scan(every=True)["lastScan"]["styles"]}
-    assert cards["day"]["close"] == {"coin": "ETH", "why": "Needs a close over 210."}
+    assert cards["day"]["close"] == {
+        "coin": "ETH",
+        "why": "Needs a close over 210.",
+        "verdict": "wait",  # trading-agent's word on it, shown beside the coin
+    }
     agent = PotAgent(pot, Fake({"line": "None.", "picks": []}))  # type: ignore[arg-type]
     cards = {c["style"]: c for c in agent.scan(every=True)["lastScan"]["styles"]}
     assert cards["position"]["close"] == {"coin": "ADA", "why": "3% above its 20-day"}
-    # The daily scan keeps its line alone.
-    assert "styles" not in agent.scan()["lastScan"]
+    # The daily scan has its own line and keeps Scan now's cards beside it.
+    daily = agent.scan()["lastScan"]
+    assert daily["line"]
+    assert [c["style"] for c in daily["styles"]] == ["scalp", "day", "swing", "position"]
 
 
 def test_scan_now_ids_each_style_apart_and_caps_the_takes(
@@ -552,9 +558,16 @@ def test_a_dollar_cap_keeps_each_trade_under_it(pot: Pot) -> None:
     assert pot.allowed(pot.equity()) == Decimal(11)  # no cap: the percentage alone
 
 
-def test_other_buys_leave_the_pots_usdc_alone(pot: Pot, desk: Trading) -> None:
+def test_other_buys_leave_the_pots_usdc_alone(
+    pot: Pot, desk: Trading, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The soft ring-fence: one Binance wallet, so the DCA book and hand orders may spend only
-    the free USDC less the pot's cash."""
+    the free USDC less the pot's cash. Off for now (decision 97), so nothing is fenced; on, it
+    warns."""
+    from api import pot as pot_module  # noqa: PLC0415
+
+    assert pot.guard(Decimal(10**6), "the DCA book") is None  # off: nothing to fence
+    monkeypatch.setattr(pot_module, "RING_FENCE", True)
     free = next(
         (Decimal(b["free"]) for b in desk.parts()[0].balances() if b["asset"] == QUOTE), ZERO
     )
@@ -1255,3 +1268,83 @@ def test_a_trade_entry_cant_be_changed_from_the_open_orders_list(pot: Pot, desk:
         desk.edit_order(edit)
     assert entry["status"] == "NEW"
     assert pot.view()["trades"][0]["status"] == "waiting"
+
+
+# Take profit (owner, 21 Nov 2026): one sell for the whole position, booked across its buys.
+
+
+def test_take_profit_sells_the_whole_position_at_market(pot: Pot) -> None:
+    from api.pot_tp import TakeProfit  # noqa: PLC0415
+
+    trade = opened(pot)
+    tp = TakeProfit(pot)
+    seen = tp.preview({"position": trade["ref"], "pct": "100", "market": True})
+    assert seen["problems"] == []
+    assert seen["pcts"] == ["100"]  # about 10 USDC held: all of it, or nothing under $10
+    tp.place({"position": trade["ref"], "pct": "100", "market": True})
+    done = pot.view()["trades"][0]
+    assert done["status"] == "closed"
+    assert done["exitKind"] == "market"
+    assert [o["kind"] for o in pot.view()["takeProfits"]] == ["market"]
+
+
+def test_take_profit_never_sells_or_leaves_under_ten_dollars(pot: Pot) -> None:
+    from api.pot_tp import TakeProfit  # noqa: PLC0415
+
+    trade = opened(pot)
+    with pytest.raises(Refused, match="at least"):
+        TakeProfit(pot).place({"position": trade["ref"], "pct": "50", "market": True})
+    assert pot.view()["trades"][0]["status"] == "open"
+
+
+def test_a_take_profit_limit_waits_holds_the_coins_then_books_its_fill(pot: Pot) -> None:
+    from api.pot_tp import TakeProfit  # noqa: PLC0415
+
+    trade = opened(pot)
+    tp = TakeProfit(pot)
+    levels = [{"price": "230", "pct": "100"}]
+    tp.place({"position": trade["ref"], "pct": "100", "levels": levels})
+    held = pot.view()["trades"][0]
+    assert held["exits"] == "held"  # its stop and target came off for the sell
+    sells = pot.view()["takeProfits"]
+    assert [(s["kind"], s["status"]) for s in sells] == [("limit", "open")]
+    with pytest.raises(Refused, match="take-profit sells hold its coins"):
+        pot.close(trade["ref"])
+    fill(by_tag(f"{trade['ref']}-P1")["orderId"])
+    pot.sync()
+    done = pot.view()["trades"][0]
+    assert done["status"] == "closed"
+    assert done["exitKind"] == "target"
+    assert Decimal(done["exitPrice"]) == Decimal(230)
+
+
+def test_a_take_profit_under_the_average_needs_anyway(pot: Pot) -> None:
+    from api.pot_tp import TakeProfit  # noqa: PLC0415
+
+    trade = opened(pot)
+    tp = TakeProfit(pot)
+    seen = tp.preview(
+        {"position": trade["ref"], "pct": "100", "levels": [{"price": "199", "pct": "100"}]}
+    )
+    assert any("at or under the price now" in p for p in seen["problems"])
+    demo.PRICES["SOLUSDT"] = ("195.00", "0")
+    try:
+        market = tp.preview({"position": trade["ref"], "pct": "100", "market": True})
+        assert any("a loss" in w for w in market["warnings"])
+        with pytest.raises(Refused):  # a problem or the warning: nothing sells unasked
+            tp.place({"position": trade["ref"], "pct": "100", "market": True})
+        assert pot.view()["trades"][0]["status"] == "open"
+    finally:
+        demo.PRICES["SOLUSDT"] = ("212.40", "3.42")
+
+
+def test_add_funds_to_a_ladder_counts_no_risk_and_no_second_trade(pot: Pot) -> None:
+    """A no-stop ladder's limits aren't measured risk, and adding to a position already held
+    isn't "another trade" of that coin."""
+    first = pot.ladder_preview({"coin": "SOL", "total": "20"})
+    assert first["problems"] == []
+    pot.place_ladder({"coin": "SOL", "rungs": first["rungs"], "anyway": True})
+    ref = pot.view()["trades"][0]["ref"]
+    again = pot.ladder_preview({"coin": "SOL", "total": "20", "position": ref})
+    assert again["warnings"] == []
+    assert pot.open_risk() == ZERO

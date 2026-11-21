@@ -43,6 +43,8 @@ class Fake:
         self.asked: list[dict[str, Any]] = []
 
     def step(self, *args: object, **kw: Any) -> tuple[dict[str, Any], Decimal, str]:
+        if args[3:4] == ("Macro calendar",):  # the scan's calendar lookup: none this week
+            return {"events": []}, Decimal(0), "fake"
         self.asked.append({"prompt": args[1], **kw})
         return self.reply, Decimal(0), "fake"
 
@@ -189,7 +191,7 @@ def test_only_plain_tickers_and_no_stablecoins_join_the_universe() -> None:
 
 def test_a_near_miss_says_how_far_and_why() -> None:
     falling = candles([100 - i * 0.5 - 1 for i in range(120)], [100 - i * 0.5 for i in range(120)])
-    gap, coin, why = screener._swing_miss("SOL", falling, -5.0)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    gap, coin, why, *_ = screener._swing_miss("SOL", falling, -5.0)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
     assert coin == "SOL"
     assert why.endswith("under its 50-day")
     assert gap > 0

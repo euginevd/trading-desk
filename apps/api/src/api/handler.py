@@ -56,6 +56,7 @@ from api.binance import Binance, BinanceError, plain
 from api.bots import Bots
 from api.dca_book import DcaBook
 from api.dca_funds import Funds
+from api.dca_moves import DcaMoves
 from api.deposits import amount_key
 from api.deposits import report as deposit_report
 from api.grid import Grids
@@ -63,10 +64,12 @@ from api.icons import Icons
 from api.market import QUOTE, MarketError, coin_symbol, market
 from api.pot import Pot
 from api.pot_agent import PotAgent
+from api.pot_tp import TakeProfit
 from api.profile_md import for_agents
 from api.sentiment import SentimentError, fear_and_greed, fear_and_greed_detail, market_global
 from api.service import CostRules, TradeCache, Wallet, fetch
 from api.store import Store
+from api.strategize import Strategist
 from api.tao import TAOSTATS_URL, TaoError, balance
 from api.trading import Refused, Trading
 from api.watchlist import Watchlist
@@ -241,7 +244,7 @@ def live_portfolio() -> dict[str, Any]:
                 base_url=TAOSTATS_URL, timeout=TIMEOUT_SECONDS, transport=tao_transport
             ) as tao,
         ):
-            rules = CostRules(store.costs(), cost_from_ms())
+            rules = CostRules(store.costs(), cost_from_ms(), alpha_holdings(store))
             portfolio = fetch(binance, fx, _wallet(tao), TRADE_CACHE, rules)
         today = datetime.now(SYDNEY).date().isoformat()
         store.record_value(today, portfolio["total"]["value"])
@@ -510,7 +513,12 @@ DCA_ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/dca/orders"): lambda desk, _q, b: DcaBook(desk).place(b),
     ("POST", "/dca/orders/cancel"): lambda desk, _q, b: DcaBook(desk).cancel(b.get("ref")),
     ("POST", "/dca/orders/amend"): lambda desk, _q, b: DcaBook(desk).amend(b),
+    ("POST", "/dca/sell/preview"): lambda desk, _q, b: DcaMoves(DcaBook(desk)).sell_preview(b),
+    ("POST", "/dca/sell"): lambda desk, _q, b: DcaMoves(DcaBook(desk)).sell(b),
+    ("POST", "/dca/add/preview"): lambda desk, _q, b: DcaMoves(DcaBook(desk)).add_preview(b),
+    ("POST", "/dca/add"): lambda desk, _q, b: DcaMoves(DcaBook(desk)).add(b),
     ("POST", "/dca/close-out"): lambda desk, _q, b: DcaBook(desk).close_out(b.get("week")),
+    ("POST", "/dca/skip"): lambda desk, _q, b: DcaBook(desk).skip(b.get("week")),
     ("GET", "/dca/check"): lambda desk, _q, _b: DcaBook(desk).check(),
     ("POST", "/dca/check/fix"): lambda desk, _q, _b: DcaBook(desk).repair(),
 }
@@ -521,6 +529,8 @@ POT_ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/pot/put-in"): lambda desk, _q, b: Pot(desk).put_in(b),
     ("POST", "/pot/trades"): lambda desk, _q, b: Pot(desk).place(b),
     ("POST", "/pot/preview"): lambda desk, _q, b: Pot(desk).preview(b),
+    ("POST", "/pot/ladders/preview"): lambda desk, _q, b: Pot(desk).ladder_preview(b),
+    ("POST", "/pot/ladders"): lambda desk, _q, b: Pot(desk).place_ladder(b),
     ("POST", "/pot/trades/cancel"): lambda desk, _q, b: Pot(desk).cancel(b.get("ref")),
     ("POST", "/pot/trades/stop"): lambda desk, _q, b: Pot(desk).move_stop(b),
     ("POST", "/pot/trades/close"): lambda desk, _q, b: Pot(desk).close(b.get("ref")),
@@ -531,6 +541,11 @@ POT_ROUTES: dict[tuple[str, str], Route] = {
     ("POST", "/pot/trades/reduce"): lambda desk, _q, b: Pot(desk).reduce(b),
     ("POST", "/pot/trades/target"): lambda desk, _q, b: Pot(desk).move_target(b),
     ("POST", "/pot/trades/note"): lambda desk, _q, b: Pot(desk).note(b),
+    ("POST", "/pot/take-profit/preview"): lambda desk, _q, b: TakeProfit(Pot(desk)).preview(b),
+    ("POST", "/pot/take-profit"): lambda desk, _q, b: TakeProfit(Pot(desk)).place(b),
+    ("POST", "/pot/take-profit/cancel"): lambda desk, _q, b: TakeProfit(Pot(desk)).cancel(
+        b.get("ref")
+    ),
     ("POST", "/pot/proposals/dismiss"): lambda desk, _q, b: Pot(desk).dismiss(b),
     ("GET", "/pot/check"): lambda desk, _q, _b: Pot(desk).check(),
     ("GET", "/pot/coins"): lambda desk, _q, _b: account_coins.snapshot(Pot(desk)),
@@ -548,7 +563,17 @@ ROUTES: dict[tuple[str, str], Route] = {
 }
 
 
-COST_SOURCES = ("Binance", "TAO wallet")
+COST_SOURCES = ("Binance", "TAO wallet", "Binance Alpha")
+ALPHA_KEY = "alpha_holdings"
+
+
+def alpha_holdings(store: Store) -> tuple[tuple[str, str], ...]:
+    """The coins the owner holds on Binance Alpha, as entered: [{"asset", "amount"}]."""
+    raw = store.setting(ALPHA_KEY, "")
+    rows = cast(list[dict[str, Any]], json.loads(raw)) if raw else []
+    return tuple((str(r["asset"]), str(r["amount"])) for r in rows if r.get("asset"))
+
+
 MAX_COST = Decimal(10_000_000)
 
 
@@ -586,6 +611,8 @@ BUYS = (
     "/pot/trades",
     "/pot/trades/add",
     "/pot/trades/enter-now",
+    "/pot/ladders",
+    "/dca/add",
 )
 PRETRADE_RULES = ("monthly_deposit_cap_aud", "per_trade_aud", "max_pct_per_coin")
 
@@ -596,6 +623,9 @@ def _spend_of(path: str, body: dict[str, Any]) -> Decimal | None:
     try:
         if path == "/dca/orders" and body.get("side", "buy") != "buy":
             return None
+        if path in ("/pot/ladders", "/dca/add"):
+            rungs = cast(list[dict[str, Any]], body.get("rungs") or [])
+            return sum((Decimal(str(r.get("spend"))) for r in rungs), Decimal(0))
         return Decimal(str(body.get("spend")))
     except (InvalidOperation, ValueError):
         return None
@@ -623,7 +653,9 @@ def _pretrade(
         return None
     _, store, audit, _ = desk.parts()
     symbol = coin_symbol(body.get("symbol") or body.get("coin", ""))
-    if path != "/dca/orders" and symbol.endswith(QUOTE):  # the DCA book guards its own buys
+    if path not in ("/dca/orders", "/dca/add") and symbol.endswith(
+        QUOTE
+    ):  # the DCA book guards its own buys
         Pot(desk).guard(spend)
     coin = symbol.removesuffix(QUOTE)
     return _rule_check(store, audit, coin, spend, body.get("override") is True, portfolio)[0]
@@ -814,6 +846,12 @@ def _add_alert(s: Services, b: dict[str, Any]) -> dict[str, Any]:
     s.store.add_alert(coin, direction, format(at.normalize(), "f"), note, int(time.time() * 1000))
     s.audit.record("alert", f"Alert set on {coin}", f"{direction} {at}")
     return {"alerts": s.store.alerts(coin)}
+
+
+def _strategize(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    """Strategize with the agent: the market's mood and calendar read through one client."""
+    with httpx.Client(timeout=TIMEOUT_SECONDS) as client:
+        return Strategist(Trading(s.binance, s.store, s.audit), s.signals, client).chat(body)
 
 
 def _funds(s: Services) -> Funds:
@@ -1137,6 +1175,7 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
         b.get("side"), b.get("amount"), b.get("agent", True) is not False
     ),
     ("POST", "/dca/funds/chat"): lambda s, _q, b: _funds(s).chat(b),
+    ("POST", "/strategize"): lambda s, _q, b: _strategize(s, b),
     ("POST", "/pot/scan"): lambda s, _q, _b: _pot_agent(s, None, "scan-now"),
     ("GET", "/pot/scan/progress"): lambda _s, _q, _b: scan_progress.view(),
     ("GET", "/risk-board"): lambda s, _q, _b: risk_board(s),

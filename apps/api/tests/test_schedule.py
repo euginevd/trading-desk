@@ -38,6 +38,7 @@ def test_each_job_has_a_slot_in_sydney_time() -> None:
         "Daily 11:15am",
         "Friday 7pm",
         "Monday 5pm",
+        "Monday 6:45pm",
         "Daily 9pm",
         "Sunday 6pm",
     ]
@@ -226,6 +227,7 @@ def test_the_switch_routes_reach_the_scheduler(services: Services) -> None:
         "pot-scan",
         "dca-deposit",
         "dca-close-out",
+        "dca-close-out-auto",
         "risk-check",
         "risk-review",
     ]
@@ -252,21 +254,34 @@ def test_a_button_holds_a_setup_that_breaks_a_profile_rule(services: Services) -
 
 
 def test_the_close_out_message_shows_the_whole_week() -> None:
+    """Decision 96: the plan to date, then what 7pm does on its own."""
     text = jobs.close_out_text(
         {
             "week": "26W47",
+            "weeks": 2,
             "planned": "600",
             "bought": "152.40",
             "waiting": "69",
             "toPlace": "378.6",
-            "open": [{"ref": "DCA-ETH-26W47-4", "coin": "ETH", "price": "1712.37", "left": "12"}],
+            "needsDeposit": "0",
+            "open": [
+                {
+                    "ref": "DCA-ETH-26W46-4",
+                    "coin": "ETH",
+                    "price": "1712.37",
+                    "left": "12",
+                    "carried": True,
+                },
+                {"ref": "DCA-SOL-26W47-1", "coin": "SOL", "price": "180", "left": "57"},
+            ],
             "toPlaceByCoin": {},
         }
     )
-    assert "Bought so far: 152.4 of 600 USDC" in text
-    assert "Open limits: ETH 12 at 1,712.37" in text
-    assert "Not placed yet: 378.6 USDC" in text
-    assert "stay open unless you choose" in text
+    assert "Plan to date: 600 USDC (2 weeks)" in text
+    assert "Bought: 152.4" in text
+    assert "378.6 USDC with no order yet is bought at market" in text
+    assert "Limits from earlier weeks are bought at market: ETH 12 at 1,712.37" in text
+    assert "This week's limits wait one more week: SOL 57 at 180" in text
 
 
 def test_keep_them_open_changes_nothing(services: Services) -> None:

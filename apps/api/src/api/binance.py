@@ -16,6 +16,23 @@ import httpx
 from api.audit import Audit
 
 TRADES_PAGE = 1000
+# Binance allows 6000 request weight a minute per IP (owner, 21 Nov 2026: it refused at 6000).
+# The desk stops short of it, and keeps the heavy reads a little while, shared by every request.
+WEIGHT_LIMIT = 6000
+WEIGHT_STOP = 4800  # over this in the current minute, reads wait for the next one
+RULES_TTL = 6 * 3600.0  # a pair's rules (exchangeInfo, weight 20) rarely change
+SHORT_TTL = 10.0  # open orders (80), balances (20): fresh enough between clicks
+SYMBOLS_TTL = 300.0  # every listed pair (4)
+_KEPT: dict[tuple[str, str], tuple[float, Any]] = {}
+_USED: dict[str, Any] = {"minute": 0, "weight": 0}
+
+
+def forget() -> None:
+    """Every kept read and the weight count dropped (tests, and a fresh start)."""
+    _KEPT.clear()
+    _USED.update(minute=0, weight=0)
+
+
 RECV_WINDOW_MS = 5000
 OK = 200
 
@@ -91,8 +108,31 @@ class Binance:
         self._clock = clock
         self._filters: dict[str, Filters] = {}
 
+    def _kept(self, name: str, ttl: float, read: Callable[[], Any]) -> Any:
+        """A heavy read, kept `ttl` seconds for every request (one Binance account)."""
+        key = (self._key[:8], name)
+        now = time.monotonic()
+        found = _KEPT.get(key)
+        if found is not None and now - found[0] < ttl:
+            return found[1]
+        value = read()
+        _KEPT[key] = (now, value)
+        return value
+
+    @staticmethod
+    def _forget_account() -> None:
+        """An order sent: what the account holds and has open is read fresh next time."""
+        for key in [k for k in _KEPT if k[1].startswith(("open orders", "balances"))]:
+            _KEPT.pop(key, None)
+
     def _call(self, method: str, path: str, query: str, label: str) -> Any:
         kind = "exchange" if method == "GET" else "order"
+        minute = int(self._clock() // 60)
+        if method == "GET" and _USED["minute"] == minute and _USED["weight"] >= WEIGHT_STOP:
+            # Orders still go; reads wait, so the desk never hits Binance's ban.
+            raise BinanceError(
+                429, "Binance's request limit is nearly used this minute. Try again in a moment."
+            )
         started = time.monotonic()
         try:
             response = self._client.request(
@@ -104,6 +144,11 @@ class Binance:
                 0, "Binance didn't answer. Check the connection and try again."
             ) from error
         ms = round((time.monotonic() - started) * 1000)
+        used = response.headers.get("x-mbx-used-weight-1m")
+        if used and used.isdigit():
+            _USED.update(minute=minute, weight=int(used))
+        if method != "GET":
+            self._forget_account()
         try:
             body: Any = response.json() if response.content else None
         except ValueError:  # an HTML error page from Binance's edge or a proxy
@@ -142,11 +187,17 @@ class Binance:
         return self._call(method, path, f"{query}&signature={signature}", label)
 
     def balances(self) -> list[dict[str, str]]:
-        account = self._signed("/api/v3/account", {"omitZeroBalances": "true"}, "balances")
+        account = self._kept(
+            "balances",
+            SHORT_TTL,
+            lambda: self._signed("/api/v3/account", {"omitZeroBalances": "true"}, "balances"),
+        )
         return list(account["balances"])
 
     def symbols(self) -> set[str]:
-        prices = self._get("/api/v3/ticker/price", "", "symbols")
+        prices = self._kept(
+            "symbols", SYMBOLS_TTL, lambda: self._get("/api/v3/ticker/price", "", "symbols")
+        )
         return {str(row["symbol"]) for row in prices}
 
     def tickers(self, symbols: list[str]) -> dict[str, dict[str, str]]:
@@ -232,10 +283,17 @@ class Binance:
         return [r for r in rows if int(r.get("status", -1)) in CREDITED]
 
     def open_orders(self) -> list[dict[str, Any]]:
-        return list(self._signed("/api/v3/openOrders", {}, "open orders"))
+        return list(
+            self._kept(
+                "open orders",
+                SHORT_TTL,
+                lambda: self._signed("/api/v3/openOrders", {}, "open orders"),
+            )
+        )
 
     def trades(self, symbol: str) -> list[dict[str, Any]]:
-        """Every trade on one pair, oldest first, a page at a time."""
+        """Every trade on one pair, oldest first, a page at a time (the portfolio's TradeCache
+        reads it again only when a balance moves)."""
         found: list[dict[str, Any]] = []
         from_id = 0
         while True:
@@ -265,7 +323,13 @@ class Binance:
 
     def filters(self, symbol: str) -> Filters:
         if symbol not in self._filters:
-            info = self._get("/api/v3/exchangeInfo", urlencode({"symbol": symbol}), "pair rules")
+            info = self._kept(
+                f"rules {symbol}",
+                RULES_TTL,
+                lambda: self._get(
+                    "/api/v3/exchangeInfo", urlencode({"symbol": symbol}), "pair rules"
+                ),
+            )
             rules = {f["filterType"]: f for f in info["symbols"][0]["filters"]}
             notional: dict[str, Any] = rules.get("NOTIONAL") or rules.get("MIN_NOTIONAL") or {}
             band: dict[str, Any] = rules.get("PERCENT_PRICE_BY_SIDE") or {}

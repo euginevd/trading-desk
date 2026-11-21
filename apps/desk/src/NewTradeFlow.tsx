@@ -269,10 +269,12 @@ function PickCard({ p, expired, onOkay }: { p: PotPick; expired: boolean; onOkay
 export default function NewTradeFlow({
   onClose,
   onHand,
+  onLadder,
   onReview,
 }: {
   onClose: () => void;
   onHand: () => void;
+  onLadder: () => void;
   onReview: (t: StyleTrade) => void;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
@@ -364,6 +366,17 @@ export default function NewTradeFlow({
       <div className="ntf-body" key={step}>
         {step === "style" && (
           <section aria-label="Pick a style">
+            <div className="views ntf-kinds" role="group" aria-label="Kind of trade">
+              <button type="button" aria-pressed="true">
+                By style
+              </button>
+              <button type="button" aria-pressed="false" onClick={onLadder}>
+                Ladder
+              </button>
+              <button type="button" aria-pressed="false" onClick={onHand}>
+                By hand
+              </button>
+            </div>
             <p className="muted">
               Pick how long you mean to hold. The desk scans the 100 most-traded USDC coins on
               Binance by that style's rules, then trading-agent checks the best few.

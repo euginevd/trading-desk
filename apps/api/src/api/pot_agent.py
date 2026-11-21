@@ -3,20 +3,22 @@ out every figure the agent reads (regime, averages, ATR, strength against BTC, r
 and checks everything it proposes: the agent names a setup's entry, stop and target, the desk
 sizes it and drops whatever breaks a rule. Nothing is placed without the owner's review."""
 
+import contextlib
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 import httpx
 
-from api import my_agents, scan_progress, screener
-from api.advisor import futures
+from api import macro, my_agents, scan_progress, screener
+from api.advisor import FUTURES_URL, futures
 from api.ai_signal import MODELS, SignalError, Signals
 from api.binance import BinanceError, plain
 from api.market import QUOTE
 from api.pot import AGENT, LIVE, Pot, sma
+from api.sentiment import SentimentError, fear_and_greed, market_global
 from api.trading import Refused, number
 
 ZERO = Decimal(0)
@@ -31,6 +33,20 @@ FUNDING_HOT = Decimal("0.05")  # % per 8 hours: longs crowded
 MODEL = "claude-opus-5-5"
 SYDNEY = ZoneInfo("Australia/Sydney")
 VERDICTS = ("take", "wait", "pass")
+# Each style's longest hold in days: a macro event inside it is named to the AI and the owner.
+HOLD_DAYS = {"scalp": 1 / 24, "day": 0.5, "swing": 21.0, "position": 42.0}
+MACRO_MODEL = "claude-haiku-5-5"  # the calendar lookup: one small call a day
+DOMINANCE_KEY = "btc_dominance_days"  # BTC's share by Sydney day, for its 7-day change
+GATE_DAYS = 14  # the macro events the scan's gates show
+SEARCH: dict[str, Any] = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {"query": {"type": "string"}, "found": {"type": "string"}},
+        "required": ["query", "found"],
+        "additionalProperties": False,
+    },
+}
 
 
 def clip(text: object, limit: int) -> str:
@@ -105,6 +121,8 @@ class PotAgent:
         self._pot = pot
         self._signals = signals
         self._client = client  # Binance futures, public: funding and open interest
+        self._spend: dict[str, Any] = {"calls": 0, "searches": 0, "usd": ZERO}
+        self._ctx: dict[str, Any] | None = None
 
     def _crowding(self, coin: str) -> str:
         if self._client is None:
@@ -113,11 +131,140 @@ class PotAgent:
         if found is None:
             return "No futures market"
         rate = Decimal(found["fundingPct"])
+        oi = self._oi_change(coin)
+        tail = f"; open interest {oi:+}% in 7 days" if oi is not None else ""
         if rate > FUNDING_HOT:
-            return f"Crowded: funding {rate}% per 8 hours"
+            return f"Crowded: funding {rate}% per 8 hours{tail}"
         if rate < 0:
-            return f"Shorts crowded: funding {rate}%"
-        return f"Clear: funding {rate}% per 8 hours"
+            return f"Shorts crowded: funding {rate}%{tail}"
+        return f"Clear: funding {rate}% per 8 hours{tail}"
+
+    def _oi_change(self, coin: str) -> Decimal | None:
+        """Open interest on Binance's USDT perpetual over 7 days, in percent; public data."""
+        if self._client is None:
+            return None
+        try:
+            response = self._client.get(
+                f"{FUTURES_URL}/futures/data/openInterestHist",
+                params={"symbol": f"{coin}USDT", "period": "1d", "limit": 8},
+            )
+            rows = cast(list[dict[str, Any]], response.json()) if response.is_success else []
+            first = Decimal(str(rows[0]["sumOpenInterestValue"]))
+            last = Decimal(str(rows[-1]["sumOpenInterestValue"]))
+        except (httpx.HTTPError, ValueError, KeyError, IndexError, TypeError, ArithmeticError):
+            return None
+        return _pct(last, first) if first else None
+
+    # The market around a scan (owner, 21 Nov 2026): Fear & Greed, BTC's dominance and its
+    # 7-day change, and the US macro calendar. Context for the AI and the owner, never a rule.
+
+    def _macro_ask(self, prompt: str, shape: dict[str, Any]) -> dict[str, Any] | None:
+        if self._signals is None:
+            return None
+        try:
+            reply, cost, _name = self._signals.step(
+                "You read official economic calendars and answer only from what you find.",
+                prompt,
+                shape,
+                "Macro calendar",
+                model=MACRO_MODEL,
+                searches=1,
+            )
+        except SignalError:
+            return None
+        self._spent(cost, 1)
+        return reply
+
+    def _spent(self, cost: Decimal, searches: int) -> None:
+        self._spend["calls"] += 1
+        self._spend["searches"] += searches
+        self._spend["usd"] += cost
+
+    def context(self) -> dict[str, Any]:
+        """Read once a scan: the mood, BTC's share, and the macro events of the next 3 weeks."""
+        if self._ctx is not None:
+            return self._ctx
+        pot = self._pot
+        now = pot.now_ms()
+        ctx: dict[str, Any] = {"fearGreed": None, "dominance": None, "macro": []}
+        if self._client is not None:
+            with contextlib.suppress(SentimentError):
+                mood = fear_and_greed(self._client)
+                ctx["fearGreed"] = {"value": mood["value"], "label": mood["label"]}
+            share = market_global(self._client).get("btcShare")
+            if share:
+                ctx["dominance"] = self._dominance(Decimal(str(share)), now)
+        ask = self._macro_ask if self._signals is not None else None
+        ctx["macro"] = macro.events(pot.store, self._client, ask, now)
+        self._ctx = ctx
+        return ctx
+
+    def _dominance(self, share: Decimal, now_ms: int) -> dict[str, str | None]:
+        """BTC's share of the market, kept a day at a time so its 7-day change can be told."""
+        today = datetime.fromtimestamp(now_ms / 1000, SYDNEY)
+        store = self._pot.store
+        raw = store.setting(DOMINANCE_KEY, "")
+        days = cast(dict[str, str], json.loads(raw) if raw else {})
+        tenth = Decimal("0.1")
+        days[today.strftime("%Y-%m-%d")] = plain(share.quantize(tenth))
+        kept = dict(sorted(days.items())[-15:])
+        store.set_setting(DOMINANCE_KEY, json.dumps(kept))
+        week_ago = (today - timedelta(days=7)).strftime("%Y-%m-%d")
+        older = [v for d, v in kept.items() if d <= week_ago]
+        change = share - Decimal(older[-1]) if older else None
+        return {
+            "share": plain(share.quantize(tenth)),
+            "change7d": plain(change.quantize(tenth)) if change is not None else None,
+        }
+
+    def _market_for(self, style: screener.Style, seen: dict[str, Any]) -> dict[str, Any]:
+        """MARKET for a prompt: the regime and timing, then the context."""
+        ctx = self.context()
+        now = self._pot.now_ms()
+        events = cast(list[dict[str, Any]], ctx["macro"])
+        hold = macro.inside(events, now, HOLD_DAYS[style.key])
+        return {
+            "regime": seen["regime"],
+            "warnings": seen["warnings"],
+            "fearGreed": ctx["fearGreed"],
+            "btcDominance": ctx["dominance"],
+            "macroInsideHold": [{"title": e["title"], "when": e["when"]} for e in hold],
+            "macroNext": [{"title": e["title"], "when": e["when"]} for e in events[:4]],
+        }
+
+    def _given(self, style: screener.Style, seen: dict[str, Any]) -> list[str]:
+        """What the AI was handed, in short lines for the scan's report."""
+        ctx = self.context()
+        regime = cast(dict[str, Any], seen.get("regime") or {})
+        lines = [f"Regime {str(regime.get('state') or 'unknown').title()}"]
+        lines += [str(w) for w in cast(list[Any], seen.get("warnings") or [])][:2]
+        for f in cast(list[dict[str, Any]], seen.get("shortlist") or [])[:4]:
+            odds = cast(dict[str, Any], f.get("odds") or {})
+            lean = f", odds {odds['lean']}" if odds.get("lean") else ""
+            lines.append(
+                f"{f['coin']}: {f['setup']}, entry {f['entry']}, stop {f['stop']}, "
+                f"target {f['target']}{lean}"
+            )
+            if f.get("crowding"):
+                lines.append(f"{f['coin']}: {f['crowding']}")
+        if not seen.get("shortlist"):
+            misses = cast(list[dict[str, Any]], seen.get("misses") or [])
+            lines += [f"{m['coin']}: {m['why']}" for m in misses]
+        now = self._pot.now_ms()
+        hold = macro.inside(cast(list[dict[str, Any]], ctx["macro"]), now, HOLD_DAYS[style.key])
+        if hold:
+            lines.append(
+                "Macro in the hold: " + ", ".join(f"{e['title']} {e['when']}" for e in hold[:3])
+            )
+        mood = cast(dict[str, Any] | None, ctx["fearGreed"])
+        dom = cast(dict[str, Any] | None, ctx["dominance"])
+        if mood:
+            words = f"Fear & Greed {mood['value']}, {mood['label']}"
+            if dom:
+                change = f" ({dom['change7d']:+} in 7 days)" if dom.get("change7d") else ""
+                words += f"; BTC dominance {dom['share']}%{change}"
+            lines.append(words)
+        return lines
 
     def facts(self, only: str | None = None) -> dict[str, Any]:
         """The desk's figures for the model: BTC and every coin, or BTC and `only`."""
@@ -206,7 +353,7 @@ class PotAgent:
             + self._rules()
         )
         try:
-            reply, _cost, _name = self._signals.step(
+            reply, cost, _name = self._signals.step(
                 system,
                 prompt,
                 shape,
@@ -216,6 +363,7 @@ class PotAgent:
             )
         except SignalError:
             return None
+        self._spent(cost, len(cast(list[Any], reply.get("searches") or [])))
         return reply
 
     def _sized(self, item: dict[str, Any]) -> dict[str, Any]:
@@ -243,6 +391,8 @@ class PotAgent:
         said: list[str] = []
         cards: list[dict[str, Any]] = []
         judged = 0
+        self._ctx = None
+        self._spend = {"calls": 0, "searches": 0, "usd": ZERO}
         keys = tuple(screener.STYLES) if every else ("swing", "position") if monday else ("swing",)
         # Scan now's steps panel (scan_progress): nothing is recorded unless Scan now began it.
         scan_progress.plan([(k, screener.STYLES[k].name) for k in keys])
@@ -275,7 +425,7 @@ class PotAgent:
                 }
                 found.append(proposal)
                 take = take or proposal
-            cards.append(_card(key, seen, take, misses))
+            cards.append(_card(key, seen, take, misses) | _report(seen, misses) | {"at": now})
         if not judged:  # nothing was judged: the proposals waiting stay, and the owner hears why
             raise Refused(" ".join(said)[:300])
         kept_ids = {p["id"] for p in found[:MAX_PROPOSALS]}
@@ -283,8 +433,42 @@ class PotAgent:
             if card.get("take") and card["take"]["id"] not in kept_ids:
                 card.pop("take")
         pot.set_proposals(found[:MAX_PROPOSALS])
-        pot.set_last_scan(" ".join(said)[:600], cards if every else None)
+        # A daily scan runs one or two styles: the others keep their last report.
+        before = cast(list[dict[str, Any]], (pot.last_scan() or {}).get("styles") or [])
+        ran = {c["style"] for c in cards}
+        order = list(screener.STYLES)
+        merged = sorted(
+            cards + [c for c in before if c.get("style") not in ran],
+            key=lambda c: order.index(c["style"]) if c.get("style") in order else 9,
+        )
+        spend = self._spend
+        cost = {
+            "calls": spend["calls"],
+            "searches": spend["searches"],
+            "usd": plain(cast(Decimal, spend["usd"]).quantize(Decimal("0.01"))),
+        }
+        pot.set_last_scan(" ".join(said)[:600], merged, {"gates": self.gates(), "cost": cost})
         return pot.view()
+
+    def gates(self) -> dict[str, Any]:
+        """Before any coin: the regime and its two tests, BTC's trend for scalps and day
+        trades, the macro calendar, the mood and BTC's share."""
+        pot = self._pot
+        now = pot.now_ms()
+        ctx = self.context()
+        intraday: dict[str, Any] = {}
+        for key in ("scalp", "day"):
+            with contextlib.suppress(BinanceError):
+                intraday[key] = screener.btc_gate(pot.binance, key, now)
+        events = cast(list[dict[str, Any]], ctx["macro"])
+        return {
+            "regime": pot.regime_view(),
+            **intraday,
+            "macro": [e for e in events if e["inDays"] <= GATE_DAYS][:6],
+            "fearGreed": ctx["fearGreed"],
+            "dominance": ctx["dominance"],
+            "weekend": datetime.fromtimestamp(now / 1000, SYDNEY).weekday() >= 5,  # noqa: PLR2004
+        }
 
     ANALYSIS: dict[str, Any] = {
         "type": "object",
@@ -500,6 +684,8 @@ class PotAgent:
             "against": {"type": "array", "items": {"type": "string"}},
             "catalyst": {"type": "string"},
             "crowding": {"type": "string"},
+            "news": {"type": "string"},
+            "flows": {"type": "string"},
             "reason": {"type": "string"},
         },
         "required": [
@@ -515,14 +701,20 @@ class PotAgent:
             "against",
             "catalyst",
             "crowding",
+            "news",
+            "flows",
             "reason",
         ],
         "additionalProperties": False,
     }
     JUDGE: dict[str, Any] = {
         "type": "object",
-        "properties": {"line": {"type": "string"}, "picks": {"type": "array", "items": PICK}},
-        "required": ["line", "picks"],
+        "properties": {
+            "line": {"type": "string"},
+            "picks": {"type": "array", "items": PICK},
+            "searches": SEARCH,
+        },
+        "required": ["line", "picks", "searches"],
         "additionalProperties": False,
     }
 
@@ -537,7 +729,17 @@ class PotAgent:
         scan_progress.step(key, "screening")
         seen = screener.last_screen(key, pot.now_ms()) or self.screen(body)
         scan_progress.step(key, None, _screened_words(seen))
-        keys = ("style", "name", "regime", "warnings", "counts", "allowed", "misses", "block")
+        keys = (
+            "style",
+            "name",
+            "regime",
+            "warnings",
+            "counts",
+            "allowed",
+            "misses",
+            "block",
+            "funnel",
+        )
         out = {k: seen.get(k) for k in keys}
         out |= {"note": seen["note"], "riskPct": seen["riskPct"], "picks": [], "line": ""}
         out["expires"] = pot.now_ms() + style.expiry_s * 1000
@@ -547,15 +749,86 @@ class PotAgent:
                 if not seen["allowed"]
                 else f"No {style.name.lower()} setups right now."
             )
+            if seen["allowed"] and seen.get("misses"):
+                out |= self._watch(style, seen, key)
+                out |= {"given": self._given(style, seen), "model": MODELS[style.model].name}
             return out
         scan_progress.step(key, "judging")
         reply = self._ask(self._judge_prompt(style, seen), self.JUDGE, f"Pot: {key} picks", style)
         if reply is None:
             raise Refused("trading-agent couldn't be reached. Try again in a minute.")
         out["line"] = str(reply.get("line") or "")[:300]
+        out["searches"] = _searches(reply)
+        out |= {"given": self._given(style, seen), "model": MODELS[style.model].name}
         scan_progress.step(key, "sizing")
         out["picks"] = self._checked_picks(style, seen, reply)
         return out
+
+    WATCH: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "line": {"type": "string"},
+            "watch": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "coin": {"type": "string"},
+                        "verdict": {"type": "string", "enum": ["wait", "pass"]},
+                        "watchFor": {"type": "string"},
+                        "reason": {"type": "string"},
+                    },
+                    "required": ["coin", "verdict", "watchFor", "reason"],
+                    "additionalProperties": False,
+                },
+            },
+            "searches": SEARCH,
+        },
+        "required": ["line", "watch", "searches"],
+        "additionalProperties": False,
+    }
+
+    def _watch(self, style: screener.Style, seen: dict[str, Any], key: str) -> dict[str, Any]:
+        """No setup: trading-agent judges the screener's near misses, watch only (decision 95).
+        It says Wait or Pass and what would make a setup, never Take: a trade still needs the
+        rules to pass. If it can't be reached, the screener's own reasons stand."""
+        misses = cast(list[dict[str, str]], seen["misses"])
+        scan_progress.step(key, "judging")
+        prompt = (
+            f"{style.name} style ({style.line}). The desk's screener found NO setup by the rules "
+            "below; these are the closest coins and what each is missing. Judge each, watch "
+            "only: verdict 'wait' if it's worth watching for the setup to form, 'pass' if not. "
+            "You can't take a trade here; the rules must pass first. watchFor: what would turn "
+            "it into a setup, at most 12 words, with a price or level where you can (e.g. "
+            "'A close back over 2.95 on the 4-hour'). Reason: at most 20 words. Order closest "
+            "first. Line: at most 15 words.\n" + CONTEXT_RULES + "\n"
+            f"THE RULES: your file's 'Rules for every style' and '{screener.HEADING[style.key]}' "
+            "sections.\n\nMARKET:\n"
+            + json.dumps(self._market_for(style, seen))
+            + "\n\nNEAR MISSES:\n"
+            + json.dumps(misses, indent=1)
+        )
+        reply = self._ask(prompt, self.WATCH, f"Pot: {key} watch", style)
+        if reply is None:
+            return {}
+        named = {m["coin"] for m in misses}
+        watch: list[dict[str, str]] = []
+        for item in cast(list[dict[str, Any]], reply.get("watch") or []):
+            coin = str(item.get("coin") or "").upper()
+            if coin not in named or any(w["coin"] == coin for w in watch):
+                continue
+            verdict = "wait" if item.get("verdict") == "wait" else "pass"
+            watch.append(
+                {
+                    "coin": coin,
+                    "verdict": verdict,
+                    "watchFor": clip(item.get("watchFor"), 100),
+                    "reason": clip(item.get("reason"), 160),
+                }
+            )
+        line = clip(reply.get("line"), 200)
+        found = {"watch": watch[:3], "searches": _searches(reply)}
+        return found | ({"line": line} if line else {})
 
     def judge_one(self, body: dict[str, Any]) -> dict[str, Any]:
         """trading-agent on one setup the paper bot found (apps/backtest): New trade's prompt
@@ -658,11 +931,16 @@ class PotAgent:
             "re-run on the coin's own past candles, 'sim' is paths drawn from them; 'needed' is "
             "the share of decided trades the target must win to break even, and 'lean' the "
             "verdict. A coin flip or a lean no is a point against; a strong no is a reason to "
-            "wait or pass. Don't repeat its numbers (the card shows them).\n\n"
+            "wait or pass. Don't repeat its numbers (the card shows them).\n"
+            + CONTEXT_RULES
+            + "News: from your coin search, the week's headline tone, 'Positive', 'Neutral' "
+            "or 'Negative', a colon, then at most 8 words. Flows: only for BTC or ETH in a "
+            "swing or position trade, one search for the week's spot ETF flows and exchange "
+            "balances, at most 12 words; otherwise an empty string.\n\n"
             f"THE RULES: your file's 'Rules for every style' and '{screener.HEADING[style.key]}' "
             "sections (what the desk has built), not its 'Not built yet' lists.\n\n"
             "MARKET:\n"
-            + json.dumps({"regime": seen["regime"], "warnings": seen["warnings"]})
+            + json.dumps(self._market_for(style, seen))
             + "\n\nSHORTLIST:\n"
             + json.dumps(seen["shortlist"], indent=1)
         )
@@ -696,6 +974,8 @@ class PotAgent:
             "against": _points(item.get("against"), 2),
             "catalyst": clip(item.get("catalyst"), 100),
             "crowding": clip(item.get("crowding") or found.get("crowding"), 70),
+            "news": clip(item.get("news"), 90),
+            "flows": clip(item.get("flows"), 110),
             "reason": clip(item.get("reason"), 220),
             "facts": found["facts"],
             "problem": None,
@@ -713,6 +993,72 @@ class PotAgent:
         else:
             pick |= sized
         return pick
+
+
+CONTEXT_RULES = (
+    "CONTEXT: MARKET holds Fear & Greed, BTC's dominance with its 7-day change, and the US "
+    "macro calendar (macroInsideHold: the releases inside this style's hold). They are "
+    "context, never a reason on their own: name a macro release inside the hold as a point "
+    "against, and don't search for macro dates. Searches: list every web search you ran, its "
+    "query and what it found in at most 12 words (an empty list if none).\n"
+)
+
+
+def _searches(reply: dict[str, Any]) -> list[dict[str, str]]:
+    rows = cast(list[dict[str, Any]], reply.get("searches") or [])
+    return [
+        {"query": clip(r.get("query"), 90), "found": clip(r.get("found"), 120)}
+        for r in rows[:6]
+        if r.get("query")
+    ]
+
+
+def _report(seen: dict[str, Any], misses: list[dict[str, Any]]) -> dict[str, Any]:
+    """One style's scan, step by step, for the Trade page: the funnel, what the AI saw, did
+    and said, and the near misses with the price that would make each a setup."""
+    watch = {w["coin"]: w for w in cast(list[dict[str, Any]], seen.get("watch") or [])}
+    near = [
+        m | {k: watch[m["coin"]][k] for k in ("verdict", "watchFor") if m["coin"] in watch}
+        for m in misses
+    ]
+    picks = [
+        {
+            k: p.get(k)
+            for k in (
+                "coin",
+                "setup",
+                "verdict",
+                "grade",
+                "score",
+                "confluence",
+                "against",
+                "catalyst",
+                "crowding",
+                "news",
+                "flows",
+                "reason",
+                "problem",
+                "entry",
+                "stop",
+                "target",
+            )
+        }
+        for p in cast(list[dict[str, Any]], seen.get("picks") or [])
+    ]
+    return {
+        "funnel": seen.get("funnel") or [],
+        "block": seen.get("block") or "",
+        "warnings": seen.get("warnings") or [],
+        "near": near,
+        "ai": {
+            "model": seen.get("model") or "",
+            "given": seen.get("given") or [],
+            "searches": seen.get("searches") or [],
+            "picks": picks,
+        }
+        if seen.get("given")
+        else None,
+    }
 
 
 def _n(count: int, one: str, many: str) -> str:
@@ -733,6 +1079,12 @@ def _screened_words(seen: dict[str, Any]) -> str:
 def _judged_words(seen: dict[str, Any]) -> str:
     """What trading-agent said of the shortlist, counted: 'trading-agent: 1 take, 1 wait'."""
     picks = cast(list[dict[str, Any]], seen.get("picks") or [])
+    watch = cast(list[dict[str, str]], seen.get("watch") or [])
+    if not picks and watch:
+        waits = [w["coin"] for w in watch if w["verdict"] == "wait"]
+        return "trading-agent: no setup; " + (
+            f"wait on {', '.join(waits)}" if waits else "nothing worth watching"
+        )
     if not picks:
         return "" if not seen.get("allowed") else "No setup to judge"
     said = [
@@ -763,8 +1115,22 @@ def _card(
     near = next((p for p in picks if p["verdict"] == "take" and p["problem"]), None) or next(
         (p for p in picks if p["verdict"] == "wait"), None
     )
+    watch = cast(list[dict[str, str]], seen.get("watch") or [])
     if near:
-        card["close"] = {"coin": near["coin"], "why": clip(near["problem"] or near["reason"], 160)}
+        card["close"] = {
+            "coin": near["coin"],
+            "why": clip(near["problem"] or near["reason"], 160),
+            "verdict": "wait",
+        }
+    elif watch:  # trading-agent judged the near misses: its first wait, else its first pass
+        w = next((x for x in watch if x["verdict"] == "wait"), watch[0])
+        miss = next((m for m in misses if m["coin"] == w["coin"]), None)
+        card["close"] = {
+            "coin": w["coin"],
+            "why": clip(miss["why"] if miss else w["reason"], 160),
+            "verdict": w["verdict"],
+            "watchFor": w["watchFor"],
+        }
     elif misses:
         card["close"] = {"coin": misses[0]["coin"], "why": clip(misses[0]["why"], 160)}
     return card

@@ -180,51 +180,239 @@
   }
 }
 
-/* The plan's coins, each with its limit or state. */
-.dcw-foot {
+/* The week's money in one bar (bought, in open limits, not placed), beside the headline. */
+.dcw-head .dcw-act {
+  margin-left: auto;
+}
+.dcw-top {
+  margin: 12px 0 18px;
+}
+.dcw-top .dcw-line {
+  margin: 0;
+}
+.dcw-top.has-money {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+  gap: 18px 32px;
+  align-items: end;
+}
+@media (max-width: 900px) {
+  .dcw-top.has-money {
+    grid-template-columns: 1fr;
+  }
+}
+.dcw-lead {
+  font-size: 34px;
+  line-height: 1.15;
+}
+.dcw-lead span {
+  color: var(--muted);
+}
+.dcw-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.dcw-sub b {
+  color: var(--accent);
+  font-weight: 600;
+}
+.dcw-split {
+  display: flex;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.dcw-split i {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+}
+.dcw-money .is-bought {
+  background: var(--accent);
+}
+.dcw-money .is-limits {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--wait) 0 4px,
+    rgba(232, 176, 75, 0.55) 4px 8px
+  );
+}
+.dcw-money dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: 10px 0 0;
+}
+.dcw-money dl div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.dcw-money dt {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px 24px;
-  flex-wrap: wrap;
-  margin-top: 16px;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
 }
-.dcw-coins {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 28px;
+.dcw-money dt i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.dcw-money dt i.is-bought,
+.dcw-money dt i.is-limits {
+  box-shadow: none;
+}
+.dcw-money dd {
   margin: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The window's elapsed part, and the time left inside it. */
+.dcw-window {
+  overflow: hidden;
+}
+.dcw-gone {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: rgba(80, 210, 193, 0.18);
+}
+.dcw-window small {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+@media (max-width: 640px) {
+  .dcw-window small {
+    display: none;
+  }
+}
+
+/* The plan's coins as cards: the week's bar with its limit stacked on, and how far the closest
+   limit is from the price. */
+.dcw-coins {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin: 16px 0 0;
   padding: 0;
   list-style: none;
 }
-.dcw-coins li {
-  min-width: 150px;
-}
-/* The whole block opens the coin's position: name, figures, bar and what's waiting. */
 .dcw-coin {
   display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 4px 12px;
-  width: calc(100% + 16px);
-  margin: -6px -8px;
-  padding: 6px 8px;
-  border: 0;
-  border-radius: 10px;
-  background: none;
+  gap: 8px;
+  width: 100%;
+  height: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: var(--sheen);
   color: inherit;
   font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: background 0.15s var(--ease);
+  transition:
+    transform 120ms var(--ease),
+    border-color 120ms var(--ease);
 }
 .dcw-coin:hover,
 .dcw-coin:focus-visible {
-  background: var(--accent-soft);
+  border-color: var(--line-2);
+  transform: translateY(-2px);
 }
 @media (prefers-reduced-motion: reduce) {
   .dcw-coin {
     transition: none;
+  }
+  .dcw-coin:hover,
+  .dcw-coin:focus-visible {
+    transform: none;
+  }
+}
+.dcw-coin:hover .dcb-coin {
+  color: var(--accent);
+}
+.dcw-coins li.is-done .dcw-coin {
+  border-color: rgba(80, 210, 193, 0.4);
+}
+.dcw-coin-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dcw-coin-top small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcw-coins li.is-done .dcw-coin-top small {
+  color: var(--accent);
+  font-weight: 600;
+}
+.dcw-of {
+  color: var(--muted);
+  font-size: 13px;
+}
+.dcw-of b {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 600;
+}
+.dcw-bar {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+.dcw-bar span {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+}
+.dcw-bar .is-bought {
+  background: var(--accent);
+}
+.dcw-bar .is-limits {
+  background: var(--wait);
+}
+.dcw-lim {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcw-lim b {
+  color: var(--wait);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dcw-split i,
+  .dcw-bar span {
+    animation: dcw-grow 700ms var(--ease) both;
+  }
+  .dcw-split i.is-limits,
+  .dcw-bar span.is-limits {
+    animation-delay: 150ms;
+  }
+  @keyframes dcw-grow {
+    from {
+      transform: scaleX(0);
+    }
   }
 }
 .dcb-drawer .dlg-btns a.btn {
@@ -233,45 +421,6 @@
   margin-right: auto;
   color: var(--text);
   text-decoration: none;
-}
-.dcw-coin:hover .dcb-coin {
-  color: var(--accent);
-}
-.dcw-of {
-  justify-self: end;
-  color: var(--muted);
-  font-size: 13px;
-}
-.dcw-of b {
-  color: var(--text);
-  font-weight: 500;
-}
-.dcw-bar {
-  grid-column: 1 / -1;
-  height: 4px;
-  overflow: hidden;
-  border-radius: 2px;
-  background: var(--line-2);
-}
-.dcw-bar span {
-  display: block;
-  height: 100%;
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-.dcw-coins li.is-done .dcw-bar span {
-  background: var(--accent);
-}
-.dcw-coins li small {
-  grid-column: 1 / -1;
-  color: var(--dim);
-  font-size: 12px;
-}
-.dcw-coins li.is-open small {
-  color: var(--wait);
-}
-.dcw-coins li.is-filled small {
-  color: var(--accent);
 }
 .dcw-act {
   display: flex;
@@ -958,6 +1107,9 @@ td.dcb-id {
   .dcw-line {
     font-size: 18px;
   }
+  .dcw-line.dcw-lead {
+    font-size: 26px;
+  }
   .dcw-days li span {
     display: none;
   }
@@ -1328,12 +1480,16 @@ dialog.dcb-drawer {
 }
 .dcb-drawer-facts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px 24px;
-  margin: 0 0 22px;
-  padding: 14px 0;
+  margin: 0 0 16px;
+  padding: 16px 0 0;
   border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+}
+@media (max-width: 560px) {
+  .dcb-drawer-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 .dcb-drawer-facts dt {
   color: var(--muted);
@@ -1342,6 +1498,12 @@ dialog.dcb-drawer {
 .dcb-drawer-facts dd {
   margin: 2px 0 0;
   color: var(--text);
+  font-weight: 500;
+}
+.dcb-drawer-facts dd small {
+  display: block;
+  font-size: 12px;
+  font-weight: 400;
 }
 .dcb-drawer-orders-head {
   display: flex;
@@ -1431,26 +1593,39 @@ dialog:has(.dcr) {
 
 /* The position panel's price strip: average cost and now as labelled pins, the gap between
    them in green or red, filled buys as dots and open orders as amber ticks. */
+/* The price strip: Now and Average above the line, the gap between them shaded with its %, filled
+   buys on the line, open limits under it with their distance and amount. */
 .dcb-ps {
-  margin: 4px 0 22px;
+  margin: 8px 0 22px;
 }
 .dcb-ps-line {
   position: relative;
-  height: 64px;
-  margin: 0 28px;
+  height: 70px;
+  margin: 0 34px;
   border-bottom: 1px solid var(--line-2);
 }
 .dcb-ps-gap {
   position: absolute;
-  bottom: -2px;
-  height: 3px;
-  border-radius: 2px;
+  bottom: -12px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  transform-origin: left;
 }
 .dcb-ps-gap.is-up {
-  background: var(--up);
+  background: rgba(46, 189, 133, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(46, 189, 133, 0.35);
+  color: var(--up);
 }
 .dcb-ps-gap.is-down {
-  background: var(--down);
+  background: rgba(240, 97, 109, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(240, 97, 109, 0.35);
+  color: var(--down);
 }
 .dcb-ps-buy,
 .dcb-ps-open {
@@ -1466,20 +1641,20 @@ dialog:has(.dcr) {
   border: 2px solid var(--panel);
 }
 .dcb-ps-open {
-  bottom: -7px;
-  width: 3px;
-  height: 14px;
-  margin-left: -1.5px;
-  border-radius: 1px;
+  bottom: -8px;
+  width: 4px;
+  height: 16px;
+  margin-left: -2px;
+  border-radius: 2px;
   background: var(--wait);
 }
 .dcb-ps-mark {
   position: absolute;
-  bottom: 0;
+  bottom: 12px;
   display: grid;
   justify-items: center;
   gap: 1px;
-  padding-bottom: 12px;
+  padding-bottom: 14px;
   transform: translateX(-50%);
   font-size: 12px;
   white-space: nowrap;
@@ -1489,12 +1664,16 @@ dialog:has(.dcr) {
   position: absolute;
   bottom: 0;
   left: 50%;
-  height: 10px;
+  height: 12px;
   border-left: 1px dashed var(--muted);
 }
 .dcb-ps-mark small {
   color: var(--muted);
   font-size: 12px;
+}
+.dcb-ps-mark b {
+  color: var(--text);
+  font-weight: 600;
 }
 .dcb-ps-mark.is-now b {
   color: var(--accent);
@@ -1502,14 +1681,44 @@ dialog:has(.dcr) {
 .dcb-ps-mark.is-now::after {
   border-left: 2px solid var(--accent);
 }
+/* An open limit's price, under the line so it never meets Now and Average above it. */
+.dcb-ps-limit {
+  position: absolute;
+  top: calc(100% + 16px);
+  display: grid;
+  justify-items: center;
+  gap: 1px;
+  transform: translateX(-50%);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.dcb-ps-limit b {
+  color: var(--wait);
+  font-weight: 600;
+}
+.dcb-ps-limit small {
+  color: var(--wait);
+  opacity: 0.8;
+  font-size: 12px;
+}
 .dcb-ps figcaption {
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
+  align-items: baseline;
   gap: 6px 16px;
-  margin-top: 14px;
+  margin-top: 24px;
   color: var(--body);
   font-size: 14px;
+}
+.dcb-ps.has-limits figcaption {
+  margin-top: 60px;
+}
+.dcb-ps-say {
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 18px;
+  line-height: 1.35;
 }
 .dcb-ps-key {
   display: inline-flex;
@@ -1521,6 +1730,67 @@ dialog:has(.dcr) {
 .dcb-ps-key i {
   position: static;
   margin: 0 0 0 6px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dcb-ps-gap {
+    animation: dcw-grow 600ms var(--ease) both;
+  }
+  .dcb-ps-mark,
+  .dcb-ps-limit {
+    animation: dcb-drop 400ms var(--ease) both;
+  }
+  .dcb-ps-limit {
+    animation-delay: 200ms;
+  }
+  @keyframes dcb-drop {
+    from {
+      opacity: 0;
+      translate: 0 -6px;
+    }
+  }
+}
+
+/* Share of the book against its target, as a bar with the target ticked. */
+.dcb-share {
+  margin: 0 0 22px;
+  padding: 0 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.dcb-share-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-share-row b {
+  color: var(--text);
+  font-size: 14px;
+}
+.dcb-share-bar {
+  position: relative;
+  height: 8px;
+  margin-top: 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+.dcb-share-bar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--accent);
+}
+.dcb-share-bar span {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--text);
+}
+.dcb-away {
+  color: var(--wait);
 }
 
 /* Every order: Hide cancelled, and the note of how many are hidden. */
@@ -1861,4 +2131,1096 @@ dialog.dco-drawer {
     max-width: 100%;
     overflow-x: auto;
   }
+}
+
+/* ---- the DCA book page: the actions beside the sentence, four figures, the Mix, cards ---- */
+.dcb-top {
+  align-items: start;
+}
+.dcb-tools {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+@media (max-width: 900px) {
+  .dcb-top {
+    grid-template-columns: 1fr;
+  }
+  .dcb-tools {
+    justify-content: flex-start;
+  }
+}
+.dcb-headline-more {
+  color: var(--muted);
+}
+.dcb-figs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 18px 0 0;
+}
+@media (max-width: 720px) {
+  .dcb-figs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.dcb-figs > div {
+  padding: 14px 16px;
+  border: 1px solid var(--edge);
+  border-radius: 14px;
+  background: var(--layer-1);
+  box-shadow: var(--sheen);
+}
+.dcb-figs dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-figs dd {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+.dcb-figs dd.dcb-pnl.is-up {
+  color: var(--up);
+}
+.dcb-figs dd.dcb-pnl.is-down {
+  color: var(--down);
+}
+.dcb-figs dd.dcb-open {
+  color: var(--wait);
+}
+.dcb-figs small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* The Mix: the book now over the targets of the plan, and the 3-year progress. */
+.dcb-mixp {
+  margin-top: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-panel);
+  background: var(--layer-1);
+  box-shadow: var(--sheen);
+}
+.dcb-mixp-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+.dcb-mixp-head h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 15px;
+}
+.dcb-mixp-head span {
+  font-size: 12px;
+}
+.dcb-mixp-rows {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-stack {
+  display: flex;
+  gap: 2px;
+  height: 22px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: var(--panel-2);
+}
+.dcb-stack i {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  overflow: hidden;
+  color: #061014;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  white-space: nowrap;
+  transform-origin: left;
+}
+.dcb-stack.is-target {
+  height: 10px;
+  opacity: 0.45;
+}
+.dcb-plan3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  margin-top: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-plan3 b {
+  color: var(--text);
+  font-weight: 600;
+}
+.dcb-plan3-bar {
+  flex: 1;
+  min-width: 80px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+.dcb-plan3-bar i {
+  display: block;
+  min-width: 4px;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* Positions as cards: the whole card opens the position; Trim sits above that. */
+.dcb-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.dcb-cards > li {
+  min-width: 0;
+}
+.dcb-card {
+  min-width: 0;
+  position: relative;
+  display: grid;
+  gap: 12px;
+  height: 100%;
+  padding: 16px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: var(--sheen);
+  transition:
+    transform 120ms var(--ease),
+    border-color 120ms var(--ease);
+}
+.dcb-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: var(--c);
+  opacity: 0.8;
+}
+.dcb-card:hover,
+.dcb-card:focus-within {
+  border-color: var(--line-2);
+  transform: translateY(-2px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .dcb-card {
+    transition: none;
+  }
+  .dcb-card:hover,
+  .dcb-card:focus-within {
+    transform: none;
+  }
+}
+.dcb-card-open {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border: 0;
+  border-radius: inherit;
+  background: none;
+  cursor: pointer;
+}
+.dcb-card-open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.dcb-card > :not(.dcb-card-open) {
+  pointer-events: none;
+}
+.dcb-card-foot button {
+  position: relative;
+  z-index: 1;
+  pointer-events: auto;
+}
+.dcb-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.dcb-card-head .dcb-coin {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 600;
+}
+.dcb-card:hover .dcb-card-head .dcb-coin {
+  color: var(--accent);
+}
+.dcb-card-head .dcb-id {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dcb-card-val {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.dcb-card-val b {
+  display: block;
+  color: var(--text);
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+}
+.dcb-card-val small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-card-val > span {
+  font-weight: 600;
+}
+.dcb-cstrip.is-empty {
+  color: var(--dim);
+  font-size: 12px;
+}
+.dcb-cstrip-line {
+  margin: 0 6px;
+  position: relative;
+  height: 28px;
+  background: linear-gradient(var(--line-2), var(--line-2)) center / 100% 1px no-repeat;
+}
+.dcb-cstrip-gap {
+  position: absolute;
+  top: 9px;
+  height: 10px;
+  border-radius: 4px;
+  transform-origin: left;
+}
+.dcb-cstrip-gap.is-up {
+  background: rgba(46, 189, 133, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(46, 189, 133, 0.4);
+}
+.dcb-cstrip-gap.is-down {
+  background: rgba(240, 97, 109, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(240, 97, 109, 0.4);
+}
+.dcb-cstrip-lim {
+  position: absolute;
+  top: 7px;
+  width: 4px;
+  height: 14px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--wait);
+}
+.dcb-cstrip-buy {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--body);
+}
+.dcb-cstrip-avg {
+  position: absolute;
+  top: 6px;
+  height: 16px;
+  border-left: 1px dashed var(--text);
+}
+.dcb-cstrip-now {
+  position: absolute;
+  top: 3px;
+  width: 2px;
+  height: 22px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--accent);
+}
+.dcb-cstrip-key {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+.dcb-cstrip-key b {
+  color: var(--text);
+  font-weight: 500;
+}
+.dcb-cstrip-key .is-now b {
+  color: var(--accent);
+}
+.dcb-card-share {
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-card-share > div {
+  display: flex;
+  justify-content: space-between;
+}
+.dcb-card-share b {
+  color: var(--text);
+}
+.dcb-card-sbar {
+  position: relative;
+  display: block;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: var(--panel-2);
+}
+.dcb-card-sbar i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 999px;
+  background: var(--c);
+  transform-origin: left;
+}
+.dcb-card-sbar span {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 2px;
+  background: var(--text);
+}
+.dcb-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+.dcb-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--wait-soft);
+  color: var(--wait);
+  font-weight: 600;
+}
+.dcb-chip.is-none {
+  background: var(--panel-2);
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* This week in the Orders line: bought, then what waits in open limits. */
+.dco-week {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.dco-split {
+  display: inline-flex;
+  width: 160px;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.dco-split i {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+}
+.dco-split .is-bought {
+  background: var(--accent);
+}
+.dco-split .is-limits {
+  background: var(--wait);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dcb-stack i,
+  .dcb-cstrip-gap,
+  .dcb-card-sbar i,
+  .dco-split i {
+    animation: dcw-grow 700ms var(--ease) both;
+  }
+}
+.dcw-left {
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcw-left::before {
+  content: "";
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+
+/* A coin's week against its quota: bought, then open limits, and what's still to place. */
+.dcb-week {
+  display: grid;
+  gap: 4px;
+  min-width: 160px;
+  font-size: 13px;
+}
+.dcb-week-figs b {
+  color: var(--text);
+  font-weight: 600;
+}
+.dcb-week-bar {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.dcb-week-bar i {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+}
+.dcb-week-bar .is-bought {
+  background: var(--accent);
+}
+.dcb-week-bar .is-limits {
+  background: var(--wait);
+}
+.dcb-week small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-week small.is-done {
+  color: var(--accent);
+}
+.dcb-card-week > small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.dcb-cell-note {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dcb-week-bar i {
+    animation: dcw-grow 700ms var(--ease) both;
+  }
+}
+.dcb-hold {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.dcb-hold b {
+  color: var(--text);
+  font-weight: 600;
+}
+.dcb-hold span {
+  font-size: 13px;
+}
+/* A Positions row opens its coin anywhere: the name's button is stretched over the row. */
+tr.dcb-row-open {
+  position: relative;
+  cursor: pointer;
+}
+tr.dcb-row-open .dcb-expand::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+tr.dcb-row-open:hover td {
+  background: var(--accent-soft);
+}
+tr.dcb-row-open td .link,
+tr.dcb-row-open td a {
+  position: relative;
+  z-index: 1;
+}
+.dcw-deposit {
+  margin: 8px 0 0;
+  color: var(--wait);
+  font-size: 12px;
+}
+
+/* The Plan: the plan to date's money as one bar, as on the Dashboard's Weekly DCA. */
+.dcb-plan-bar {
+  display: flex;
+  height: 14px;
+  margin-top: 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.dcb-plan-bar i {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+}
+.dcb-plan-bar .is-bought,
+.dcb-plan-figs .is-bought {
+  background: var(--accent);
+}
+.dcb-plan-bar .is-limits,
+.dcb-plan-figs .is-limits {
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--wait) 0 4px,
+    rgba(232, 176, 75, 0.55) 4px 8px
+  );
+}
+.dcb-plan-figs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+  margin: 10px 0 0;
+}
+.dcb-plan-figs div {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.dcb-plan-figs dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dcb-plan-figs dt i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--panel-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.dcb-plan-figs dd {
+  margin: 0;
+  color: var(--text);
+  font-weight: 600;
+}
+.dcb-plan-say {
+  margin: 10px 0 0;
+  color: var(--wait);
+  font-size: 13px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dcb-plan-bar i {
+    animation: dcw-grow 700ms var(--ease) both;
+  }
+}
+
+/* A section's head that folds it (Fold.tsx, the Trade page's watchlist): the whole row is the button, bar what sits at its end. */
+.acc-fold {
+  display: flex;
+  flex: 1;
+  align-items: baseline;
+  gap: 12px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.acc-fold h2::after {
+  content: "";
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 0 3px 10px;
+  border-right: 1.5px solid var(--muted);
+  border-bottom: 1.5px solid var(--muted);
+  transform: rotate(-45deg);
+  transition: transform 0.15s var(--ease);
+}
+.acc-fold[aria-expanded="true"] h2::after {
+  transform: rotate(45deg);
+}
+.acc-fold h2 {
+  margin: 0;
+}
+.dcb-mixp-head .acc-fold h2 {
+  color: var(--text);
+  font-size: 15px;
+}
+/* A folded section: one slim line, its key figures as chips (Fold.tsx). */
+.dcb-section.is-folded,
+.dcb-mixp.is-folded {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+.dcb-section.is-folded {
+  margin-top: 10px;
+}
+.is-folded > .dcb-section-head,
+.is-folded > .dcb-mixp-head {
+  margin-bottom: 0;
+}
+.acc-fold {
+  align-items: center;
+}
+.fold-sum {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.fold-chip {
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--layer-2);
+  color: var(--body);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.fold-chip.up,
+.fold-chip.is-bull {
+  color: var(--up);
+}
+.fold-chip.down,
+.fold-chip.is-bear {
+  color: var(--down);
+}
+.fold-chip.wait,
+.fold-chip.is-neutral {
+  color: var(--wait);
+}
+/* Crisper cards (owner, 21 Nov 2026): the value and P&L in the head, then the plan bar, the
+   strip and the next limit; nothing said twice. */
+.dcb-card {
+  gap: 10px;
+  padding: 14px;
+}
+.dcb-card-head {
+  justify-content: space-between;
+}
+.dcb-card-now {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.dcb-card-now b {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 600;
+}
+.dcb-card-now small {
+  font-size: 12px;
+  font-weight: 600;
+}
+.dcb-card .dcb-week small {
+  display: none;
+}
+.dcb-card-foot {
+  padding-top: 0;
+  border-top: 0;
+}
+.dcb-strip-cell {
+  width: 28%;
+  min-width: 180px;
+}
+/* A position opened in place, on the DCA book and the Trade page: its orders as a small table
+   with a tag each, then the way to its full panel. */
+.cps-open-row td {
+  padding: 6px 10px 14px;
+  background: var(--layer-1);
+}
+.cps-open-row .btn {
+  margin-top: 8px;
+}
+.cps-orders {
+  margin: 2px 0 6px;
+  font-size: 13px;
+}
+.cps-orders .link {
+  padding: 0;
+}
+.cps-orders .pot-tag {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 5px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.cps-orders .pot-tag.is-wait {
+  background: var(--wait-soft);
+  color: var(--wait);
+}
+.cps-orders .pot-tag.is-live {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+/* In the Positions tables the strip is a picture only: Holding says avg and now. */
+.dcb-strip-cell .dcb-cstrip-key {
+  display: none;
+}
+.fold-sum[hidden] {
+  display: none;
+}
+/* PctStrip.tsx: a position's limits on the table's one scale, in % from now. */
+.pcs {
+  position: relative;
+  display: block;
+  height: 40px;
+  margin: 0 18px;
+  font-size: 10px;
+}
+.pcs-line {
+  position: absolute;
+  top: 16px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--line-2);
+}
+.pcs-gap {
+  position: absolute;
+  top: 14px;
+  height: 6px;
+  border-radius: 3px;
+}
+.pcs-gap.is-down {
+  background: rgba(240, 97, 109, 0.35);
+}
+.pcs-gap.is-up {
+  background: rgba(46, 189, 133, 0.35);
+}
+.pcs-now {
+  position: absolute;
+  top: 6px;
+  width: 2px;
+  height: 22px;
+  margin-left: -1px;
+  background: var(--accent);
+}
+.pcs-fill {
+  position: absolute;
+  top: 13px;
+  width: 8px;
+  height: 8px;
+  margin-left: -4px;
+  border-radius: 50%;
+  background: var(--body);
+}
+.pcs-lim {
+  position: absolute;
+  top: 10px;
+  display: grid;
+  justify-items: center;
+  width: 3px;
+  height: 14px;
+  margin-left: -1.5px;
+  border-radius: 1px;
+  background: var(--wait);
+}
+.pcs-lim small {
+  position: absolute;
+  top: 16px;
+  color: var(--wait);
+  white-space: nowrap;
+}
+.pcs-avg {
+  position: absolute;
+  top: -2px;
+  transform: translateX(-50%);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.pcs-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+.pcs-key i {
+  display: inline-block;
+  margin-left: 4px;
+}
+.pcs-key .is-lim {
+  width: 3px;
+  height: 10px;
+  background: var(--wait);
+}
+.pcs-key .is-fill {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--body);
+}
+.pcs-key .is-now {
+  width: 2px;
+  height: 10px;
+  background: var(--accent);
+}
+.pcs-band {
+  position: absolute;
+  top: 13px;
+  height: 8px;
+  border-radius: 4px;
+  background: rgba(194, 204, 209, 0.35);
+}
+.cps-orders .pot-tag.is-sell {
+  background: color-mix(in srgb, var(--up) 16%, transparent);
+  color: var(--up);
+}
+/* The open row's actions on both Positions tables (PositionCells.tsx). */
+.pos-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0 6px;
+}
+/* Take profit (TakeProfitPanel.tsx). */
+.tp-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 10px 0;
+}
+.tp-pick .views button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.tp-live {
+  margin: 8px 0;
+  font-size: 13px;
+}
+.tp-live small {
+  color: var(--muted);
+}
+.tp-live ul,
+.tp-notes {
+  margin: 4px 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+.tp-live li .link {
+  margin-left: 8px;
+  padding: 0;
+}
+.ldr-replace {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 6px 0;
+  font-size: 13px;
+}
+/* A coin's panel holding its whole Orders tool. */
+dialog.dcb-drawer.is-wide {
+  width: min(1180px, 100vw);
+}
+.dcb-drawer .dco {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.dcb-book-tools {
+  display: flex;
+  gap: 16px;
+  justify-content: flex-end;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.dcb-planhead input[type="date"] {
+  cursor: pointer;
+}
+/* The weekly plan's form (PlanForm), compact. */
+.dpf-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.dpf-sum {
+  color: var(--muted);
+  font-size: 13px;
+}
+.dpf-sum b {
+  color: var(--text);
+}
+.dpf-split {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0 14px;
+}
+.dpf-bar {
+  display: flex;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--line-2);
+}
+.dpf-bar i {
+  height: 100%;
+}
+.dpf-key {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dpf-key i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 2px;
+}
+.dpf-rows {
+  display: grid;
+  margin-top: 6px;
+}
+.dpf-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(100px, 1fr) minmax(90px, 0.8fr) 28px;
+  gap: 10px;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+}
+.dpf-labels {
+  padding-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.dpf-labels [title] {
+  cursor: help;
+}
+.dpf-coin,
+.dpf-field {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 8px;
+  background: var(--bg-2, transparent);
+}
+.dpf-coin:focus-within,
+.dpf-field:focus-within {
+  border-color: var(--accent);
+}
+.dpf-coin input,
+.dpf-field input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 0;
+  border: 0;
+  outline: none;
+  background: none;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+.dpf-field small {
+  color: var(--muted);
+}
+.dpf-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--line-2);
+}
+.dpf-x {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.dpf-x:hover:not(:disabled) {
+  color: var(--down);
+}
+.dpf-x:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.dpf-add {
+  margin: 10px 0 4px;
+  padding: 0;
+}
+.cps-orders .pot-tag.is-done {
+  background: var(--line);
+  color: var(--muted);
+}
+/* The Dashboard's Buy everything now: compact. */
+dialog.dcw-close {
+  width: min(360px, calc(100vw - 32px));
+  padding: 18px 20px;
+}
+dialog.dcw-close h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+dialog.dcw-close p {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+dialog.dcw-close .dlg-btns {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+dialog.dcw-close .dlg-btns .btn {
+  white-space: nowrap;
+}
+.ach-open span {
+  color: var(--accent);
+}
+.ach-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.dcb-mixp-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.dcb-plan-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.dcb-mixp-head .dcb-plan-actions {
+  font-size: 13px;
 }

@@ -111,44 +111,93 @@ def _num(value: str) -> str:
 
 
 def close_out_text(state: dict[str, Any]) -> str:
-    """Monday's message: the whole week, whichever button placed its orders (TODO 27)."""
+    """Monday's message (decision 96): the plan to date, then what 7pm will do on its own."""
     lines = [
         f"dca-agent: Monday close-out, week {state['week']}",
-        f"Bought so far: {_num(state['bought'])} of {_num(state['planned'])} USDC",
+        f"Plan to date: {_num(state['planned'])} USDC ({state['weeks']} weeks)",
+        f"Bought: {_num(state['bought'])} · In open limits: {_num(state['waiting'])}"
+        f" · No order yet: {_num(state['toPlace'])}",
     ]
-    if state["open"]:
-        limits = " · ".join(
-            f"{o['coin']} {_num(o['left'])} at {_num(o['price'])}"
-            if o["price"]
-            else f"{o['coin']} {_num(o['left'])}"
-            for o in state["open"]
+    carried = [o for o in state["open"] if o.get("carried")]
+    fresh = [o for o in state["open"] if not o.get("carried")]
+
+    def listed(rows: list[dict[str, Any]]) -> str:
+        return " · ".join(
+            f"{o['coin']} {_num(o['left'])} at {_num(o['price'])}" if o["price"] else o["coin"]
+            for o in rows
         )
-        lines.append(f"Open limits: {limits}")
+
+    lines += ["", "At 7pm, unless you choose:"]
     if Decimal(state["toPlace"]) > 0:
-        lines.append(f"Not placed yet: {_num(state['toPlace'])} USDC")
+        short = Decimal(state.get("needsDeposit") or "0")
+        line = f"- {_num(state['toPlace'])} USDC with no order yet is bought at market"
+        if short > 0:
+            line += f"; {_num(state['needsDeposit'])} of it waits for a deposit"
+        lines.append(line + ".")
+    if carried:
+        lines.append(f"- Limits from earlier weeks are bought at market: {listed(carried)}.")
+    if fresh:
+        lines.append(f"- This week's limits wait one more week: {listed(fresh)}.")
     lines += [
         "",
-        "Open limits stay open unless you choose. Buy the rest at market buys them and what's "
-        "not placed, until 7pm. Or choose per coin on the DCA book.",
+        "Buy everything now buys it all at market, limits too. Skip this week takes its amount "
+        "out of the plan. The Trading account's money is never used.",
     ]
     return "\n".join(lines)
 
 
+def _due(state: dict[str, Any]) -> bool:
+    """Anything for 7pm to do: money with no order yet, or a limit from an earlier week."""
+    return Decimal(state["toPlace"]) > 0 or any(o.get("carried") for o in state["open"])
+
+
 def close_out(s: Services, now: datetime) -> str:
+    """5pm Monday: tell the owner what 7pm will do, with Buy everything now and Skip."""
     state = DcaBook(Trading(s.binance, s.store, s.audit)).week_state()
-    if not state["open"] and Decimal(state["planned"]) <= 0:
+    if Decimal(state["planned"]) <= 0 and not state["open"]:
         return "No weekly plan set and nothing open: nothing to close out."
-    if not state["open"] and Decimal(state["toPlace"]) <= 0:
-        return f"This week is bought: {_num(state['bought'])} USDC. Nothing to close out."
+    if state["skipped"]:
+        return "This week is skipped: nothing to close out."
+    if not _due(state):
+        return f"On plan: {_num(state['bought'])} USDC bought, nothing due at 7pm."
     week, _ = week_of(int(now.timestamp() * 1000))
     turn = now.replace(hour=19, minute=0, second=0, microsecond=0)
-    keep = schedule.offer(s.store, "dca-keep", week, turn, now)
     buy = schedule.offer(s.store, "dca-close-out", week, turn, now)
+    skip = schedule.offer(s.store, "dca-skip", week, turn, now)
     missed = _tell(
-        s, close_out_text(state), [("Keep them open", keep), ("Buy the rest at market", buy)]
+        s, close_out_text(state), [("Buy everything now", buy), ("Skip this week", skip)]
     )
-    found = f"{len(state['open'])} open, {_num(state['toPlace'])} USDC not placed."
+    found = f"{len(state['open'])} open, {_num(state['toPlace'])} USDC with no order yet."
     return f"{found} {'Not sent: ' + missed if missed else 'Asked on Telegram.'}"
+
+
+def close_out_auto(s: Services, now: datetime) -> str:
+    """Just before 7pm Monday: the close-out runs on its own (decision 96), unless the week was
+    skipped. Money with no order yet and limits from earlier weeks are bought at market, up to
+    the free USDC that isn't the Trading account's; this week's limits wait one more week."""
+    book = DcaBook(Trading(s.binance, s.store, s.audit))
+    state = book.week_state(funds=False)
+    if state["skipped"] or not _due(state):
+        return "Nothing due." if not state["skipped"] else "This week is skipped."
+    week, _ = week_of(int(now.timestamp() * 1000))
+    try:
+        done = book.close_out(week, auto=True)
+    except (Refused, BinanceError) as error:
+        said = f"Not done: {getattr(error, 'message', None) or error}"
+        _tell(s, f"dca-agent: Monday close-out {said}")
+        return said
+    said = _done_words(done)
+    _tell(s, f"dca-agent: Monday close-out done. {said}")
+    return said
+
+
+def _done_words(done: dict[str, Any]) -> str:
+    said = f"Bought at market: {', '.join(done['closed'])}." if done["closed"] else ""
+    if done["missed"]:
+        said += f" Not bought: {', '.join(done['missed'])}."
+    if Decimal(done.get("short") or "0") > 0:
+        said += f" {_num(done['short'])} USDC waits for a deposit."
+    return said.strip() or "Nothing was left to buy."
 
 
 def risk_check(s: Services, now: datetime) -> str:
@@ -178,6 +227,7 @@ def runners(s: Services, now: datetime) -> dict[str, schedule.Runner]:
         "pot-scan": lambda: scan(s, now),
         "dca-deposit": lambda: deposit_day(s, now),
         "dca-close-out": lambda: close_out(s, now),
+        "dca-close-out-auto": lambda: close_out_auto(s, now),
         "risk-check": lambda: risk_check(s, now),
         "risk-review": lambda: risk_review(s, now),
     }
@@ -204,11 +254,7 @@ def _setup(desk: Trading, kind: str, arg: str, s: Services) -> str:
 def _close_out(desk: Trading, week: str, now: datetime) -> str:
     if week_of(int(now.timestamp() * 1000))[0] != week:
         return "Too late: the week turned over at 7pm. The DCA book shows what's open."
-    done = DcaBook(desk).close_out(week)
-    said = f"Bought at market: {', '.join(done['closed'])}." if done["closed"] else ""
-    if done["missed"]:
-        said += f" Not bought: {', '.join(done['missed'])}."
-    return said.strip() or "Nothing was left to buy."
+    return _done_words(DcaBook(desk).close_out(week))
 
 
 def act(s: Services, item: dict[str, Any], now: datetime) -> str:
@@ -220,7 +266,10 @@ def act(s: Services, item: dict[str, Any], now: datetime) -> str:
             return _setup(desk, kind, arg, s)
         if kind == "dca-close-out":
             return _close_out(desk, arg, now)
-        if kind == "dca-keep":
+        if kind == "dca-skip":
+            DcaBook(desk).skip(arg)
+            return "Skipped: this week's amount is out of the plan. Open limits stay as they are."
+        if kind == "dca-keep":  # a button from before decision 96
             return "Kept open: they wait on Binance. Change or cancel them on the DCA book."
     except (Refused, BinanceError) as error:
         return f"Not done: {getattr(error, 'message', None) or error}"

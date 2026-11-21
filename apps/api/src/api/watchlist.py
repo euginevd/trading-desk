@@ -4,6 +4,7 @@ coin with its price and last signal."""
 import time
 from typing import Any
 
+from api import perp
 from api.ai_signal import Signals
 from api.audit import Audit
 from api.binance import Binance
@@ -100,8 +101,8 @@ class Watchlist:
         most = cap(chosen)
         if len(coins) >= most:
             raise MarketError(f"{chosen['name']} is full at {most}. Remove a coin first.")
-        if symbol not in self._binance.symbols():
-            raise MarketError(f"Binance has no {pair(symbol)} pair.")
+        if symbol not in self._binance.symbols() and not perp.listed(name):
+            raise MarketError(f"Binance has no {pair(symbol)} pair, on spot or futures.")
         self._store.watch_coin(chosen["id"], name, _now())
         self._audit.record("settings", "Watchlist", f"Added {name} to {chosen['name']}")
         return self.view(chosen["id"])

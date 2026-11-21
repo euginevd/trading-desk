@@ -1,41 +1,38 @@
 // The DCA book (TODO 11): five lifelong positions, one per coin, fed only by orders placed from
 // the desk. A sentence, three years as weekly ticks, this week's planner, the positions and
 // every order. A trim sells a slice and its buy-back is linked to it; tax parcels stay on Tax.
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   ApiError,
-  checkDca,
+  cancelDcaOrder,
   dcaOdds,
-  fixDca,
   getDcaBook,
+  placeDcaAdd,
   placeDcaOrder,
+  placeDcaSell,
+  previewDcaAdd,
+  previewDcaSell,
   sellCheck,
+  strategize,
   setDcaPlan,
 } from "./api";
 import { errorOf } from "./format";
 import CoinIcon from "./CoinIcon";
+import { colourOf, PlanPanel, WeekBar } from "./DcaCards";
+import { PctKey, PctStrip, scaleFor } from "./PctStrip";
+import CoinFunds from "./CoinFunds";
+import { Holding, PositionActions, PositionName } from "./PositionCells";
+import TakeProfitPanel from "./TakeProfitPanel";
 import DcaChat from "./DcaChat";
 import PositionDrawer from "./DcaPosition";
 import { Live } from "./Figures";
+import { FoldHead, useFold } from "./Fold";
 import DcaFunds from "./DcaFunds";
 import DcaOrderDrawer from "./DcaOrderDrawer";
 import DcaOrders, { CancelDialog } from "./DcaOrders";
-import {
-  SOURCE,
-  dollars,
-  STATUS,
-  amountOf,
-  day,
-  isOpen,
-  limit,
-  qty,
-  signed,
-  toCsv,
-  two,
-} from "./dcaFormat";
+import { dollars, STATUS, isOpen, qty, signed, two, wholeDollars, roundPrice } from "./dcaFormat";
 import type {
   DcaBook,
-  DcaCheck,
   DcaOdds,
   DcaOrder,
   DcaOrderRequest,
@@ -53,15 +50,6 @@ const oddsWords = (o: DcaOdds | null) =>
         ? `${o.hit} of ${o.weeks} wk`
         : `${o.pct}% (${o.hit} of ${o.weeks})`;
 
-function Coin({ coin }: { coin: string }) {
-  return (
-    <span className="dcb-coin">
-      <CoinIcon coin={coin} />
-      {coin}
-    </span>
-  );
-}
-
 // ---------------------------------------------------------------- the plan
 
 const BLANK_PLAN: DcaPlan = {
@@ -69,6 +57,28 @@ const BLANK_PLAN: DcaPlan = {
   weeks: 156,
   orders: [{ coin: "BTC", spend: "", odds: 60 }],
 };
+
+// A date input opens its calendar on the first click; clicked again once focused, it types
+// (owner, 21 Nov 2026: both).
+const openPicker = (e: React.MouseEvent<HTMLInputElement>) => {
+  if (document.activeElement === e.currentTarget) return; // focused: let it type
+  try {
+    e.currentTarget.showPicker();
+  } catch {
+    // an older browser: the input works as typed
+  }
+};
+const DAY = 86_400_000;
+const addWeeks = (start: string, weeks: number) =>
+  new Date(Date.parse(`${start}T00:00:00Z`) + weeks * 7 * DAY).toISOString().slice(0, 10);
+const weeksBetween = (start: string, end: string) =>
+  Math.min(
+    520,
+    Math.max(
+      1,
+      Math.round((Date.parse(`${end}T00:00:00Z`) - Date.parse(`${start}T00:00:00Z`)) / (7 * DAY)),
+    ),
+  );
 
 function PlanForm({
   plan,
@@ -88,6 +98,15 @@ function PlanForm({
       orders: d.orders.map((o, k) => (k === i ? { ...o, ...change } : o)),
     }));
   const total = draft.orders.reduce((s, o) => s + (Number(o.spend) || 0), 0);
+  // A week's money by coin, biggest first, for the split bar.
+  const byCoin = [
+    ...draft.orders
+      .filter((o) => o.coin && Number(o.spend) > 0)
+      .reduce(
+        (m, o) => m.set(o.coin, (m.get(o.coin) ?? 0) + Number(o.spend)),
+        new Map<string, number>(),
+      ),
+  ].sort((x, y) => y[1] - x[1]);
   const save = () => {
     setBusy(true);
     setError(null);
@@ -111,96 +130,120 @@ function PlanForm({
         save();
       }}
     >
-      <h2>{plan ? "Change the weekly plan" : "Your weekly plan"}</h2>
-      <p className="muted">
-        One row per weekly order. Fill odds are the share of past weeks a limit at that depth filled
-        by Monday evening; the desk picks the price to match.
-      </p>
+      {/* The plan at a glance (owner, 21 Nov 2026: sleeker): what a week buys, split by coin,
+          over the dates; each order one compact row. */}
+      <div className="dpf-head">
+        <h2>{plan ? "Change the weekly plan" : "Your weekly plan"}</h2>
+        <span className="dpf-sum num">
+          <b>{wholeDollars(String(total))}</b> a week · {wholeDollars(String(total * draft.weeks))}{" "}
+          over {draft.weeks} {draft.weeks === 1 ? "week" : "weeks"}
+        </span>
+      </div>
+      {total > 0 && (
+        <div className="dpf-split" aria-hidden="true">
+          <span className="dpf-bar">
+            {byCoin.map(([c, v], k) => (
+              <i key={c} style={{ width: `${(v / total) * 100}%`, background: colourOf(c, k) }} />
+            ))}
+          </span>
+          <span className="dpf-key">
+            {byCoin.map(([c, v], k) => (
+              <span key={c}>
+                <i style={{ background: colourOf(c, k) }} />
+                {c} {Math.round((v / total) * 100)}%
+              </span>
+            ))}
+          </span>
+        </div>
+      )}
       <div className="dcb-planhead">
         <label>
           Starts
           <input
             type="date"
             value={draft.start}
-            onChange={(e) => setDraft({ ...draft, start: e.target.value })}
+            onMouseDown={openPicker}
+            onChange={(e) => e.target.value && setDraft({ ...draft, start: e.target.value })}
           />
         </label>
         <label>
-          Weeks
+          Ends
           <input
-            type="number"
-            min={1}
-            max={520}
-            value={draft.weeks}
-            onChange={(e) => setDraft({ ...draft, weeks: Number(e.target.value) })}
+            type="date"
+            min={draft.start}
+            value={addWeeks(draft.start, draft.weeks)}
+            onMouseDown={openPicker}
+            onChange={(e) =>
+              e.target.value &&
+              setDraft({ ...draft, weeks: weeksBetween(draft.start, e.target.value) })
+            }
           />
         </label>
       </div>
-      <table className="dcb-table">
-        <thead>
-          <tr>
-            <th>Coin</th>
-            <th>Amount</th>
-            <th>Fill odds %</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {draft.orders.map((o, i) => (
-            <tr key={i}>
-              <td>
-                <input
-                  aria-label={`Order ${i + 1} coin`}
-                  value={o.coin}
-                  onChange={(e) => row(i, { coin: e.target.value.toUpperCase() })}
-                />
-              </td>
-              <td>
-                <input
-                  aria-label={`Order ${i + 1} amount`}
-                  inputMode="decimal"
-                  value={o.spend}
-                  onChange={(e) => row(i, { spend: e.target.value })}
-                />
-              </td>
-              <td>
-                <input
-                  aria-label={`Order ${i + 1} fill odds`}
-                  type="number"
-                  min={5}
-                  max={95}
-                  value={o.odds}
-                  onChange={(e) => row(i, { odds: Number(e.target.value) })}
-                />
-              </td>
-              <td>
-                <button
-                  type="button"
-                  className="link"
-                  disabled={draft.orders.length === 1}
-                  onClick={() =>
-                    setDraft({ ...draft, orders: draft.orders.filter((_, k) => k !== i) })
-                  }
-                >
-                  Remove
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="dcb-planfoot">
-        <button
-          type="button"
-          className="link"
-          onClick={() =>
-            setDraft({ ...draft, orders: [...draft.orders, { coin: "", spend: "", odds: 60 }] })
-          }
-        >
-          Add a row
-        </button>
-        <span className="muted num">{two(total)} a week</span>
-      </p>
+      <div className="dpf-rows" role="table" aria-label="Weekly orders">
+        <div className="dpf-row dpf-labels" role="row">
+          <span role="columnheader">Coin</span>
+          <span role="columnheader">Each week</span>
+          <span
+            role="columnheader"
+            title="The share of past weeks a limit at that depth filled by Monday evening; the desk picks the price to match. Higher fills more often, lower buys cheaper."
+          >
+            Fill odds ⓘ
+          </span>
+          <span />
+        </div>
+        {draft.orders.map((o, i) => (
+          <div className="dpf-row" role="row" key={i}>
+            <span className="dpf-coin" role="cell">
+              {o.coin ? <CoinIcon coin={o.coin} /> : <i className="dpf-dot" />}
+              <input
+                aria-label={`Order ${i + 1} coin`}
+                placeholder="Coin"
+                value={o.coin}
+                onChange={(e) => row(i, { coin: e.target.value.toUpperCase() })}
+              />
+            </span>
+            <span className="dpf-field" role="cell">
+              <small>$</small>
+              <input
+                aria-label={`Order ${i + 1} amount`}
+                inputMode="decimal"
+                value={o.spend}
+                onChange={(e) => row(i, { spend: e.target.value })}
+              />
+            </span>
+            <span className="dpf-field" role="cell">
+              <input
+                aria-label={`Order ${i + 1} fill odds`}
+                type="number"
+                min={5}
+                max={95}
+                value={o.odds}
+                onChange={(e) => row(i, { odds: Number(e.target.value) })}
+              />
+              <small>%</small>
+            </span>
+            <button
+              type="button"
+              className="dpf-x"
+              aria-label={`Remove order ${i + 1}`}
+              disabled={draft.orders.length === 1}
+              onClick={() => setDraft({ ...draft, orders: draft.orders.filter((_, k) => k !== i) })}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        className="link dpf-add"
+        onClick={() =>
+          setDraft({ ...draft, orders: [...draft.orders, { coin: "", spend: "", odds: 60 }] })
+        }
+      >
+        + Add an order
+      </button>
       {error && (
         <p className="error-text" role="alert">
           {error}
@@ -221,55 +264,6 @@ function PlanForm({
 }
 
 // ---------------------------------------------------------------- three years as ticks
-
-function Ticks({ book }: { book: DcaBook }) {
-  const p = book.progress;
-  const [said, setSaid] = useState("Hover or focus a week to read it.");
-  if (!p) return null;
-  const tell = (i: number) => {
-    const t = p.ticks[i];
-    if (!t) return setSaid(`Week ${i + 1}: to come.`);
-    const base = `Week ${t.week}, Friday ${day(Date.parse(t.friday), true)}`;
-    if (t.state === "now")
-      return setSaid(`${base}: this week, ${two(t.usdc)} ${book.quote} so far.`);
-    if (t.state === "missed") return setSaid(`${base}: nothing bought.`);
-    if (t.state === "part")
-      return setSaid(`${base}: ${two(t.usdc)} of ${two(p.weekly)} ${book.quote} bought.`);
-    setSaid(`${base}: ${two(t.usdc)} ${book.quote} bought${t.trim ? ", and a trim" : ""}.`);
-  };
-  return (
-    <div className="dcb-years">
-      <div
-        className="dcb-ticks"
-        role="group"
-        aria-label={`Week ${p.week} of ${p.weeks}: ${p.ticks.filter((t) => t.state === "bought").length} weeks bought`}
-        style={{ gridTemplateColumns: `repeat(${p.weeks}, minmax(0, 1fr))` }}
-      >
-        {Array.from({ length: p.weeks }, (_, i) => {
-          const t = p.ticks[i];
-          const cls = t ? `is-${t.state}${t.trim ? " is-trim" : ""}` : "";
-          return t ? (
-            <button
-              key={i}
-              type="button"
-              className={`dcb-tick ${cls}`}
-              style={{ ["--i" as string]: i }}
-              aria-label={`Week ${t.week}`}
-              onPointerEnter={() => tell(i)}
-              onFocus={() => tell(i)}
-              onClick={() => tell(i)}
-            />
-          ) : (
-            <span key={i} className="dcb-tick" style={{ ["--i" as string]: i }} />
-          );
-        })}
-      </div>
-      <p className="muted dcb-years-said" aria-live="polite">
-        {said}
-      </p>
-    </div>
-  );
-}
 
 // ---------------------------------------------------------------- one order, trims, buy-backs
 
@@ -538,81 +532,16 @@ function OrderSheet({
   );
 }
 
-// ---------------------------------------------------------------- check against Binance
-
-// Every order goes to Binance with its reference as its client order id; this reads them all
-// back and says what differs. Fixing re-reads each differing order and adds back any the book
-// lost.
-function Checked({ found, busy, onFix }: { found: DcaCheck; busy: boolean; onFix: () => void }) {
-  const issues = found.differ.length + found.onlyBinance.length + found.onlyBook.length;
-  const fixable = found.differ.length + found.onlyBinance.length;
-  const fixedWords =
-    found.fixed !== undefined ? ` Updated ${found.fixed}, added back ${found.added ?? 0}.` : "";
-  if (issues === 0) {
-    return (
-      <p className="dcb-check is-ok" role="status">
-        All {found.inBook} {found.inBook === 1 ? "order" : "orders"} in the book match Binance.
-        {fixedWords}
-      </p>
-    );
-  }
-  return (
-    <div className="dcb-check" role="status">
-      <p>
-        {found.matched} of {found.inBook} match Binance; {issues} to look at.{fixedWords}
-      </p>
-      <ul>
-        {found.differ.map((d) => (
-          <li key={d.ref}>
-            <b>{d.ref}</b>: the book says {d.book.status} ({qty(d.book.filledQty)} filled), Binance
-            says {d.binance.status} ({qty(d.binance.filledQty)} filled).
-          </li>
-        ))}
-        {found.onlyBinance.map((o) => (
-          <li key={o.ref}>
-            <b>{o.ref}</b>: on Binance ({o.side}, {o.status}), not in the book.
-          </li>
-        ))}
-        {found.onlyBook.map((o) => (
-          <li key={o.ref}>
-            <b>{o.ref}</b>: in the book, not found on Binance. Binance drops orders cancelled with
-            nothing filled after about 90 days.
-          </li>
-        ))}
-      </ul>
-      {fixable > 0 && (
-        <button type="button" className="btn btn-small" disabled={busy} onClick={onFix}>
-          Update the book from Binance
-        </button>
-      )}
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------- money per coin
 
-// What sits in open buy orders for a coin, and the share of the book against its target.
+// What sits in open buy orders, for a coin or the whole book.
 const openOf = (book: DcaBook, coin?: string) =>
   book.orders
     .filter((o) => isOpen(o) && o.side === "buy" && (!coin || o.coin === coin))
     .reduce((s, o) => s + Number(o.spend ?? 0), 0);
-function mixOf(book: DcaBook) {
-  const plan = book.plan?.orders ?? [];
-  const spend = plan.reduce((s, o) => s + Number(o.spend), 0) || 1;
-  const value = book.positions.reduce((s, p) => s + Number(p.value ?? 0), 0);
-  const target = (coin: string) =>
-    (plan.filter((o) => o.coin === coin).reduce((s, o) => s + Number(o.spend), 0) * 100) / spend;
-  const now = (v: string | null) => (value > 0 ? (Number(v ?? 0) * 100) / value : 0);
-  const scale = Math.max(
-    1,
-    ...book.positions.map((p) => Math.max(target(p.coin), now(p.value)) * 1.15),
-  );
-  return { target, now, scale };
-}
 
-// Show more and the chat are remembered per browser; storage may be blocked, then they start
+// The chat and the positions' view are remembered per browser; storage may be blocked, then they start
 // closed.
-const MORE_KEY = "desk.dcaBook.more";
 const CHAT_KEY = "desk.dcaBook.chat";
 function readFlag(key: string, fallback = false): boolean {
   try {
@@ -629,14 +558,148 @@ function saveFlag(key: string, open: boolean) {
     // not kept: it starts closed next time
   }
 }
-const readMore = () => readFlag(MORE_KEY);
-const saveMore = (open: boolean) => saveFlag(MORE_KEY, open);
 
 // ---------------------------------------------------------------- the page
 
-const HIDE_KEY = "desk.dca.hideCancelled";
-// Cancelled with nothing bought: of no interest once it's off Binance.
-const gone = (o: DcaOrder) => o.status === "cancelled" && Number(o.filledQty) === 0;
+type DcaSort = "coin" | "added" | "value" | "pnl";
+type SortState = { key: DcaSort; down: boolean } | null;
+
+function sortedPositions(list: DcaPosition[], sort: SortState): DcaPosition[] {
+  if (!sort) return list;
+  const fig = (p: DcaPosition): number | string =>
+    sort.key === "coin"
+      ? p.coin
+      : sort.key === "added"
+        ? Number(p.added)
+        : sort.key === "value"
+          ? Number(p.value ?? 0)
+          : p.pnlPct === null
+            ? -Infinity
+            : Number(p.pnlPct);
+  return [...list].sort((a, b) => {
+    const x = fig(a);
+    const y = fig(b);
+    const order = typeof x === "string" ? x.localeCompare(String(y)) : x - Number(y);
+    return order * (sort.down ? -1 : 1);
+  });
+}
+const ariaSort = (sort: SortState, key: DcaSort) =>
+  sort?.key === key ? (sort.down ? "descending" : "ascending") : "none";
+function sortButton(
+  sort: SortState,
+  setSort: (f: (s: SortState) => SortState) => void,
+  key: DcaSort,
+  label: string,
+) {
+  return (
+    <button
+      type="button"
+      className="sort-btn"
+      onClick={() => setSort((s) => ({ key, down: s?.key === key ? !s.down : key !== "coin" }))}
+    >
+      {label}
+      <span aria-hidden="true">{sort?.key === key ? (sort.down ? " ↓" : " ↑") : ""}</span>
+    </button>
+  );
+}
+
+// A position opened in place: its waiting limits one by one, then its buys a week to a row
+// (the newest six), so a coin with hundreds of orders stays short; the panel has them all.
+const WEEKS_SHOWN = 6;
+function OpenOrders({
+  orders,
+  now,
+  held,
+  funds,
+  onPanel,
+  onTakeProfit,
+  onAddFunds,
+}: {
+  orders: DcaOrder[];
+  now: number | null;
+  held: boolean;
+  funds?: ReactNode; // Add funds, open in the row
+  onPanel: () => void;
+  onTakeProfit: () => void;
+  onAddFunds: () => void;
+}) {
+  const waiting = orders
+    .filter((o) => isOpen(o) && Number(o.price) > 0)
+    .sort((a, b) => Number(b.price) - Number(a.price));
+  const done = orders.filter((o) => o.status === "filled" && Number(o.filledQuote) > 0);
+  const weeks = new Map<string, { buys: number; sells: number; spent: number; qty: number }>();
+  for (const o of done) {
+    const w = weeks.get(o.week) ?? { buys: 0, sells: 0, spent: 0, qty: 0 };
+    if (o.side === "buy") {
+      w.buys += 1;
+      w.spent += Number(o.filledQuote);
+      w.qty += Number(o.filledQty);
+    } else {
+      w.sells += 1;
+    }
+    weeks.set(o.week, w);
+  }
+  const rows = [...weeks.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  const live = orders.filter((o) => o.status !== "cancelled").length;
+  return (
+    <>
+      <table className="dcb-table cps-orders num">
+        <thead>
+          <tr>
+            <th>Order</th>
+            <th className="r">Price</th>
+            <th className="r">From now</th>
+            <th className="r">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          {waiting.map((o) => {
+            const away = now ? (Number(o.price) / now - 1) * 100 : null;
+            const sell = o.side === "sell";
+            return (
+              <tr key={o.ref}>
+                <td>
+                  <span className={`pot-tag ${sell ? "is-sell" : "is-wait"}`}>
+                    {sell ? "Selling" : "Waiting"}
+                  </span>
+                </td>
+                <td className="r">{roundPrice(o.price)}</td>
+                <td className="r muted">
+                  {away === null
+                    ? "—"
+                    : `fills ${Math.abs(away).toFixed(1)}% ${away > 0 ? "higher" : "lower"}`}
+                </td>
+                <td className="r">
+                  {wholeDollars(sell ? String(Number(o.qty) * Number(o.price)) : (o.spend ?? "0"))}
+                </td>
+              </tr>
+            );
+          })}
+          {rows.slice(0, WEEKS_SHOWN).map(([week, w]) => (
+            <tr key={week}>
+              <td>
+                <span className="pot-tag is-live">Bought</span>{" "}
+                <span className="muted">
+                  {week} · {w.buys} {w.buys === 1 ? "buy" : "buys"}
+                  {w.sells ? ` · ${w.sells} sold` : ""}
+                </span>
+              </td>
+              <td className="r">{w.qty > 0 ? `avg ${roundPrice(w.spent / w.qty)}` : "—"}</td>
+              <td className="r muted">—</td>
+              <td className="r">{wholeDollars(String(w.spent))}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <PositionActions onTakeProfit={held ? onTakeProfit : undefined} onAddFunds={onAddFunds}>
+        <button type="button" className="btn btn-small" onClick={onPanel}>
+          Orders{live > 0 ? ` · ${live}` : ""}
+        </button>
+      </PositionActions>
+      {funds}
+    </>
+  );
+}
 
 export default function DcaBookPage() {
   const [book, setBook] = useState<DcaBook | null>(null);
@@ -650,8 +713,6 @@ export default function DcaBookPage() {
   };
   const [said, setSaid] = useState<string | null>(null);
   // The Dashboard's links open the book at Add funds or Remove funds.
-  const [checked, setChecked] = useState<DcaCheck | null>(null);
-  const [checking, setChecking] = useState(false);
   // The Dashboard's "Plan this week" opens the weekly one.
   const [funds, setFunds] = useState<"add" | "remove" | "weekly" | null>(() => {
     const query = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
@@ -660,13 +721,10 @@ export default function DcaBookPage() {
     return query.has("plan") ? "weekly" : null;
   });
   const [cancelling, setCancelling] = useState<DcaOrder | null>(null);
+  // Take profit on a coin, or add funds to it (owner, 21 Nov 2026), as on the Trade page.
+  const [selling, setSelling] = useState<string | null>(null);
+  const [adding, setAdding] = useState<string | null>(null);
   const [viewing, setViewing] = useState<{ ref: string; edit: boolean } | null>(null);
-  const [hideCancelled, setHideCancelled] = useState(() => readFlag(HIDE_KEY, true));
-  const toggleHide = () =>
-    setHideCancelled((h) => {
-      saveFlag(HIDE_KEY, !h);
-      return !h;
-    });
   const weeklyAmount = String(
     (book?.plan?.orders ?? []).reduce((sum, o) => sum + Number(o.spend), 0) || "",
   );
@@ -687,7 +745,13 @@ export default function DcaBookPage() {
   const [openCoin, setOpenCoin] = useState<string | null>(() =>
     asked.has("rebalance") ? null : asked.get("coin"),
   );
-  const [more, setMore] = useState(() => readMore());
+  // A row opens in place (owner, 21 Nov 2026), like the Trade page's; the full panel (facts,
+  // Trim) is a click away from there.
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [posOpen, togglePos] = useFold("dcb-pos");
+  // The positions table sorts like the Portfolio's and the Trade page's: figures high to low
+  // on the first click, the coin A to Z; the plan's own order until then.
+  const [sort, setSort] = useState<{ key: DcaSort; down: boolean } | null>(null);
   const [chatOpen, setChatOpen] = useState(() => chatting || readFlag(CHAT_KEY));
   const openChat = (open: boolean) => {
     setChatOpen(open);
@@ -764,355 +828,103 @@ export default function DcaBookPage() {
       </main>
     );
   }
+  // One scale for the Limits column: every coin's limits, fills and average in % from now.
+  const stripScale = scaleFor(
+    book.positions.map((p) => ({
+      now:
+        Number(p.qty) > 0 && p.value !== null
+          ? Number(p.value) / Number(p.qty)
+          : Number(p.price ?? 0) || null,
+      prices: [
+        ...book.orders
+          .filter((o) => o.coin === p.coin && o.side === "buy" && o.status !== "cancelled")
+          .map((o) => Number(o.avgPrice ?? o.price ?? 0))
+          .filter((x) => x > 0),
+        ...(p.avgCost ? [Number(p.avgCost)] : []),
+      ],
+    })),
+  );
 
   const t = book.totals;
   const p = book.progress;
   const openTotal = openOf(book);
-  const mix = mixOf(book);
+  // The open limits in a few words: how many, and how far the closest one is from its price.
+  const limitsNow = book.orders.filter(
+    (o) => isOpen(o) && o.side === "buy" && o.kind === "limit" && Number(o.price) > 0,
+  );
+  const closestAway = limitsNow
+    .map((o) => {
+      const pos = book.positions.find((x) => x.coin === o.coin);
+      const held = Number(pos?.qty ?? 0);
+      const now = held > 0 && pos?.value ? Number(pos.value) / held : 0;
+      return now > 0 ? Math.max(0, (1 - Number(o.price) / now) * 100) : null;
+    })
+    .filter((x): x is number => x !== null)
+    .sort((a, b) => a - b)[0];
+  const openWords = limitsNow.length
+    ? `${limitsNow.length} ${limitsNow.length === 1 ? "limit" : "limits"}${closestAway !== undefined ? `, closest ${closestAway.toFixed(1)}% away` : ""}`
+    : "none waiting";
   const pnl = Number(t.pnl);
-  const bought = book.orders.some((o) => Number(o.filledQty) > 0);
-  const backed = new Set(book.orders.filter((o) => o.source === "buy-back").map((o) => o.link));
-  const runCheck = (fix: boolean) => {
-    setChecking(true);
-    (fix ? fixDca() : checkDca()).then(
-      (found) => {
-        setChecked(found);
-        setChecking(false);
-        if (fix) load();
-      },
-      (e: unknown) => {
-        setChecking(false);
-        setSaid(errorOf(e, "Binance couldn't be read. Try again in a minute."));
-      },
-    );
-  };
-  const toggleMore = () => {
-    setMore((m) => {
-      saveMore(!m);
-      return !m;
-    });
-  };
-  const renderOrders = (all: DcaOrder[], label: string) => {
-    const list = hideCancelled ? all.filter((o) => !gone(o)) : all;
-    const hidden = all.length - list.length;
-    return (
-      <>
-        {list.length > 0 && (
-          <div className="dcb-scroll">
-            <table className="dcb-table" aria-label={label}>
-              <thead>
-                <tr>
-                  <th>Reference</th>
-                  <th>Placed</th>
-                  <th>Coin</th>
-                  <th>Source</th>
-                  <th className="r">Price</th>
-                  <th className="r">Quantity</th>
-                  <th className="r">{book.quote}</th>
-                  <th className="r dcb-hide">Fee</th>
-                  <th>State</th>
-                  <th>
-                    <span className="visually-hidden">Action</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((o) => {
-                  const sold = o.side === "sell";
-                  return (
-                    <tr key={o.ref}>
-                      <td className="dcb-id">
-                        {o.ref}
-                        {o.link && <small> for {o.link}</small>}
-                      </td>
-                      <td className="num">{day(o.created)}</td>
-                      <td>
-                        <Coin coin={o.coin} />
-                      </td>
-                      <td>
-                        <span className={`dcb-src is-${o.source}`}>{SOURCE[o.source]}</span>
-                      </td>
-                      <td className="r num">
-                        {o.avgPrice
-                          ? limit(o.avgPrice)
-                          : o.kind === "market"
-                            ? "Market"
-                            : limit(o.price)}
-                      </td>
-                      <td className={`r num ${sold ? "down" : ""}`}>
-                        {sold ? "−" : ""}
-                        {qty(Number(o.filledQty) > 0 ? o.filledQty : o.qty)}
-                      </td>
-                      <td className="r num">{two(amountOf(o))}</td>
-                      <td className="r num muted dcb-hide">{two(o.fee)}</td>
-                      <td>
-                        <span className={`dcb-tag is-${o.status}`}>{STATUS[o.status]}</span>
-                      </td>
-                      <td className="r dco-acts">
-                        <button
-                          type="button"
-                          className="link"
-                          aria-label={`View ${o.ref}`}
-                          onClick={() => setViewing({ ref: o.ref, edit: false })}
-                        >
-                          View
-                        </button>
-                        {isOpen(o) && o.kind === "limit" && (
-                          <button
-                            type="button"
-                            className="link"
-                            aria-label={`Modify ${o.ref}`}
-                            onClick={() => setViewing({ ref: o.ref, edit: true })}
-                          >
-                            Modify
-                          </button>
-                        )}
-                        {isOpen(o) ? (
-                          <button
-                            type="button"
-                            className="link danger"
-                            aria-label={`Cancel ${o.ref}`}
-                            onClick={() => setCancelling(o)}
-                          >
-                            Cancel
-                          </button>
-                        ) : o.source === "trim" && o.status === "filled" && !backed.has(o.ref) ? (
-                          <button
-                            type="button"
-                            className="link"
-                            onClick={() =>
-                              setSheet({
-                                kind: "buy",
-                                coin: o.coin,
-                                source: "buy-back",
-                                link: o.ref,
-                                spend: String(Math.floor(Number(o.filledQuote) * 100) / 100),
-                              })
-                            }
-                          >
-                            Buy back
-                          </button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {hidden > 0 && (
-          <p className="muted dcb-hidden-note">
-            {hidden} cancelled {hidden === 1 ? "order" : "orders"} hidden.{" "}
-            <button type="button" className="link" onClick={toggleHide}>
-              Show
-            </button>
-          </p>
-        )}
-      </>
-    );
-  };
-  const exportCsv = () => {
-    const blob = new Blob([toCsv(book.orders, book.quote)], { type: "text/csv" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `dca-book-${new Date().toISOString().slice(0, 10)}.csv`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
 
   return (
     <main className={`wrap dcb${chatOpen ? " has-chat" : ""}`}>
       <div className="dcb-main">
-        <div className="dcb-top">
+        {/* No headline and no button row (owner, 21 Nov 2026): the tiles say it; this week's
+            buy and the plan's edit live on the Plan panel; adding to or taking from a coin is
+            in its row. */}
+        <h1 className="visually-hidden">DCA book</h1>
+        <dl className="dcb-figs num">
           <div>
-            <h1 className="dcb-headline">
-              {bought ? (
-                <>
-                  {dollars(t.added)} in, worth <Live value={t.value}>{dollars(t.value)}</Live>.
-                </>
-              ) : (
-                "Nothing bought yet."
-              )}
-              {openTotal > 0 && <> {dollars(openTotal)} more in open orders.</>}
-            </h1>
-            <p className="muted dcb-sub">
-              {book.positions.length} positions for life, week {p?.week ?? 1} of {p?.weeks ?? "—"}.
-              {bought && t.pnlPct !== null
-                ? ` ${pnl >= 0 ? "Up" : "Down"} ${two(Math.abs(Number(t.pnlPct)))}% on what you've put in, after ${dollars(t.fees)} in fees.`
-                : " The book starts with your first order."}
-              {Number(t.realised) ? ` ${dollars(t.realised, true)} realised on trims.` : ""}
-              {p && ` Friday buys: ${dollars(p.onPlan)} of ${dollars(p.planTotal)} over 3 years.`}
-            </p>
+            <dt>Put in</dt>
+            <dd>{wholeDollars(t.added)}</dd>
+            {p && (
+              <small>
+                week {p.week} of {p.weeks}
+              </small>
+            )}
           </div>
-          <dl className="dcb-totals">
-            <div>
-              <dt>Put in</dt>
-              <dd className="num">{dollars(t.added)}</dd>
-            </div>
-            <div>
-              <dt>Value</dt>
-              <dd className="num">
-                <Live value={t.value}>{dollars(t.value)}</Live>
-              </dd>
-            </div>
-            <div>
-              <dt>P&amp;L</dt>
-              <dd className={`num dcb-pnl ${pnl > 0 ? "is-up" : pnl < 0 ? "is-down" : ""}`}>
-                <Live value={t.pnl}>{dollars(t.pnl, true)}</Live>
-              </dd>
-            </div>
-            <div>
-              <dt>Open orders</dt>
-              <dd className="num dcb-open">{dollars(openTotal)}</dd>
-            </div>
-          </dl>
-        </div>
-        {book.priceError && (
-          <p className="dcb-warn" role="alert">
-            Binance didn't answer ({book.priceError}), so value and P&amp;L are missing. Quantities
-            and costs are from the desk's own records.
-          </p>
-        )}
-
-        <section className="dcb-section" aria-labelledby="dcb-pos-title">
-          <div className="dcb-section-head">
-            <h2 id="dcb-pos-title">Positions</h2>
-            <span className="dcb-actions">
+          <div>
+            <dt>Value</dt>
+            <dd>
+              <Live value={t.value}>{wholeDollars(t.value)}</Live>
+            </dd>
+            <small>{book.priceError ? "prices missing" : "live from Binance"}</small>
+          </div>
+          <div>
+            <dt>P&amp;L</dt>
+            <dd className={`dcb-pnl ${pnl > 0 ? "is-up" : pnl < 0 ? "is-down" : ""}`}>
+              <Live value={t.pnl}>{wholeDollars(t.pnl, true)}</Live>
+            </dd>
+            <small>
+              {t.pnlPct !== null ? `${signed(t.pnlPct)}% · ` : ""}fees {dollars(t.fees)}
+              {Number(t.realised) ? ` · ${wholeDollars(t.realised, true)} realised` : ""}
+            </small>
+          </div>
+          <div>
+            <dt>Open limits</dt>
+            <dd className={openTotal > 0 ? "dcb-open" : ""}>{wholeDollars(openTotal)}</dd>
+            <small>{openWords}</small>
+          </div>
+        </dl>
+        <PlanPanel
+          book={book}
+          actions={
+            <>
               <button
                 type="button"
-                className="btn btn-small"
+                className="btn btn-small btn-accent"
                 disabled={!weeklyAmount}
                 title={`This week's ${weeklyAmount} ${book.quote}, split by your plan`}
-                onClick={() => setFunds("weekly")}
+                onClick={() => setFunds(funds === "weekly" ? null : "weekly")}
               >
-                Weekly DCA
-              </button>
-              <button type="button" className="btn btn-small" onClick={() => setFunds("add")}>
-                Add funds
-              </button>
-              <button
-                type="button"
-                className="btn btn-small"
-                disabled={!book.positions.some((x) => Number(x.qty) > 0)}
-                onClick={() => setFunds("remove")}
-              >
-                Remove funds
+                Buy this week
               </button>
               <button type="button" className="link" onClick={() => setEditing(true)}>
-                Change the plan
+                Edit
               </button>
-            </span>
-          </div>
-          <div className="dcb-scroll">
-            <table className="dcb-table" aria-label="Positions">
-              <thead>
-                <tr>
-                  <th>Position</th>
-                  <th className="r">Put in</th>
-                  <th className="r">Value</th>
-                  <th className="r">P&amp;L</th>
-                  <th className="r">Open orders</th>
-                  <th>Share of the book</th>
-                  <th>
-                    <span className="visually-hidden">Trim</span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {book.positions.map((pos) => {
-                  const n = Number(pos.pnl);
-                  const opened = openCoin === pos.coin;
-                  const mine = book.orders.filter((o) => o.coin === pos.coin);
-                  const open = openOf(book, pos.coin);
-                  const now = mix.now(pos.value);
-                  const target = mix.target(pos.coin);
-                  return (
-                    <Fragment key={pos.coin}>
-                      <tr id={`pos-${pos.coin}`} className={opened ? "is-open" : ""}>
-                        <td>
-                          <button
-                            type="button"
-                            className="dcb-expand"
-                            aria-expanded={opened}
-                            onClick={() => setOpenCoin(opened ? null : pos.coin)}
-                          >
-                            <Coin coin={pos.coin} />
-                            <small className="dcb-id">
-                              {pos.id}
-                              {pos.since
-                                ? ` since ${day(pos.since, true)}`
-                                : ", nothing bought yet"}
-                              {mine.length > 0 && (
-                                <span className="dcb-count">
-                                  {", "}
-                                  {mine.length} {mine.length === 1 ? "order" : "orders"}
-                                </span>
-                              )}
-                            </small>
-                          </button>
-                        </td>
-                        <td className="r num">${Math.round(Number(pos.added))}</td>
-                        <td className="r num">
-                          <Live value={pos.value}>${Math.round(Number(pos.value ?? 0))}</Live>
-                        </td>
-                        <td className={`r num ${n > 0 ? "up" : n < 0 ? "down" : ""}`}>
-                          {dollars(pos.pnl, true)}
-                          {pos.pnlPct !== null && (
-                            <span className="muted"> ({signed(pos.pnlPct)}%)</span>
-                          )}
-                        </td>
-                        <td className={`r num ${open > 0 ? "dcb-open" : "muted"}`}>
-                          {open > 0 ? dollars(open) : "—"}
-                        </td>
-                        <td>
-                          <span className="dcb-mix">
-                            <span className="dcb-tbar" aria-hidden="true">
-                              <span
-                                className="dcb-tnow"
-                                style={{ width: `${(now / mix.scale) * 100}%` }}
-                              />
-                              <span
-                                className="dcb-ttarget"
-                                style={{ left: `${(target / mix.scale) * 100}%` }}
-                              />
-                            </span>
-                            <span className="num">
-                              {Math.round(now)}%{" "}
-                              <span className="muted">of {Math.round(target * 10) / 10}%</span>
-                            </span>
-                          </span>
-                        </td>
-                        <td className="r">
-                          <button
-                            type="button"
-                            className="link"
-                            disabled={!(Number(pos.qty) > 0)}
-                            onClick={() => setSheet({ kind: "trim", position: pos })}
-                          >
-                            Trim
-                          </button>
-                        </td>
-                      </tr>
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <p className="dcb-note">
-            Each coin is one position for life. Only orders placed from the desk count: buys or
-            sells on Binance outside it, transfers to your Ledger and staking are ignored, so the
-            book can differ from your Binance balance. Tax parcels are on the Tax page.
-          </p>
-        </section>
-
-        {said && (
-          <p className="muted" role="status">
-            {said}
-          </p>
-        )}
-
+            </>
+          }
+        />
         {funds && (
           <DcaFunds
             key={funds}
@@ -1126,51 +938,246 @@ export default function DcaBookPage() {
             }}
           />
         )}
+        {book.priceError && (
+          <p className="dcb-warn" role="alert">
+            Binance didn't answer ({book.priceError}), so value and P&amp;L are missing. Quantities
+            and costs are from the desk's own records.
+          </p>
+        )}
 
-        <DcaOrders
-          book={book}
-          onChanged={(words) => {
-            setSaid(words);
-            load();
-          }}
-          onBuyBack={(o) =>
-            setSheet({
-              kind: "buy",
-              coin: o.coin,
-              source: "buy-back",
-              link: o.ref,
-              spend: String(Math.floor(Number(o.filledQuote) * 100) / 100),
-            })
-          }
-          tools={
-            <>
-              <button
-                type="button"
-                className="link"
-                disabled={!book.orders.length}
-                onClick={exportCsv}
-              >
-                Export CSV
-              </button>
-              <button
-                type="button"
-                className="link"
-                disabled={checking}
-                onClick={() => runCheck(false)}
-              >
-                {checking ? "Checking Binance…" : "Check against Binance"}
-              </button>
-            </>
-          }
-          below={
-            checked && <Checked found={checked} busy={checking} onFix={() => runCheck(true)} />
-          }
-        />
+        <section
+          className={`dcb-section${posOpen ? "" : " is-folded"}`}
+          aria-labelledby="dcb-pos-title"
+        >
+          <div className="dcb-section-head">
+            <FoldHead
+              id="dcb-pos"
+              open={posOpen}
+              onToggle={togglePos}
+              title={
+                <span title="Each coin is one position for life. Only orders placed from the desk count: buys or sells on Binance outside it, transfers to your Ledger and staking are ignored, so the book can differ from your Binance balance. Tax parcels are on the Tax page.">
+                  Positions
+                </span>
+              }
+              summary={`${book.positions.length} coins`}
+            />
+          </div>
+          {posOpen && (
+            <div id="dcb-pos-body">
+              {
+                <div className="dcb-scroll">
+                  <table className="dcb-table" aria-label="Positions">
+                    <thead>
+                      <tr>
+                        <th aria-sort={ariaSort(sort, "coin")}>
+                          {sortButton(sort, setSort, "coin", "Position")}
+                        </th>
+                        <th aria-sort={ariaSort(sort, "added")}>
+                          {sortButton(sort, setSort, "added", "Plan to date")}
+                        </th>
+                        <th>
+                          Limits <PctKey />
+                        </th>
+                        <th aria-sort={ariaSort(sort, sort?.key === "pnl" ? "pnl" : "value")}>
+                          {sortButton(sort, setSort, "value", "Holding")} ·{" "}
+                          {sortButton(sort, setSort, "pnl", "P&L %")}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedPositions(book.positions, sort).map((pos) => {
+                        const n = Number(pos.pnl);
+                        const opened = expanded === pos.coin;
+                        const nowPx =
+                          Number(pos.qty) > 0 && pos.value !== null
+                            ? Number(pos.value) / Number(pos.qty)
+                            : Number(pos.price ?? 0) || null;
+                        const mine = book.orders.filter((o) => o.coin === pos.coin);
+                        return (
+                          <Fragment key={pos.coin}>
+                            {/* The whole row opens the coin: the name's button is stretched over it
+                          (dca.css), and Trim sits above. */}
+                            <tr
+                              id={`pos-${pos.coin}`}
+                              className={`dcb-row-open${opened ? " is-open" : ""}`}
+                            >
+                              <td>
+                                <button
+                                  type="button"
+                                  className="dcb-expand"
+                                  aria-expanded={opened}
+                                  onClick={() => setExpanded(opened ? null : pos.coin)}
+                                >
+                                  <PositionName
+                                    coin={pos.coin}
+                                    kind="DCA"
+                                    since={pos.since}
+                                    extra={
+                                      mine.length
+                                        ? `${mine.length} ${mine.length === 1 ? "order" : "orders"}`
+                                        : undefined
+                                    }
+                                  />
+                                </button>
+                              </td>
+                              <td>
+                                <WeekBar book={book} coin={pos.coin} />
+                              </td>
+                              <td className="dcb-strip-cell">
+                                <PctStrip
+                                  now={nowPx}
+                                  avg={pos.avgCost ? Number(pos.avgCost) : null}
+                                  fills={mine
+                                    .filter(
+                                      (o) =>
+                                        o.side === "buy" && o.status === "filled" && o.avgPrice,
+                                    )
+                                    .map((o) => Number(o.avgPrice))}
+                                  limits={mine
+                                    .filter(
+                                      (o) => o.side === "buy" && isOpen(o) && Number(o.price) > 0,
+                                    )
+                                    .map((o) => ({
+                                      price: Number(o.price),
+                                      spend: Number(o.spend ?? 0),
+                                    }))}
+                                  scale={stripScale}
+                                />
+                              </td>
+                              <td className="num">
+                                {/* Value with its P&L, then the average against the price now: whether
+                              this week's buys bring the average down. */}
+                                <Holding
+                                  value={pos.value === null ? null : Number(pos.value)}
+                                  pnl={n}
+                                  pnlPct={pos.pnlPct === null ? null : Number(pos.pnlPct)}
+                                  avg={
+                                    Number(pos.qty) > 0 && pos.avgCost ? Number(pos.avgCost) : null
+                                  }
+                                  now={nowPx}
+                                />
+                              </td>
+                            </tr>
+                            {opened && (
+                              <tr className="cps-open-row">
+                                <td colSpan={4}>
+                                  <OpenOrders
+                                    orders={mine}
+                                    now={nowPx}
+                                    held={Number(pos.qty) > 0}
+                                    onPanel={() => setOpenCoin(pos.coin)}
+                                    onTakeProfit={() => {
+                                      setAdding(null);
+                                      setSelling(selling === pos.coin ? null : pos.coin);
+                                    }}
+                                    onAddFunds={() => {
+                                      setSelling(null);
+                                      setAdding(adding === pos.coin ? null : pos.coin);
+                                    }}
+                                    funds={
+                                      selling === pos.coin ? (
+                                        <TakeProfitPanel
+                                          coin={pos.coin}
+                                          label={`DCA-${pos.coin}`}
+                                          live={mine
+                                            .filter((o) => o.side === "sell" && isOpen(o))
+                                            .map((o) => ({
+                                              ref: o.ref,
+                                              price: o.price,
+                                              qty: o.qty ?? "0",
+                                              value: o.price
+                                                ? Number(o.qty) * Number(o.price)
+                                                : null,
+                                            }))}
+                                          preview={(plan) =>
+                                            previewDcaSell({ coin: pos.coin, ...plan })
+                                          }
+                                          place={(plan, anyway) =>
+                                            placeDcaSell({ coin: pos.coin, ...plan, anyway }).then(
+                                              (b) => setBook(b),
+                                            )
+                                          }
+                                          cancelLive={(ref) =>
+                                            cancelDcaOrder(ref).then(() => load())
+                                          }
+                                          agent="dca-agent"
+                                          strategize={(b) =>
+                                            strategize({
+                                              ...b,
+                                              book: "dca",
+                                              mode: "sell",
+                                              coin: pos.coin,
+                                            })
+                                          }
+                                          onClose={() => setSelling(null)}
+                                          onPlaced={(words) => {
+                                            setSelling(null);
+                                            setSaid(`${words} Each is a trim in the book.`);
+                                            load();
+                                          }}
+                                        />
+                                      ) : (
+                                        adding === pos.coin && (
+                                          <CoinFunds
+                                            coin={pos.coin}
+                                            quote={book.quote}
+                                            waiting={{
+                                              count: mine.filter(
+                                                (o) =>
+                                                  o.side === "buy" &&
+                                                  o.kind === "limit" &&
+                                                  isOpen(o),
+                                              ).length,
+                                              usd: mine
+                                                .filter(
+                                                  (o) =>
+                                                    o.side === "buy" &&
+                                                    o.kind === "limit" &&
+                                                    isOpen(o),
+                                                )
+                                                .reduce((s, o) => s + Number(o.spend ?? 0), 0),
+                                            }}
+                                            preview={previewDcaAdd}
+                                            place={placeDcaAdd}
+                                            agent="dca-agent"
+                                            strategize={(b) =>
+                                              strategize({
+                                                ...b,
+                                                book: "dca",
+                                                mode: "add",
+                                                coin: pos.coin,
+                                              })
+                                            }
+                                            onClose={() => setAdding(null)}
+                                            onPlaced={(words) => {
+                                              setAdding(null);
+                                              setSaid(words);
+                                              load();
+                                            }}
+                                          />
+                                        )
+                                      )
+                                    }
+                                  />
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              }
+            </div>
+          )}
+        </section>
 
-        <button type="button" className="dcb-more" aria-expanded={more} onClick={toggleMore}>
-          {more ? "Show less" : "Show more: the 3-year plan"}
-        </button>
-        {more && <Ticks book={book} />}
+        {said && (
+          <p className="muted" role="status">
+            {said}
+          </p>
+        )}
 
         {openCoin && (
           <PositionDrawer
@@ -1182,7 +1189,26 @@ export default function DcaBookPage() {
               setOpenCoin(null);
               setSheet({ kind: "trim", position: pos });
             }}
-            renderOrders={renderOrders}
+            orders={
+              <DcaOrders
+                book={book}
+                coin={openCoin}
+                onChanged={(words) => {
+                  setSaid(words);
+                  load();
+                }}
+                onBuyBack={(o) => {
+                  setOpenCoin(null);
+                  setSheet({
+                    kind: "buy",
+                    coin: o.coin,
+                    source: "buy-back",
+                    link: o.ref,
+                    spend: String(Math.floor(Number(o.filledQuote) * 100) / 100),
+                  });
+                }}
+              />
+            }
           />
         )}
         {sheet && (

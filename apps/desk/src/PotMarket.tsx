@@ -76,8 +76,57 @@ export function MarketCards({
     gapWords(gapPct(regime.btc, regime.sma200), "200-day"),
   ].filter((g): g is string => g !== null);
   const waiting = pot.proposals.length;
+  // BTC against each average as a bar: its length is the distance, up to 25%.
+  const avg = (label: string, value: string | undefined) => {
+    const gap = gapPct(regime.btc, value);
+    if (gap === null) return null;
+    return (
+      <span className="pot-mkt-avg" key={label}>
+        <span>{label}</span>
+        <span className="pot-mkt-avg-bar" aria-hidden="true">
+          <i
+            className={gap >= 0 ? "is-up" : "is-down"}
+            style={{ width: `${Math.min(100, (Math.abs(gap) / 25) * 100)}%` }}
+          />
+        </span>
+        <span className={gap >= 0 ? "up" : "down"}>
+          {gap >= 0 ? "+" : "−"}
+          {Math.abs(gap).toFixed(1)}%
+        </span>
+      </span>
+    );
+  };
+  const bars = [avg("50-day", regime.sma50), avg("200-day", regime.sma200)].filter(Boolean);
+  // The regime's two tests, so the card says why: Bull passes both, Bear fails both, Neutral
+  // is one of each.
+  const btc = Number(regime.btc);
+  const fast = Number(regime.sma50);
+  const slow = Number(regime.sma200);
+  const checks =
+    btc > 0 && fast > 0 && slow > 0
+      ? [
+          { label: "BTC > 200d", full: "BTC above its 200-day", ok: btc > slow },
+          { label: "50d > 200d", full: "50-day above the 200-day", ok: fast > slow },
+        ]
+      : null;
+  // What would change it: Bull has a price (BTC back over its 200-day, the 50-day above it);
+  // Bear has none once BTC is under the 200-day, only the 50-day's slide, so it's in days.
+  const upTo = (to: number) =>
+    `${dollars(String(Math.round(to)))} (+${((to / btc - 1) * 100).toFixed(0)}%)`;
+  const bearIn = Number(regime.bearIn);
+  // One short line: what turns it, with the price or the days.
+  const why =
+    regime.state === "bull"
+      ? `Neutral < ${dollars(String(Math.round(slow)))}`
+      : regime.state === "bear"
+        ? "Neutral once BTC is back over its 200-day"
+        : checks && checks[0]?.ok === false
+          ? `Bull > ${upTo(slow)}${bearIn > 0 ? ` · Bear in ~${bearIn}d` : ""}`
+          : checks
+            ? "Bull once the 50-day crosses over"
+            : "";
   return (
-    <ul className="pot-scan pot-mkt" aria-label="The market today">
+    <ul className="pot-scan pot-mkt is-strip" aria-label="The market today">
       <li className="pot-scan-card">
         <Opener name="Market regime" onOpen={(el) => onOpen({ kind: "regime" }, el)}>
           Market regime
@@ -85,22 +134,38 @@ export function MarketCards({
         <p className={`pot-mkt-fig is-${regime.state ?? "none"}`}>
           {regime.state ? REGIME[regime.state] : "—"}
         </p>
-        <small className="pot-mkt-line">
-          {regime.state === null
-            ? regime.words || "Not known yet"
-            : regime.state === "bear"
-              ? "No new trades"
-              : "New trades allowed"}
-        </small>
+        {checks ? (
+          <>
+            <ul className="pot-mkt-checks num" aria-label="What decides the regime">
+              {checks.map((c) => (
+                <li
+                  key={c.label}
+                  className={c.ok ? "is-yes" : "is-no"}
+                  title={`${c.full}: ${c.ok ? "yes" : "no"}`}
+                >
+                  <span aria-hidden="true">{c.ok ? "✓" : "✕"}</span>
+                  {c.label}
+                </li>
+              ))}
+            </ul>
+            <small className="pot-mkt-line num">{why}</small>
+          </>
+        ) : (
+          <small className="pot-mkt-line">{regime.words || "Not known yet"}</small>
+        )}
       </li>
       <li className="pot-scan-card">
         <Opener name="BTC against its averages" onOpen={(el) => onOpen({ kind: "btc" }, el)}>
-          BTC against its averages
+          BTC
         </Opener>
         <p className="pot-mkt-fig num">{dollars(regime.btc)}</p>
-        <small className="pot-mkt-line num">
-          {gaps.length > 0 ? gaps.join(" · ") : regime.words ? `BTC ${regime.words}` : "—"}
-        </small>
+        {bars.length > 0 ? (
+          <span className="pot-mkt-avgs num" role="img" aria-label={gaps.join(" · ")}>
+            {bars}
+          </span>
+        ) : (
+          <small className="pot-mkt-line num">{regime.words ? `BTC ${regime.words}` : "—"}</small>
+        )}
       </li>
       <li className="pot-scan-card">
         <Opener name="Fear and Greed" onOpen={(el) => onOpen({ kind: "mood" }, el)}>
@@ -115,6 +180,11 @@ export function MarketCards({
             "—"
           )}
         </p>
+        {fear && Number.isFinite(fear.value) && (
+          <span className="pot-mkt-fg" aria-hidden="true">
+            <i style={{ left: `${Math.min(100, Math.max(0, fear.value))}%` }} />
+          </span>
+        )}
         <small className="pot-mkt-line num">BTC dominance {share(global?.btcShare)}</small>
       </li>
       <li className="pot-scan-card">
@@ -136,6 +206,26 @@ export function MarketCards({
     </ul>
   );
 }
+
+// What the scan reads, in one line each (the owner's wording, 21 Nov 2026).
+export const INPUTS: [string, string][] = [
+  ["Chart structure", "trend, support, volatility (ATR) and volume, read from Binance candles"],
+  ["BTC's direction", "BTC's regime, plus its 1-hour and 4-hour trend for scalps and day trades"],
+  ["Strength against BTC", "keeps only coins outperforming BTC over 30 days or 13 weeks"],
+  ["Liquidity", "top 100 coins that trade enough each day to fill without slippage"],
+  ["Coin catalysts", "unlocks, listings and hacks due within the hold, found by web search"],
+  ["Back-test odds", "how often this exact setup paid off on the coin's own history"],
+  ["Funding", "when longs pay a high rate the trade is crowded, and a flush hits spot too"],
+  ["Macro calendar", "CPI, FOMC and jobs dates, read daily; warns when one lands inside the hold"],
+  ["Fear & Greed", "context for the AI, never a rule: extremes don't time an entry"],
+  ["BTC dominance", "when BTC's share of the market rises, alts tend to lag: a point against"],
+  ["Open interest", "rising open interest with a rising price means a crowded, fragile move"],
+  ["News tone", "the coin search also rates the week's headlines: positive, neutral or negative"],
+  [
+    "ETF flows and on-chain",
+    "BTC and ETH swing and position trades: the week's ETF flows and exchange balances",
+  ],
+];
 
 // Each stage as the owner reads it, and whether the style is being worked on now.
 const STAGE: Record<PotScanState, string> = {
@@ -214,6 +304,20 @@ export function ScanSteps({
             </li>
           ))}
         </ol>
+      )}
+      {open && (
+        <details className="pot-steps-reads">
+          <summary>What each scan reads ({INPUTS.length})</summary>
+          <ul className="scr-checks">
+            {INPUTS.map(([name, what]) => (
+              <li key={name}>
+                <i aria-hidden="true">✓</i>
+                <b>{name}</b>
+                <span>{what}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </section>
   );

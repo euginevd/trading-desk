@@ -112,7 +112,7 @@
 }
 .pot-trade {
   display: grid;
-  grid-template-columns: 210px minmax(0, 1fr) 130px 110px;
+  grid-template-columns: 170px minmax(0, 1fr) 110px 170px 110px;
   align-items: center;
   gap: 18px;
   width: calc(100% + 20px);
@@ -379,7 +379,8 @@ dialog:has(.pot-rv) {
   .pot-trade {
     grid-template-columns: 1fr auto;
   }
-  .pot-trade .pot-ladder {
+  .pot-trade .pot-ladder,
+  .pot-trade .pot-held {
     grid-row: 2;
     grid-column: 1 / -1;
   }
@@ -1077,32 +1078,6 @@ button.acc-coin:focus-visible {
 }
 
 /* The watchlist: folds to its head; Edit shows the coins as chips. */
-.acc-fold {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-.acc-fold h2::after {
-  content: "";
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  margin: 0 0 3px 10px;
-  border-right: 1.5px solid var(--muted);
-  border-bottom: 1.5px solid var(--muted);
-  transform: rotate(-45deg);
-  transition: transform 0.15s var(--ease);
-}
-.acc-fold[aria-expanded="true"] h2::after {
-  transform: rotate(45deg);
-}
 .acc-edit {
   display: flex;
   flex-wrap: wrap;
@@ -1931,6 +1906,30 @@ dialog.ntf {
   -webkit-line-clamp: 3;
   line-clamp: 3;
 }
+/* The regime card's two tests as small chips on one line, a tick or a cross each. */
+.pot-mkt-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 4px;
+  padding: 0;
+  list-style: none;
+  font-size: 11px;
+}
+.pot-mkt-checks li {
+  display: inline-flex;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--layer-2);
+  color: var(--body);
+}
+.pot-mkt-checks .is-yes span {
+  color: var(--up);
+}
+.pot-mkt-checks .is-no span {
+  color: var(--down);
+}
 /* Scan now's steps (PotMarket.tsx): a row per style, its stage as a word beside an icon, and
    what it found; Hide steps folds it to its first line. */
 .pot-steps {
@@ -2171,4 +2170,1143 @@ dialog.ntf {
   .pst-axis {
     font-size: 17px;
   }
+}
+.pot-scan-watch {
+  display: block;
+  margin-top: 4px;
+  color: var(--wait);
+  font-size: 12px;
+}
+
+/* ---- The Trade page rework (mockup trade-page): a sentence with the two actions, four tiles
+   with one risk budget, a banner, positions first, the market as one strip, then setups. ---- */
+.acc-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px 24px;
+  margin: 4px 0 18px;
+}
+.acc-headline {
+  max-width: 30ch;
+  margin: 0;
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: 460;
+  line-height: 1.15;
+}
+.acc-headline span {
+  color: var(--muted);
+}
+.acc-sub {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.acc-sub b {
+  font-weight: 600;
+}
+.acc-sub b.up {
+  color: var(--up);
+}
+.acc-sub b.down {
+  color: var(--down);
+}
+.acc-top .acc-acts {
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .acc-headline {
+    font-size: 26px;
+  }
+}
+
+.acc-money {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+@media (max-width: 900px) {
+  .acc-money {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.acc-split {
+  display: flex;
+  height: 5px;
+  margin: 8px 0 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--layer-2);
+}
+.acc-split i {
+  display: block;
+  height: 100%;
+}
+.acc-split .is-cash {
+  background: var(--accent);
+}
+.acc-split .is-trades {
+  background: var(--wait);
+}
+.acc-split .is-dca {
+  background: var(--muted);
+  opacity: 0.45;
+}
+/* The Risk budget: open risk and the month's loss as two meters in one tile. */
+.acc-money .acc-budget dd {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 13px;
+  font-weight: 400;
+}
+.acc-money .acc-budget .acc-gauge {
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  box-shadow: none;
+}
+.acc-gauge-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.acc-gauge-row .pot-open {
+  color: var(--muted);
+  font-size: 12px;
+}
+.acc-gauge-row b {
+  color: var(--text);
+  font-size: 13px;
+}
+.acc-gauge .acc-meter {
+  margin: 4px 0 0;
+}
+.acc-gauge-note {
+  color: var(--dim);
+}
+
+.acc-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border: 1px solid rgba(232, 176, 75, 0.35);
+  border-radius: 12px;
+  background: var(--wait-soft);
+  color: var(--wait);
+  font-size: 13px;
+}
+.acc-banner b {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* A held trade: Bought and Now on a line, the move between them shaded. */
+.pot-held {
+  position: relative;
+  display: block;
+  height: 46px;
+}
+.pot-held .pot-rail {
+  top: 22px;
+  height: 1px;
+  background: var(--line-2);
+}
+.pot-held-gap {
+  position: absolute;
+  top: 17px;
+  height: 11px;
+  border-radius: 4px;
+}
+.pot-held-gap.is-down {
+  background: var(--down-soft);
+  box-shadow: inset 0 0 0 1px rgba(240, 97, 109, 0.4);
+}
+.pot-held-gap.is-up {
+  background: var(--up-soft);
+  box-shadow: inset 0 0 0 1px rgba(46, 189, 133, 0.4);
+}
+.pot-held-pin {
+  position: absolute;
+  top: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  transform: translateX(-50%);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.pot-held-pin b {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+.pot-held-pin.is-now {
+  top: 30px;
+}
+.pot-held-pin.is-now b {
+  color: var(--accent);
+}
+.pot-fix {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+.pot-fix small {
+  color: var(--wait);
+  font-size: 11px;
+}
+.pot-fix-btn {
+  padding: 4px 10px;
+  border: 1px solid rgba(232, 176, 75, 0.5);
+  border-radius: 8px;
+  background: var(--wait-soft);
+  color: var(--wait);
+  font-size: 12px;
+  font-weight: 600;
+}
+.pot-trade:hover .pot-fix-btn {
+  background: rgba(232, 176, 75, 0.22);
+}
+
+/* The market as one strip: one panel, four parts split by hairlines. */
+.pot-scan.pot-mkt.is-strip {
+  gap: 0;
+  margin: 14px 0 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  background: var(--layer-1);
+  box-shadow: var(--sheen);
+}
+.pot-mkt.is-strip .pot-scan-card {
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+}
+.pot-mkt.is-strip .pot-scan-card:first-child {
+  border-left: 0;
+}
+@media (max-width: 900px) {
+  .pot-scan.pot-mkt.is-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .pot-mkt.is-strip .pot-scan-card:nth-child(3) {
+    border-left: 0;
+  }
+  .pot-mkt.is-strip .pot-scan-card:nth-child(n + 3) {
+    border-top: 1px solid var(--line);
+  }
+}
+.pot-mkt-avgs {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.pot-mkt-avg {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) 52px;
+  align-items: center;
+  gap: 8px;
+}
+.pot-mkt-avg > span:last-child {
+  text-align: right;
+}
+.pot-mkt-avg-bar {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--layer-2);
+}
+.pot-mkt-avg-bar i {
+  display: block;
+  height: 100%;
+  transform-origin: left;
+}
+.pot-mkt-avg-bar i.is-down {
+  background: var(--down);
+}
+.pot-mkt-avg-bar i.is-up {
+  background: var(--up);
+}
+.pot-mkt-fg {
+  position: relative;
+  display: block;
+  height: 6px;
+  margin: 2px 0;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    #c0392b,
+    var(--down) 25%,
+    var(--wait) 50%,
+    var(--up) 75%,
+    #1e8a5f
+  );
+  opacity: 0.85;
+}
+.pot-mkt-fg i {
+  position: absolute;
+  top: -4px;
+  width: 4px;
+  height: 14px;
+  margin-left: -2px;
+  border-radius: 2px;
+  background: var(--text);
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+/* Setups: a heading, then the style cards with how near each is. */
+.pot-setups {
+  margin-top: 18px;
+}
+.pot-setups .dcb-section-head span {
+  font-size: 12px;
+}
+.pot-setups .pot-scan {
+  margin-top: 0;
+}
+.pot-near {
+  display: block;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--layer-2);
+}
+.pot-near i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(232, 176, 75, 0.35), var(--wait));
+  transform-origin: left;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .acc-split i,
+  .pot-mkt-avg-bar i,
+  .pot-near i,
+  .pot-held-gap {
+    animation: pot-grow 700ms var(--ease) both;
+  }
+  @keyframes pot-grow {
+    from {
+      transform: scaleX(0);
+    }
+  }
+}
+/* The watchlist as a table, like the Portfolio's: its 30-day line in a narrow column. */
+.acc-table .acc-td-spark {
+  width: 110px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.acc-table .acc-td-spark .acc-spark {
+  display: block;
+  width: 100%;
+  height: 22px;
+}
+@media (max-width: 620px) {
+  .acc-table .acc-th-spark,
+  .acc-table .acc-td-spark {
+    display: none;
+  }
+}
+/* The trades' tabs with New trade at their end. */
+/* New trade beside the tabs: the same neutral button as Scan now, at the tabs' height, so
+   the selected tab stays the only teal in the row. */
+.acc-tabs-head .acc-new {
+  height: 34px;
+  gap: 6px;
+}
+.acc-new span {
+  color: var(--accent);
+  font-weight: 700;
+}
+.acc-tabs-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+/* Profit and loss: unrealized and realized as two rows in one tile, each opening its figures. */
+.acc-pnl dd {
+  display: grid;
+  gap: 6px;
+  margin: 6px 0 0;
+}
+.acc-pnl-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.acc-pnl-row:last-child {
+  border-bottom: 0;
+}
+.acc-pnl-row b {
+  font-size: 16px;
+  font-weight: 600;
+}
+.acc-pnl-row b small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.acc-pnl-row:hover span {
+  color: var(--text);
+}
+/* The scan report (ScanReport.tsx): five folding sections, kept compact. */
+.scr .dcb-section {
+  margin-top: 12px;
+}
+.scr-checks {
+  display: grid;
+  gap: 0;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.scr-checks li {
+  display: grid;
+  grid-template-columns: 16px 170px minmax(0, 1fr);
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--line);
+}
+.scr-checks li:last-child {
+  border-bottom: 0;
+}
+.scr-checks i {
+  color: var(--up);
+  font-style: normal;
+  font-weight: 700;
+}
+.scr-checks b {
+  color: var(--text);
+  font-weight: 600;
+}
+.scr-checks span {
+  color: var(--muted);
+}
+.scr-gates {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+.scr-gate {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  min-width: 0;
+}
+.scr-gate small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.scr-gate b {
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 600;
+}
+.scr-gate b.is-bull,
+.scr-gate b.up {
+  color: var(--up);
+}
+.scr-gate b.is-neutral {
+  color: var(--wait);
+}
+.scr-gate b.is-bear,
+.scr-gate b.down {
+  color: var(--down);
+}
+.scr-gate-line {
+  color: var(--muted);
+  font-size: 12px;
+}
+.scr-gate .pot-mkt-checks > span {
+  display: inline-flex;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--layer-2);
+  color: var(--body);
+}
+.scr-gate .pot-mkt-checks .is-yes span {
+  color: var(--up);
+}
+.scr-gate .pot-mkt-checks .is-no span {
+  color: var(--down);
+}
+.scr-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.scr-tabs {
+  margin: 2px 0 10px;
+}
+.scr-tab-n {
+  margin-left: 4px;
+  opacity: 0.7;
+  font-size: 11px;
+}
+.scr-block {
+  margin: 0 0 8px;
+  color: var(--wait);
+  font-size: 13px;
+}
+.scr-steps {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.scr-step {
+  display: grid;
+  grid-template-columns: 22px minmax(170px, 1.2fr) minmax(80px, 1.4fr) 40px minmax(0, 2fr);
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.scr-step:disabled {
+  cursor: default;
+}
+.scr-step:not(:disabled):hover,
+.scr-steps .is-open .scr-step {
+  background: var(--accent-soft);
+}
+.scr-n {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--layer-2);
+  color: var(--muted);
+  font-size: 11px;
+}
+.scr-what b {
+  display: block;
+  color: var(--text);
+  font-weight: 600;
+}
+.scr-what small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.scr-bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--layer-2);
+}
+.scr-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.5s var(--ease);
+}
+.scr-count {
+  color: var(--text);
+  font-weight: 600;
+  text-align: right;
+}
+.scr-out {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.scr-out b {
+  color: var(--down);
+  font-weight: 600;
+}
+.scr-drop {
+  margin: 2px 0 8px 34px;
+  padding: 4px 0 4px 12px;
+  border-left: 2px solid var(--line-2);
+}
+.scr-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0 0 6px;
+}
+.scr-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--layer-2);
+  font-size: 12px;
+}
+.scr-chip.is-pass {
+  background: rgba(46, 189, 133, 0.14);
+  color: var(--up);
+}
+.scr-table {
+  font-size: 13px;
+}
+.scr-more {
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+.scr-ai {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.scr-box {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-size: 13px;
+}
+.scr-box > b {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+.scr-box ul {
+  margin: 0;
+  padding-left: 16px;
+}
+.scr-box p {
+  margin: 4px 0 0;
+}
+.scr-q {
+  color: var(--accent);
+  font-family: ui-monospace, Menlo, monospace;
+  font-size: 12px;
+}
+.scr-for span {
+  font-weight: 600;
+}
+.scr-facts {
+  font-size: 12px;
+}
+.scr-verdict {
+  display: inline-block;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.scr-verdict.is-take {
+  background: rgba(46, 189, 133, 0.14);
+  color: var(--up);
+}
+.scr-verdict.is-wait {
+  background: rgba(232, 176, 75, 0.14);
+  color: var(--wait);
+}
+.scr-verdict.is-pass {
+  background: rgba(240, 97, 109, 0.12);
+  color: var(--down);
+}
+@media (max-width: 1000px) {
+  .scr-gates {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 720px) {
+  .scr-gates,
+  .scr-ai {
+    grid-template-columns: 1fr 1fr;
+  }
+  .scr-step {
+    grid-template-columns: 22px minmax(0, 1fr) 40px;
+  }
+  .scr-bar,
+  .scr-out {
+    grid-column: 2 / -1;
+  }
+  .scr-checks li {
+    grid-template-columns: 16px minmax(0, 1fr);
+  }
+  .scr-checks span {
+    grid-column: 2;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scr-bar i {
+    transition: none;
+  }
+}
+/* A ladder as one card above its rungs (PotPage.tsx, LadderCards). */
+.ldc {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+.ldc-card {
+  display: grid;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.ldc-card header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.ldc-bar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--layer-2);
+}
+.ldc-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.ldc-sum {
+  margin: 0;
+  font-size: 13px;
+}
+.ldc-sum b {
+  color: var(--text);
+}
+.ldc-rungs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+.ldc-rungs li {
+  display: grid;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.ldc-rungs li.is-done {
+  border-color: rgba(80, 210, 193, 0.4);
+  background: var(--accent-soft);
+}
+.ldc-rungs b {
+  color: var(--text);
+}
+.ldc-rungs small {
+  color: var(--muted);
+}
+.ldc-card .btn {
+  justify-self: start;
+}
+/* The ladder screen (PotLadder.tsx). */
+.ldr-top {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr;
+  gap: 10px;
+  margin: 10px 0;
+}
+.ldr-top label small {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.ldr-top input,
+.ldr-top select {
+  width: 100%;
+}
+.ldr-strip {
+  position: relative;
+  height: 54px;
+  margin: 8px 20px 12px;
+  font-size: 11px;
+}
+.ldr-line {
+  position: absolute;
+  top: 26px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--line-2);
+}
+.ldr-mark {
+  position: absolute;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+.ldr-mark::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  width: 2px;
+  height: 12px;
+}
+.ldr-mark.is-now {
+  top: 0;
+  color: var(--text);
+}
+.ldr-mark.is-now::after {
+  top: 16px;
+  background: var(--text);
+}
+.ldr-mark.is-rung,
+.ldr-mark.is-stop {
+  top: 34px;
+}
+.ldr-mark.is-rung {
+  color: var(--accent);
+}
+.ldr-mark.is-rung::after {
+  top: -8px;
+  background: var(--accent);
+}
+.ldr-mark.is-stop {
+  color: var(--down);
+}
+.ldr-mark.is-stop::after {
+  top: -8px;
+  background: var(--down);
+}
+.ldr-table input {
+  width: 100%;
+  max-width: 110px;
+}
+.ldr-odds {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.ldr-odds-bar {
+  width: 54px;
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--layer-2);
+}
+.ldr-odds-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+.ldr-add {
+  margin: 4px 0;
+}
+.ldr-sum {
+  margin: 8px 0;
+  font-size: 13px;
+}
+.ldr-sum b {
+  color: var(--text);
+}
+.ldr-exits {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.ldr-opt {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.ldr-switch {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--text);
+}
+.ldr-problems {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  color: var(--down);
+  font-size: 13px;
+}
+.ldr-warns {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(232, 176, 75, 0.3);
+  border-radius: 12px;
+  background: rgba(232, 176, 75, 0.1);
+  font-size: 13px;
+}
+.ldr-warns b {
+  color: var(--wait);
+}
+.ldr-warns ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.ldr-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+}
+.ldr-anyway {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 13px;
+}
+.ntf-kinds {
+  margin: 0 0 10px;
+}
+@media (max-width: 640px) {
+  .ldr-top,
+  .ldr-exits {
+    grid-template-columns: 1fr;
+  }
+}
+.pnt-rules.is-warned {
+  border-color: rgba(232, 176, 75, 0.35);
+  background: rgba(232, 176, 75, 0.08);
+}
+.pnt-rules.is-warned b {
+  color: var(--wait);
+}
+/* Under Scan now's steps: what every scan reads, folded. */
+.pot-steps-reads {
+  margin-top: 8px;
+  font-size: 13px;
+}
+.pot-steps-reads summary {
+  color: var(--accent);
+  cursor: pointer;
+}
+/* Positions by coin (PotPage.tsx, CoinPositions): a row a coin, its strip with the average,
+   the price now and every waiting limit, its distance and amount under it. */
+.cps-filter {
+  margin: 4px 0 8px;
+}
+.cps-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.cps-row {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) 110px 190px;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  padding: 12px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 10px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cps-row:hover,
+.cps-list .is-open .cps-row {
+  background: var(--accent-soft);
+}
+.cps-row .r {
+  display: grid;
+  justify-items: end;
+}
+.cps-row .dcb-id {
+  display: block;
+}
+.cps {
+  position: relative;
+  display: block;
+  height: 58px;
+  margin: 0 30px;
+  font-size: 11px;
+}
+.cps-line {
+  position: absolute;
+  top: 22px;
+  right: 0;
+  left: 0;
+  height: 2px;
+  background: var(--line-2);
+}
+.cps-gap {
+  position: absolute;
+  top: 20px;
+  height: 6px;
+  border-radius: 3px;
+}
+.cps-gap.is-up {
+  background: rgba(46, 189, 133, 0.35);
+}
+.cps-gap.is-down {
+  background: rgba(240, 97, 109, 0.35);
+}
+.cps-pin {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  color: var(--text);
+  white-space: nowrap;
+}
+.cps-pin small {
+  color: var(--muted);
+}
+.cps-pin.is-now {
+  color: var(--accent);
+}
+.cps-lim {
+  position: absolute;
+  top: 28px;
+  display: grid;
+  justify-items: center;
+  transform: translateX(-50%);
+  color: var(--wait);
+  white-space: nowrap;
+}
+.cps-lim::before {
+  content: "";
+  position: absolute;
+  top: -10px;
+  width: 2px;
+  height: 10px;
+  background: var(--wait);
+}
+.cps-lim small {
+  color: var(--muted);
+}
+.cps-open {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 10px 12px;
+  padding-left: 12px;
+  border-left: 2px solid var(--line-2);
+}
+.cps-open .btn {
+  justify-self: start;
+}
+@media (max-width: 860px) {
+  .cps-row {
+    grid-template-columns: 1fr auto;
+  }
+  .cps {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+  .cps-row > :last-child {
+    grid-column: 1 / -1;
+    justify-items: start;
+  }
+}
+/* The Trade page's two views, like the Bots page's tabs. */
+.pot-views {
+  margin: 18px 0 4px;
+}
+.pot-views .track {
+  display: inline-flex;
+}
+.pot-views .track button .acc-n {
+  margin-left: 6px;
+}
+.ldr-join {
+  display: grid;
+  gap: 4px;
+  max-width: 280px;
+  margin: 0 0 6px;
+}
+.ldr-join small {
+  color: var(--muted);
+  font-size: 12px;
+}
+.pot-scan-top {
+  align-items: center;
+  margin-top: 8px;
+}
+.pot-views {
+  margin: 0 0 14px;
+}
+.ldr-why {
+  margin: 0 0 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.ldr-why b {
+  color: var(--text);
+}
+/* Positions as the DCA book's table: an open row shows its strip and its orders. */
+.cps-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 10px;
+}
+.cps-bar .cps-filter {
+  margin: 0;
+}
+.dcb-card.is-open {
+  outline: 1px solid var(--accent);
+}
+.cps-open > b {
+  color: var(--text);
+}
+.cps-strip-cell {
+  width: 30%;
+  min-width: 180px;
+}
+.acc-perp {
+  display: block;
+  color: var(--wait);
+  font-size: 11px;
+}
+.acc-tabs-head .cps-filter {
+  margin: 0 0 0 auto;
+}
+.acc-tabs-wrap > .dcb-section-head {
+  align-items: center;
+}
+.acc-tabs-wrap > .dcb-section-head .acc-new {
+  gap: 6px;
+}
+.acc-head-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+.acc-head-tools .cps-filter {
+  margin: 0;
 }

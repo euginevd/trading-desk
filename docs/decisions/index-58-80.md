@@ -1,0 +1,27 @@
+# Decisions 58 to 80
+
+Part of [the index](../decisions.md), one line each.
+
+58. The Profile is the owner's Investment Policy Statement: typed, versioned, read by every agent; unset rules are never enforced. [Record](from-58.md)
+59. *Superseded by 70:* The agents are a team of five under a Desk Coordinator, each with a name, title and remit. [Record](from-58.md)
+60. A trading agent with a versioned profile; Analyse runs one coin step by step and proposes an order; Trade rebuilt around it. [Record](from-58.md)
+61. *Partly superseded by 70 (trade.md):* profile.md and trade.md are the source, changed through Claude Code; the desk renders them read-only. [Record](from-58.md)
+62. profile.md v2 is the Profile word for word; four widgets from it; the command bar changes it through a diff and Accept. [Record](from-58.md)
+63. The Dashboard as the morning check: the day in a sentence, a week rail of the plan's buys, what to watch. [Record](from-58.md)
+64. The Portfolio as what you hold in a sentence and one strip against targets; Fear & Greed in the top bar; a real kill switch. [Record](from-58.md)
+65. Settings as a sentence and hairline sections; the name only from the Profile; each fact on one page. [Record](from-58.md)
+66. The Journal as a sentence of rules kept, a 30-day strip of trades, then the filtered ledger. [Record](from-58.md)
+67. *Superseded by 69:* Trade leads with the agent's call; the steps fold away; the levels are a ladder around today's price. [Record](from-58.md)
+68. DCA and Grid bots share one Bots page, filtered by type; the old links open it filtered. [Record](from-58.md)
+69. Trade keeps only what you can act on: verdict, one line on what to do, the order and its checks; reasons fold away. [Record](from-58.md)
+70. My agents: one versioned Markdown file per agent in `local/agents/`, on a week rota on the Profile; the first is `dca-agent`. [Record](from-58.md)
+71. The monthly money splits into DCA and a small trading pot, one agent each; bot styles are playbooks in the trading agent's file. [Record](from-58.md)
+72. The DCA book: one lifelong position per coin, fed only from the desk, P&L against money added; the desk works out fill odds. [Record](from-58.md)
+73. The trading pot is its own book run by trading-agent: POT- rows for money in, a lifelong TRD- reference per trade, stop and target as one OCO. [Record](from-58.md)
+74. A scheduler (plain code) wakes the agents once per slot and brings proposals to Telegram with one-tap buttons that run the desk's checks. [Record](from-58.md)
+75. The trading pot is the Trading account: money first, coins as cards, trades in tabs; other buys dipping into its USDC are logged, not blocked. [Record](from-58.md)
+76. A visual refresh: ink-blue surfaces, a serif for the desk's sentences, a top-edge sheen on raised controls, one settle-in motion. [Record](from-58.md)
+77. The teal floating console: a rounded frame, layered panels, pill tabs with icons, one type scale with nothing under 12px to read. [Record](from-58.md)
+78. The Ledger mark; a slow ambient drift behind the frame; the Trading account's trades take the Profile pre-trade check. [Record](from-58.md)
+79. Risk leads with four risks: A$10K on Binance in all, 70%+ of the 2026 coins on the Ledger, TAO's glide path, the backup checks. [Record](from-58.md)
+80. New trade by style: a screener in code over the top 100 on Binance, trading-agent on the shortlist only; scalp and day trades on test. [Record](from-58.md)

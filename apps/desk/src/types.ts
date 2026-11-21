@@ -3,7 +3,7 @@ export type Num = string | null;
 
 export interface Holding {
   asset: string;
-  source: "Binance" | "TAO wallet";
+  source: "Binance" | "TAO wallet" | "Binance Alpha";
   amount: string;
   price: Num;
   value: Num;
@@ -1179,14 +1179,32 @@ export interface DcaBook {
   priceError: string | null;
 }
 // This week against the plan, whichever button placed its buys (TODO 28).
+// The plan as a running total (decision 96): every plan week adds its amount (skipped weeks
+// aside); bought and open limits from any week count against it; the rest has no order yet.
 export interface DcaWeekState {
   week: string;
+  weekly: string;
+  weeks: number;
   planned: string;
   bought: string;
   waiting: string;
   toPlace: string;
-  open: { ref: string; coin: string; price: string | null; left: string }[];
+  open: {
+    ref: string;
+    coin: string;
+    price: string | null;
+    left: string;
+    week: string;
+    carried: boolean;
+  }[];
   toPlaceByCoin: Record<string, string>;
+  plannedByCoin: Record<string, string>;
+  boughtByCoin: Record<string, string>;
+  waitingByCoin: Record<string, string>;
+  // Free USDC the DCA may use (not the Trading account's), and what it can't cover yet.
+  free: string | null;
+  needsDeposit: string;
+  skipped: boolean;
 }
 export interface DcaOdds {
   hit: number;
@@ -1346,7 +1364,81 @@ export interface PotScanCard {
     entry: string;
     rr: string | null;
   };
-  close?: { coin: string; why: string };
+  close?: { coin: string; why: string; verdict?: "wait" | "pass"; watchFor?: string };
+  // The scan's report for this style (owner, 21 Nov 2026): its steps, what the AI saw, did and
+  // said, and the near misses with the price that would make each a setup.
+  at?: number;
+  funnel?: ScanStep[];
+  block?: string;
+  warnings?: string[];
+  near?: ScanNear[];
+  ai?: ScanAi | null;
+}
+
+export interface ScanOut {
+  coin: string;
+  why: string;
+  trigger?: string;
+  awayPct?: string;
+}
+
+export interface ScanStep {
+  key: string;
+  name: string;
+  rule: string;
+  count: number;
+  outCount: number;
+  out: ScanOut[];
+  passed?: string[];
+}
+
+export interface ScanNear extends ScanOut {
+  stage?: string;
+  verdict?: "wait" | "pass";
+  watchFor?: string;
+}
+
+export interface ScanPick {
+  coin: string;
+  setup: string;
+  verdict: "take" | "wait" | "pass";
+  grade: string;
+  score: number;
+  confluence: string[];
+  against: string[];
+  catalyst: string;
+  crowding: string;
+  news?: string;
+  flows?: string;
+  reason: string;
+  problem: string | null;
+  entry: string;
+  stop: string;
+  target: string;
+}
+
+export interface ScanAi {
+  model: string;
+  given: string[];
+  searches: { query: string; found: string }[];
+  picks: ScanPick[];
+}
+
+export interface BtcGate {
+  frame: string;
+  close: string;
+  ema: string;
+  open: boolean;
+}
+
+export interface ScanGates {
+  regime: PotView["regime"];
+  scalp?: BtcGate;
+  day?: BtcGate;
+  macro: { title: string; at: number; when: string; inDays: number }[];
+  fearGreed: { value: number; label: string } | null;
+  dominance: { share: string; change7d: string | null } | null;
+  weekend: boolean;
 }
 
 export interface PotProposal {
@@ -1374,6 +1466,11 @@ export interface AccountCoin {
   value: string;
   change24hPct: string;
   change30dPct: string | null;
+  // Its market cap in US dollars, from CoinGecko; null when CoinGecko doesn't list it.
+  marketCap?: string | null;
+  source?: "spot" | "futures"; // futures: Binance lists only a USDT perpetual; watch only
+  change7dPct?: string | null; // the last 7 daily closes
+  fromHighPct?: string | null; // how far under its 30-day high, in percent
   spark: string[];
   insight: { trend: string; setup: string; status: "watch" | "wait" | "none" } | null;
   tradable: boolean;
@@ -1498,6 +1595,7 @@ export interface PotPreview {
     breakeven: string;
   } | null;
   problems: string[];
+  warnings?: string[]; // rules the owner may place past on their own trade
 }
 
 // A style's or a setup's closed trades, summed (the Stats tab's tables).
@@ -1516,7 +1614,7 @@ export interface PotView {
   config: { mode: "test" | "risk"; fixed: string; riskPct: string; maxRisk?: string };
   allowedRisk?: string;
   // Free USDC on Binance against the account's available money (one wallet).
-  backing?: { free: string; held: string; short: string } | null;
+  backing?: { free: string; locked?: string; held: string; short: string } | null;
   putIn: string;
   value: string;
   result: string;
@@ -1534,13 +1632,23 @@ export interface PotView {
     btc?: string;
     sma50?: string;
     sma200?: string;
+    // Days until the 50-day falls under the 200-day if BTC held today's price; absent if not
+    // within 120 days.
+    bearIn?: string;
   };
   nextScan: number;
   // Scan now adds a card per style: its take, or the coin closest to one and what's missing.
-  lastScan: { at: number; line: string; styles?: PotScanCard[] } | null;
+  lastScan: {
+    at: number;
+    line: string;
+    styles?: PotScanCard[];
+    gates?: ScanGates;
+    cost?: { calls: number; searches: number; usd: string };
+  } | null;
   scansOnItsOwn?: boolean;
   proposals: PotProposal[];
   trades: PotTrade[];
+  takeProfits?: PotTakeProfit[]; // each position's take-profit sells (pot_tp)
   moves: { ref: string; kind: "in" | "out"; usdc: string; created: number }[];
   stats: {
     trades: number;
@@ -1602,6 +1710,7 @@ export interface PotTradeRequest {
   reason: string;
   proposal?: string;
   override?: boolean; // past a broken Profile rule, logged (decision 78)
+  anyway?: boolean; // the owner's own trade, past the account's soft rules (21 Nov 2026)
   style?: PotStyleKey; // its rules: local/agents/trading-agent.md
   market?: boolean; // buy now at market instead of a limit at the entry
   expires?: number; // a style's proposal is refused after this (ms)
@@ -1786,4 +1895,111 @@ export interface BacktestView {
   runs: BacktestRunLine[];
   job: BacktestJob | null;
   worker: { seen: number | null; on: boolean };
+}
+
+// A ladder trade's preview (POST /pot/ladders/preview): its rungs with fill odds, the
+// average if all fill, the risk, and the rules: problems refuse, warnings can be placed past.
+export interface LadderRung {
+  price: string;
+  spend: string;
+  qty: string;
+  underPct: string;
+  odds: number;
+  why: string;
+}
+
+export interface LadderPreview {
+  coin: string;
+  now: string;
+  tick: string;
+  plan?: "A" | "B"; // the desk's pick, or the one asked: A an entry and 3 limits, B and 2
+  planWhy?: string;
+  rungs: LadderRung[];
+  total: string;
+  avg: string | null;
+  avgPct: string | null;
+  likely: string;
+  stop: string | null;
+  target: string | null;
+  risk: string;
+  problems: string[];
+  warnings: string[];
+  replacing?: { ref: string; price: string; spend: string }[]; // waiting limits re-planned
+  freed?: string;
+}
+
+export interface LadderRequest {
+  coin: string;
+  total?: string;
+  plan?: "A" | "B";
+  rungs?: { price: string; spend: string; why?: string }[];
+  stop?: string;
+  target?: string;
+  position?: string; // a live trade's ref: the ladder adds to its position
+  replace?: boolean; // the position's waiting limits cancelled and planned again with the add
+}
+
+// A position's take-profit sell (owner, 21 Nov 2026): one Binance sell for the whole position.
+export interface PotTakeProfit {
+  ref: string;
+  position: string;
+  kind: "limit" | "market";
+  price: string | null;
+  qty: string;
+  executedQty: string;
+  executedQuote: string;
+  status: "placing" | "open" | "filled" | "cancelled";
+  created: number;
+}
+
+export interface TakeProfitLevel {
+  price: string | null; // null: at market
+  pct: string; // of the position
+  qty: string;
+  value: string;
+  gainPct: string | null; // against the average
+  why: string;
+}
+
+export interface TakeProfitPreview {
+  position: string;
+  coin: string;
+  market: boolean;
+  now: string;
+  avg: string | null;
+  breakeven: string | null;
+  held: string;
+  free: string;
+  value: string;
+  pcts: string[]; // the shares that sell $10 or more and leave $10 or nothing
+  maxLevels: number;
+  pct: string;
+  levels: TakeProfitLevel[];
+  problems: string[];
+  warnings: string[];
+  notes: string[];
+}
+
+// Strategize with the agent (AgentChat): its words and the whole plan back.
+export interface StrategizeReply {
+  reply: string;
+  rows: { price: string; amount: string; why: string }[]; // amount: USDC, or % when selling
+  by: string;
+}
+export interface StrategizeRequest {
+  book: "trade" | "dca";
+  mode: "add" | "sell";
+  coin: string;
+  position?: string;
+  total?: string;
+  message: string;
+  history: { who: string; text: string }[];
+  rows: { price: string; amount: string; why: string }[];
+}
+
+export interface TakeProfitRequest {
+  position: string;
+  pct: string;
+  market?: boolean;
+  levels?: { price: string; pct: string; why?: string }[];
 }

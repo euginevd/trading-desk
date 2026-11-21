@@ -212,7 +212,7 @@ describe("side panel", () => {
     expect(within(tabs).getByRole("link", { name: "Grid bots" }).getAttribute("aria-current")).toBe(
       "page",
     );
-    expect(within(tabs).getByRole("link", { name: "Accumulation" }).getAttribute("href")).toBe(
+    expect(within(tabs).getByRole("link", { name: "DCA bots" }).getAttribute("href")).toBe(
       "#/dca-book",
     );
     expect(screen.queryByText(/Rebalancing/)).toBeNull();

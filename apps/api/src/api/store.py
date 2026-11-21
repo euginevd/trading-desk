@@ -1,5 +1,5 @@
 """Limits, the kill switch, the watchlist, signals and account value history, and the old smart
-trades (read only, decision 95), kept in a local SQLite file (decisions 13 and 18)."""
+trades (read only, decision 98), kept in a local SQLite file (decisions 13 and 18)."""
 
 import json
 import sqlite3
