@@ -422,3 +422,114 @@ def test_a_market_sale_without_an_answer_isnt_sent_again(
     markets = [o for o in orders("SELL") if o["type"] == "MARKET"]
     assert len(markets) == 1
     assert bots.detail(trade_id)["deals"][0]["status"] == "stopped"
+
+
+def test_a_buy_the_kill_switch_couldnt_cancel_is_kept_and_tried_again(
+    bots: Bots, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 3: a cancel that didn't take leaves the buy followed, its deal open, and the next
+    step cancels it once Binance answers."""
+    dip(bots, monkeypatch)
+    bots.trading.set_limits("50", "500")
+    bot_id = bots.create(SETTINGS)["bots"][0]["id"]
+    bots.switch(bot_id, on=True, confirmed=True)
+    bots.step()  # six limit buys, none filled
+    real = bots._binance.cancel  # pyright: ignore[reportPrivateUsage]
+
+    def lost(*_a: object, **_k: object) -> None:
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(bots._binance, "cancel", lost)  # pyright: ignore[reportPrivateUsage]
+    bots.trading.set_trading(False)
+    assert bots.stop_all("Stopped by the kill switch.") == 6
+    assert all(o["status"] == "NEW" for o in orders("BUY"))
+    view = bots.view()["bots"][0]
+    assert not view["enabled"]
+    assert len(view["deals"]) == 1  # not ended while its buys are live
+
+    monkeypatch.setattr(bots._binance, "cancel", real)  # pyright: ignore[reportPrivateUsage]
+    bots.step()  # trading still off: tried again, though no bot is enabled
+    assert all(o["status"] == "CANCELED" for o in orders("BUY"))
+    assert bots.view()["bots"][0]["deals"] == []
+    assert bots.stop_all("Stopped by the kill switch.") == 0
+
+
+def test_a_buy_met_with_a_5xx_is_looked_up_not_written_off(
+    bots: Bots, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a 5xx's outcome is unknown. The buy here reached Binance, so it stays followed
+    and the kill switch still finds and cancels it."""
+    dip(bots, monkeypatch)
+    bots.trading.set_limits("50", "500")
+    bot_id = bots.create({**SETTINGS, "maxDcaOrders": "0"})["bots"][0]["id"]
+    bots.switch(bot_id, on=True, confirmed=True)
+    real = bots._binance.buy_limit  # pyright: ignore[reportPrivateUsage]
+
+    def took_it_then_503(*args: Any, **kwargs: Any) -> Any:
+        real(*args, **kwargs)
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(bots._binance, "buy_limit", took_it_then_503)  # pyright: ignore[reportPrivateUsage]
+    bots.step()
+    assert len(orders("BUY")) == 1
+    assert bots.view()["bots"][0]["enabled"]  # not paused as if Binance had refused it
+    bots.trading.set_trading(False)
+    bots.step()
+    assert all(o["status"] == "CANCELED" for o in orders("BUY"))
+
+
+def test_a_deal_stays_open_at_take_profit_while_a_buy_is_still_live(
+    bots: Bots, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a buy whose cancel didn't take can still fill, so its deal isn't ended."""
+    dip(bots, monkeypatch)
+    bots.trading.set_limits("50", "500")
+    bot_id = bots.create(SETTINGS)["bots"][0]["id"]
+    bots.switch(bot_id, on=True, confirmed=True)
+    bots.step()
+    fill(orders("BUY")[0]["orderId"])
+    bots.step()  # the take profit
+    fill(orders("SELL")[0]["orderId"])
+    real = bots._binance.cancel  # pyright: ignore[reportPrivateUsage]
+
+    def lost(*_a: object, **_k: object) -> None:
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(bots._binance, "cancel", lost)  # pyright: ignore[reportPrivateUsage]
+    bots.step()
+    view = bots.view()["bots"][0]
+    assert len(view["deals"]) == 1
+    assert "still live on Binance" in view["note"]
+    monkeypatch.setattr(bots._binance, "cancel", real)  # pyright: ignore[reportPrivateUsage]
+    bots.step()
+    view = bots.view()["bots"][0]
+    assert (view["deals"], view["closed"]) == ([], 1)
+    assert all(o["status"] == "CANCELED" for o in orders("BUY")[1:])
+
+
+def test_deleting_a_bot_keeps_what_it_bought_today_counted(
+    bots: Bots, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 8: a deleted bot is hidden, not erased. Its buys still count against today's limit
+    and the monthly cap, and the ledger still names its fills."""
+    dip(bots, monkeypatch)
+    bots.trading.set_limits("50", "500")
+    bot_id = bots.create(SETTINGS)["bots"][0]["id"]
+    bots.switch(bot_id, on=True, confirmed=True)
+    bots.step()
+    fill(orders("BUY")[0]["orderId"])
+    bots.step()
+    fill(orders("SELL")[0]["orderId"])
+    bots.step()  # take profit: the deal closes and its other buys are cancelled
+    bots.switch(bot_id, on=False, confirmed=False)
+    spent = bots.trading.settings()["spentToday"]
+    assert Decimal(spent) > 0
+    assert bots.delete(bot_id)["bots"] == []
+    assert bots.trading.settings()["spentToday"] == spent
+    store = bots._store  # pyright: ignore[reportPrivateUsage]
+    named = store.order_sources().values()
+    assert any(s.startswith(f"DCA-{bot_id} · D-") for s in named)
+    with pytest.raises(LookupError):
+        store.bot(bot_id)
+    bots.step()  # a deleted bot is never stepped
+    assert bots.create(SETTINGS)["bots"][0]["id"] != bot_id

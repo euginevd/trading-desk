@@ -6,7 +6,7 @@ from typing import Any
 
 import httpx
 from api.audit import Audit
-from api.binance import Binance
+from api.binance import Binance, forget
 from api.handler import MissingKey, cost_from_ms, handler
 from api.local import load_env
 from api.service import TradeCache, aud_rate, fetch, usd_rates
@@ -93,6 +93,7 @@ def test_a_refresh_reuses_trade_history_until_the_balance_moves(tmp_path: Path) 
     assert asked.count("/api/v3/myTrades") == 1  # nothing traded: history reused
     assert again["total"]["profit"] == first["total"]["profit"]
     held["BTC"] = "2"
+    forget()  # balances are kept 10 seconds; a later read sees the move
     fetch(binance, fx, cache=cache)
     assert asked.count("/api/v3/myTrades") == 2  # the balance moved: fetched again
 

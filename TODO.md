@@ -35,6 +35,8 @@ Your requirements, features and ideas, numbered, in your own words. In `producti
 30. A notification bell on the desk: exchange alerts like a stop Binance refused or a trade left with no stop show there and go to Telegram, and from Telegram I can resolve them. *(Asked 20 Nov 2026, after the NEAR trade held no stop for two days, decision 91. To decide first: which alerts, and what Resolve may do from Telegram.)*
 31. A minimum a trade. *(Asked 20 Nov 2026. Built 21 Nov 2026 at the owner's 10 USDC: every Trading account buy (a trade, each ladder level, an add) under it is refused, never sized up; `MIN_ORDER` in pot.py.)*
 32. The Trading account's cap back, once the owner wants one: today it has none (decision 97), trades spend what's free on Binance and the DCA book's ring-fence warning is off (`RING_FENCE` in pot.py). *(Asked 21 Nov 2026, "for now".)*
+33. Features only the old Trade page used, unreachable since the Trading account replaced it (decision 98): the trading agent's step-by-step Analyse (feature 65), price alerts, the Trade page's watchlists and coin ranking, and smart trades as one-off DCA deals (feature 47). Their api routes still answer. To decide: bring each back on a page, or delete it like the smart trades. *(Found 21 Nov 2026 in the audit's #6.)*
+34. Left from the 21 Nov 2026 audit, low risk on a single-owner local desk: a request id on DCA orders and the Trading account's add and reduce, so a resent request never places twice (the buttons are busy-guarded and nothing retries; audit 10); and a grid's stop below retrying the orders its cancel didn't take, as the kill switch now does (audit 3). *(Found 21 Nov 2026.)*
 
 Later, from the project ideas doc, not started until listed above:
 

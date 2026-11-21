@@ -119,7 +119,7 @@ describe("the drift card", () => {
     render(<DriftCard />);
     const link = await screen.findByRole("link", { name: /^Trim A\$500/ });
     expect(link.getAttribute("href")).toBe(
-      "#/trade?coin=TAO&side=sell&price=410&qty=0.813&why=rebalance",
+      "#/dca-book?coin=TAO&rebalance=sell&price=410&qty=0.813",
     );
     expect(screen.getByText("In band")).toBeTruthy();
   });

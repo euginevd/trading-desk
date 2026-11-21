@@ -9,7 +9,7 @@ import httpx
 import pytest
 from api import demo
 from api.audit import Audit
-from api.binance import Binance
+from api.binance import Binance, BinanceError
 from api.grid import GridConfig, Grids, backtest, config_of, parse_grid, plan, stored
 from api.handler import handler
 from api.indicators import Candle
@@ -271,3 +271,153 @@ def test_a_paused_grid_with_a_sell_out_refuses_to_open_twice(grids: Grids) -> No
     grids.switch(grid_id, on=False, confirmed=False)  # stop: the sell cancelled
     grids.switch(grid_id, on=True, confirmed=True)  # now it can start again
     assert len(mine("BUY")) == 8
+
+
+def test_a_buy_held_overnight_counts_on_the_day_it_is_sent(grids: Grids) -> None:
+    """Audit 2: a buy held by the daily limit and sent after midnight counts against that
+    day's limit, not the day it was queued (which would let it count on neither)."""
+    grids.trading.set_limits("60", "400")
+    grid_id = grids.create(SETTINGS)["grids"][0]["id"]
+    grids.switch(grid_id, on=True, confirmed=True)  # the opening buys use $389.49 of today's 400
+    first = next(o for o in mine("BUY") if o["price"] == "98420")
+    fill(first["orderId"])
+    grids.step()  # its sell goes on
+    fill(mine("SELL")[0]["orderId"])
+    grids.step()  # the sell's buy-back: $50, but only $10.51 left today, so it waits
+    assert "limit is used up" in grids.view()["grids"][0]["note"]
+    assert len(mine("BUY")) == 7
+
+    tomorrow = NOW + 86_400
+    grids._clock = lambda: tomorrow  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    grids.trading._clock = lambda: tomorrow  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    grids.step()
+    assert len(mine("BUY")) == 8  # sent this morning
+    left = Decimal(grids.trading.settings()["leftToday"])
+    assert left < Decimal(351)  # and counted today: about 350 left, not the full 400
+
+
+def test_a_grid_buy_the_kill_switch_couldnt_cancel_stays_open_and_is_tried_again(
+    grids: Grids, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 3: a buy still live on Binance is never marked cancelled; it stays followed, and
+    each step tries it again while trading is off."""
+    grids.trading.set_limits("60", "1000")
+    grid_id = grids.create(SETTINGS)["grids"][0]["id"]
+    grids.switch(grid_id, on=True, confirmed=True)
+    real = grids._binance.cancel  # pyright: ignore[reportPrivateUsage]
+
+    def lost(*_a: object, **_k: object) -> None:
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(grids._binance, "cancel", lost)  # pyright: ignore[reportPrivateUsage]
+    grids.trading.set_trading(False)
+    assert grids.stop_all("Stopped by the kill switch.") == 8
+    assert len(mine("BUY")) == 8
+    view = grids.view()["grids"][0]
+    assert not view["enabled"]
+    assert view["openBuys"] == 8  # still open in the book, not cancelled
+    with pytest.raises(Refused, match="still live on Binance"):
+        grids.switch(grid_id, on=False, confirmed=False)
+
+    monkeypatch.setattr(grids._binance, "cancel", real)  # pyright: ignore[reportPrivateUsage]
+    grids.step()
+    assert mine("BUY") == []
+    assert grids.view()["grids"][0]["openBuys"] == 0
+
+
+def rows(grids: Grids, grid_id: int) -> list[str]:
+    return [r["status"] for r in grids._store.grid_orders(grid_id)]  # pyright: ignore[reportPrivateUsage]
+
+
+def test_a_grid_buy_met_with_a_5xx_is_looked_up_not_written_off(
+    grids: Grids, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a 5xx's outcome is unknown. The buy here reached Binance, so the row stays
+    placing and is found live, never cancelled and sent again."""
+    grids.trading.set_limits("60", "1000")
+    grid_id = grids.create(SETTINGS)["grids"][0]["id"]
+    real = grids._binance.buy_limit  # pyright: ignore[reportPrivateUsage]
+
+    def took_it_then_503(*args: Any, **kwargs: Any) -> Any:
+        real(*args, **kwargs)
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(grids._binance, "buy_limit", took_it_then_503)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(BinanceError):
+        grids.switch(grid_id, on=True, confirmed=True)
+    assert "placing" in rows(grids, grid_id)
+    assert "cancelled" not in rows(grids, grid_id)
+    monkeypatch.setattr(grids._binance, "buy_limit", real)  # pyright: ignore[reportPrivateUsage]
+    grids.step()
+    assert "placing" not in rows(grids, grid_id)
+    assert len(mine("BUY")) == len({o["clientOrderId"] for o in mine("BUY")})  # none sent twice
+
+
+def test_a_grid_lookup_only_sends_again_when_binance_says_it_isnt_there(
+    grids: Grids, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a clock out of step (-1021) proves nothing; only "Order does not exist" does."""
+    grids.trading.set_limits("60", "1000")
+    grid_id = grids.create(SETTINGS)["grids"][0]["id"]
+    real, lookup = grids._binance.buy_limit, grids._binance.order_by_client  # pyright: ignore[reportPrivateUsage]
+
+    def no_answer(*_a: object, **_k: object) -> None:
+        raise BinanceError(0, "Binance didn't answer.")
+
+    def out_of_step(*_a: object, **_k: object) -> None:
+        raise BinanceError(400, "Timestamp for this request is outside of the recvWindow.", -1021)
+
+    monkeypatch.setattr(grids._binance, "buy_limit", no_answer)  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(BinanceError):
+        grids.switch(grid_id, on=True, confirmed=True)
+    monkeypatch.setattr(grids._binance, "buy_limit", real)  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setattr(grids._binance, "order_by_client", out_of_step)  # pyright: ignore[reportPrivateUsage]
+    grids.step()
+    assert "placing" in rows(grids, grid_id)  # not put back to wanted on an error like that
+    monkeypatch.setattr(grids._binance, "order_by_client", lookup)  # pyright: ignore[reportPrivateUsage]
+    grids.step()  # the demo never got it: "Order does not exist" (-2013)
+    assert "placing" not in rows(grids, grid_id)
+
+
+def test_deleting_a_grid_keeps_what_it_bought_today_counted(grids: Grids) -> None:
+    """Audit 8: a deleted grid is hidden, not erased: what it bought still counts against
+    today's limit and the monthly cap, and the ledger still names its fills."""
+    grids.trading.set_limits("60", "1000")
+    grid_id = grids.create(SETTINGS)["grids"][0]["id"]
+    grids.switch(grid_id, on=True, confirmed=True)
+    bought = mine("BUY")[0]
+    fill(bought["orderId"])
+    grids.step()
+    grids.switch(grid_id, on=False, confirmed=False)
+    spent = grids.trading.settings()["spentToday"]
+    assert Decimal(spent) > 0
+    assert grids.delete(grid_id)["grids"] == []
+    assert grids.trading.settings()["spentToday"] == spent
+    store = grids._store  # pyright: ignore[reportPrivateUsage]
+    assert store.order_sources()[f"BTCUSDT:{bought['orderId']}"] == f"GRID-{grid_id}"
+    with pytest.raises(LookupError):
+        store.grid(grid_id)
+
+
+def test_a_database_made_before_hidden_deletes_gets_the_column(tmp_path: Path) -> None:
+    """Audit 8: the desk's existing databases have no `deleted` column; opening one adds it."""
+    import sqlite3  # noqa: PLC0415 - only this test builds an old database
+
+    path = tmp_path / "old.sqlite"
+    old = sqlite3.connect(path)
+    old.execute(
+        "CREATE TABLE grids (id INTEGER PRIMARY KEY, name TEXT NOT NULL, symbol TEXT NOT NULL, "
+        "config TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 0, note TEXT, started INTEGER, "
+        "created INTEGER NOT NULL, updated INTEGER NOT NULL)"
+    )
+    old.execute(
+        "INSERT INTO grids (name, symbol, config, created, updated) VALUES "
+        "('BTC range', 'BTCUSDT', '{}', 1, 1)"
+    )
+    old.commit()
+    old.close()
+    store = Store(path)
+    assert [g["name"] for g in store.grids()] == ["BTC range"]
+    store.delete_grid(1, 2)
+    assert store.grids() == []
+    store.close()

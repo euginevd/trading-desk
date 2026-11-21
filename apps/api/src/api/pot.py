@@ -14,7 +14,7 @@ from typing import Any, cast
 from zoneinfo import ZoneInfo
 
 from api import my_agents, pot_stats, screener
-from api.binance import BinanceError, Filters, plain
+from api.binance import BinanceError, Filters, missing, plain, unknown
 from api.dca_book import binance_state
 from api.locks import locked
 from api.market import QUOTE
@@ -52,11 +52,6 @@ SCAN_HOUR, SCAN_MINUTE = 11, 15
 LIVE = ("placing", "waiting", "open")
 SETUP = re.compile(r"[\w ,.'()-]{1,60}")
 COINS_LINE = re.compile(r"^- (?:Fallback c|C)oins:\s*(.+)$", re.MULTILINE)
-
-
-def unknown(error: BinanceError) -> bool:
-    """No answer, or a 5xx: Binance may or may not have the order (its API docs say so)."""
-    return error.status == 0 or error.status >= 500  # noqa: PLR2004
 
 
 def ref_week(ms: int) -> str:
@@ -1663,6 +1658,15 @@ class Pot:
             return
         if listed.get("listOrderStatus") != "ALL_DONE":
             return
+        if self._legs_sold(order, trade):
+            return
+        self._save_order(order, {"status": "cancelled"})
+        if trade["status"] == "open":  # the next sync puts them back
+            self._save_trade(trade, {"note": "Its stop and target were cancelled on Binance."})
+
+    def _legs_sold(self, order: dict[str, Any], trade: dict[str, Any]) -> bool:
+        """A finished OCO's sale, in whole or in part, into the trade (only one leg can sell);
+        False when neither leg sold anything."""
         symbol = f"{trade['coin']}{QUOTE}"
         for leg in json.loads(order["legs"] or "[]"):
             sent = self._binance.order(symbol, int(leg))
@@ -1683,10 +1687,8 @@ class Pot:
             )
             kind = "target" if str(sent.get("type")) in ("LIMIT_MAKER", "LIMIT") else "stop"
             self._close(trade, executed, quote, Decimal(trade["fees_usd"]) + fee, kind)
-            return
-        self._save_order(order, {"status": "cancelled"})
-        if trade["status"] == "open":  # the next sync puts them back
-            self._save_trade(trade, {"note": "Its stop and target were cancelled on Binance."})
+            return True
+        return False
 
     def _refresh(self, order: dict[str, Any]) -> None:
         if order["kind"] == "oco":
@@ -1701,7 +1703,7 @@ class Pot:
             else:
                 sent = self._binance.order(symbol, int(order["order_id"]))
         except BinanceError as error:
-            if order["status"] != "placing" or unknown(error):
+            if order["status"] != "placing" or not missing(error):
                 raise
             sent = {"orderId": 0, "status": "REJECTED"}  # Binance never took it
         self._follow(order, sent)
@@ -1712,7 +1714,7 @@ class Pot:
         try:
             sent = self._binance.order_list_by_client(order["ref"])
         except BinanceError as error:
-            if unknown(error):
+            if not missing(error):
                 raise
             self._save_order(order, {"status": "cancelled"})
             return False
@@ -1806,6 +1808,15 @@ class Pot:
             raise Refused(
                 "Binance didn't take its stop and target off, so nothing changed. Try again."
             ) from None
+        # A target can part-fill before the cancel: that sale is recorded, and the caller's copy
+        # of the trade is stale, so it must not sell or re-protect the old amount (audit 4).
+        trade = self._trade(trade["ref"])
+        self._rules_of(trade["coin"])  # read before any save, as in _check_exit
+        if self._legs_sold(live, trade):
+            raise Refused(
+                "Part of it sold on Binance a moment ago (its stop or target), so nothing "
+                "changed. Look again."
+            )
         self._save_order(live, {"status": "cancelled"})
 
     def _pull_stop(self, trade: dict[str, Any], live: dict[str, Any]) -> None:
@@ -2039,7 +2050,8 @@ class Pot:
             )
         self._keeps_stop(trade, {})
         rules = self._rules_of(coin)
-        qty = rules.amount(number(body.get("usdc"), "The amount") / now)
+        # $10 asked rounds under $10 at Binance's step: one step more, as a ladder's limit does.
+        qty = rung_qty(rules, now, number(body.get("usdc"), "The amount"))
         spend = qty * now
         if qty <= ZERO or spend < max(rules.min_notional, MIN_ORDER):
             raise Refused(smallest(rules.min_notional))

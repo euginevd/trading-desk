@@ -14,7 +14,7 @@ from decimal import ROUND_FLOOR, Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
-from api.binance import BinanceError, plain
+from api.binance import BinanceError, missing, plain, unknown
 from api.locks import locked
 from api.market import QUOTE
 from api.trading import Refused, Trading, number
@@ -438,6 +438,9 @@ class DcaBook:
         price = rules.price(number(body.get("price"), "Price")) if kind == "limit" else None
         smallest = f"That's under Binance's smallest order of {rules.min_notional}."
         if side == "sell":
+            # A sell is a new order too: the kill switch refuses every one (spec 10, audit 9).
+            if not self._desk.settings()["tradingOn"]:
+                raise Refused("Trading is off. Turn it on in the top bar to trade.")
             qty = rules.amount(number(body.get("qty"), "Quantity"))
             if qty > self._held(coin):
                 raise Refused(f"The book holds less {coin} than that.")
@@ -488,7 +491,7 @@ class DcaBook:
         try:
             order = self._send(saved, f"{coin}{QUOTE}")
         except BinanceError as error:
-            if error.status != 0:  # refused: never placed
+            if not unknown(error):  # refused: never placed
                 self._store.save_dca_order(saved | {"status": "cancelled", "updated": now})
             raise
         self._record(saved, order)
@@ -572,7 +575,7 @@ class DcaBook:
             else:
                 order = self._binance.order(symbol, int(row["order_id"]))
         except BinanceError as error:
-            if row["status"] != "placing" or error.status == 0:
+            if row["status"] != "placing" or not missing(error):
                 raise
             order = {"orderId": 0, "status": "REJECTED"}  # Binance never took it
         self._record(row, order)
@@ -588,6 +591,8 @@ class DcaBook:
                     continue
 
     def _cancel(self, row: dict[str, Any]) -> dict[str, Any]:
+        """The order cancelled and its final fills recorded; refused when Binance still has it
+        live, so nothing is placed in its place while it can still fill."""
         if row["status"] == "placing":
             self._refresh(row)
             row = self._row(int(row["id"]))
@@ -601,7 +606,13 @@ class DcaBook:
         if str(order.get("status")) == "CANCELED":
             order = self._binance.order(symbol, int(row["order_id"]))  # its final fills
         self._record(row, order)
-        return self._row(int(row["id"]))
+        done = self._row(int(row["id"]))
+        if done["status"] in ("placing", "open"):
+            raise Refused(
+                f"{row['ref']} is still live on Binance: the cancel didn't take. "
+                "Nothing new was placed; try again in a minute."
+            )
+        return done
 
     @locked
     def cancel(self, ref: object) -> dict[str, Any]:
@@ -767,7 +778,7 @@ class DcaBook:
         try:
             self._record(saved, self._send(saved, f"{coin}{QUOTE}"))
         except BinanceError as error:
-            if error.status != 0:
+            if not unknown(error):  # refused: never placed
                 self._store.save_dca_order(saved | {"status": "cancelled", "updated": self._now()})
             raise
 

@@ -19,7 +19,7 @@ import {
   setFeature,
   setTrading,
 } from "./api";
-import { percent, trend, usdShort } from "./format";
+import { errorOf, percent, trend, usdShort } from "./format";
 import Coach from "./Coach";
 import type { BotsTab } from "./BotsHome";
 import { FEATURES, type FeatureId, FeaturesContext, type Flags, featureOn } from "./features";
@@ -272,6 +272,8 @@ export default function App() {
   const [tao, setTao] = useState<TaoWallet["status"] | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [switching, setSwitching] = useState(false);
+  // What the last switch said when it didn't go as asked: refused, or buys still live.
+  const [killNote, setKillNote] = useState<string | null>(null);
   const [tickers, setTickers] = useState<Ticker[]>([]);
   const [global, setGlobal] = useState<MarketGlobal | null>(null);
   const [fear, setFear] = useState<Sentiment | null>(null);
@@ -309,13 +311,15 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    getSettings().then(setSettings, () => setSettings(null));
     // Unreadable, every feature is as it starts: today's pages on, new ones off.
     getFeatures().then(
       (r) => setFlags(r.flags),
       () => setFlags({}),
     );
     const tick = () => {
+      // Read again each tick: a desk opened before the api, or a switch made on Telegram,
+      // shows the kill switch as it is within 30 seconds (audit 14).
+      getSettings().then(setSettings, () => setSettings(null));
       getTickers(["BTC"]).then(
         (r) => setTickers(r.tickers),
         () => setTickers([]),
@@ -353,15 +357,24 @@ export default function App() {
   const onStatus = useCallback((next: Status) => setStatus(next), []);
   const onTao = useCallback((next: TaoWallet["status"]) => setTao(next), []);
 
+  // Unknown (the api unread), a click switches trading off: stopping is always allowed.
   const toggle = () => {
-    if (!settings) return;
     setSwitching(true);
-    setTrading(!settings.tradingOn).then(
+    setKillNote(null);
+    setTrading(settings ? !settings.tradingOn : false).then(
       (next) => {
         setSettings(next);
         setSwitching(false);
+        const live = next.stillLive ?? 0;
+        if (!next.tradingOn && live > 0)
+          setKillNote(
+            `${live} ${live === 1 ? "buy is" : "buys are"} still live on Binance: the desk tries to cancel ${live === 1 ? "it" : "them"} every 30 seconds.`,
+          );
       },
-      () => setSwitching(false),
+      (e: unknown) => {
+        setSwitching(false);
+        setKillNote(errorOf(e, "Trading wasn't switched. Try again."));
+      },
     );
   };
 
@@ -446,9 +459,14 @@ export default function App() {
             className="pill kill"
             type="button"
             aria-pressed={on}
-            disabled={!settings || switching}
+            disabled={switching}
             onClick={toggle}
-            title="Kill switch: off refuses every new order"
+            title={
+              killNote ??
+              (settings
+                ? "Kill switch: off refuses every new order"
+                : "Kill switch: the api hasn't answered; click to switch trading off")
+            }
           >
             <span className="pill-icon">
               <PowerIcon />
@@ -460,6 +478,11 @@ export default function App() {
               <i />
             </span>
           </button>
+          {killNote && (
+            <p className="kill-note" role="alert">
+              {killNote}
+            </p>
+          )}
         </div>
       </aside>
       <button

@@ -3,10 +3,12 @@ runs started from the desk, one run in full, and the job queue the backtest work
 api never starts a process: it writes a checked request into `local/backtest/jobs`, and the
 worker runs it. Only the desk's own runs are listed, never run.sh's (owner, 20 Nov 2026)."""
 
+import contextlib
 import json
 import os
 import re
 import secrets
+import stat
 import time
 import zipfile
 from collections.abc import Callable
@@ -14,12 +16,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-from api.backtest_report import load, summary
+from api.backtest_report import from_zip, summary
 from api.backtest_runs import QUOTE, STYLES, BadRun, check, default
 
 RUN_ID = re.compile(r"backtest-result-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
 JOB_ID = re.compile(r"job-\d{8}-\d{6}-[0-9a-f]{6}")
 LOG_LINES = 12
+# The Freqtrade containers write local/backtest, so the api reads only plain files there, of a
+# sane size, and the log from its end (audit 19).
+MAX_JSON = 1_000_000
+MAX_RESULT = 500_000_000
+LOG_TAIL_BYTES = 16_384
 WORKER_STALE_MS = 30_000
 OPEN = {"queued", "running"}
 
@@ -35,9 +42,56 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
-def _read(path: Path) -> dict[str, Any] | None:
+def _open_plain(path: Path, most: int) -> int | None:
+    """A descriptor on a regular file of at most `most` bytes, or None: opened once, never
+    through a link (to .env, say), never blocking on a pipe, and checked on what was opened,
+    so nothing can be swapped in between the check and the read."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    flags |= getattr(os, "O_BINARY", 0)
     try:
-        found: object = json.loads(path.read_text(encoding="utf-8"))
+        fd = os.open(path, flags)
+    except OSError:
+        return None
+    found = os.fstat(fd)
+    if not stat.S_ISREG(found.st_mode) or found.st_size > most:
+        os.close(fd)
+        return None
+    return fd
+
+
+def _read_plain(path: Path, most: int) -> bytes | None:
+    fd = _open_plain(path, most)
+    if fd is None:
+        return None
+    with os.fdopen(fd, "rb") as found:
+        return found.read(most + 1)[:most]
+
+
+def _tail(path: Path) -> list[str]:
+    """The log's last lines, read from its end only."""
+    fd = _open_plain(path, 1 << 62)
+    if fd is None:
+        return []
+    with os.fdopen(fd, "rb") as log:
+        size = log.seek(0, os.SEEK_END)
+        log.seek(max(size - LOG_TAIL_BYTES, 0))
+        text = log.read(LOG_TAIL_BYTES).decode("utf-8", "replace")
+    return text.splitlines()[-LOG_LINES:]
+
+
+def _create(path: Path, text: str) -> None:
+    """A new file, written only if nothing is at that path: never through a link left there."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
+    with os.fdopen(os.open(path, flags, 0o644), "w", encoding="utf-8") as out:
+        out.write(text)
+
+
+def _read(path: Path) -> dict[str, Any] | None:
+    raw = _read_plain(path, MAX_JSON)
+    if raw is None:
+        return None
+    try:
+        found: object = json.loads(raw.decode("utf-8"))
     except (OSError, ValueError):
         return None
     return cast(dict[str, Any], found) if isinstance(found, dict) else None
@@ -65,8 +119,12 @@ class Backtests:
         except OSError:
             return None
         if key not in _cache:
+            fd = _open_plain(path, MAX_RESULT)
+            if fd is None:
+                return None
             try:
-                _cache[key] = summary(load(path))
+                with os.fdopen(fd, "rb") as result:
+                    _cache[key] = summary(from_zip(result))
             except (OSError, ValueError, KeyError, TypeError, StopIteration, zipfile.BadZipFile):
                 _cache[key] = None  # a result Freqtrade was still writing, cut off, or not ours
         return _cache[key]
@@ -122,11 +180,7 @@ class Backtests:
     def _job(self, job: str) -> dict[str, Any]:
         request = _read(self.jobs / f"{job}.request.json") or {}
         state = _read(self.jobs / f"{job}.status.json") or {"state": "queued"}
-        log = self.jobs / f"{job}.log"
-        try:
-            tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-LOG_LINES:]
-        except OSError:
-            tail = []
+        tail = _tail(self.jobs / f"{job}.log")
         cancelling = (self.jobs / f"{job}.cancel").exists()
         named = state.get("state", "queued")
         error = state.get("error")
@@ -204,7 +258,12 @@ class Backtests:
             "created": self.now(),
         }
         tmp = self.jobs / f"{job}.request.tmp"
-        tmp.write_text(json.dumps(request), encoding="utf-8")
+        try:
+            _create(tmp, json.dumps(request))
+        except FileExistsError as error:
+            raise BadRun(
+                "Something else is in the jobs folder under that name: try again."
+            ) from error
         tmp.replace(self.jobs / f"{job}.request.json")
         return self.view()
 
@@ -214,7 +273,8 @@ class Backtests:
             raise BadRun("That isn't a backtest job.")
         if not (self.jobs / f"{job}.request.json").exists():
             raise LookupError(job)
-        (self.jobs / f"{job}.cancel").write_text("", encoding="utf-8")
+        with contextlib.suppress(FileExistsError):  # asked already, or something else is there
+            _create(self.jobs / f"{job}.cancel", "")
         return self.view()
 
 

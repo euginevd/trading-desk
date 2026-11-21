@@ -755,6 +755,17 @@ td.dcb-id {
 .dcb-sheet-form p {
   margin: 0;
 }
+/* The fields, locked while the order is reviewed: no box of its own. */
+.dcb-sheet-fields {
+  display: contents;
+}
+.dcb-review {
+  padding: 10px 12px;
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
 .dcb-seg {
   display: inline-flex;
   width: max-content;

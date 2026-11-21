@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, cast
 
 from api import screener
-from api.binance import BinanceError, Filters, plain
+from api.binance import BinanceError, Filters, plain, unknown
 from api.dca_book import binance_state
 from api.locks import locked
 from api.market import QUOTE
@@ -346,8 +346,6 @@ class TakeProfit:
             else:
                 sent = self._binance.limit_sell(symbol, qty, Decimal(level["price"]), order["ref"])
         except BinanceError as error:
-            from api.pot import unknown  # noqa: PLC0415 - pot imports this module
-
             if not unknown(error):  # unknown: the next sync looks it up by its id
                 self._pot.save_order(saved, {"status": "cancelled"})
                 raise

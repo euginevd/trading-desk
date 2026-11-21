@@ -91,9 +91,12 @@ def odds_ladder(rows: list[list[Any]], now: float, *, selling: bool) -> list[dic
 
 
 class Strategist:
-    def __init__(self, desk: Trading, signals: Signals | None) -> None:
+    def __init__(
+        self, desk: Trading, signals: Signals | None, client: httpx.Client | None = None
+    ) -> None:
         self._desk = desk
         self._signals = signals
+        self._client = client  # the market's mood and calendar; none in tests
         self._pot = Pot(desk)
 
     def _position(self, book: str, coin: str, key: str) -> dict[str, Any]:
@@ -143,8 +146,9 @@ class Strategist:
         except Exception:  # noqa: BLE001 - context only; the chat goes on without it
             found["regime"] = None
         # Context only; the chat goes on without it.
-        with httpx.Client(timeout=10) as client, contextlib.suppress(Exception):
-            found |= PotAgent(self._pot, None, client).context()
+        if self._client is not None:
+            with contextlib.suppress(Exception):
+                found |= PotAgent(self._pot, None, self._client).context()
         return found
 
     def _ask(self, slug: str, prompt: str) -> dict[str, Any]:

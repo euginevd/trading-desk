@@ -10,7 +10,7 @@ import { amendDcaOrder, cancelDcaOrder, fundsOdds } from "./api";
 import { errorOf } from "./format";
 import { FoldHead, useFold } from "./Fold";
 import CoinIcon from "./CoinIcon";
-import DcaOrderDrawer, { away, left, pct, qtyOf } from "./DcaOrderDrawer";
+import DcaOrderDrawer, { away, left, pct, qtyOf, since } from "./DcaOrderDrawer";
 import { SOURCE, STATUS, amountOf, isOpen, limit, qty as fmtQty, two, when } from "./dcaFormat";
 import type { DcaBook, DcaOrder } from "./types";
 
@@ -408,6 +408,7 @@ export default function DcaOrders({
                         const live = isOpen(o);
                         const at = Number(o.avgPrice ?? o.price);
                         const off = away(at, prices[o.coin] ?? 0);
+                        const moved = since(at, prices[o.coin] ?? 0);
                         const p = canEdit(o) ? oddsOf(o) : null;
                         const buyBack =
                           o.source === "trim" && o.status === "filled" && !backed.has(o.ref);
@@ -454,14 +455,14 @@ export default function DcaOrders({
                             <td className={`r num ${live ? "muted" : ""}`}>
                               {live ? (
                                 pct(off)
-                              ) : off === null ? (
+                              ) : moved === null ? (
                                 "—"
                               ) : (
                                 <span
-                                  className={-off >= 0 ? "up" : "down"}
+                                  className={moved >= 0 ? "up" : "down"}
                                   title="The price now against its fill"
                                 >
-                                  {pct(-off)}
+                                  {pct(moved)}
                                 </span>
                               )}
                             </td>

@@ -6,7 +6,7 @@ import json
 import zipfile
 from collections import defaultdict
 from pathlib import Path
-from typing import Any
+from typing import IO, Any
 
 from api.backtest_runs import STYLES
 
@@ -24,16 +24,21 @@ STRATEGIES: dict[str, tuple[str, bool]] = {
 }
 
 
+def from_zip(source: Path | IO[bytes]) -> dict[str, Any]:
+    """A result's JSON from Freqtrade's zip, given its path or a file already open."""
+    with zipfile.ZipFile(source) as z:
+        name = next(
+            n
+            for n in z.namelist()
+            if n.endswith(".json") and not n.endswith(("_config.json", "_market_change.json"))
+        )
+        return json.loads(z.read(name))
+
+
 def load(path: Path) -> dict[str, Any]:
     """A result's JSON, from Freqtrade's zip or a plain file."""
     if path.suffix == ".zip":
-        with zipfile.ZipFile(path) as z:
-            name = next(
-                n
-                for n in z.namelist()
-                if n.endswith(".json") and not n.endswith(("_config.json", "_market_change.json"))
-            )
-            return json.loads(z.read(name))
+        return from_zip(path)
     return json.loads(path.read_text(encoding="utf-8"))
 
 

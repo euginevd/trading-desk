@@ -284,10 +284,19 @@ def live_bots() -> Generator[Bots]:
 def _set_trading(desk: Trading, on: bool) -> dict[str, Any]:
     """The kill switch: off stops every bot too, and cancels their open buys (spec 10)."""
     settings = desk.set_trading(on)
-    if not on:
-        Bots(*desk.parts()).stop_all("Stopped by the kill switch.")
-        Grids(*desk.parts()).stop_all("Stopped by the kill switch.")
-    return settings
+    if on:
+        return settings
+    # Both always run, the grids even if the bots fail; a buy Binance still has live is retried
+    # by each step while trading is off.
+    try:
+        live = Bots(*desk.parts()).stop_all("Stopped by the kill switch.")
+    finally:
+        grids = Grids(*desk.parts()).stop_all("Stopped by the kill switch.")
+    live += grids
+    if live:
+        audit = desk.parts()[2]
+        audit.record("settings", "Kill switch", f"{live} bot and grid buys still live; retrying")
+    return settings | {"stillLive": live}
 
 
 BOT_ROUTES: dict[tuple[str, str], Callable[[Bots, dict[str, Any]], dict[str, Any]]] = {
@@ -542,13 +551,9 @@ POT_ROUTES: dict[tuple[str, str], Route] = {
     ("GET", "/pot/coins"): lambda desk, _q, _b: account_coins.snapshot(Pot(desk)),
 }
 ROUTES: dict[tuple[str, str], Route] = {
-    ("GET", "/trade"): lambda desk, q, _: desk.terminal(coin_symbol(q.get("symbol") or "BTC")),
     ("GET", "/settings"): lambda desk, _q, _b: desk.settings(),
     ("PUT", "/limits"): lambda desk, _, b: desk.set_limits(b.get("perOrder"), b.get("perDay")),
     ("PUT", "/trading"): lambda desk, _, b: _set_trading(desk, b.get("on") is True),
-    ("POST", "/trades"): lambda desk, _, b: desk.place(b),
-    ("POST", "/orders"): lambda desk, _, b: desk.place_order(b),
-    ("POST", "/orders/ladder"): lambda desk, _, b: desk.ladder_order(b),
     ("POST", "/orders/edit"): lambda desk, _, b: desk.edit_order(b),
     ("POST", "/orders/cancel"): lambda desk, _, b: desk.cancel_order(
         b.get("symbol"), b.get("orderId")
@@ -598,12 +603,11 @@ def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
 
 
 # The Trading account's trades are the owner's own buys too (decision 78); the DCA close-out is
-# not, as it finishes a week the owner already approved.
+# not, as it finishes a week the owner already approved. A DCA change is checked when it raises a
+# buy (audit 9).
 BUYS = (
-    "/trades",
-    "/orders",
-    "/orders/ladder",
     "/dca/orders",
+    "/dca/orders/amend",
     "/pot/trades",
     "/pot/trades/add",
     "/pot/trades/enter-now",
@@ -622,10 +626,6 @@ def _spend_of(path: str, body: dict[str, Any]) -> Decimal | None:
         if path in ("/pot/ladders", "/dca/add"):
             rungs = cast(list[dict[str, Any]], body.get("rungs") or [])
             return sum((Decimal(str(r.get("spend"))) for r in rungs), Decimal(0))
-        if path == "/orders":
-            if body.get("side") != "buy":
-                return None
-            return Decimal(str(body.get("price"))) * Decimal(str(body.get("amount")))
         return Decimal(str(body.get("spend")))
     except (InvalidOperation, ValueError):
         return None
@@ -646,6 +646,8 @@ def _pretrade(
         return _rule_check(store, audit, str(sized["coin"]), spend, override, portfolio)[0]
     if path in ("/pot/trades/add", "/pot/trades/enter-now"):
         return _pretrade_add(desk, body, portfolio)
+    if path == "/dca/orders/amend":
+        return _pretrade_amend(desk, body, portfolio)
     spend = _spend_of(path, body)
     if spend is None or not spend.is_finite() or spend <= 0:
         return None
@@ -676,11 +678,43 @@ def _pretrade_add(
     return _rule_check(store, audit, str(trade["coin"]), spend, override, portfolio)[0]
 
 
+def _pretrade_amend(
+    desk: Trading, body: dict[str, Any], portfolio: Portfolio
+) -> dict[str, object] | None:
+    """A DCA change that raises a buy (audit 9): the per-trade size is judged on the new
+    order, the monthly cap and the coin's share on what the raise adds, as the old order's
+    unfilled part already counts. A new price, or the same or a smaller amount, adds nothing."""
+    _, store, audit, clock = desk.parts()
+    row = store.dca_order(str(body.get("ref") or ""))
+    if row is None or row["side"] != "buy" or body.get("raise") is not True:
+        return None
+    try:
+        spend = Decimal(str(body.get("spend")))
+        left = Decimal(row["spend"] or "0") - Decimal(row["executed_quote"])
+    except (InvalidOperation, ValueError):
+        return None
+    if not spend.is_finite() or spend <= left:
+        return None
+    now = datetime.fromtimestamp(clock(), SYDNEY)
+    counted = left if int(row["created"]) >= profile_live.month_start_ms(now) else Decimal(0)
+    override = body.get("override") is True
+    coin = str(row["coin"])
+    return _rule_check(store, audit, coin, spend, override, portfolio, credit=counted)[0]
+
+
 def _rule_check(  # noqa: PLR0913, PLR0917 - each is a separate fact about the buy
-    store: Store, audit: Audit, coin: str, spend: Decimal, override: bool, portfolio: Portfolio
+    store: Store,
+    audit: Audit,
+    coin: str,
+    spend: Decimal,
+    override: bool,
+    portfolio: Portfolio,
+    *,
+    credit: Decimal = Decimal(0),
 ) -> tuple[dict[str, object] | None, list[dict[str, str]]]:
     """A 409 naming each set Profile rule the buy breaks, or None when it may go; and the rules
-    it breaks, whether or not the owner confirmed past them."""
+    it breaks, whether or not the owner confirmed past them. credit: what an order this buy
+    replaces already counts this month, so the cap and the coin's share see only what it adds."""
 
     _, doc = profile.current(store)
     if all(profile.rule(doc, key) is None for key in PRETRADE_RULES):
@@ -697,8 +731,8 @@ def _rule_check(  # noqa: PLR0913, PLR0917 - each is a separate fact about the b
     found = profile_live.breaks(
         doc,
         spend_aud=spend * rate,
-        month_aud=profile_live.month_spent_aud(store, rate, datetime.now(SYDNEY)),
-        share_after=profile_live.share_after(held, coin, spend) if held else None,
+        month_aud=profile_live.month_spent_aud(store, rate, datetime.now(SYDNEY)) - credit * rate,
+        share_after=profile_live.share_after(held, coin, spend - credit) if held else None,
         coin=coin,
     )
     if held is None and profile.rule(doc, "max_pct_per_coin") is not None:
@@ -729,23 +763,14 @@ def _trading_route(  # noqa: PLR0913, PLR0917 - each factory is a seam the tests
     trading: TradingFactory,
     portfolio: Portfolio,
 ) -> dict[str, object] | None:
-    action = re.fullmatch(r"/trades/(\d+)/(cancel|close)", path)
     route = ROUTES.get((method, path))
-    if route is None and not (method == "POST" and action):
+    if route is None:
         return None
     with trading() as desk:
-        if route is not None:
-            held = _pretrade(desk, path, _body(event), portfolio)
-            if held is not None:
-                return held
-            data = route(desk, params, _body(event))
-            if path == "/trade" and _demo():
-                data["demo"] = True
-            return _reply(200, data)
-        assert action is not None  # noqa: S101 - checked above
-        trade_id = int(action.group(1))
-        done = desk.cancel(trade_id) if action.group(2) == "cancel" else desk.close(trade_id)
-        return _reply(200, done)
+        held = _pretrade(desk, path, _body(event), portfolio)
+        if held is not None:
+            return held
+        return _reply(200, route(desk, params, _body(event)))
 
 
 def _tickers(binance: Binance, coins: str) -> dict[str, Any]:
@@ -821,6 +846,12 @@ def _add_alert(s: Services, b: dict[str, Any]) -> dict[str, Any]:
     s.store.add_alert(coin, direction, format(at.normalize(), "f"), note, int(time.time() * 1000))
     s.audit.record("alert", f"Alert set on {coin}", f"{direction} {at}")
     return {"alerts": s.store.alerts(coin)}
+
+
+def _strategize(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    """Strategize with the agent: the market's mood and calendar read through one client."""
+    with httpx.Client(timeout=TIMEOUT_SECONDS) as client:
+        return Strategist(Trading(s.binance, s.store, s.audit), s.signals, client).chat(body)
 
 
 def _funds(s: Services) -> Funds:
@@ -1144,9 +1175,7 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
         b.get("side"), b.get("amount"), b.get("agent", True) is not False
     ),
     ("POST", "/dca/funds/chat"): lambda s, _q, b: _funds(s).chat(b),
-    ("POST", "/strategize"): lambda s, _q, b: Strategist(
-        Trading(s.binance, s.store, s.audit), s.signals
-    ).chat(b),
+    ("POST", "/strategize"): lambda s, _q, b: _strategize(s, b),
     ("POST", "/pot/scan"): lambda s, _q, _b: _pot_agent(s, None, "scan-now"),
     ("GET", "/pot/scan/progress"): lambda _s, _q, _b: scan_progress.view(),
     ("GET", "/risk-board"): lambda s, _q, _b: risk_board(s),
@@ -1174,9 +1203,9 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("PUT", "/journal/tags"): lambda s, _, b: journal.tag(s.store, b),
     ("PUT", "/journal/lists"): lambda s, _, b: journal.set_lists(s.store, b),
     ("GET", "/settings/features"): lambda s, _q, _b: features.view(s.store),
-    ("PUT", "/settings/features"): lambda s, _, b: features.switch(s.store, b),
+    ("PUT", "/settings/features"): lambda s, _, b: _switch_feature(s, b),
     ("GET", "/settings/telegram"): lambda s, _q, _b: telegram.view(s.store),
-    ("PUT", "/settings/telegram"): lambda s, _, b: telegram.set_time(s.store, b),
+    ("PUT", "/settings/telegram"): lambda s, _, b: _telegram_time(s, b),
     ("PUT", "/settings/telegram/token"): lambda s, _, b: _telegram_token(s, b),
     ("POST", "/settings/telegram/test"): lambda s, _q, _b: _telegram_test(s),
     ("POST", "/settings/telegram/link"): lambda s, _q, _b: _telegram_link(s),
@@ -1358,6 +1387,19 @@ def _telegram_token(s: Services, body: dict[str, Any]) -> dict[str, Any]:
     telegram.new_link(s.store)  # a new bot links afresh, by the code shown in Settings
     s.audit.record("settings", "Telegram bot token", "Saved to .env")
     return telegram.view(s.store)
+
+
+def _telegram_time(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    done = telegram.set_time(s.store, body)
+    s.audit.record("settings", "Morning summary time", str(done["time"]))  # audit 23
+    return done
+
+
+def _switch_feature(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    done = features.switch(s.store, body)
+    said = "On" if body.get("on") is True else "Off"
+    s.audit.record("settings", f"Page or feature: {body.get('id')}", said)  # audit 23
+    return done
 
 
 def _telegram_link(s: Services) -> dict[str, Any]:

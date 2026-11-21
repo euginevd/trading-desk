@@ -47,6 +47,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 25b. Headless Chrome on Windows lays out at 500px at least: check phone layouts at `--window-size=500,…`, not 390.
 25c. A full-height panel inside the frame took only the frame's margin off `100vh`, so every page scrolled 30px: subtract margin, padding and border (`calc(100vh - 58px)`).
 25d. The api refuses a change that isn't JSON, so a bodiless POST failed: `call` in `api.ts` sends `{}`; test by clicking the button, not only `curl -d '{}'`.
+25e. Vitest 5 run from Git Bash on Windows fails every file with "failed to find the runner": run it from PowerShell (`npx.cmd vitest run`) or CI.
 26. Slicing `styles.css` from a block's comment to the file's end drops rules appended after it: slice to the next block's comment, then check the rest.
 
 ## Python and Postgres
@@ -59,7 +60,7 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 ## Binance
 
-29 to 29m, on orders, ids, Telegram and the pre-trade check: [known-mistakes/binance.md](known-mistakes/binance.md).
+29 to 29p, on orders, ids, Telegram and the pre-trade check: [known-mistakes/binance.md](known-mistakes/binance.md).
 
 ## SQLite
 

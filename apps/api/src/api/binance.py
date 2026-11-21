@@ -22,10 +22,17 @@ WEIGHT_LIMIT = 6000
 WEIGHT_STOP = 4800  # over this in the current minute, reads wait for the next one
 RULES_TTL = 6 * 3600.0  # a pair's rules (exchangeInfo, weight 20) rarely change
 SHORT_TTL = 10.0  # open orders (80), balances (20): fresh enough between clicks
-TRADES_TTL = 60.0  # a pair's trade history (20 a page)
 SYMBOLS_TTL = 300.0  # every listed pair (4)
 _KEPT: dict[tuple[str, str], tuple[float, Any]] = {}
 _USED: dict[str, Any] = {"minute": 0, "weight": 0}
+
+
+def forget() -> None:
+    """Every kept read and the weight count dropped (tests, and a fresh start)."""
+    _KEPT.clear()
+    _USED.update(minute=0, weight=0)
+
+
 RECV_WINDOW_MS = 5000
 OK = 200
 
@@ -37,12 +44,32 @@ def plain(value: Decimal) -> str:
 
 
 class BinanceError(Exception):
-    """Binance refused a call; the message is Binance's own, safe to show the owner."""
+    """Binance refused a call; the message is Binance's own, safe to show the owner. `status` is
+    the HTTP status (0: no answer) and `code` Binance's own error code (0 when it sent none)."""
 
-    def __init__(self, status: int, message: str) -> None:
+    def __init__(self, status: int, message: str, code: int = 0) -> None:
         super().__init__(message)
         self.status = status
         self.message = message
+        self.code = code
+
+
+RATE_LIMITED = (418, 429)
+SERVER_ERROR = 500
+NOT_THERE = (-2013, -2011)  # "Order does not exist", "Unknown order sent"
+
+
+def unknown(error: BinanceError) -> bool:
+    """An order sent and met with this may be on Binance: no answer, a rate limit or a 5xx
+    (Binance's API docs: a 5xx's outcome is unknown). The row stays "placing" and is looked up
+    by its client id; any other error is Binance refusing it (audit 7)."""
+    return error.status == 0 or error.status in RATE_LIMITED or error.status >= SERVER_ERROR
+
+
+def missing(error: BinanceError) -> bool:
+    """A lookup by client id that proves the order was never placed: Binance says it isn't
+    there. Any other error (no answer, a 5xx, a clock out of step) proves nothing (audit 7)."""
+    return error.code in NOT_THERE
 
 
 CREDITED = (1, 6)  # Binance deposit states: success, and credited but locked
@@ -95,7 +122,7 @@ class Binance:
     @staticmethod
     def _forget_account() -> None:
         """An order sent: what the account holds and has open is read fresh next time."""
-        for key in [k for k in _KEPT if k[1].startswith(("open orders", "balances", "trades "))]:
+        for key in [k for k in _KEPT if k[1].startswith(("open orders", "balances"))]:
             _KEPT.pop(key, None)
 
     def _call(self, method: str, path: str, query: str, label: str) -> Any:
@@ -130,13 +157,16 @@ class Binance:
                 self._audit.record(kind, f"Binance: {label}", "Failed: not JSON")
                 raise BinanceError(0, "Binance sent a reply the desk couldn't read.") from None
         if response.status_code != OK:
-            message = (
-                str(cast(dict[str, Any], body).get("msg", "")) if isinstance(body, dict) else ""
-            )
+            found = cast(dict[str, Any], body) if isinstance(body, dict) else {}
+            message = str(found.get("msg", ""))
+            try:
+                code = int(found.get("code", 0))
+            except (TypeError, ValueError):
+                code = 0
             self._audit.record(
                 kind, f"Binance: {label}", f"Refused {response.status_code}: {message}"
             )
-            raise BinanceError(response.status_code, str(message or response.reason_phrase))
+            raise BinanceError(response.status_code, str(message or response.reason_phrase), code)
         self._audit.record(kind, f"Binance: {label}", f"OK, {ms} ms")
         return body
 
@@ -262,10 +292,8 @@ class Binance:
         )
 
     def trades(self, symbol: str) -> list[dict[str, Any]]:
-        """Every trade on one pair, oldest first; kept a minute (each page weighs 20)."""
-        return list(self._kept(f"trades {symbol}", TRADES_TTL, lambda: self._trades(symbol)))
-
-    def _trades(self, symbol: str) -> list[dict[str, Any]]:
+        """Every trade on one pair, oldest first, a page at a time (the portfolio's TradeCache
+        reads it again only when a balance moves)."""
         found: list[dict[str, Any]] = []
         from_id = 0
         while True:

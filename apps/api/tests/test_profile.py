@@ -321,33 +321,58 @@ def call(store: Store, audit: Audit, monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 def buy(**fields: Any) -> dict[str, Any]:
-    return {
-        "clientId": "a1b2c3d4-0000-0000-0000-000000000001",
-        "symbol": "BTCUSDT",
-        "side": "buy",
-        "price": "90000",
-        "amount": "0.001",
-    } | fields
+    """A DCA limit buy: one of the owner's own buys, so the pre-trade check sees it."""
+    return {"coin": "BTC", "spend": "90", "price": "90000", "source": "named"} | fields
 
 
 def test_a_buy_over_the_monthly_cap_needs_a_second_confirm(
     call: Any, store: Store, audit: Audit
 ) -> None:
     call("PUT", "/limits", {"perOrder": "100000", "perDay": "100000"})
+    plan = {
+        "start": "2026-11-06",
+        "weeks": 156,
+        "orders": [{"coin": "BTC", "spend": "40", "odds": 70}],
+    }
+    assert call("PUT", "/dca/plan", plan)[0] == 200  # noqa: PLR2004
     profile.save_section(store, audit, "rules", {"per_trade_aud": "100000"}, now=NOW)
-    assert call("POST", "/orders", buy())[0] == 200  # noqa: PLR2004 - no cap set: not checked
+    assert call("POST", "/dca/orders", buy())[0] == 200  # noqa: PLR2004 - no cap set: not checked
     page = profile.save_section(store, audit, "rules", {"monthly_deposit_cap_aud": "200"}, now=NOW)
     assert page["version"] == 2  # noqa: PLR2004
-    big = buy(clientId="a1b2c3d4-0000-0000-0000-000000000002", amount="0.002")
-    status, held_back = call("POST", "/orders", big)  # A$270 on top of A$135 this month
+    big = buy(spend="180")
+    status, held_back = call("POST", "/dca/orders", big)  # A$270 on top of A$135 this month
     assert status == 409  # noqa: PLR2004
     assert held_back["ruleBreaks"][0]["label"] == "Monthly deposit cap"
     assert "over your A$200 cap" in held_back["ruleBreaks"][0]["message"]
-    status, _ = call("POST", "/orders", big | {"override": True})
+    status, _ = call("POST", "/dca/orders", big | {"override": True})
     assert status == 200  # noqa: PLR2004
     assert profile_ai.overrides(store)[0]["rules"] == ["monthly_deposit_cap_aud"]
-    sell = big | {"side": "sell", "clientId": "a1b2c3d4-0000-0000-0000-000000000003"}
-    assert call("POST", "/orders", sell)[0] != 409  # noqa: PLR2004 - sales aren't checked
+
+
+def test_raising_a_dca_order_meets_the_pre_trade_check(
+    call: Any, store: Store, audit: Audit
+) -> None:
+    """Audit 9: a change that raises a buy is checked like a new buy; a new price isn't."""
+    call("PUT", "/limits", {"perOrder": "1000", "perDay": "1000"})
+    plan = {
+        "start": "2026-11-06",
+        "weeks": 156,
+        "orders": [{"coin": "BTC", "spend": "40", "odds": 70}],
+    }
+    assert call("PUT", "/dca/plan", plan)[0] == 200  # noqa: PLR2004
+    profile.save_section(store, audit, "rules", {"per_trade_aud": "100"}, now=NOW)
+    status, placed = call("POST", "/dca/orders", buy(spend="40"))  # about A$60: under A$100
+    assert status == 200  # noqa: PLR2004
+    status, moved = call("POST", "/dca/orders/amend", {"ref": placed["ref"], "price": "89000"})
+    assert status == 200  # noqa: PLR2004 - a new price adds nothing: not checked
+    raised = {"ref": moved["ref"], "price": "89000", "spend": "90", "raise": True}
+    status, held_back = call("POST", "/dca/orders/amend", raised)  # about A$135
+    assert status == 409  # noqa: PLR2004
+    assert held_back["ruleBreaks"][0]["rule"] == "per_trade_aud"
+    assert (store.dca_order(moved["ref"]) or {}).get("status") == "open"  # still working
+    status, _ = call("POST", "/dca/orders/amend", raised | {"override": True})
+    assert status == 200  # noqa: PLR2004
+    assert profile_ai.overrides(store)[0]["rules"] == ["per_trade_aud"]
 
 
 def test_a_bot_holds_a_buy_that_breaks_a_rule(store: Store, audit: Audit) -> None:
@@ -554,10 +579,10 @@ def test_a_new_bot_never_inherits_a_deleted_ones_confirmation(store: Store, audi
     first = store.add_bot("TR-1", "BTCUSDT", "{}", NOW)
     bots.allow_past_rules(first, allowed=True)
     assert bots.rule_hold(D(5000), first) is None  # confirmed past the cap
-    store.delete_bot(first)
+    store.delete_bot(first, NOW)
     second = store.add_bot("DCA-1", "BTCUSDT", "{}", NOW + 1)
-    assert second == first  # SQLite reuses the id
-    assert bots.rule_hold(D(5000), second) is not None  # but not the confirmation
+    assert second != first  # a deleted bot is kept hidden, so its id is never reused (audit 8)
+    assert bots.rule_hold(D(5000), second) is not None  # nor its confirmation
 
 
 def test_a_trading_account_trade_gets_the_same_check(call: Any, store: Store, audit: Audit) -> None:

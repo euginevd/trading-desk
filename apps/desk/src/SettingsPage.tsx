@@ -6,6 +6,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import {
   finishSignIn,
   getAiSettings,
+  getSettings,
   getTelegram,
   linkTelegram,
   saveTelegramToken,
@@ -13,11 +14,12 @@ import {
   testTelegram,
   saveAiKey,
   setAiSettings,
+  setLimits,
   startSignIn,
 } from "./api";
 import { day, errorOf } from "./format";
 import { FEATURES, type FeatureInfo, featureOn, isNew, useFeatures } from "./features";
-import type { AiMode, AiSettings, TelegramSettings } from "./types";
+import type { AiMode, AiSettings, Settings, TelegramSettings } from "./types";
 
 const MODES: Record<AiMode, { name: string; title: string; sub: string }> = {
   api_key: { name: "API key (pay per use)", title: "API key", sub: "Pay per use" },
@@ -271,6 +273,7 @@ export default function SettingsPage() {
           </>
         )}
       </section>
+      <Limits />
       <Telegram onRead={setTg} />
       <Pages />
     </main>
@@ -526,6 +529,171 @@ function Subscription({
 }
 
 // Telegram's morning summary (decision 57): your own bot; its token goes to .env.
+const dollars = (v: string | number) =>
+  `$${Number(v).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+// The owner's per-order and daily limits (spec 10, audit 15): every buy, the bots' included, stays
+// inside them. Zero until set, and nothing buys until they are. A raise asks once more first.
+function Limits() {
+  const [now, setNow] = useState<Settings | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [perOrder, setPerOrder] = useState("");
+  const [perDay, setPerDay] = useState("");
+  const [asking, setAsking] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const take = (s: Settings) => {
+    setNow(s);
+    setPerOrder(Number(s.perOrder) > 0 ? s.perOrder : "");
+    setPerDay(Number(s.perDay) > 0 ? s.perDay : "");
+  };
+  useEffect(() => {
+    getSettings().then(take, () => setFailed(true));
+  }, [attempt]);
+  const unset = now !== null && !(Number(now.perOrder) > 0);
+  const raises =
+    now !== null &&
+    !unset &&
+    (Number(perOrder) > Number(now.perOrder) || Number(perDay) > Number(now.perDay));
+  const changed =
+    now !== null &&
+    Number(perOrder) > 0 &&
+    Number(perDay) > 0 &&
+    (Number(perOrder) !== Number(now.perOrder) || Number(perDay) !== Number(now.perDay));
+  const save = () => {
+    setBusy(true);
+    setNote(null);
+    setLimits(perOrder, perDay).then(
+      (s) => {
+        take(s);
+        setBusy(false);
+        setAsking(false);
+        setNote({ ok: true, text: "Limits saved" });
+      },
+      (e: unknown) => {
+        setBusy(false);
+        setAsking(false);
+        setNote({ ok: false, text: errorOf(e, "The limits weren't saved.") });
+      },
+    );
+  };
+  const status: { tone: Tone; word: string } | null = !now
+    ? null
+    : unset
+      ? { tone: "down", word: "Not set: nothing buys" }
+      : { tone: "up", word: `${dollars(now.leftToday)} left today` };
+  return (
+    <section className="set-section" aria-labelledby="settings-limits">
+      <CardHead id="settings-limits" title="Trading limits">
+        {status && <Status tone={status.tone}>{status.word}</Status>}
+      </CardHead>
+      <p className="settings-intro muted">
+        Every buy stays inside these, the DCA book&apos;s, the Trading account&apos;s and the
+        bots&apos;, checked in the api. The day turns over at midnight, Sydney time.
+      </p>
+      {!now && !failed && (
+        <p className="muted settings-loading" aria-busy="true">
+          Loading…
+        </p>
+      )}
+      {!now && failed && (
+        <div className="settings-error-row">
+          <p className="settings-error" role="alert">
+            The limits couldn&apos;t be read.
+          </p>
+          <button
+            type="button"
+            className="settings-btn"
+            onClick={() => {
+              setFailed(false);
+              setAttempt((n) => n + 1);
+            }}
+          >
+            Try again
+          </button>
+        </div>
+      )}
+      {now && (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!changed || busy) return;
+            if (raises && !asking) setAsking(true);
+            else save();
+          }}
+        >
+          <div className="settings-field">
+            <label className="settings-label" htmlFor="limit-order">
+              Per order ($)
+            </label>
+            <div className="settings-input">
+              <input
+                id="limit-order"
+                inputMode="decimal"
+                placeholder="Not set"
+                value={perOrder}
+                disabled={busy || asking}
+                onChange={(e) => setPerOrder(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="settings-field">
+            <label className="settings-label" htmlFor="limit-day">
+              Per day ($)
+            </label>
+            <div>
+              <div className="settings-input">
+                <input
+                  id="limit-day"
+                  inputMode="decimal"
+                  placeholder="Not set"
+                  value={perDay}
+                  disabled={busy || asking}
+                  onChange={(e) => setPerDay(e.target.value)}
+                />
+                {!asking && (
+                  <button type="submit" className="settings-btn" disabled={busy || !changed}>
+                    Save limits
+                  </button>
+                )}
+              </div>
+              <p className="settings-hint muted">
+                Spent today: {dollars(now.spentToday)}. The per-order limit can&apos;t be more than
+                the daily one.
+              </p>
+            </div>
+          </div>
+          {asking && (
+            <div className="settings-link" role="group" aria-label="Raise the limits">
+              <p>
+                Raise to {dollars(perOrder)} an order and {dollars(perDay)} a day? The desk and its
+                bots may then spend up to that.
+              </p>
+              <button type="submit" className="settings-btn" disabled={busy}>
+                Raise the limits
+              </button>
+              <button
+                type="button"
+                className="settings-btn"
+                disabled={busy}
+                onClick={() => setAsking(false)}
+              >
+                Keep them
+              </button>
+            </div>
+          )}
+          {note && (
+            <p className={note.ok ? "muted" : "settings-error"} role={note.ok ? "status" : "alert"}>
+              {note.text}
+            </p>
+          )}
+        </form>
+      )}
+    </section>
+  );
+}
+
 function Telegram({ onRead }: { onRead: (tg: TelegramSettings) => void }) {
   const [tg, setTg] = useState<TelegramSettings | null>(null);
   const [failed, setFailed] = useState(false);

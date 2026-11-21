@@ -44,6 +44,16 @@ def _usd(value: str | Decimal) -> str:
 
 
 def proposal_text(p: dict[str, Any]) -> str:
+    screened = p.get("screened")
+    # When trading-agent moved the screen's levels, the one-tap says so and from what (audit 21).
+    moved = (
+        [
+            f"Levels moved by trading-agent: the screen had entry {screened['entry']}, "
+            f"stop {screened['stop']}, target {screened['target']}."
+        ]
+        if isinstance(screened, dict)
+        else []
+    )
     return "\n".join(
         [
             f"trading-agent: {p['coin']}, {p['setup']}",
@@ -51,6 +61,7 @@ def proposal_text(p: dict[str, Any]) -> str:
             "",
             f"Entry {p['entry']} (limit), stop {p['stop']} (−{p['stopPct']}%), "
             f"target {p['target']}",
+            *moved,
             f"{_usd(p['spend'])} position, {_usd(p['risk'])} at risk, {p['rr']} : 1 after fees",
             f"Crowding: {p['crowding']}",
         ]
