@@ -283,9 +283,13 @@ def _set_trading(desk: Trading, on: bool) -> dict[str, Any]:
     settings = desk.set_trading(on)
     if on:
         return settings
-    # Both always run; a buy Binance still has live is retried by each step while trading is off.
-    live = Bots(*desk.parts()).stop_all("Stopped by the kill switch.")
-    live += Grids(*desk.parts()).stop_all("Stopped by the kill switch.")
+    # Both always run, the grids even if the bots fail; a buy Binance still has live is retried
+    # by each step while trading is off.
+    try:
+        live = Bots(*desk.parts()).stop_all("Stopped by the kill switch.")
+    finally:
+        grids = Grids(*desk.parts()).stop_all("Stopped by the kill switch.")
+    live += grids
     if live:
         audit = desk.parts()[2]
         audit.record("settings", "Kill switch", f"{live} bot and grid buys still live; retrying")

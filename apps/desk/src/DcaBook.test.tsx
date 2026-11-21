@@ -517,6 +517,38 @@ describe("DCA book page", () => {
     ).toBeTruthy();
   });
 
+  it("lets a raise a Profile rule held go once confirmed, logged", async () => {
+    const fetch = serve(book());
+    const answer = fetch.getMockImplementation();
+    fetch.mockImplementation((url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { override?: boolean };
+      if (url === "/api/dca/orders/amend" && !body.override) {
+        const held = { error: "This buy breaks your rule: Per-trade size.", ruleBreaks: [{}] };
+        return Promise.resolve(new Response(JSON.stringify(held), { status: 409 }));
+      }
+      if (!answer) throw new Error("No fetch.");
+      return answer(url, init);
+    });
+    const props = {
+      book: book(),
+      editing: true,
+      onClose: () => undefined,
+      onCancel: () => undefined,
+      onOpen: () => undefined,
+      onDone: () => undefined,
+    };
+    render(<DcaOrderDrawer {...props} order={order({})} />);
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "90" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Place anyway (logged)" }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders/amend")).toHaveLength(2));
+    expect(JSON.parse(String(sent(fetch, "/dca/orders/amend")[1]?.[1]?.body))).toMatchObject({
+      spend: "90",
+      raise: true,
+      override: true,
+    });
+  });
+
   it("never buys again what filled while Modify was open (audit 11)", async () => {
     const fetch = serve(book());
     const props = {

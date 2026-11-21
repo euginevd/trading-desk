@@ -18,7 +18,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
-import { amendDcaOrder, fundsOdds, getMarket } from "./api";
+import { ApiError, amendDcaOrder, fundsOdds, getMarket } from "./api";
 import { errorOf } from "./format";
 import { token } from "./BotKit";
 import CoinIcon from "./CoinIcon";
@@ -289,6 +289,8 @@ export default function DcaOrderDrawer({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // A raise a Profile rule held: Place anyway sends it once more, confirmed and logged.
+  const [ruleHeld, setRuleHeld] = useState(false);
   // Whether the owner typed an amount: untouched, a change sends none and the api keeps what's
   // left now, so a part that fills while the drawer is open is never bought again (audit 11).
   const [typed, setTyped] = useState(false);
@@ -454,9 +456,10 @@ export default function DcaOrderDrawer({
   const amountChanged = typed && Math.abs(Number(usdc) - left(order)) >= 0.005;
   const qtyChanged = typed && Math.abs(Number(qty) - qtyOf(order)) > 1e-9;
   const changed = Number(price) !== Number(order.price) || (buy ? amountChanged : qtyChanged);
-  const save = () => {
+  const save = (override = false) => {
     setBusy(true);
     setError("");
+    setRuleHeld(false);
     const amount = buy
       ? amountChanged
         ? { spend: usdc, raise: Number(usdc) > left(order) }
@@ -464,10 +467,11 @@ export default function DcaOrderDrawer({
       : qtyChanged
         ? { qty }
         : {};
-    amendDcaOrder({ ref: order.ref, price, ...amount }).then(
+    amendDcaOrder({ ref: order.ref, price, ...amount, ...(override ? { override } : {}) }).then(
       (placed) => onDone(`${order.ref} cancelled; now ${placed.ref} at ${limit(placed.price)}.`),
       (e: unknown) => {
         setBusy(false);
+        setRuleHeld(e instanceof ApiError && e.ruleBreaks.length > 0);
         setError(errorOf(e, "Not changed."));
       },
     );
@@ -640,10 +644,15 @@ export default function DcaOrderDrawer({
                 className="btn btn-accent"
                 type="button"
                 disabled={busy || !changed || !(Number(price) > 0) || !(Number(usdc) > 0)}
-                onClick={save}
+                onClick={() => save()}
               >
                 {busy ? "Changing…" : "Save changes"}
               </button>
+              {ruleHeld && (
+                <button className="btn" type="button" disabled={busy} onClick={() => save(true)}>
+                  Place anyway (logged)
+                </button>
+              )}
             </div>
           ) : (
             <button className="btn btn-accent" type="button" onClick={() => setEditing(true)}>

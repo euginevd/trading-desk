@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-from api.backtest_report import load, summary
+from api.backtest_report import from_zip, summary
 from api.backtest_runs import QUOTE, STYLES, BadRun, check, default
 
 RUN_ID = re.compile(r"backtest-result-\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}")
@@ -42,27 +42,40 @@ def _now_ms() -> int:
     return int(time.time() * 1000)
 
 
-def _plain(path: Path, most: int) -> bool:
-    """A regular file of at most `most` bytes: never a link (to .env, say), a pipe that would
-    block the api, or a device."""
+def _open_plain(path: Path, most: int) -> int | None:
+    """A descriptor on a regular file of at most `most` bytes, or None: opened once, never
+    through a link (to .env, say), never blocking on a pipe, and checked on what was opened,
+    so nothing can be swapped in between the check and the read."""
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    flags |= getattr(os, "O_BINARY", 0)
     try:
-        found = path.lstat()
+        fd = os.open(path, flags)
     except OSError:
-        return False
-    return stat.S_ISREG(found.st_mode) and found.st_size <= most
+        return None
+    found = os.fstat(fd)
+    if not stat.S_ISREG(found.st_mode) or found.st_size > most:
+        os.close(fd)
+        return None
+    return fd
+
+
+def _read_plain(path: Path, most: int) -> bytes | None:
+    fd = _open_plain(path, most)
+    if fd is None:
+        return None
+    with os.fdopen(fd, "rb") as found:
+        return found.read(most + 1)[:most]
 
 
 def _tail(path: Path) -> list[str]:
     """The log's last lines, read from its end only."""
-    if not _plain(path, 1 << 62):
+    fd = _open_plain(path, 1 << 62)
+    if fd is None:
         return []
-    try:
-        with path.open("rb") as log:
-            size = log.seek(0, os.SEEK_END)
-            log.seek(max(size - LOG_TAIL_BYTES, 0))
-            text = log.read(LOG_TAIL_BYTES).decode("utf-8", "replace")
-    except OSError:
-        return []
+    with os.fdopen(fd, "rb") as log:
+        size = log.seek(0, os.SEEK_END)
+        log.seek(max(size - LOG_TAIL_BYTES, 0))
+        text = log.read(LOG_TAIL_BYTES).decode("utf-8", "replace")
     return text.splitlines()[-LOG_LINES:]
 
 
@@ -74,10 +87,11 @@ def _create(path: Path, text: str) -> None:
 
 
 def _read(path: Path) -> dict[str, Any] | None:
-    if not _plain(path, MAX_JSON):
+    raw = _read_plain(path, MAX_JSON)
+    if raw is None:
         return None
     try:
-        found: object = json.loads(path.read_text(encoding="utf-8"))
+        found: object = json.loads(raw.decode("utf-8"))
     except (OSError, ValueError):
         return None
     return cast(dict[str, Any], found) if isinstance(found, dict) else None
@@ -105,10 +119,12 @@ class Backtests:
         except OSError:
             return None
         if key not in _cache:
-            if not _plain(path, MAX_RESULT):
+            fd = _open_plain(path, MAX_RESULT)
+            if fd is None:
                 return None
             try:
-                _cache[key] = summary(load(path))
+                with os.fdopen(fd, "rb") as result:
+                    _cache[key] = summary(from_zip(result))
             except (OSError, ValueError, KeyError, TypeError, StopIteration, zipfile.BadZipFile):
                 _cache[key] = None  # a result Freqtrade was still writing, cut off, or not ours
         return _cache[key]

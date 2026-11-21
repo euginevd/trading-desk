@@ -347,6 +347,7 @@ export const amendDcaOrder = (change: {
   spend?: string;
   qty?: string;
   raise?: boolean;
+  override?: boolean;
 }) => call<DcaOrder>("POST", "/dca/orders/amend", change);
 
 // The trading pot (docs/plan-trade.md).
