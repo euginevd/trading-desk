@@ -4,6 +4,7 @@ In Docker it listens inside its container (API_HOST=0.0.0.0) with no port publis
 desk container reaches it, and the desk is published on 127.0.0.1 only (spec 9)."""
 
 import base64
+import ipaddress
 import json
 import os
 import threading
@@ -48,6 +49,21 @@ HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"} | {o.split("://", 1)[1] for o
 SERVICE = f"api:{PORT}"
 SERVICE_ON = SERVICE in {h.strip() for h in os.environ.get("DESK_HOSTS", "").split(",")}
 SERVICE_ROUTES = {("POST", "/pot/judge-one")}
+# DESK_BOTS_NET: the Freqtrade containers' own network (docker-compose.yml). A request from it
+# reaches that one route and nothing else, whatever its headers say: a container can send any
+# Host header, but not another network's address (audit 18).
+_bots = os.environ.get("DESK_BOTS_NET", "").strip()
+BOTS_NET = ipaddress.ip_network(_bots, strict=False) if _bots else None
+
+
+def from_bots(peer: str) -> bool:
+    """Whether a request came from the Freqtrade containers' network."""
+    if BOTS_NET is None or not peer:
+        return False
+    try:
+        return ipaddress.ip_address(peer) in BOTS_NET
+    except ValueError:
+        return True  # an address that can't be read is treated as theirs: refused
 
 
 def load_env(path: Path) -> None:
@@ -66,9 +82,14 @@ def load_env(path: Path) -> None:
             os.environ[name] = value
 
 
-def allowed(method: str, headers: dict[str, str], path: str = "") -> str | None:
-    """Why a request is refused, or None. Changes need JSON from the desk's own page."""
+def allowed(method: str, headers: dict[str, str], path: str = "", peer: str = "") -> str | None:
+    """Why a request is refused, or None. Changes need JSON from the desk's own page; the
+    Freqtrade containers reach the one service route only."""
     host = headers.get("host", "")
+    if from_bots(peer) and (
+        not SERVICE_ON or host != SERVICE or (method, path) not in SERVICE_ROUTES
+    ):
+        return "Unknown host."
     if host == SERVICE and SERVICE_ON:
         if (method, path) not in SERVICE_ROUTES or "origin" in headers:
             return "Unknown host."
@@ -86,7 +107,7 @@ class Local(BaseHTTPRequestHandler):
     def _handle(self) -> None:
         url = urlsplit(self.path)
         headers = {k.lower(): v for k, v in self.headers.items()}
-        refusal = allowed(self.command, headers, url.path)
+        refusal = allowed(self.command, headers, url.path, str(self.client_address[0]))
         try:
             length = int(headers.get("content-length", "0") or 0)
         except ValueError:

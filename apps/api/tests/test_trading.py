@@ -1,3 +1,4 @@
+import ipaddress
 import json
 from collections.abc import Generator, Iterator
 from contextlib import contextmanager
@@ -6,7 +7,7 @@ from typing import Any
 
 import httpx
 import pytest
-from api import demo
+from api import demo, local
 from api.audit import Audit
 from api.binance import Binance
 from api.handler import handler
@@ -125,3 +126,19 @@ def test_the_local_api_takes_changes_only_from_the_desk() -> None:
     other = {"host": "127.0.0.1:5173", "origin": "https://evil.example"}
     assert allowed("POST", {**other, "content-type": "application/json"}) == "Unknown origin."
     assert allowed("GET", {"host": "evil.example:8000"}) == "Unknown host."
+
+
+def test_the_freqtrade_containers_reach_one_route_whatever_their_headers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit 18: a container can send the desk's own Host header; its network gives it away."""
+    monkeypatch.setattr(local, "BOTS_NET", ipaddress.ip_network("172.30.250.0/24"))
+    monkeypatch.setattr(local, "SERVICE_ON", True)
+    posing = {"host": "127.0.0.1:8000", "content-type": "application/json"}
+    bot = "172.30.250.7"
+    assert allowed("POST", posing, "/dca/orders", bot) == "Unknown host."
+    assert allowed("GET", posing, "/settings", bot) == "Unknown host."
+    service = {"host": local.SERVICE, "content-type": "application/json"}
+    assert allowed("POST", service, "/pot/judge-one", bot) is None
+    assert allowed("POST", service, "/dca/orders", bot) == "Unknown host."
+    assert allowed("POST", posing, "/dca/orders", "172.18.0.3") is None  # the desk's network
