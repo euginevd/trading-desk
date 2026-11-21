@@ -255,7 +255,7 @@ export function DriftCard({ drift: given }: { drift?: Drift | null }) {
               {r.outside && r.side ? (
                 <a
                   className="drift-act"
-                  href={`#/trade?coin=${r.coin}&side=${r.side}&price=${r.price ?? ""}&qty=${r.qty ?? ""}&why=rebalance`}
+                  href={`#/dca-book?coin=${r.coin}&rebalance=${r.side}&price=${r.price ?? ""}&qty=${r.qty ?? ""}`}
                   title={
                     r.capped
                       ? `${km(r.toTargetAud ?? null)} to reach the target; one order of your per-trade size at a time`

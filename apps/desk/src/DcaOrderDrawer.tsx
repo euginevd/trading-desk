@@ -47,6 +47,9 @@ export const qtyOf = (o: DcaOrder) =>
         : 0;
 export const away = (at: number, now: number) =>
   now > 0 && at > 0 ? ((at - now) / now) * 100 : null;
+// How far the price has moved since a fill, against the fill price (audit 17).
+export const since = (at: number, now: number) =>
+  now > 0 && at > 0 ? ((now - at) / at) * 100 : null;
 export const pct = (v: number | null) => (v === null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`);
 // A price typed or dragged: 2 places from 1 up, 6 under.
 const tidy = (n: number) => (n >= 1 ? n.toFixed(2) : n.toFixed(6));
@@ -321,6 +324,7 @@ export default function DcaOrderDrawer({
   const now = Number(market?.price ?? 0);
   const at = Number(editing ? price : live ? order.price : (order.avgPrice ?? order.price));
   const off = away(at, now);
+  const moved = since(at, now);
   const filled = Number(order.filledQuote) > 0;
   const spend = editing && typed ? Number(usdc) : left(order);
   const pos = book.positions.find((p) => p.coin === order.coin);
@@ -377,7 +381,7 @@ export default function DcaOrderDrawer({
   // What it means, in a few lines.
   const reaching = !live
     ? filled
-      ? `${order.status === "cancelled" ? "Part filled" : "Filled"}: $${two(order.filledQuote)} at ${limit(order.avgPrice)}${off === null ? "" : `; the price is ${pct(-off)} from there now`}.`
+      ? `${order.status === "cancelled" ? "Part filled" : "Filled"}: $${two(order.filledQuote)} at ${limit(order.avgPrice)}${moved === null ? "" : `; the price is ${pct(moved)} from there now`}.`
       : order.status === "cancelled"
         ? "Cancelled before anything filled."
         : "A market order, being placed."
@@ -511,8 +515,8 @@ export default function DcaOrderDrawer({
         </div>
         <div>
           <small>{live ? "To fill" : "Since"}</small>
-          <b className={`num ${live ? "" : off !== null && -off > 0 ? "up" : "down"}`}>
-            {live ? pct(off) : pct(off === null ? null : -off)}
+          <b className={`num ${live ? "" : moved !== null && moved > 0 ? "up" : "down"}`}>
+            {live ? pct(off) : pct(moved)}
           </b>
         </div>
         <div>

@@ -274,8 +274,15 @@ function Ticks({ book }: { book: DcaBook }) {
 // ---------------------------------------------------------------- one order, trims, buy-backs
 
 type Sheet =
-  | { kind: "buy"; coin: string; source: "desk" | "buy-back"; link?: string; spend?: string }
-  | { kind: "trim"; position: DcaPosition };
+  | {
+      kind: "buy";
+      coin: string;
+      source: "desk" | "buy-back";
+      link?: string;
+      spend?: string;
+      price?: string;
+    }
+  | { kind: "trim"; position: DcaPosition; qty?: string; price?: string };
 
 function OrderSheet({
   sheet,
@@ -293,8 +300,12 @@ function OrderSheet({
   const taxTimer = useRef<number | undefined>(undefined);
   const [coin, setCoin] = useState(sheet.kind === "trim" ? sheet.position.coin : sheet.coin);
   const [market, setMarket] = useState(false);
-  const [price, setPrice] = useState(sheet.kind === "trim" ? (sheet.position.price ?? "") : "");
-  const [amount, setAmount] = useState(sheet.kind === "buy" ? (sheet.spend ?? "") : "");
+  const [price, setPrice] = useState(
+    sheet.kind === "trim" ? (sheet.price ?? sheet.position.price ?? "") : (sheet.price ?? ""),
+  );
+  const [amount, setAmount] = useState(
+    sheet.kind === "buy" ? (sheet.spend ?? "") : (sheet.qty ?? ""),
+  );
   const [odds, setOdds] = useState<DcaOdds | null>(null);
   const [tax, setTax] = useState<SellCheck | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -661,8 +672,21 @@ export default function DcaBookPage() {
   );
   const asked = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
   const chatting = asked.has("chat");
-  // The Dashboard's coin links open that position with its orders.
-  const [openCoin, setOpenCoin] = useState<string | null>(() => asked.get("coin"));
+  // The Dashboard's coin links open that position with its orders; the Tax tab's rebalance
+  // link opens a Trim or Add order filled in instead, for review (audit 17).
+  const rebalance = useRef(
+    asked.get("rebalance") === "sell" || asked.get("rebalance") === "buy"
+      ? {
+          coin: asked.get("coin") ?? "",
+          side: asked.get("rebalance") as "sell" | "buy",
+          price: asked.get("price") ?? "",
+          qty: asked.get("qty") ?? "",
+        }
+      : null,
+  );
+  const [openCoin, setOpenCoin] = useState<string | null>(() =>
+    asked.has("rebalance") ? null : asked.get("coin"),
+  );
   const [more, setMore] = useState(() => readMore());
   const [chatOpen, setChatOpen] = useState(() => chatting || readFlag(CHAT_KEY));
   const openChat = (open: boolean) => {
@@ -680,6 +704,24 @@ export default function DcaBookPage() {
     );
   }, []);
   useEffect(() => load(), [load]);
+  useEffect(() => {
+    const want = rebalance.current;
+    if (!book || !want) return;
+    rebalance.current = null; // once, on the first read of the book
+    const pos = book.positions.find((p) => p.coin === want.coin);
+    const spend = (Number(want.qty) * Number(want.price)).toFixed(2);
+    if (!pos || (want.side === "sell" && !(Number(pos.qty) > 0))) {
+      setSaid(
+        `${want.coin} isn't held in the DCA book, so rebalance it where it's held: ${want.side} ${want.qty} at ${want.price}.`,
+      );
+      return;
+    }
+    setSheet(
+      want.side === "sell"
+        ? { kind: "trim", position: pos, qty: want.qty, price: want.price }
+        : { kind: "buy", coin: want.coin, source: "desk", spend, price: want.price },
+    );
+  }, [book]);
   useEffect(() => {
     const tick = window.setInterval(() => {
       if (document.visibilityState === "visible") load();

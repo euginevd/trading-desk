@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DcaBookPage from "./DcaBookPage";
-import DcaOrderDrawer from "./DcaOrderDrawer";
+import DcaOrderDrawer, { since } from "./DcaOrderDrawer";
 import DcaWidget from "./DcaWidget";
 import { toCsv } from "./dcaFormat";
 import type { DcaBook, DcaOrder, DcaWeekPlan, FundsPlan } from "./types";
@@ -565,6 +565,35 @@ describe("DCA book page", () => {
       qty: "0.005",
       price: "2000",
     });
+  });
+
+  it("measures a fill's move since against its fill price (audit 17)", () => {
+    expect(since(100, 200)).toBe(100); // doubled: +100%, not +50%
+    expect(since(200, 100)).toBe(-50);
+    expect(since(0, 100)).toBeNull();
+  });
+
+  it("opens the Tax tab's rebalance as a trim filled in, for review (audit 17)", async () => {
+    window.location.hash = "#/dca-book?coin=ETH&rebalance=sell&price=2000&qty=0.005";
+    const fetch = serve(book());
+    render(<DcaBookPage />);
+    const sheet = await screen.findByRole("dialog", { name: "Trim ETH" });
+    expect(within(sheet).getByLabelText("Quantity (ETH)")).toHaveProperty("value", "0.005");
+    expect(within(sheet).getByLabelText("Price (USDC)")).toHaveProperty("value", "2000");
+    expect(sent(fetch, "/dca/orders")).toHaveLength(0); // nothing sent until reviewed and placed
+    window.location.hash = "";
+  });
+
+  it("says where to rebalance a coin the book doesn't hold", async () => {
+    window.location.hash = "#/dca-book?coin=TAO&rebalance=sell&price=410&qty=0.813";
+    serve(book());
+    render(<DcaBookPage />);
+    expect(
+      await screen.findByText(
+        "TAO isn't held in the DCA book, so rebalance it where it's held: sell 0.813 at 410.",
+      ),
+    ).toBeTruthy();
+    window.location.hash = "";
   });
 
   it("asks before cancelling, and says what happens to the reference and the money", async () => {
