@@ -284,3 +284,33 @@ def test_the_worker_runs_a_job_and_records_its_result(
     garbled = json.loads((worker.JOBS / "job-20261120-000002-abcdef.status.json").read_text())
     assert garbled["state"] == "failed"
     assert worker.pending() == []
+
+
+def _link(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target)
+    except OSError:  # Windows without the right to make links: CI runs it on Linux
+        pytest.skip("Symbolic links can't be made here.")
+
+
+def test_the_job_files_are_read_and_written_as_plain_files_only(tmp_path: Path) -> None:
+    """Audit 19: the Freqtrade containers write the jobs folder; a link left there (to .env,
+    say) is never read back to the page or written through."""
+    secret = tmp_path / "dot-env"
+    secret.write_text("BINANCE_SECRET=made-up\n")
+    jobs = tmp_path / "jobs"
+    _job(jobs, JOB, {"style": "swing", "coin": "SOL"}, {"state": "queued"})
+    _link(jobs / f"{JOB}.log", secret)
+    _link(jobs / f"{JOB}.cancel", secret)
+    desk = Backtests(tmp_path, now=lambda: 1_795_000_000_000, coins=lambda: TOP)
+    assert desk.view()["job"]["log"] == []
+    desk.cancel({"id": JOB})
+    assert secret.read_text() == "BINANCE_SECRET=made-up\n"  # not emptied through the link
+
+
+def test_a_long_log_is_read_from_its_end(tmp_path: Path) -> None:
+    jobs = tmp_path / "jobs"
+    _job(jobs, JOB, {"style": "swing", "coin": "SOL"}, {"state": "queued"})
+    (jobs / f"{JOB}.log").write_text("".join(f"line {n}\n" for n in range(100_000)))
+    shown = Backtests(tmp_path, coins=lambda: TOP).view()["job"]["log"]
+    assert shown == [f"line {n}" for n in range(99_988, 100_000)]
