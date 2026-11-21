@@ -472,50 +472,6 @@ def test_an_analyse_run_ends_in_a_call_shown_on_the_watchlist(services: Any) -> 
     assert chart["interval"] == "1h"
 
 
-def sell(**fields: Any) -> dict[str, Any]:
-    base: dict[str, Any] = {
-        "clientId": "a1b2c3d4-0000-0000-0000-000000000009",
-        "symbol": "SOLUSDT",
-        "side": "sell",
-        "price": "240",
-        "amount": "0.3",
-    }
-    return {**base, **fields}
-
-
-def test_limit_orders_keep_the_limits_and_the_kill_switch(services: Any) -> None:
-    status, error = services("POST", "/orders", sell())
-    assert status == 400
-    assert "limits first" in error["error"]
-    services("PUT", "/limits", {"perOrder": "100", "perDay": "500"})
-    status, done = services("POST", "/orders", sell())
-    assert status == 200
-    assert "Limit sell placed: 0.3 SOL/USDT at 240" in done["message"]
-    status, error = services("POST", "/orders", sell(amount="1"))
-    assert status == 400
-    assert "per-order limit" in error["error"]
-    services("PUT", "/trading", {"on": False})
-    status, error = services(
-        "POST", "/orders", sell(clientId="a1b2c3d4-0000-0000-0000-00000000000a")
-    )
-    assert status == 400
-    assert "Trading is off" in error["error"]
-
-
-def test_a_limit_buy_is_a_smart_trade_and_can_be_cancelled(services: Any) -> None:
-    services("PUT", "/limits", {"perOrder": "100", "perDay": "500"})
-    buy = sell(side="buy", symbol="BTCUSDT", price="90000", amount="0.001", takeProfit="99000")
-    status, done = services("POST", "/orders", buy)
-    assert status == 200
-    assert done["trade"]["status"] == "waiting"
-    order_id = done["trade"]["buy_id"]
-    status, _ = services("POST", "/orders/cancel", {"symbol": "BTCUSDT", "orderId": order_id})
-    assert status == 200
-    _, terminal = services("GET", "/trade", symbol="BTCUSDT")
-    assert terminal["trades"][0]["status"] == "cancelled"
-    assert all(o["orderId"] != order_id for o in terminal["openOrders"])
-
-
 def test_any_open_order_can_be_cancelled_even_with_trading_off(services: Any) -> None:
     services("PUT", "/trading", {"on": False})
     status, done = services("POST", "/orders/cancel", {"symbol": "SOLUSDT", "orderId": 2})

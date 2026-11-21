@@ -1192,3 +1192,66 @@ def test_cancelling_an_entry_binance_has_cancels_it_there(
     pot.cancel(trade["ref"])
     assert by_tag(f"{trade['ref']}-E")["status"] == "CANCELED"
     assert pot.view()["trades"][0]["status"] == "cancelled"
+
+
+def test_an_entry_is_only_written_off_when_binance_says_it_isnt_there(
+    pot: Pot, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a lookup refused for a clock out of step (-1021) proves nothing; only "Order
+    does not exist" shows the entry never reached Binance."""
+    real, lookup = pot.binance.buy_limit, pot.binance.order_by_client
+
+    def lost(*_args: Any) -> dict[str, Any]:
+        raise BinanceError(0, "Timed out")
+
+    def out_of_step(*_args: Any) -> dict[str, Any]:
+        raise BinanceError(400, "Timestamp for this request is outside of the recvWindow.", -1021)
+
+    monkeypatch.setattr(pot.binance, "buy_limit", lost)
+    with pytest.raises(BinanceError):
+        pot.place(SOL)
+    monkeypatch.setattr(pot.binance, "buy_limit", real)
+    monkeypatch.setattr(pot.binance, "order_by_client", out_of_step)
+    pot.sync()
+    assert pot.view()["trades"][0]["status"] == "placing"
+    monkeypatch.setattr(pot.binance, "order_by_client", lookup)
+    pot.sync()  # the demo never got it: "Order does not exist" (-2013)
+    assert pot.view()["trades"][0]["status"] == "cancelled"
+
+
+def test_a_target_that_part_filled_before_its_exits_came_off_is_never_sold_twice(
+    pot: Pot,
+) -> None:
+    """Audit 4: Close takes the OCO off; what its target already sold is recorded first, and
+    only the rest is sold at market."""
+    trade = opened(pot)  # 0.05 SOL, its target at 230
+    target = by_tag(f"{trade['ref']}-X1T")
+    target |= {"status": "PARTIALLY_FILLED", "executedQty": "0.02", "cummulativeQuoteQty": "4.6"}
+    with pytest.raises(Refused, match="Part of it sold on Binance"):
+        pot.close(trade["ref"])
+    assert by_tag(f"{trade['ref']}-X1T")["status"] == "CANCELED"
+    assert not any(
+        o.get("clientOrderId") == f"{trade['ref']}-M1" for o in demo.EXCHANGE.orders.values()
+    )
+    part = pot.view()["trades"][0]
+    assert part["status"] == "open"
+    closed = pot.close(trade["ref"])
+    assert by_tag(f"{trade['ref']}-M1")["origQty"] == "0.03"  # the rest, not the full 0.05
+    assert (closed["status"], closed["exitKind"]) == ("closed", "market")
+
+
+def test_a_trade_entry_cant_be_changed_from_the_open_orders_list(pot: Pot, desk: Trading) -> None:
+    """Audit 5: changed there, the entry would fill untracked, with no stop put on."""
+    trade = pot.place(SOL)
+    entry = by_tag(f"{trade['ref']}-E")
+    edit = {
+        "symbol": "SOLUSDC",
+        "orderId": entry["orderId"],
+        "price": "195",
+        "amount": entry["origQty"],
+        "clientId": "edit-test-0002",
+    }
+    with pytest.raises(Refused, match=f"belongs to trade {trade['ref']}"):
+        desk.edit_order(edit)
+    assert entry["status"] == "NEW"
+    assert pot.view()["trades"][0]["status"] == "waiting"

@@ -71,9 +71,15 @@ export default function DcaFunds({
   const [busy, setBusy] = useState<"analyse" | "chat" | "place" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [held, setHeld] = useState<string | null>(null);
+  // The row a Profile rule held: Place anyway overrides it alone, never the rows after it.
+  const [heldAt, setHeldAt] = useState<number | null>(null);
+  // Set when the confirm closes mid-batch: nothing more is sent (audit 16).
+  const stopped = useRef(false);
   const [lines, setLines] = useState<Line[]>([]);
   const [message, setMessage] = useState("");
   const dialog = useRef<HTMLDialogElement>(null);
+  // The side on show now: a plan or chat reply asked for the other side is dropped (audit 12).
+  const showing = useRef(side);
 
   const selling = side === "remove";
   const total = rows.reduce((s, r) => s + (Number(r.usdc) || 0), 0);
@@ -82,9 +88,11 @@ export default function DcaFunds({
   const tooSmall = pending.filter((r) => Number(r.usdc) < MIN).map((r) => r.coin);
 
   const take = (p: FundsPlan) => {
+    if ((p.side === "sell") !== (showing.current === "remove")) return false;
     setPlan(p);
     setRows([...p.orders, ...(p.skipped ?? []).map((s) => ({ ...s, skipped: true }))]);
     setAmount(p.amount);
+    return true;
   };
   const [talking, setTalking] = useState(false);
   const analyse = () => {
@@ -123,8 +131,7 @@ export default function DcaFunds({
       message: text,
     }).then(
       (p) => {
-        take(p);
-        setLines((l) => [...l, { who: "agent", text: p.reply ?? p.note }]);
+        if (take(p)) setLines((l) => [...l, { who: "agent", text: p.reply ?? p.note }]);
         setBusy(null);
       },
       (e: unknown) => {
@@ -156,15 +163,21 @@ export default function DcaFunds({
     );
   };
 
-  const place = async (override = false) => {
+  const place = async (overrideAt: number | null = null) => {
+    // The plan's own side decides buy or sell, never the toggle (audit 12).
+    const sells = plan ? plan.side === "sell" : selling;
     setBusy("place");
     setHeld(null);
+    setHeldAt(null);
+    stopped.current = false;
     const next = [...rows];
     for (const [i, r] of next.entries()) {
       if (r.result || r.skipped || !(Number(r.usdc) > 0)) continue; // left-out coins stay out
+      if (stopped.current) break;
+      const override = i === overrideAt;
       try {
         const placed = await placeDcaOrder(
-          selling
+          sells
             ? {
                 coin: r.coin,
                 side: "sell",
@@ -184,6 +197,7 @@ export default function DcaFunds({
       } catch (e) {
         if (e instanceof ApiError && e.ruleBreaks.length) {
           setHeld(e.message);
+          setHeldAt(i);
           break;
         }
         next[i] = { ...r, result: errorOf(e, "Not placed."), failed: true };
@@ -195,7 +209,7 @@ export default function DcaFunds({
     const done = next.filter((r) => r.result && !r.failed).length;
     if (done)
       onPlaced(
-        `${done} ${selling ? "limit sells" : "limit buys"} placed from ${two(asked)} ${quote}.`,
+        `${done} ${sells ? "limit sells" : "limit buys"} placed from ${two(asked)} ${quote}.`,
       );
   };
 
@@ -209,7 +223,9 @@ export default function DcaFunds({
               key={s}
               type="button"
               aria-pressed={side === s}
+              disabled={busy !== null}
               onClick={() => {
+                showing.current = s;
                 setSide(s);
                 setPlan(null);
                 setRows([]);
@@ -401,7 +417,7 @@ export default function DcaFunds({
           {held && (
             <div className="alert" role="alert">
               <span>{held}</span>
-              <button type="button" className="btn btn-small" onClick={() => void place(true)}>
+              <button type="button" className="btn btn-small" onClick={() => void place(heldAt)}>
                 Place anyway (logged)
               </button>
             </div>
@@ -426,7 +442,13 @@ export default function DcaFunds({
         </>
       )}
 
-      <dialog ref={dialog} aria-labelledby="dcf-confirm">
+      <dialog
+        ref={dialog}
+        aria-labelledby="dcf-confirm"
+        onClose={() => {
+          if (busy === "place") stopped.current = true;
+        }}
+      >
         <h2 id="dcf-confirm">
           Place {pending.length} {selling ? "limit sells" : "limit buys"}?
         </h2>
@@ -447,7 +469,7 @@ export default function DcaFunds({
         />
         <div className="dlg-btns">
           <button className="btn" type="button" onClick={() => dialog.current?.close()}>
-            Not yet
+            {busy === "place" ? "Stop" : "Not yet"}
           </button>
           <button
             className={`btn ${selling ? "btn-danger" : "btn-accent"}`}

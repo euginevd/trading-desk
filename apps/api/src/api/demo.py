@@ -203,7 +203,9 @@ class Exchange:
             return httpx.Response(200, json={"orderListId": list_id, "orders": legs})
         if path == "/api/v3/orderList":
             if "origClientOrderId" in p and p["origClientOrderId"] not in self.names:
-                return httpx.Response(400, json={"msg": "Order list does not exist."})
+                return httpx.Response(
+                    400, json={"code": -2013, "msg": "Order list does not exist."}
+                )
             found = self.names.get(p.get("origClientOrderId", ""), int(p.get("orderListId", 0)))
             ids = self.lists[found]
             filled = any(self.orders[i]["status"] == "FILLED" for i in ids)
@@ -237,7 +239,7 @@ class Exchange:
         else:
             order = self.orders.get(int(p["orderId"]))
         if order is None:
-            return httpx.Response(400, json={"msg": "Order does not exist."})
+            return httpx.Response(400, json={"code": -2013, "msg": "Order does not exist."})
         if method == "DELETE":
             order["status"] = "CANCELED"
         return httpx.Response(200, json=order)

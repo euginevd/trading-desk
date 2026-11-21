@@ -1,5 +1,5 @@
-"""Smart trades, limits, the kill switch, the watchlist, signals and account value history,
-kept in a local SQLite file (decisions 13 and 18)."""
+"""Limits, the kill switch, the watchlist, signals and account value history, and the old smart
+trades (read only, decision 95), kept in a local SQLite file (decisions 13 and 18)."""
 
 import json
 import sqlite3
@@ -75,7 +75,8 @@ CREATE TABLE IF NOT EXISTS bots (
     note TEXT,
     last_signal INTEGER NOT NULL DEFAULT 0,
     created INTEGER NOT NULL,
-    updated INTEGER NOT NULL
+    updated INTEGER NOT NULL,
+    deleted INTEGER
 );
 CREATE TABLE IF NOT EXISTS bot_deals (
     id INTEGER PRIMARY KEY,
@@ -112,7 +113,8 @@ CREATE TABLE IF NOT EXISTS grids (
     note TEXT,
     started INTEGER,
     created INTEGER NOT NULL,
-    updated INTEGER NOT NULL
+    updated INTEGER NOT NULL,
+    deleted INTEGER
 );
 CREATE TABLE IF NOT EXISTS grid_orders (
     id INTEGER PRIMARY KEY,
@@ -237,22 +239,13 @@ CREATE TABLE IF NOT EXISTS pot_orders (
     updated INTEGER NOT NULL
 );
 """
-FIELDS = (
-    "status",
-    "buy_id",
-    "qty",
-    "entry_price",
-    "exit_kind",
-    "exit_id",
-    "exit_price",
-    "note",
-    "updated",
-)
-# Every column a trade can change, written out whole: no SQL is built from strings.
-UPDATE = (
-    "UPDATE trades SET status = :status, buy_id = :buy_id, qty = :qty, "
-    "entry_price = :entry_price, exit_kind = :exit_kind, exit_id = :exit_id, "
-    "exit_price = :exit_price, note = :note, updated = :updated WHERE id = :id"
+
+
+# Columns added after the first databases were made, each with its fixed statement: no SQL is
+# built from strings.
+ADDED_COLUMNS = (
+    ("bots", "deleted", "ALTER TABLE bots ADD COLUMN deleted INTEGER"),
+    ("grids", "deleted", "ALTER TABLE grids ADD COLUMN deleted INTEGER"),
 )
 
 
@@ -262,6 +255,10 @@ class Store:
         self._db = sqlite3.connect(path, timeout=5)
         self._db.row_factory = sqlite3.Row
         self._db.executescript(SCHEMA)
+        # Added after the first databases were made: a deleted bot or grid is hidden, its
+        # orders kept for today's spend, the monthly cap and the ledger (audit 8).
+        for table, column, statement in ADDED_COLUMNS:
+            self._add_column(table, column, statement)
         # The Markdown made from the Profile on each save, beside the database it came from.
         self.profile_md = path.parent / (
             "profile.md" if path.stem == "desk" else f"{path.stem}-profile.md"
@@ -270,6 +267,12 @@ class Store:
         self.trade_md = path.parent / (
             "trade.md" if path.stem == "desk" else f"{path.stem}-trade.md"
         )
+
+    def _add_column(self, table: str, column: str, statement: str) -> None:
+        rows = self._db.execute("SELECT name FROM pragma_table_info(?)", (table,))
+        if column not in {str(r["name"]) for r in rows}:
+            with self._db:
+                self._db.execute(statement)  # one of ADDED_COLUMNS' fixed statements
 
     def close(self) -> None:
         self._db.close()
@@ -285,50 +288,6 @@ class Store:
                 "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (key, value),
             )
-
-    def claim(self, trade: dict[str, Any]) -> tuple[dict[str, Any], bool]:
-        """Records a new trade as placing; the same client_id again returns the first one."""
-        try:
-            with self._db:
-                cursor = self._db.execute(
-                    "INSERT INTO trades (client_id, created, symbol, entry, limit_price, spend, "
-                    "take_profit, stop_loss, status, updated) "
-                    "VALUES (:client_id, :created, :symbol, :entry, :limit_price, :spend, "
-                    ":take_profit, :stop_loss, 'placing', :created)",
-                    trade,
-                )
-        except sqlite3.IntegrityError:
-            row = self._db.execute(
-                "SELECT * FROM trades WHERE client_id = ?", (trade["client_id"],)
-            ).fetchone()
-            return dict(row), False
-        return self.trade(int(cursor.lastrowid or 0)), True
-
-    def trade(self, trade_id: int) -> dict[str, Any]:
-        row = self._db.execute("SELECT * FROM trades WHERE id = ?", (trade_id,)).fetchone()
-        if row is None:
-            raise LookupError(trade_id)
-        return dict(row)
-
-    def update(self, trade_id: int, **changes: Any) -> dict[str, Any]:
-        unknown = set(changes) - set(FIELDS)
-        if unknown:
-            raise ValueError(unknown)
-        row = {**self.trade(trade_id), **changes}
-        with self._db:
-            self._db.execute(UPDATE, {field: row[field] for field in (*FIELDS, "id")})
-        return self.trade(trade_id)
-
-    def trades(self, limit: int = 50) -> list[dict[str, Any]]:
-        rows = self._db.execute("SELECT * FROM trades ORDER BY created DESC LIMIT ?", (limit,))
-        return [dict(r) for r in rows]
-
-    def open_trades(self) -> list[dict[str, Any]]:
-        rows = self._db.execute(
-            "SELECT * FROM trades "
-            "WHERE status IN ('placing', 'waiting', 'needs_exits', 'protected', 'open')"
-        )
-        return [dict(r) for r in rows]
 
     def spent_since(self, since_ms: int) -> Decimal:
         """Today's spend against the daily limit: smart trades, and the DCA and grid bots' buys
@@ -388,7 +347,18 @@ class Store:
         return trades + bots + gridded + booked + potted
 
     def order_owner(self, order_id: int) -> str | None:
-        """Which bot or grid placed this Binance order, by its reference, if any."""
+        """Which part of the desk placed this Binance order, by its reference, if any: the DCA
+        book, a Trading account trade, a bot or a grid."""
+        row = self._db.execute(
+            "SELECT ref FROM dca_orders WHERE order_id = ?", (order_id,)
+        ).fetchone()
+        if row:
+            return f"the DCA book ({row['ref']})"
+        row = self._db.execute(
+            "SELECT trade_ref FROM pot_orders WHERE order_id = ?", (order_id,)
+        ).fetchone()
+        if row:
+            return f"trade {row['trade_ref']}"
         row = self._db.execute(
             "SELECT bot_deals.bot_id FROM bot_orders JOIN bot_deals "
             "ON bot_deals.id = bot_orders.deal_id WHERE bot_orders.order_id = ?",
@@ -451,10 +421,13 @@ class Store:
     # DCA bots (decision 37): each bot, its deals and every order a deal placed.
 
     def bots(self) -> list[dict[str, Any]]:
-        return [dict(r) for r in self._db.execute("SELECT * FROM bots ORDER BY created, id")]
+        rows = self._db.execute("SELECT * FROM bots WHERE deleted IS NULL ORDER BY created, id")
+        return [dict(r) for r in rows]
 
     def bot(self, bot_id: int) -> dict[str, Any]:
-        row = self._db.execute("SELECT * FROM bots WHERE id = ?", (bot_id,)).fetchone()
+        row = self._db.execute(
+            "SELECT * FROM bots WHERE id = ? AND deleted IS NULL", (bot_id,)
+        ).fetchone()
         if row is None:
             raise LookupError(bot_id)
         return dict(row)
@@ -477,15 +450,11 @@ class Store:
             )
         return self.bot(int(bot["id"]))
 
-    def delete_bot(self, bot_id: int) -> None:
+    def delete_bot(self, bot_id: int, now_ms: int) -> None:
+        """Hides the bot; its deals and orders stay, so what it bought still counts against
+        today's limit and the monthly cap, and the ledger still names its fills (audit 8)."""
         with self._db:
-            self._db.execute(
-                "DELETE FROM bot_orders WHERE deal_id IN "
-                "(SELECT id FROM bot_deals WHERE bot_id = ?)",
-                (bot_id,),
-            )
-            self._db.execute("DELETE FROM bot_deals WHERE bot_id = ?", (bot_id,))
-            self._db.execute("DELETE FROM bots WHERE id = ?", (bot_id,))
+            self._db.execute("UPDATE bots SET deleted = ? WHERE id = ?", (now_ms, bot_id))
 
     def deals(self, bot_id: int) -> list[dict[str, Any]]:
         rows = self._db.execute(
@@ -798,10 +767,13 @@ class Store:
     # Grid bots (decision 38): each grid, and every order it wants or placed.
 
     def grids(self) -> list[dict[str, Any]]:
-        return [dict(r) for r in self._db.execute("SELECT * FROM grids ORDER BY created, id")]
+        rows = self._db.execute("SELECT * FROM grids WHERE deleted IS NULL ORDER BY created, id")
+        return [dict(r) for r in rows]
 
     def grid(self, grid_id: int) -> dict[str, Any]:
-        row = self._db.execute("SELECT * FROM grids WHERE id = ?", (grid_id,)).fetchone()
+        row = self._db.execute(
+            "SELECT * FROM grids WHERE id = ? AND deleted IS NULL", (grid_id,)
+        ).fetchone()
         if row is None:
             raise LookupError(grid_id)
         return dict(row)
@@ -824,10 +796,11 @@ class Store:
             )
         return self.grid(int(grid["id"]))
 
-    def delete_grid(self, grid_id: int) -> None:
+    def delete_grid(self, grid_id: int, now_ms: int) -> None:
+        """Hides the grid; its orders stay, for today's limit, the monthly cap and the ledger
+        (audit 8)."""
         with self._db:
-            self._db.execute("DELETE FROM grid_orders WHERE grid_id = ?", (grid_id,))
-            self._db.execute("DELETE FROM grids WHERE id = ?", (grid_id,))
+            self._db.execute("UPDATE grids SET deleted = ? WHERE id = ?", (now_ms, grid_id))
 
     def add_grid_order(self, order: dict[str, Any]) -> int:
         with self._db:
@@ -850,7 +823,8 @@ class Store:
             self._db.execute(
                 "UPDATE grid_orders SET order_id = :order_id, status = :status, "
                 "executed_qty = :executed_qty, executed_quote = :executed_quote, "
-                "fee_base = :fee_base, profit = :profit, updated = :updated WHERE id = :id",
+                "fee_base = :fee_base, profit = :profit, created = :created, updated = :updated "
+                "WHERE id = :id",
                 order,
             )
 

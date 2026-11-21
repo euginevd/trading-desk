@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import DcaBookPage from "./DcaBookPage";
+import DcaOrderDrawer, { since } from "./DcaOrderDrawer";
 import DcaWidget from "./DcaWidget";
 import { toCsv } from "./dcaFormat";
 import type { DcaBook, DcaOrder, DcaWeekPlan, FundsPlan } from "./types";
@@ -385,6 +386,79 @@ describe("DCA book page", () => {
     });
   });
 
+  it("keeps Add and Remove fixed while a plan is coming, and places it as it was planned", async () => {
+    const fetch = serve(book());
+    render(<DcaBookPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add funds" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Amount in USDC" }), {
+      target: { value: "100" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Plan it" }));
+    // Audit 12: switched mid-plan, a buy plan would have gone out as sells.
+    expect(screen.getByRole("button", { name: "Remove" })).toHaveProperty("disabled", true);
+    expect(await screen.findByText("Most to BTC, near last week's low.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Review \d limit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Place \d/ }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders").length).toBeGreaterThan(0));
+    for (const [, init] of sent(fetch, "/dca/orders"))
+      expect(JSON.parse(String(init?.body))).not.toHaveProperty("side", "sell");
+  });
+
+  it("overrides only the order a rule held, and stops when the confirm closes (audit 16)", async () => {
+    const fetch = serve(book());
+    const answer = fetch.getMockImplementation();
+    let calls = 0;
+    let release: (() => void) | null = null;
+    fetch.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/dca/orders") {
+        calls += 1;
+        if (calls === 1) {
+          const held = { error: "This buy breaks your rule: Per-trade size.", ruleBreaks: [{}] };
+          return Promise.resolve(new Response(JSON.stringify(held), { status: 409 }));
+        }
+        if (calls === 4) {
+          // the second batch's first order: answered only once the confirm has closed
+          return new Promise<Response>((done) => {
+            release = () => done(new Response(JSON.stringify(order({})), { status: 200 }));
+          });
+        }
+      }
+      if (!answer) throw new Error("No fetch.");
+      return answer(url, init);
+    });
+    render(<DcaBookPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Add funds" }));
+    fireEvent.change(screen.getByRole("textbox", { name: "Amount in USDC" }), {
+      target: { value: "100" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Plan it" }));
+    expect(await screen.findByText("Most to BTC, near last week's low.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Review \d limit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Place \d/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "Place anyway (logged)" }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders")).toHaveLength(3));
+    const bodies = sent(fetch, "/dca/orders").map(
+      ([, init]) => JSON.parse(String(init?.body)) as { override: boolean },
+    );
+    expect(bodies.map((b) => b.override)).toEqual([false, true, false]); // the held one alone
+
+    // A second plan, its confirm closed while the first order is on its way: no second order.
+    fireEvent.click(screen.getByRole("button", { name: "Plan again" }));
+    expect(await screen.findByRole("button", { name: /^Review \d limit/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Review \d limit/ }));
+    fireEvent.click(screen.getByRole("button", { name: /^Place \d/ }));
+    await waitFor(() => expect(calls).toBe(4));
+    fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+    (release as (() => void) | null)?.();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: /^Review \d limit/ })).toHaveProperty(
+        "disabled",
+        false,
+      ),
+    );
+    expect(sent(fetch, "/dca/orders")).toHaveLength(4);
+  });
+
   it("adds funds: the desk's split, a tick and a hand edit, then one limit per coin", async () => {
     const fetch = serve(book());
     render(<DcaBookPage />);
@@ -441,6 +515,117 @@ describe("DCA book page", () => {
     expect(
       await screen.findByText("DCA-BTC-26W47-1 cancelled; now DCA-BTC-26W47-2 at 63,837.40."),
     ).toBeTruthy();
+  });
+
+  it("lets a raise a Profile rule held go once confirmed, logged", async () => {
+    const fetch = serve(book());
+    const answer = fetch.getMockImplementation();
+    fetch.mockImplementation((url: string, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { override?: boolean };
+      if (url === "/api/dca/orders/amend" && !body.override) {
+        const held = { error: "This buy breaks your rule: Per-trade size.", ruleBreaks: [{}] };
+        return Promise.resolve(new Response(JSON.stringify(held), { status: 409 }));
+      }
+      if (!answer) throw new Error("No fetch.");
+      return answer(url, init);
+    });
+    const props = {
+      book: book(),
+      editing: true,
+      onClose: () => undefined,
+      onCancel: () => undefined,
+      onOpen: () => undefined,
+      onDone: () => undefined,
+    };
+    render(<DcaOrderDrawer {...props} order={order({})} />);
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "90" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Place anyway (logged)" }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders/amend")).toHaveLength(2));
+    expect(JSON.parse(String(sent(fetch, "/dca/orders/amend")[1]?.[1]?.body))).toMatchObject({
+      spend: "90",
+      raise: true,
+      override: true,
+    });
+  });
+
+  it("never buys again what filled while Modify was open (audit 11)", async () => {
+    const fetch = serve(book());
+    const props = {
+      book: book(),
+      editing: true,
+      onClose: () => undefined,
+      onCancel: () => undefined,
+      onOpen: () => undefined,
+      onDone: () => undefined,
+    };
+    const { rerender } = render(<DcaOrderDrawer {...props} order={order({})} />);
+    // The 30-second reload brings a part fill: $20 of the $49.79 bought while the drawer is open.
+    rerender(
+      <DcaOrderDrawer {...props} order={order({ filledQty: "0.0003", filledQuote: "20" })} />,
+    );
+    fireEvent.change(screen.getByLabelText("Limit price"), { target: { value: "63500.37" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders/amend")).toHaveLength(1));
+    expect(JSON.parse(String(sent(fetch, "/dca/orders/amend")[0]?.[1]?.body))).toEqual({
+      ref: "DCA-BTC-26W47-1",
+      price: "63500.37", // no amount, no raise: the api keeps what's left now
+    });
+  });
+
+  it("shows a trim before it sells, and Enter only reviews it (audit 13)", async () => {
+    const fetch = serve(book());
+    render(<DcaBookPage />);
+    const [, ethTrim] = await screen.findAllByRole("button", { name: "Trim" });
+    if (!ethTrim) throw new Error("No Trim button for ETH.");
+    fireEvent.click(ethTrim);
+    const sheet = screen.getByRole("dialog", { name: "Trim ETH" });
+    const quantity = within(sheet).getByLabelText("Quantity (ETH)");
+    fireEvent.change(within(sheet).getByLabelText("Price (USDC)"), { target: { value: "2000" } });
+    fireEvent.change(quantity, { target: { value: "0.005" } });
+    fireEvent.submit(quantity); // Enter in a field
+    expect(within(sheet).getByRole("status").textContent).toBe(
+      "Sell 0.005 ETH at 2000, about 10.00 USDC.",
+    );
+    expect(quantity.matches(":disabled")).toBe(true); // locked inside its fieldset
+    expect(sent(fetch, "/dca/orders")).toHaveLength(0);
+    fireEvent.click(within(sheet).getByRole("button", { name: "Sell ETH" }));
+    await waitFor(() => expect(sent(fetch, "/dca/orders")).toHaveLength(1));
+    expect(JSON.parse(String(sent(fetch, "/dca/orders")[0]?.[1]?.body))).toMatchObject({
+      coin: "ETH",
+      side: "sell",
+      qty: "0.005",
+      price: "2000",
+    });
+  });
+
+  it("measures a fill's move since against its fill price (audit 17)", () => {
+    expect(since(100, 200)).toBe(100); // doubled: +100%, not +50%
+    expect(since(200, 100)).toBe(-50);
+    expect(since(0, 100)).toBeNull();
+  });
+
+  it("opens the Tax tab's rebalance as a trim filled in, for review (audit 17)", async () => {
+    window.location.hash = "#/dca-book?coin=ETH&rebalance=sell&price=2000&qty=0.005";
+    const fetch = serve(book());
+    render(<DcaBookPage />);
+    const sheet = await screen.findByRole("dialog", { name: "Trim ETH" });
+    expect(within(sheet).getByLabelText("Quantity (ETH)")).toHaveProperty("value", "0.005");
+    expect(within(sheet).getByLabelText("Price (USDC)")).toHaveProperty("value", "2000");
+    expect(sent(fetch, "/dca/orders")).toHaveLength(0); // nothing sent until reviewed and placed
+    window.location.hash = "";
+  });
+
+  it("says where to rebalance a coin the book doesn't hold", async () => {
+    window.location.hash = "#/dca-book?coin=TAO&rebalance=sell&price=410&qty=0.813";
+    serve(book());
+    render(<DcaBookPage />);
+    expect(
+      await screen.findByText(
+        "TAO isn't held in the DCA book, so rebalance it where it's held: sell 0.813 at 410.",
+      ),
+    ).toBeTruthy();
+    window.location.hash = "";
   });
 
   it("asks before cancelling, and says what happens to the reference and the money", async () => {

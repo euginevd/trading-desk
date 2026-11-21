@@ -131,12 +131,16 @@ def test_a_run_defaults_to_the_last_month() -> None:
 
 def test_the_commands_test_one_usdc_pair_with_btc_beside_it() -> None:
     run = Run(STYLES["swing"], "SOL", date(2026, 8, 19), date(2026, 11, 19))
-    download, older, test = commands(run)
+    download, older, daily, test = commands(run)
     assert download[:2] == ["freqtrade", "download-data"]
     assert "/freqtrade/config/usdc.json" in download
     pairs = download[download.index("--pairs") + 1 : download.index("--timerange")]
     assert pairs == ["SOL/USDC", "BTC/USDC"]
     assert older[-1] == "--prepend"
+    # BTC's daily candles from 420 days before the start, for the Bear filter (audit 22).
+    assert daily[daily.index("--pairs") + 1] == "BTC/USDC"
+    assert daily[daily.index("--timerange") + 1] == "20250625-20261119"
+    assert daily[daily.index("--timeframes") + 1 :] == ["1d", "--prepend"]
     assert test[test.index("--strategy") + 1] == "DeskSwing"
     assert test[test.index("--pairs") + 1] == "SOL/USDC"
     assert test[test.index("--timerange") + 1] == "20260819-20261119"
@@ -258,11 +262,11 @@ def test_the_worker_runs_a_job_and_records_its_result(
     worker = _worker(tmp_path, monkeypatch)
     worker.JOBS.mkdir(parents=True)
     _zip(worker.RESULTS)
-    # Stand-ins for Freqtrade: two downloads, then a backtest that writes .last_result.json.
+    # Stand-ins for Freqtrade: three downloads, then a backtest that writes .last_result.json.
     last = worker.RESULTS / ".last_result.json"
     marker = json.dumps({"latest_backtest": "backtest-result-2026-11-20_06-48-02.zip"})
     write_last = f"open({str(last)!r}, 'w').write({marker!r})"
-    fake = [[sys.executable, "-c", "print('ok')"]] * 2 + [[sys.executable, "-c", write_last]]
+    fake = [[sys.executable, "-c", "print('ok')"]] * 3 + [[sys.executable, "-c", write_last]]
     monkeypatch.setattr(worker, "commands", lambda _run: fake)  # pyright: ignore[reportUnknownLambdaType, reportUnknownArgumentType]
     monkeypatch.setattr(worker, "POLL_SECONDS", 0.01)
     start, end = default()
@@ -284,3 +288,33 @@ def test_the_worker_runs_a_job_and_records_its_result(
     garbled = json.loads((worker.JOBS / "job-20261120-000002-abcdef.status.json").read_text())
     assert garbled["state"] == "failed"
     assert worker.pending() == []
+
+
+def _link(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target)
+    except OSError:  # Windows without the right to make links: CI runs it on Linux
+        pytest.skip("Symbolic links can't be made here.")
+
+
+def test_the_job_files_are_read_and_written_as_plain_files_only(tmp_path: Path) -> None:
+    """Audit 19: the Freqtrade containers write the jobs folder; a link left there (to .env,
+    say) is never read back to the page or written through."""
+    secret = tmp_path / "dot-env"
+    secret.write_text("BINANCE_SECRET=made-up\n")
+    jobs = tmp_path / "jobs"
+    _job(jobs, JOB, {"style": "swing", "coin": "SOL"}, {"state": "queued"})
+    _link(jobs / f"{JOB}.log", secret)
+    _link(jobs / f"{JOB}.cancel", secret)
+    desk = Backtests(tmp_path, now=lambda: 1_795_000_000_000, coins=lambda: TOP)
+    assert desk.view()["job"]["log"] == []
+    desk.cancel({"id": JOB})
+    assert secret.read_text() == "BINANCE_SECRET=made-up\n"  # not emptied through the link
+
+
+def test_a_long_log_is_read_from_its_end(tmp_path: Path) -> None:
+    jobs = tmp_path / "jobs"
+    _job(jobs, JOB, {"style": "swing", "coin": "SOL"}, {"state": "queued"})
+    (jobs / f"{JOB}.log").write_text("".join(f"line {n}\n" for n in range(100_000)))
+    shown = Backtests(tmp_path, coins=lambda: TOP).view()["job"]["log"]
+    assert shown == [f"line {n}" for n in range(99_988, 100_000)]

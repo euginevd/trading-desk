@@ -18,7 +18,7 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { useEffect, useRef, useState } from "react";
-import { amendDcaOrder, fundsOdds, getMarket } from "./api";
+import { ApiError, amendDcaOrder, fundsOdds, getMarket } from "./api";
 import { errorOf } from "./format";
 import { token } from "./BotKit";
 import CoinIcon from "./CoinIcon";
@@ -47,6 +47,9 @@ export const qtyOf = (o: DcaOrder) =>
         : 0;
 export const away = (at: number, now: number) =>
   now > 0 && at > 0 ? ((at - now) / now) * 100 : null;
+// How far the price has moved since a fill, against the fill price (audit 17).
+export const since = (at: number, now: number) =>
+  now > 0 && at > 0 ? ((now - at) / at) * 100 : null;
 export const pct = (v: number | null) => (v === null ? "—" : `${v > 0 ? "+" : ""}${v.toFixed(1)}%`);
 // A price typed or dragged: 2 places from 1 up, 6 under.
 const tidy = (n: number) => (n >= 1 ? n.toFixed(2) : n.toFixed(6));
@@ -286,6 +289,11 @@ export default function DcaOrderDrawer({
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  // A raise a Profile rule held: Place anyway sends it once more, confirmed and logged.
+  const [ruleHeld, setRuleHeld] = useState(false);
+  // Whether the owner typed an amount: untouched, a change sends none and the api keeps what's
+  // left now, so a part that fills while the drawer is open is never bought again (audit 11).
+  const [typed, setTyped] = useState(false);
 
   useEffect(() => {
     let on = true;
@@ -318,8 +326,9 @@ export default function DcaOrderDrawer({
   const now = Number(market?.price ?? 0);
   const at = Number(editing ? price : live ? order.price : (order.avgPrice ?? order.price));
   const off = away(at, now);
+  const moved = since(at, now);
   const filled = Number(order.filledQuote) > 0;
-  const spend = editing ? Number(usdc) : left(order);
+  const spend = editing && typed ? Number(usdc) : left(order);
   const pos = book.positions.find((p) => p.coin === order.coin);
   const others = book.orders.filter(
     (o) => o.coin === order.coin && o.ref !== order.ref && isOpen(o) && o.kind === "limit",
@@ -374,7 +383,7 @@ export default function DcaOrderDrawer({
   // What it means, in a few lines.
   const reaching = !live
     ? filled
-      ? `${order.status === "cancelled" ? "Part filled" : "Filled"}: $${two(order.filledQuote)} at ${limit(order.avgPrice)}${off === null ? "" : `; the price is ${pct(-off)} from there now`}.`
+      ? `${order.status === "cancelled" ? "Part filled" : "Filled"}: $${two(order.filledQuote)} at ${limit(order.avgPrice)}${moved === null ? "" : `; the price is ${pct(moved)} from there now`}.`
       : order.status === "cancelled"
         ? "Cancelled before anything filled."
         : "A market order, being placed."
@@ -428,10 +437,12 @@ export default function DcaOrderDrawer({
     ]);
 
   const setFromUsdc = (v: string) => {
+    setTyped(true);
     setUsdc(v);
     if (Number(price) > 0 && Number(v) > 0) setQty((Number(v) / Number(price)).toFixed(8));
   };
   const setFromQty = (v: string) => {
+    setTyped(true);
     setQty(v);
     if (Number(price) > 0 && Number(v) > 0) setUsdc((Number(v) * Number(price)).toFixed(2));
   };
@@ -442,12 +453,13 @@ export default function DcaOrderDrawer({
     if (buy && Number(usdc) > 0) setQty((Number(usdc) / Number(v)).toFixed(8));
     if (!buy && Number(qty) > 0) setUsdc((Number(qty) * Number(v)).toFixed(2));
   };
-  const amountChanged = Math.abs(Number(usdc) - left(order)) >= 0.005;
-  const qtyChanged = Math.abs(Number(qty) - qtyOf(order)) > 1e-9;
+  const amountChanged = typed && Math.abs(Number(usdc) - left(order)) >= 0.005;
+  const qtyChanged = typed && Math.abs(Number(qty) - qtyOf(order)) > 1e-9;
   const changed = Number(price) !== Number(order.price) || (buy ? amountChanged : qtyChanged);
-  const save = () => {
+  const save = (override = false) => {
     setBusy(true);
     setError("");
+    setRuleHeld(false);
     const amount = buy
       ? amountChanged
         ? { spend: usdc, raise: Number(usdc) > left(order) }
@@ -455,10 +467,11 @@ export default function DcaOrderDrawer({
       : qtyChanged
         ? { qty }
         : {};
-    amendDcaOrder({ ref: order.ref, price, ...amount }).then(
+    amendDcaOrder({ ref: order.ref, price, ...amount, ...(override ? { override } : {}) }).then(
       (placed) => onDone(`${order.ref} cancelled; now ${placed.ref} at ${limit(placed.price)}.`),
       (e: unknown) => {
         setBusy(false);
+        setRuleHeld(e instanceof ApiError && e.ruleBreaks.length > 0);
         setError(errorOf(e, "Not changed."));
       },
     );
@@ -506,8 +519,8 @@ export default function DcaOrderDrawer({
         </div>
         <div>
           <small>{live ? "To fill" : "Since"}</small>
-          <b className={`num ${live ? "" : off !== null && -off > 0 ? "up" : "down"}`}>
-            {live ? pct(off) : pct(off === null ? null : -off)}
+          <b className={`num ${live ? "" : moved !== null && moved > 0 ? "up" : "down"}`}>
+            {live ? pct(off) : pct(moved)}
           </b>
         </div>
         <div>
@@ -631,10 +644,15 @@ export default function DcaOrderDrawer({
                 className="btn btn-accent"
                 type="button"
                 disabled={busy || !changed || !(Number(price) > 0) || !(Number(usdc) > 0)}
-                onClick={save}
+                onClick={() => save()}
               >
                 {busy ? "Changing…" : "Save changes"}
               </button>
+              {ruleHeld && (
+                <button className="btn" type="button" disabled={busy} onClick={() => save(true)}>
+                  Place anyway (logged)
+                </button>
+              )}
             </div>
           ) : (
             <button className="btn btn-accent" type="button" onClick={() => setEditing(true)}>

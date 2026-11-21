@@ -4,6 +4,7 @@ In Docker it listens inside its container (API_HOST=0.0.0.0) with no port publis
 desk container reaches it, and the desk is published on 127.0.0.1 only (spec 9)."""
 
 import base64
+import ipaddress
 import json
 import os
 import threading
@@ -33,7 +34,8 @@ HOST = os.environ.get("API_HOST", "127.0.0.1")
 PORT = 8000
 WATCH_SECONDS = 30
 AGENT_SECONDS = 15
-MAX_BODY = 10_000
+# Room for the largest import, a 200 KB Profile, once escaped as JSON (audit 23).
+MAX_BODY = 512_000
 # The desk's own pages, and the api itself. Anything else is refused, so a web page open in
 # another tab can't reach the api (cross-site requests) or rename itself to it (DNS rebinding).
 ORIGINS = {"http://127.0.0.1:5173", "http://localhost:5173"} | {
@@ -48,6 +50,21 @@ HOSTS = {f"127.0.0.1:{PORT}", f"localhost:{PORT}"} | {o.split("://", 1)[1] for o
 SERVICE = f"api:{PORT}"
 SERVICE_ON = SERVICE in {h.strip() for h in os.environ.get("DESK_HOSTS", "").split(",")}
 SERVICE_ROUTES = {("POST", "/pot/judge-one")}
+# DESK_BOTS_NET: the Freqtrade containers' own network (docker-compose.yml). A request from it
+# reaches that one route and nothing else, whatever its headers say: a container can send any
+# Host header, but not another network's address (audit 18).
+_bots = os.environ.get("DESK_BOTS_NET", "").strip()
+BOTS_NET = ipaddress.ip_network(_bots, strict=False) if _bots else None
+
+
+def from_bots(peer: str) -> bool:
+    """Whether a request came from the Freqtrade containers' network."""
+    if BOTS_NET is None or not peer:
+        return False
+    try:
+        return ipaddress.ip_address(peer) in BOTS_NET
+    except ValueError:
+        return True  # an address that can't be read is treated as theirs: refused
 
 
 def load_env(path: Path) -> None:
@@ -66,9 +83,14 @@ def load_env(path: Path) -> None:
             os.environ[name] = value
 
 
-def allowed(method: str, headers: dict[str, str], path: str = "") -> str | None:
-    """Why a request is refused, or None. Changes need JSON from the desk's own page."""
+def allowed(method: str, headers: dict[str, str], path: str = "", peer: str = "") -> str | None:
+    """Why a request is refused, or None. Changes need JSON from the desk's own page; the
+    Freqtrade containers reach the one service route only."""
     host = headers.get("host", "")
+    if from_bots(peer) and (
+        not SERVICE_ON or host != SERVICE or (method, path) not in SERVICE_ROUTES
+    ):
+        return "Unknown host."
     if host == SERVICE and SERVICE_ON:
         if (method, path) not in SERVICE_ROUTES or "origin" in headers:
             return "Unknown host."
@@ -86,7 +108,7 @@ class Local(BaseHTTPRequestHandler):
     def _handle(self) -> None:
         url = urlsplit(self.path)
         headers = {k.lower(): v for k, v in self.headers.items()}
-        refusal = allowed(self.command, headers, url.path)
+        refusal = allowed(self.command, headers, url.path, str(self.client_address[0]))
         try:
             length = int(headers.get("content-length", "0") or 0)
         except ValueError:
@@ -108,7 +130,18 @@ class Local(BaseHTTPRequestHandler):
                 "requestContext": {"http": {"method": self.command}},
                 "body": body,
             }
-            reply = handler(event, None)
+            try:
+                reply = handler(event, None)
+            except Exception as error:  # noqa: BLE001 - one bad request must not drop the connection
+                # The desk would otherwise say the api isn't running; the type is logged, not sent.
+                print(f"{self.command} {url.path}: unexpected {type(error).__name__}")
+                reply = {
+                    "statusCode": 500,
+                    "headers": {"content-type": "application/json"},
+                    "body": json.dumps(
+                        {"error": "The api hit an error it didn't expect. Try again; it's logged."}
+                    ),
+                }
         text = str(reply["body"])
         data = base64.b64decode(text) if reply.get("isBase64Encoded") else text.encode()
         self.send_response(int(str(reply["statusCode"])))
@@ -128,12 +161,11 @@ class Local(BaseHTTPRequestHandler):
 
 
 def watch(stop: threading.Event) -> None:
-    """Every 30 seconds: places exits for filled buys, records trades that closed, and steps
-    each DCA and grid bot (decisions 37 and 38), and follows the trading pot's orders."""
+    """Every 30 seconds: follows the DCA book's and the Trading account's orders, and steps each
+    DCA and grid bot (decisions 37 and 38)."""
     while not stop.wait(WATCH_SECONDS):
         try:
             with live_trading() as desk:
-                desk.watch()
                 DcaBook(desk).sync()
                 Pot(desk).sync()
             with live_bots() as bots:

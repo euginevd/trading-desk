@@ -51,6 +51,12 @@ STYLES: dict[str, Style] = {
 }  # fmt: skip
 
 
+# BTC's daily candles before the test: the Bear filter reads its 200-day average, and Freqtrade
+# loads a strategy's startup candles (400 at most) on the daily too. Scalp and day download only a
+# month before, so without these the filter was off for the whole run (audit 22).
+DAILY_DAYS = 420
+
+
 class BadRun(ValueError):
     """A run request the desk won't queue."""
 
@@ -138,9 +144,15 @@ def commands(run: Run) -> list[list[str]]:
         "freqtrade", "download-data", *configs, "--pairs", *pairs,
         "--timerange", f"{first}-{end}", "--timeframes", *timeframes,
     ]  # fmt: skip
+    daily_first = (run.start - timedelta(days=DAILY_DAYS)).strftime("%Y%m%d")
+    daily = [
+        "freqtrade", "download-data", *configs, "--pairs", f"BTC/{QUOTE}",
+        "--timerange", f"{daily_first}-{end}", "--timeframes", "1d", "--prepend",
+    ]  # fmt: skip
     return [
         download,
         [*download, "--prepend"],
+        daily,
         [
             "freqtrade", "backtesting", *configs,
             "--strategy", run.strategy, "--pairs", run.pair,

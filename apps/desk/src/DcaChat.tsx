@@ -51,6 +51,7 @@ export default function DcaChat({
   const input = useRef<HTMLInputElement>(null);
   const list = useRef<HTMLOListElement>(null);
   const dialog = useRef<HTMLDialogElement>(null);
+  const stopped = useRef(false);
 
   useEffect(() => {
     if (open) input.current?.focus();
@@ -103,9 +104,11 @@ export default function DcaChat({
     const line = lines[review];
     if (!line?.actions) return;
     setBusy(true);
+    stopped.current = false;
     const next = [...line.actions];
     for (const [i, a] of next.entries()) {
       if (!a.on || a.result) continue;
+      if (stopped.current) break; // the confirm was closed: nothing more is sent (audit 16)
       try {
         next[i] = { ...a, result: await run(a) };
       } catch (e) {
@@ -246,7 +249,14 @@ export default function DcaChat({
           </button>
         </form>
 
-        <dialog ref={dialog} aria-labelledby="dcc-confirm" onClose={() => setReview(null)}>
+        <dialog
+          ref={dialog}
+          aria-labelledby="dcc-confirm"
+          onClose={() => {
+            if (busy) stopped.current = true;
+            setReview(null);
+          }}
+        >
           <h2 id="dcc-confirm">
             Place {chosen.length} {chosen.length === 1 ? "action" : "actions"}?
           </h2>
@@ -264,7 +274,7 @@ export default function DcaChat({
           />
           <div className="dlg-btns">
             <button className="btn" type="button" onClick={() => dialog.current?.close()}>
-              Not yet
+              {busy ? "Stop" : "Not yet"}
             </button>
             <button
               className="btn btn-accent"

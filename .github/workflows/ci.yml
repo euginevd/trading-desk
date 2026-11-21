@@ -34,10 +34,11 @@ jobs:
           while IFS= read -r f; do
             case "$f" in
               "") ;;
+              # Scripts first: apps/backtest/run.sh is a script before it is an app file (audit 24).
+              .github/workflows/* | *.sh) workflows=true; python=true; web=true ;;
               apps/desk/*) web=true ;;
               apps/* | *.py | pyproject.toml | uv.lock | .python-version) python=true ;;
               *.md | docs/* | guides/* | LICENSE | infra/* | .vscode/*) ;;
-              .github/workflows/* | *.sh) workflows=true; python=true; web=true ;;
               *) python=true; web=true ;;
             esac
           done <<< "$files"

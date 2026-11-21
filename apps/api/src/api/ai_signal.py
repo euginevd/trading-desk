@@ -132,7 +132,12 @@ def chosen_model(model: Callable[[], str]) -> str:
 
 
 class SignalError(Exception):
-    """A signal the desk can't give; the message says why, in plain words."""
+    """A signal the desk can't give; the message says why, in plain words. `cost`: what the
+    calls before it were billed, which still counts toward the monthly cap (audit 20)."""
+
+    def __init__(self, message: str, cost: Decimal = Decimal(0)) -> None:
+        super().__init__(message)
+        self.cost = cost
 
 
 class CapReached(SignalError):
@@ -395,6 +400,10 @@ class Signals:
     def budget(self) -> dict[str, str]:
         return {"spent": plain(self.spent()), "cap": plain(self._cap)}
 
+    def _charge(self, cost: Decimal) -> None:
+        if cost > 0:
+            self._store.set_setting(self._month_key(), plain(self.spent() + cost))
+
     def write(self, system: str, text: str, shape: dict[str, Any], label: str) -> dict[str, Any]:
         """A short piece of writing for the desk (the coach's messages), through the same
         provider, cap and audit log as the plans."""
@@ -403,11 +412,12 @@ class Signals:
         try:
             reply, cost = self._ask(system, text, shape)
         except SignalError as error:
+            self._charge(error.cost)  # billed though it failed
             self._audit.record("signal", f"Claude: {label}", f"Failed: {error}")
             raise
         via = str(reply.pop("_via", "API key"))
         reply.pop("_model", None)
-        self._store.set_setting(self._month_key(), plain(self.spent() + cost))
+        self._charge(cost)
         self._audit.record("signal", f"Claude: {label} via {via}", f"about ${cost:.3f}")
         return reply | ({"_cost": plain(cost)} if STEP.get().model else {})
 
@@ -453,11 +463,12 @@ class Signals:
         try:
             reply, cost = self._ask(system, prompt(facts), schema(facts))
         except SignalError as error:
+            self._charge(error.cost)  # billed though it failed
             self._audit.record("signal", f"Claude: signal {coin}", f"Failed: {error}")
             raise
         via = str(reply.pop("_via", "API key"))
         model = str(reply.pop("_model", MODEL))
-        self._store.set_setting(self._month_key(), plain(self.spent() + cost))
+        self._charge(cost)
         try:
             signal: dict[str, Any] = checked(reply, facts, kept) | {
                 "via": via,
@@ -490,21 +501,25 @@ def claude(
         chosen = chosen_model(model)
         cost = Decimal(0)
         response: Any = None
-        for _ in range(3):  # a long search turn can pause; send it back to carry on
-            response = _create(client, system, messages, shape, chosen, effort())
-            cost += usage_cost(response.usage, chosen)
-            if response.stop_reason != "pause_turn":
-                break
-            messages.append({"role": "assistant", "content": response.content})
+        try:
+            for _ in range(3):  # a long search turn can pause; send it back to carry on
+                response = _create(client, system, messages, shape, chosen, effort())
+                cost += usage_cost(response.usage, chosen)
+                if response.stop_reason != "pause_turn":
+                    break
+                messages.append({"role": "assistant", "content": response.content})
+        except SignalError as error:
+            error.cost += cost  # the turns before it were billed
+            raise
         if response is None or response.stop_reason == "refusal":
-            raise SignalError("Claude declined to give a signal for this coin.")
+            raise SignalError("Claude declined to give a signal for this coin.", cost)
         texts = [b.text for b in response.content if getattr(b, "type", "") == "text"]
         try:
             reply: Any = json.loads(texts[-1]) if texts else None
         except json.JSONDecodeError:
             reply = None
         if not isinstance(reply, dict):
-            raise SignalError("Claude's answer wasn't in the expected shape. Re-run it.")
+            raise SignalError("Claude's answer wasn't in the expected shape. Re-run it.", cost)
         return cast(dict[str, Any], reply) | {"_model": chosen}, cost
 
     return ask

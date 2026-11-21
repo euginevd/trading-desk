@@ -18,6 +18,10 @@ services:
       DESK_ENV_FILE: /app/.env
       # The paper bot (below) may call the api by its service name to ask trading-agent.
       DESK_HOSTS: api:8000
+      # The Freqtrade containers' network: from it, that one route answers and nothing else,
+      # whatever Host header they send (audit 18).
+      DESK_BOTS_NET: ${DESK_BOTS_SUBNET:-172.30.250.0/24}
+    networks: [default, bots]
     volumes:
       - ./local:/app/local # SQLite and the audit log stay on your disk
       - ./.env:/app/.env # read at start; the Settings page writes the AI credentials back
@@ -46,8 +50,12 @@ services:
   # The strategies call the desk's own screener (mounted read-only), so they test the same
   # rules New trade uses. No keys: Binance's public candles only; nothing is ever placed.
   backtest: &freqtrade
-    image: freqtradeorg/freqtrade:2026.10_freqai # the latest release, with FreqAI's models
+    # The latest release, with FreqAI's models, pinned by digest: a re-pushed tag can't change
+    # what runs (audit 18).
+    image: freqtradeorg/freqtrade:2026.10_freqai@sha256:8ab9efee447bedb5b9e31eeaaca0b11252168d6d86c57404c3494d5b43f5538c
     profiles: [backtest]
+    # Their own network: the internet for Binance's public candles, and the api's one route.
+    networks: [bots]
     environment:
       PYTHONPATH: /desk
       DESK_QUOTE: USDT
@@ -100,3 +108,12 @@ services:
       ${PAPER_AI:+--config /freqtrade/config/$PAPER_AI}
       --strategy ${PAPER_STRATEGY:-DeskSwing} --dry-run
     restart: unless-stopped
+
+networks:
+  # The Freqtrade containers (backtest, backtest-worker, paper) and the api. Its fixed range lets
+  # the api tell their requests from the desk's; change DESK_BOTS_SUBNET in .env if it clashes
+  # with a network you already have.
+  bots:
+    ipam:
+      config:
+        - subnet: ${DESK_BOTS_SUBNET:-172.30.250.0/24}

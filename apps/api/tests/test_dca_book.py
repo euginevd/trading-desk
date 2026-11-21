@@ -10,7 +10,7 @@ import httpx
 import pytest
 from api import demo
 from api.audit import Audit
-from api.binance import Binance
+from api.binance import Binance, BinanceError
 from api.dca_book import (
     SYDNEY,
     DcaBook,
@@ -364,3 +364,114 @@ def test_a_change_spends_no_more_than_is_left_unless_raised(book: DcaBook) -> No
     with pytest.raises(Refused, match="per-order"):
         book.amend({"ref": raised["ref"], "price": "95000", "spend": "150", "raise": True})
     assert next(o for o in book.view()["orders"] if o["ref"] == raised["ref"])["status"] == "open"
+
+
+def test_a_cancel_that_didnt_take_places_nothing_in_its_place(
+    book: DcaBook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 1: a limit still live on Binance must never be followed by a second buy."""
+    first = book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+
+    def lost(*_a: object, **_k: object) -> None:
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(book.binance, "cancel", lost)
+    sent = len(demo.EXCHANGE.orders)
+    with pytest.raises(Refused, match="still live on Binance"):
+        book.cancel(first["ref"])
+    with pytest.raises(Refused, match="still live on Binance"):
+        book.amend({"ref": first["ref"], "price": "2900"})
+    closed = book.close_out()
+    assert closed["closed"] == ["BTC 40", "SOL 20"]  # the others still bought
+    assert closed["missed"] == [
+        f"ETH ({first['ref']} is still live on Binance: the cancel "
+        "didn't take. Nothing new was placed; try again in a minute.)"
+    ]
+    assert len(demo.EXCHANGE.orders) == sent + 2  # BTC and SOL only: no second ETH buy
+    assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["open"]
+
+
+def test_a_trim_with_trading_off_is_refused(book: DcaBook, desk: Trading) -> None:
+    """Audit 9: the kill switch refuses every new order, sells included (spec 10)."""
+    book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+    fill(max(demo.EXCHANGE.orders))
+    book.sync()
+    desk.set_trading(False)
+    sent = len(demo.EXCHANGE.orders)
+    trim = {"coin": "ETH", "side": "sell", "qty": "0.005", "price": "3500", "source": "trim"}
+    with pytest.raises(Refused, match="Trading is off"):
+        book.place(trim)
+    assert len(demo.EXCHANGE.orders) == sent
+
+
+def test_a_buy_met_with_a_5xx_is_looked_up_not_written_off(
+    book: DcaBook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: Binance's docs say a 5xx's outcome is unknown. The buy here did go through, so
+    the row stays placing and the sync finds it live, rather than calling it cancelled."""
+    real = book.binance.buy_limit
+
+    def took_it_then_503(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        real(*args, **kwargs)
+        raise BinanceError(503, "Service unavailable")
+
+    monkeypatch.setattr(book.binance, "buy_limit", took_it_then_503)
+    with pytest.raises(BinanceError):
+        book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+    assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["placing"]
+    monkeypatch.setattr(book.binance, "buy_limit", real)
+    book.sync()
+    assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["open"]
+
+
+def test_a_lookup_only_writes_an_order_off_when_binance_says_it_isnt_there(
+    book: DcaBook, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 7: a clock out of step (-1021) proves nothing; only "Order does not exist" does."""
+    lookup = book.binance.order_by_client
+
+    def no_answer(*_a: object, **_k: object) -> None:
+        raise BinanceError(0, "Binance didn't answer.")
+
+    monkeypatch.setattr(book.binance, "buy_limit", no_answer)
+    with pytest.raises(BinanceError):
+        book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+
+    def out_of_step(*_a: object, **_k: object) -> None:
+        raise BinanceError(400, "Timestamp for this request is outside of the recvWindow.", -1021)
+
+    monkeypatch.setattr(book.binance, "order_by_client", out_of_step)
+    book.sync()
+    assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["placing"]
+    monkeypatch.setattr(book.binance, "order_by_client", lookup)
+    book.sync()  # the demo never got it: "Order does not exist" (-2013)
+    assert [o["status"] for o in book.view()["orders"] if o["coin"] == "ETH"] == ["cancelled"]
+
+
+def test_a_dca_order_cant_be_changed_from_the_open_orders_list(
+    book: DcaBook, desk: Trading, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Audit 5: the open-orders list's edit would replace it under a new id, and the book
+    would lose it; it is refused, by the book's id or, before that's known, by its tag."""
+    placed = book.place({"coin": "ETH", "spend": "20", "price": "3000", "source": "weekly"})
+    order = next(
+        o for o in demo.EXCHANGE.orders.values() if o.get("clientOrderId") == placed["ref"]
+    )
+    edit = {
+        "symbol": "ETHUSDC",
+        "orderId": order["orderId"],
+        "price": "2900",
+        "amount": order["origQty"],
+        "clientId": "edit-test-0001",
+    }
+    with pytest.raises(Refused, match=r"belongs to the DCA book \(DCA-ETH-"):
+        desk.edit_order(edit)
+
+    def unknown(_order_id: int) -> None:
+        return None  # sent without an answer: the book has no Binance id for it yet
+
+    monkeypatch.setattr(desk._store, "order_owner", unknown)  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    with pytest.raises(Refused, match="belongs to DCA-ETH-"):
+        desk.edit_order(edit)
+    assert order["status"] == "NEW"
+    assert book.view()["orders"][0]["status"] == "open"

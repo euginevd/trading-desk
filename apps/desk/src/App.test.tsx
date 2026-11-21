@@ -301,6 +301,39 @@ describe("feature flags", () => {
   });
 });
 
+describe("kill switch", () => {
+  it("can switch trading off when the api wasn't up as the desk opened (audit 14)", async () => {
+    const fetch = serve({
+      ...basics,
+      "GET /settings": () => [500, { error: "Not yet." }],
+      "PUT /trading": () => [200, { ...settings, tradingOn: false, stillLive: 2 }],
+    });
+    render(<App />);
+    const pill = await screen.findByRole("button", { name: "Trading unknown" });
+    expect(pill).toHaveProperty("disabled", false);
+    fireEvent.click(pill);
+    await waitFor(() =>
+      expect(fetch.mock.calls.filter(([, init]) => init?.method === "PUT")).toHaveLength(1),
+    );
+    const put = fetch.mock.calls.find(([, init]) => init?.method === "PUT");
+    expect(JSON.parse(String(put?.[1]?.body))).toEqual({ on: false });
+    expect(await screen.findByRole("button", { name: "Trading off" })).toBeTruthy();
+    const side = screen.getByRole("complementary", { name: "Side panel" });
+    expect(within(side).getByRole("alert").textContent).toBe(
+      "2 buys are still live on Binance: the desk tries to cancel them every 30 seconds.",
+    );
+  });
+
+  it("says so when the switch fails", async () => {
+    serve({ ...basics, "PUT /trading": () => [500, { error: "The api couldn't save it." }] });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "Trading on" }));
+    const side = screen.getByRole("complementary", { name: "Side panel" });
+    expect((await within(side).findByRole("alert")).textContent).toBe("The api couldn't save it.");
+    expect(screen.getByRole("button", { name: "Trading on" })).toBeTruthy();
+  });
+});
+
 describe("portfolio page", () => {
   beforeEach(() => {
     window.location.hash = "#/portfolio"; // today's content, moved off the Dashboard

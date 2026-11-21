@@ -421,6 +421,16 @@ h2 {
 .folded .side-status .switch {
   display: none;
 }
+.kill-note {
+  margin: 6px 2px 0;
+  color: var(--down);
+  font-size: 12px;
+  line-height: 1.35;
+}
+/* Folded, the note is the pill's tooltip. */
+.folded .kill-note {
+  display: none;
+}
 /* Logo or icon first, the status dot at the far end; folded, the dot sits on the icon's corner. */
 .pill-icon {
   display: inline-flex;

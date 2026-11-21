@@ -67,6 +67,9 @@ one() {
   # and anything older than what's already kept (a new download only adds what's newer)
   # shellcheck disable=SC2086
   run backtest download-data "${configs[@]}" --days "$from" --timeframes $tfs --prepend
+  # and daily candles from 420 days before the start: the Bear filter reads BTC's 200-day
+  # average, and Freqtrade loads up to 400 startup candles on the daily too (audit 22)
+  run backtest download-data "${configs[@]}" --days "$((range + 420))" --timeframes 1d --prepend
   echo "== $name${only:+ ($only)}: backtest from $start =="
   run backtest backtesting "${configs[@]}" ${extra[@]+"${extra[@]}"} \
     --strategy "$strategy" --timerange "${TIMERANGE:-$start-$end}" --fee 0.001 \
