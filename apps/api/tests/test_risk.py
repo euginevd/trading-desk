@@ -79,7 +79,7 @@ def test_deposits_and_the_portfolio() -> None:
     portfolio = {
         "total": {"value": "480000", "audRate": "1.5"},
         "holdings": [
-            {"asset": "TAO", "source": "TAO wallet", "value": "8000"},
+            {"asset": "TAO", "source": "Ledger", "value": "8000"},
             {"asset": "BTC", "source": "Binance", "value": "4000"},
             {"asset": "USDC", "source": "Binance", "value": "9000"},
         ],

@@ -1,5 +1,7 @@
 import type { Flags } from "./features";
 import type {
+  LedgerView,
+  StakingIncome,
   DcaWeekState,
   AccountCoin,
   PotAction,
@@ -125,6 +127,13 @@ export const getSentiment = () => call<Sentiment>("GET", "/sentiment");
 export const getGlobal = () => call<MarketGlobal>("GET", "/global");
 export const getSentimentDetail = () => call<SentimentDetail>("GET", "/sentiment/detail");
 export const getSettings = () => call<Settings>("GET", "/settings");
+export const getLedger = () => call<LedgerView>("GET", "/ledger");
+export const addLedgerAddress = (coin: string, network: string, address: string) =>
+  call<LedgerView>("POST", "/ledger/address", { coin, network, address });
+export const removeLedgerAddress = (id: number) =>
+  call<LedgerView>("POST", "/ledger/remove", { id });
+export const countLedgerToken = (id: number, mint: string, coin: string | null) =>
+  call<LedgerView>("POST", "/ledger/token", { id, mint, coin });
 export const getAiSettings = () => call<AiSettings>("GET", "/settings/ai");
 export const setAiSettings = (
   mode: AiMode,
@@ -222,6 +231,16 @@ export const sendAgent = (id: string, text: string) =>
 
 // Tax lots, drift, the Journal and Telegram (decisions 54 to 57).
 export const getTax = () => call<TaxReport>("GET", "/tax");
+export const getStaking = () => call<StakingIncome>("GET", "/tax/staking");
+export const addStaking = (claim: {
+  day: string;
+  coin: string;
+  amount: string;
+  priceUsd: string;
+  audRate?: string;
+}) => call<StakingIncome>("POST", "/tax/staking", claim);
+export const removeStaking = (id: number) =>
+  call<StakingIncome>("POST", "/tax/staking/remove", { id });
 export const sellCheck = (coin: string, qty: string) =>
   call<SellCheck>(
     "GET",

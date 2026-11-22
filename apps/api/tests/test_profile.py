@@ -250,7 +250,7 @@ def held(**extra: Any) -> dict[str, Any]:
         "holdings": [
             {
                 "asset": "TAO",
-                "source": "TAO wallet",
+                "source": "Ledger",
                 "value": "7000",
                 "price": "400",
                 "profitPercent": "-30",

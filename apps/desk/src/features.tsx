@@ -14,6 +14,7 @@ export type FeatureId =
   | "trade"
   | "backtest"
   | "risk"
+  | "tax"
   | "bots"
   | "profile"
   | "settings";
@@ -38,7 +39,7 @@ export const FEATURES: FeatureInfo[] = [
     startsOn: true,
     always: true,
   },
-  { id: "portfolio", name: "Portfolio", what: "Binance and your TAO wallet", startsOn: true },
+  { id: "portfolio", name: "Portfolio", what: "Binance and your Ledger", startsOn: true },
   { id: "journal", name: "Journal", what: "Your trades with tags and notes", startsOn: true },
   {
     id: "trade",
@@ -59,6 +60,12 @@ export const FEATURES: FeatureInfo[] = [
     what: "The biggest risks to your holdings",
     startsOn: true,
     keeps: "Your limits are still checked on every order",
+  },
+  {
+    id: "tax",
+    name: "Tax",
+    what: "Gains and losses by financial year, lots, and staking income",
+    startsOn: true,
   },
   {
     id: "bots",

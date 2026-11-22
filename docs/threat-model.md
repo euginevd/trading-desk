@@ -16,6 +16,7 @@ flowchart LR
   subgraph internet ["Internet: untrusted"]
     binance[Binance API]
     taostats[Taostats API]
+    solana[Chain RPCs]
     anthropic[Anthropic API and web search]
     fx[Frankfurter]
     gecko[CoinGecko]
@@ -27,6 +28,7 @@ flowchart LR
   api --> db
   api -- "TB2: signed reads and orders" --> binance
   api -- "TB3: coldkey address" --> taostats
+  api -- "TB8" --> solana
   api -- "TB4: figures, position" --> anthropic
   api -- "TB2: daily rate" --> fx
   api -- "TB5: coin tickers, USDT/AUD" --> gecko
@@ -45,18 +47,19 @@ Circles: processes; cylinders: stores; dashed boxes: trust boundaries.
 | D4 | Watchlists, limits, bots, trades, plans, history | Internal | `local/desk.sqlite` |
 | D5 | Audit log | Confidential | `local/audit.jsonl`, add-only |
 | D6 | The TAO coldkey address | Internal (public on chain) | `.env`, sent to Taostats |
+| D7 | Ledger addresses, xpub | Internal | `local/` |
 
 ## Trust boundaries
 
 In full: [threat-model/boundaries.md](threat-model/boundaries.md).
 
 - **TB1** Browser to `api`: `127.0.0.1` only, no sign-in (decision 10); only the desk's origin, `Content-Type` checked on writes.
-- **TB2** `api` to Binance and Frankfurter: TLS, Binance calls signed; replies parsed to a fixed shape.
-- **TB3** `api` to Taostats: TLS, the public address only.
+- **TB2** `api` to Binance and Frankfurter: TLS, signed; replies parsed to a fixed shape.
+- **TB3** `api` to Taostats and chain RPCs (TB8, decision 99): TLS, public addresses only.
 - **TB4** `api` to Anthropic, by API key or subscription (decision 48): figures, position and Profile, never keys or ids; replies schema-checked.
 - **TB5** `api` to CoinGecko: tickers, never amounts; logos checked for host, type and size.
-- **TB6** `api` to Telegram: the token only in the URL, never logged; messages, never keys, to the chat linked by code (decision 57); its one-use buttons place orders (decision 74, R12).
-- **TB7** Freqtrade and `api`: one route in, job files out; nothing placed (decisions 84, 87). The api knows them by network, not Host; image pinned by digest (audit 18).
+- **TB6** `api` to Telegram: token only in the URL, unlogged; messages, never keys, to the chat linked by code (decision 57); its one-use buttons place orders (decision 74, R12).
+- **TB7** Freqtrade and `api` (decisions 84, 87).
 
 ## Top risks
 

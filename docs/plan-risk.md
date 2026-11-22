@@ -35,11 +35,23 @@ risk-agent's file and weekly review lead with the four; alerts stay on a state c
 - [ ] Profile 6.7, 7.1 and 7.6: the owner pastes the change into the command bar and Accepts
 - [x] Tests: the cap and the move, the glide path weeks, the what-if, a backup check falling due
 
-### 2. Ledger balances
+### 2. Ledger balances (decision 99, feature 125)
 
-- [ ] Public addresses for BTC, ETH and SOL in Settings, read and cached; ZEC and HYPE typed with a date
-- [ ] The Portfolio shows Ledger as a source beside Binance and the TAO wallet
-- [ ] Threat model and spec updated; tests with the lookups stubbed
+The owner moved coins to the Ledger on 22 Nov 2026 and stakes TAO from it, so "TAO wallet" becomes **Ledger**: one source beside Binance.
+
+- [x] `ledger_addresses` table (coin, network, address, tokens counted, added), seeded once from the `ledger.device` setting (a removed address stays removed); the device record stays in settings for the security agent later
+- [x] Solana reader (`api/ledger_wallet.py`): SOL and counted tokens, through the api only, cached 15 minutes, the last figure kept on a failure
+- [x] TAO stays on Taostats by `TAO_COLDKEY`, its rows now under Ledger; entered costs under "TAO wallet" move to "Ledger" in one migration (tax lots follow the coin, whatever its source)
+- [x] The Portfolio: Ledger rows priced like Binance's; a moved coin carries the Binance average cost (Binance's holding is covered first, the Ledger's next); the tabs read All, Binance, Ledger (decision 101); the side panel and Profile say Ledger
+- [x] Risk: "2026 coins on the Ledger" counts the Ledger rows (no longer "Not set up"); the money on Binance drops as coins move
+- [x] Settings › Ledger: each address with its balance, Add and Remove; tokens counted or listed apart
+- [x] Threat model, spec and tests
+
+- [x] ETH and ERC-20 tokens from Ethereum's public RPC and HYPE from HyperEVM's, a token counted by its contract; SUI from Sui's GraphQL and NEAR from FastNEAR's RPC
+
+- [x] BTC by the account's xpub: receive and change addresses worked out on the owner's machine (no package: `api/bitcoin_xpub.py`, checked against BIP 84's test vector), each read from mempool.space until 5 unused in a row, derived as the scan goes
+
+Later: ZEC typed in with its date, or read once Binance's TEX deposit address can be sent to from the Ledger.
 
 ### 3. risk-agent
 

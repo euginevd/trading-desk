@@ -193,7 +193,7 @@ def test_demo_mode_runs_the_whole_path(tmp_path: Path, monkeypatch: Any) -> None
     assert '"demo": true' in body
     # Binance's 84,754.50 and the TAO wallet's 98.9 TAO (with 1.5 of rewards) at 412.50
     assert '"value": "125550.75"' in body
-    assert '"source": "TAO wallet"' in body
+    assert '"source": "Ledger"' in body
     rates = json.loads(body)["total"]["rates"]
     assert rates["USD"] == "1"
     assert rates["AUD"] == "1.4738"
@@ -217,10 +217,10 @@ def test_an_entered_average_cost_gives_the_tao_wallet_its_pnl(
     monkeypatch.setenv("DEMO", "1")
     monkeypatch.setenv("AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     monkeypatch.setenv("DESK_DB_DIR", str(tmp_path))
-    saved = _put_cost({"source": "TAO wallet", "asset": "tao", "averageCost": "300"})
+    saved = _put_cost({"source": "Ledger", "asset": "tao", "averageCost": "300"})
     assert saved["statusCode"] == 200
     holdings = json.loads(str(handler({"rawPath": "/portfolio"}, None)["body"]))["holdings"]
-    tao = next(h for h in holdings if h["source"] == "TAO wallet")
+    tao = next(h for h in holdings if h["source"] == "Ledger")
     # 97.4 TAO bought at 300 and 1.5 TAO of rewards, now 412.50: the rewards cost nothing
     assert tao["amount"] == "98.9"
     assert tao["averageCost"] == "300"
@@ -228,12 +228,9 @@ def test_an_entered_average_cost_gives_the_tao_wallet_its_pnl(
     assert tao["covered"] == "97.4"
     assert tao["profit"] == "11576.25"  # 98.9 x 412.5 - 97.4 x 300
     assert '"cost"' in (tmp_path / "audit.jsonl").read_text()
-    assert (
-        _put_cost({"source": "TAO wallet", "asset": "TAO", "averageCost": None})["statusCode"]
-        == 200
-    )
+    assert _put_cost({"source": "Ledger", "asset": "TAO", "averageCost": None})["statusCode"] == 200
     holdings = json.loads(str(handler({"rawPath": "/portfolio"}, None)["body"]))["holdings"]
-    assert next(h for h in holdings if h["source"] == "TAO wallet")["profit"] is None
+    assert next(h for h in holdings if h["source"] == "Ledger")["profit"] is None
 
 
 def test_an_entered_cost_must_be_a_positive_number_for_a_real_holding(
@@ -242,9 +239,9 @@ def test_an_entered_cost_must_be_a_positive_number_for_a_real_holding(
     monkeypatch.setenv("AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     monkeypatch.setenv("DESK_DB_DIR", str(tmp_path))
     for body in (
-        {"source": "TAO wallet", "asset": "TAO", "averageCost": "-1"},
-        {"source": "TAO wallet", "asset": "TAO", "averageCost": "abc"},
-        {"source": "TAO wallet", "asset": "TAO", "averageCost": "NaN"},
+        {"source": "Ledger", "asset": "TAO", "averageCost": "-1"},
+        {"source": "Ledger", "asset": "TAO", "averageCost": "abc"},
+        {"source": "Ledger", "asset": "TAO", "averageCost": "NaN"},
         {"source": "Kraken", "asset": "TAO", "averageCost": "1"},
         {"source": "Binance", "asset": "../x", "averageCost": "1"},
     ):

@@ -204,7 +204,7 @@ function Road({ r }: { r: BoardRoad }) {
           </h2>
           {r.parts && (
             <p className="pf-sub">
-              <Live value={r.totalAud}>{km(r.totalAud)}</Live>: TAO{" "}
+              <Live value={r.totalAud}>{km(r.totalAud)}</Live>: Ledger{" "}
               <Live value={r.parts.taoAud}>{km(r.parts.taoAud)}</Live>, Binance{" "}
               <Live value={r.parts.binanceAud}>{km(r.parts.binanceAud)}</Live>, emergency fund{" "}
               {km(r.parts.emergencyAud)}.

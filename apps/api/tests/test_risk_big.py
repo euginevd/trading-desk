@@ -59,7 +59,7 @@ def test_no_ledger_yet_reads_as_not_set_up() -> None:
 
 
 def test_taos_glide_path_with_new_money_only_and_its_pnl() -> None:
-    tao = h("TAO", "7000", "TAO wallet", profit="-3000")
+    tao = h("TAO", "7000", "Ledger", profit="-3000")
     rows = by_key(risk_big.big_four(folio(tao, h("BTC", "3000")), PLAN, {}, NOW))
     t = rows["big-tao"]
     assert t["figure"] == "70%"

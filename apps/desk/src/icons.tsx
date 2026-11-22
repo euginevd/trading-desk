@@ -73,6 +73,13 @@ export const RiskIcon = () => (
   </svg>
 );
 
+export const TaxIcon = () => (
+  <svg {...base}>
+    <path d="M6 3.5h12v17l-2.5-1.5-2 1.5-1.5-1.5-1.5 1.5-2-1.5L6 20.5z" />
+    <path d="M9 8h6M9 11.5h6M9 15h3" />
+  </svg>
+);
+
 export const DcaIcon = () => (
   <svg {...base}>
     <rect x="4" y="7" width="16" height="12" rx="3" />
@@ -136,6 +143,16 @@ export const PillWalletIcon = () => (
   <svg {...pill}>
     <path d="M5 7.5h12.5a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h10" />
     <circle cx="16" cy="13.3" r="1" />
+  </svg>
+);
+
+// A hardware wallet, for the Ledger (decision 99): a device with its USB end and button. Generic,
+// not Ledger's own mark.
+export const HardwareWalletIcon = () => (
+  <svg {...pill}>
+    <rect x="3" y="8" width="13" height="8" rx="2.5" />
+    <path d="M16 10.5h3.5a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H16" />
+    <circle cx="8" cy="12" r="1.6" />
   </svg>
 );
 

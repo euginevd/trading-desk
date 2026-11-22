@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import CoinIcon from "./CoinIcon";
 import { dollars, roundPrice, wholeDollars } from "./dcaFormat";
 import { Live } from "./Figures";
+import type { Money } from "./money";
 import { percent } from "./format";
 
 // How long a position has been on: "today", "1 day", "12 days".
@@ -82,17 +83,25 @@ export function Holding({
   pnlPct,
   avg,
   now,
+  m,
+  avgTitle,
 }: {
   value: number | null;
   pnl: number;
   pnlPct: number | null;
   avg: number | null;
   now: number | null;
+  // The Portfolio passes its currency (A$, US$…); Trade and the DCA book show US$.
+  m?: Money;
+  avgTitle?: string;
 }) {
+  const whole = (v: number, signed = false) =>
+    m ? m.whole(v, signed) : signed ? dollars(String(v), true) : wholeDollars(String(v));
+  const each = (v: number) => (m ? m.price(v) : roundPrice(v));
   if (!avg) {
     return (
       <small className="dcb-cell-note">
-        nothing bought yet · now {now === null ? "—" : roundPrice(now)}
+        nothing bought yet · now {now === null ? "—" : each(now)}
       </small>
     );
   }
@@ -101,16 +110,16 @@ export function Holding({
       <span className="dcb-hold">
         <b>
           <Live value={value === null ? null : String(value)}>
-            {value === null ? "—" : wholeDollars(String(value))}
+            {value === null ? "—" : whole(value)}
           </Live>
         </b>
         <span className={pnl > 0 ? "up" : pnl < 0 ? "down" : "muted"}>
-          {dollars(String(pnl), true)}
+          {whole(pnl, true)}
           {pnlPct !== null && ` (${percent(String(pnlPct))})`}
         </span>
       </span>
-      <small className="dcb-cell-note">
-        avg {roundPrice(avg)} · now {now === null ? "—" : roundPrice(now)}
+      <small className="dcb-cell-note" title={avgTitle}>
+        avg {each(avg)} · now {now === null ? "—" : each(now)}
       </small>
     </>
   );

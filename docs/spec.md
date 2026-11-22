@@ -11,7 +11,7 @@ Unnumbered; the same for every project of this business.
 - Regulators and laws: none while it trades only its owner's money. Trading for others would need an Australian financial services licence and AUSTRAC registration, so commercialising starts with legal advice (decision 6). An AI signal shown to others could count as financial advice too.
 - Data: no customer data. The owner's data and keys stay on their own machine. The AI features send Anthropic computed figures, the owner's position, Profile, agent profile and a coin's tax lots, never keys, wallet addresses or ids (decisions 46, 58 and 60).
 - Risk appetite: none for losing funds through the software (no key can withdraw; no order the owner didn't confirm or switch on); low for showing balances to others.
-- Systems: Binance is the system of record for balances, orders and trades; Taostats for the TAO wallet; this keeps an audit log. The AI plan comes from Claude, by API key or the owner's subscription (decision 48). The AUD rate is CoinGecko's live USDT price, the ECB's daily rate (Frankfurter) its fallback (decision 29). No payments.
+- Systems: Binance is the system of record for balances, orders and trades; chains for the Ledger (99); this keeps an audit log. The AI plan comes from Claude, by API key or subscription (decision 48). The AUD rate is CoinGecko's live USDT price, the ECB's daily rate (Frankfurter) its fallback (decision 29). No payments.
 - People: the owner sets the trading rules and limits, and approves any new exchange, key permission or data flow.
 
 ## Project
@@ -31,7 +31,7 @@ Repo: `personal`, public (decision 5).
 Template defaults: GitHub Actions, the pre-push scan and the PR security checks. No cloud resources for now.
 
 6. Two apps in one `docker compose` (decisions 4 and 14):
-   - `api`: Python. It reads Binance and Taostats, asks Claude, places orders and runs the bots and agents, keeping SQLite and the audit log in `local/`; only it holds a key.
+   - `api`: Python. It reads Binance and the Ledger, asks Claude, places orders and runs the bots and agents, keeping SQLite and the audit log in `local/`; only it holds a key.
    - `desk`: React, Vite and TypeScript: Dashboard, Portfolio, Journal, Trading account (Trade), Risk, Bots (Accumulation, Opportunities, Grid bots), Profile (with My agents) and Settings (switches: decision 85).
    - Keys come from `.env`, put there by the owner (decision 2).
 

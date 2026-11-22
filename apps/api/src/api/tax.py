@@ -3,7 +3,7 @@ records, not tax advice.
 
 Each buy since the cost start date (1 Jul 2026, decision 34) is a lot with its cost in AUD at
 the day's rate; sales use lots first in, first out. Whatever is held beyond those buys, bought
-before the start date or moved in from elsewhere (the TAO wallet among them), is one lot of
+before the start date or moved in from elsewhere (TAO on the Ledger among them), is one lot of
 unknown age and cost, used first. A lot qualifies for the discount once held more than 12
 months; this follows today's rule, not the proposed 2027 change.
 """

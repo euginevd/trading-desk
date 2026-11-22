@@ -50,7 +50,7 @@ def portfolio(change_pct: str, **extra: Any) -> dict[str, Any]:
         },  # noqa: E501
         {
             "asset": "TAO",
-            "source": "TAO wallet",
+            "source": "Ledger",
             "value": "5000",
             "price": "400",
             "change24h": "-18.2",

@@ -1,6 +1,6 @@
-/* The Portfolio (decision 64), on design-system.md's tokens; prefixed port-. Like the Dashboard and
-   the Profile: a sentence for the hero, one bold element (the strip of what you hold against your
-   targets), hairline ledgers instead of cards. */
+/* The Portfolio (decisions 64 and 101), on design-system.md's tokens; prefixed port-. Three tabs,
+   each with only its own figures: four widgets, then Allocation (and Fiat on Binance), then the
+   holdings ledger. */
 .port {
   display: flex;
   flex-direction: column;
@@ -17,117 +17,89 @@
   font-size: 12px;
 }
 
-/* What you hold, in a sentence. */
-.port-headline {
-  margin: 0 0 6px;
-  font-size: 34px;
-  line-height: 1.15;
-  max-width: 36ch;
-}
-.port-lead,
-.port-tao {
+/* Each tab's four widgets (owner, 22 Nov 2026), in the Trade page's tile style (pot.css
+   .acc-money): a label, one figure, a line under it, and a split bar where it shows a share. */
+.port-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
   margin: 0;
-  color: var(--body);
-  font-size: 15px;
-  max-width: 72ch;
 }
-.port-tao {
+.port-tiles > div {
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  background: var(--layer-1);
+  box-shadow: var(--sheen);
+}
+.port-tiles dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.port-tiles dd {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: 24px;
+  font-weight: 500;
+}
+.port-tiles dd.up {
+  color: var(--up);
+}
+.port-tiles dd.down {
+  color: var(--down);
+}
+.port-sub {
+  display: block;
   margin-top: 2px;
   color: var(--muted);
-  font-size: 13px;
-}
-
-/* The strip: now on top, your targets under it in the same order and colours. */
-.port-strip {
-  border-top: 1px solid var(--line);
-  padding-top: 16px;
-}
-.port-bars {
-  display: grid;
-  grid-template-columns: 52px minmax(0, 1fr);
-  align-items: center;
-  gap: 6px 10px;
-}
-.port-bar-name {
-  color: var(--muted);
   font-size: 12px;
 }
-.port-bar {
+.port-sub.up {
+  color: var(--up);
+}
+.port-sub.down {
+  color: var(--down);
+}
+.port-sub.port-warn {
+  color: var(--wait);
+}
+.port-split {
   display: flex;
   gap: 2px;
-  min-width: 0;
-}
-.port-bar.now {
-  height: 44px;
-}
-.port-bar.target {
-  height: 18px;
-}
-.port-slice {
-  position: relative;
-  flex-basis: 0;
-  min-width: 3px;
-  display: flex;
-  align-items: center;
-  padding: 0 0 0 8px;
-  border: 0;
-  border-radius: 4px;
+  height: 4px;
+  margin: 8px 0 2px;
+  border-radius: 2px;
   overflow: hidden;
-  color: var(--accent-ink);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-  transition:
-    opacity 160ms var(--ease),
-    filter 160ms var(--ease);
 }
-.port-slice.light {
-  color: var(--text);
+.port-split i {
+  display: block;
+  height: 100%;
+  transition: width 700ms var(--ease);
 }
-.port-bar.target .port-slice {
-  font-size: 11px;
-  opacity: 0.6;
+.port-split .is-ledger,
+.port-split .is-free {
+  background: var(--accent);
 }
-.port-slice.dim {
-  opacity: 0.25;
-}
-.port-bar.target .port-slice.dim {
-  opacity: 0.15;
-}
-.port-slice:hover,
-.port-slice:focus-visible {
-  filter: brightness(1.12);
-}
-.port-slice:focus-visible {
-  outline: 2px solid var(--text);
-  outline-offset: 2px;
-}
-.port-untargeted {
-  flex-basis: 0;
-  border-radius: 4px;
-  background: repeating-linear-gradient(135deg, var(--panel-2) 0 4px, transparent 4px 8px);
-  border: 1px solid var(--line);
-}
-.port-readout {
-  margin: 10px 0 0 62px;
-  min-height: 1.5em;
-  color: var(--text);
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
+.port-split .is-binance,
+.port-split .is-held {
+  background: var(--line-2);
 }
 
-/* Targets and money in: two hairline columns. */
+/* Allocation and Fiat: two boxes side by side (Fiat on Binance only). */
 .port-pair {
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
-  gap: 0 48px;
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 10px;
 }
-.port-pair:empty {
-  display: none;
+.port-pair.is-one {
+  grid-template-columns: minmax(0, 1fr);
+}
+.port-pair > section {
+  padding: 14px 18px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-panel);
+  background: var(--layer-1);
+  box-shadow: var(--sheen);
 }
 .port-pair h2 {
   margin: 0 0 8px;
@@ -138,119 +110,75 @@
   font-size: 13px;
   font-weight: 400;
 }
-.port-targets ul {
-  list-style: none;
+
+/* The donut: slices 2px apart, the one you point at a little thicker; the centre reads it. */
+.port-alloc-body {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+.port-donut {
+  width: 180px;
+  height: 180px;
+}
+.port-arc {
+  cursor: pointer;
+  transition: stroke-width 160ms var(--ease);
+}
+.port-arc:focus-visible {
+  outline: none;
+  stroke-width: 24;
+}
+.port-donut-big {
+  fill: var(--text);
+  font-size: 22px;
+  font-weight: 600;
+}
+.port-donut-small {
+  fill: var(--muted);
+  font-size: 11px;
+}
+.port-legend {
+  display: grid;
+  gap: 2px;
   margin: 0;
   padding: 0;
+  list-style: none;
+  font-size: 13px;
 }
-.port-targets li {
+.port-legend li {
   display: grid;
-  grid-template-columns: 48px minmax(80px, 1fr) 118px 84px;
-  gap: 14px;
+  grid-template-columns: 10px 64px 48px 64px minmax(0, 1fr) auto;
+  gap: 8px;
   align-items: center;
-  padding: 9px 0;
-  border-bottom: 1px solid var(--line);
+  padding: 4px 6px;
+  border-radius: 8px;
 }
-/* Each row on the shared scale: the band shaded, the target a tick, where it is now a fill
-   (amber outside the band, mint inside). */
-.drift-scale {
-  position: relative;
-  display: block;
+.port-legend li.is-picked {
+  background: var(--layer-2);
+}
+.port-legend li i {
+  width: 10px;
   height: 10px;
-  border-radius: 5px;
-  background: var(--panel-2);
+  border-radius: 3px;
 }
-.drift-scale i {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  display: block;
+.port-legend-coin {
+  color: var(--text);
+  font-weight: 500;
 }
-.drift-zone {
-  background: var(--accent-soft);
-  border-radius: 5px;
+.port-legend .num {
+  text-align: right;
 }
-.drift-fill {
-  left: 0;
-  border-radius: 5px;
-  background: var(--wait);
-  transition: width 700ms var(--ease);
-}
-.port-targets li.in .drift-fill {
-  background: var(--accent);
-}
-.drift-target {
-  top: -4px !important;
-  bottom: -4px !important;
-  width: 2px;
-  margin-left: -1px;
-  border-radius: 1px;
-  background: var(--text);
-}
-.drift-read {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  column-gap: 4px;
-  align-items: baseline;
-  line-height: 1.3;
-}
-.drift-read b {
-  font-size: 15px;
-  font-weight: 600;
-}
-.drift-read small {
-  grid-column: 1 / -1;
+.port-legend-target {
   font-size: 12px;
 }
-.port-targets .drift-act {
-  justify-self: end;
-  font-size: 13px;
-  font-weight: 600;
+.port-legend-act {
+  font-size: 12px;
   white-space: nowrap;
 }
-.port-targets a.drift-act {
-  padding: 5px 10px;
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
-  color: var(--text);
-  text-decoration: none;
-  transition:
-    border-color 140ms var(--ease),
-    background 140ms var(--ease);
-}
-.port-targets a.drift-act:hover,
-.port-targets a.drift-act:focus-visible {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.drift-note {
-  margin: 10px 0 0;
-  font-size: 12px;
-}
-.drift-key {
-  display: inline-block;
-  width: 12px;
-  height: 6px;
-  margin: 0 3px 0 6px;
-  border-radius: 3px;
-  vertical-align: 1px;
-}
-.drift-key:first-child {
-  margin-left: 0;
-}
-.drift-key.fill {
-  background: var(--wait);
-}
-.drift-key.target {
-  width: 2px;
-  height: 10px;
-  vertical-align: -1px;
-  background: var(--text);
-}
-.drift-key.zone {
-  background: var(--accent-soft);
-  outline: 1px solid var(--line-2);
-}
+
+/* Fiat: money in by month. */
 .port-money-total {
   margin: 0 0 10px;
 }
@@ -303,89 +231,108 @@
   background: none;
   font-weight: 600;
 }
-.port-kept {
-  display: block;
-  width: 56px;
-  height: 3px;
-  margin: 4px 0 0 auto;
-  border-radius: 2px;
-  background: var(--down-soft);
-  overflow: hidden;
+
+/* A holding opened in place (Trade's row-open pattern, dca.css): where it's held, its cost and
+   where to act on it. */
+.port-holdings tr.is-open td {
+  background: var(--layer-2);
 }
-.port-kept i {
-  display: block;
-  height: 100%;
-  background: var(--down);
-  opacity: 0.7;
-  transition: width 700ms var(--ease);
+tr.port-open td {
+  padding: 10px 16px 14px;
+  background: var(--layer-1);
 }
-.port-kept.above {
-  background: var(--up-soft);
+.port-detail dl {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  margin: 0;
 }
-.port-kept.above i {
-  background: var(--up);
+.port-detail dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+.port-detail dd {
+  margin: 2px 0 0;
+  color: var(--text);
+}
+.port-detail-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 12px 0 0;
+  font-size: 13px;
 }
 
-/* Narrow (~650px pane): one column; phones: shorter type, the strip keeps its names inside. */
+/* Loading: the page's shape, not one block. */
+.port-skeleton {
+  display: grid;
+  gap: 10px;
+}
+.port-skel-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.port-skel-tiles .skeleton {
+  height: 84px;
+}
+.port-skel-box {
+  height: 220px;
+}
+.port-skel-row {
+  height: 44px;
+}
+
+/* Narrow (~650px pane): the tiles two by two, the boxes one under the other; phones: the
+   donut over its legend. */
 @media (max-width: 900px) {
+  .port-skel-tiles,
+  .port-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .port-pair {
     grid-template-columns: minmax(0, 1fr);
-    row-gap: 22px;
-  }
-  .port-headline {
-    font-size: 27px;
   }
 }
 @media (max-width: 520px) {
-  .port-headline {
-    font-size: 23px;
+  .port-tiles dd {
+    font-size: 20px;
   }
-  .port-bars {
-    grid-template-columns: 40px minmax(0, 1fr);
+  .port-alloc-body {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
   }
-  .port-readout {
-    margin-left: 0;
+  .port-legend {
+    width: 100%;
   }
-  .port-bar.target .port-slice span {
-    display: none;
+  .port-legend li {
+    grid-template-columns: 10px 56px 44px minmax(0, 1fr);
   }
-  .port-targets li {
-    grid-template-columns: 40px minmax(60px, 1fr) auto;
-    row-gap: 8px;
-  }
-  .port-targets .drift-act {
-    grid-column: 1 / -1;
-    justify-self: start;
+  .port-legend-target,
+  .port-legend-act {
+    grid-column: 2 / -1;
   }
 }
 
-/* Motion: the strip fills in from the left, slice by slice, and the targets follow; then motion
-   only answers you (the readout follows the slice you're on) or shows change (a moved total
-   rolls). Off under reduced motion. */
+/* Motion answers you or shows change: the tiles and boxes settle in once, a split bar slides to
+   its new share, the month you pick fades in. Off under reduced motion. */
 @media (prefers-reduced-motion: no-preference) {
-  .port-headline {
-    animation: port-rise 420ms var(--ease) both;
+  .port-tiles > div,
+  .port-pair > section {
+    animation: port-rise 360ms var(--ease) both;
   }
-  .port-bar .port-slice {
-    animation: port-grow 520ms var(--ease) both;
-    animation-delay: calc(var(--i, 0) * 70ms + 120ms);
-  }
-  .port-slice.light {
-    color: var(--text);
-  }
-  .port-bar.target .port-slice {
-    animation-delay: calc(var(--i, 0) * 70ms + 520ms);
-  }
-  .port-readout,
   .port-money-month {
     animation: port-fade 200ms ease-out both;
   }
   .port-money-list {
     animation: port-rise 240ms var(--ease) both;
   }
-  .port-targets .drift-fill {
-    animation: port-grow 700ms var(--ease) both;
-    animation-delay: calc(var(--i, 0) * 80ms + 300ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .port-split i,
+  .port-arc {
+    transition: none;
   }
 }
 @keyframes port-rise {
@@ -404,14 +351,6 @@
   }
   to {
     opacity: 1;
-  }
-}
-@keyframes port-grow {
-  from {
-    clip-path: inset(0 100% 0 0);
-  }
-  to {
-    clip-path: inset(0 0 0 0);
   }
 }
 .port-ord-tools {

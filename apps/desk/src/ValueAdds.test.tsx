@@ -96,7 +96,7 @@ vi.mock("./api", () => ({
   setJournalLists: (setups: string[], mistakes: string[]) => Promise.resolve({ setups, mistakes }),
 }));
 
-const { DriftCard, TaxTab } = await import("./Tax");
+const { TaxTab } = await import("./Tax");
 const { default: Journal } = await import("./Journal");
 
 afterEach(cleanup);
@@ -111,17 +111,6 @@ describe("the Tax tab", () => {
     expect(screen.getByText("before 1 Jul 2026")).toBeTruthy();
     expect(screen.getByText(/wash sale/)).toBeTruthy();
     expect(screen.getByText(/not tax advice/)).toBeTruthy();
-  });
-});
-
-describe("the drift card", () => {
-  it("links an order back to target, within the per-trade size", async () => {
-    render(<DriftCard />);
-    const link = await screen.findByRole("link", { name: /^Trim A\$500/ });
-    expect(link.getAttribute("href")).toBe(
-      "#/dca-book?coin=TAO&rebalance=sell&price=410&qty=0.813",
-    );
-    expect(screen.getByText("In band")).toBeTruthy();
   });
 });
 

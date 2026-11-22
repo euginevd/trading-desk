@@ -3,7 +3,7 @@ export type Num = string | null;
 
 export interface Holding {
   asset: string;
-  source: "Binance" | "TAO wallet" | "Binance Alpha";
+  source: "Binance" | "Ledger";
   amount: string;
   price: Num;
   value: Num;
@@ -14,6 +14,7 @@ export interface Holding {
   profit: Num;
   profitPercent: Num;
   costEntered?: boolean; // the owner's own average cost, not one from trades (decision 27)
+  enteredCost?: Num; // All's combined row: the entered part's own cost, for its editor
   feeToken?: boolean; // BNB: the average of this year's buys, for all that's held (decision 35)
 }
 
@@ -60,6 +61,7 @@ export interface Portfolio {
   wallets: {
     binance: { status: "connected" };
     tao: TaoWallet;
+    ledger?: LedgerStatus;
   };
   history: { day: string; value: string }[];
 }
@@ -68,6 +70,45 @@ export type TaoWallet =
   | { status: "connected"; free: string; staked: string; total: string; rewards?: string }
   | { status: "not_set" }
   | { status: "error"; error: string };
+
+// How the Ledger's public addresses read (decision 99): TAO comes through `tao` above.
+export type LedgerStatus =
+  | {
+      status: "connected";
+      readAt: number | null;
+      stale: boolean;
+      error?: string;
+      staleNetworks?: string[];
+      failedNetworks?: string[];
+      addresses?: number;
+    }
+  | { status: "not_set" }
+  | {
+      status: "error";
+      error: string;
+      readAt?: number | null;
+      failedNetworks?: string[];
+      addresses?: number;
+    };
+
+// Settings › Ledger (GET /ledger): each saved public address and what it holds.
+export interface LedgerAddress {
+  id: number;
+  coin: string;
+  network: string;
+  address: string;
+  tokens: Record<string, string>;
+  status: "connected" | "error" | "not_read";
+  coins?: Record<string, string>;
+  unknown?: Record<string, string>;
+  readAt?: number;
+  stale?: boolean;
+  error?: string;
+}
+export interface LedgerView {
+  addresses: LedgerAddress[];
+  networks: string[];
+}
 
 // The api's trade terminal replies (apps/api/src/api/trading.py).
 export interface Settings {
@@ -1016,6 +1057,24 @@ export interface TaxLot {
   qualifiesOn: string | null;
   daysToDiscount: number | null;
 }
+// Staking income the owner records (GET /tax/staking): each claim valued when it was entered.
+export interface StakingClaim {
+  id: number;
+  day: string;
+  coin: string;
+  amount: string;
+  priceUsd: string;
+  audRate: string;
+  usd: string;
+  aud: string;
+  thisFy: boolean;
+}
+export interface StakingIncome {
+  fy: number;
+  claims: StakingClaim[];
+  fyAud: string;
+}
+
 export interface TaxReport {
   fy: string;
   realisedGainsAud: string;

@@ -1,15 +1,17 @@
 from collections.abc import Iterator
 
 import pytest
-from api import binance, screener, tao
+from api import binance, ledger_wallet, screener, tao
 
 
 @pytest.fixture(autouse=True)
 def fresh_tao_readings() -> Iterator[None]:
-    """Each test starts with no kept TAO wallet reading."""
+    """Each test starts with no kept TAO or Ledger reading."""
     tao.forget()
+    ledger_wallet.forget()
     yield
     tao.forget()
+    ledger_wallet.forget()
 
 
 @pytest.fixture(autouse=True)
