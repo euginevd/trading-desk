@@ -405,10 +405,7 @@ def test_zcash_sums_the_transparent_account_from_its_xpub(tmp_path: Path) -> Non
 def test_a_busy_3xpl_is_waited_out(tmp_path: Path, monkeypatch: Any) -> None:
     from api import bitcoin_xpub  # noqa: PLC0415 - only these tests need it
 
-    def no_wait(_seconds: float) -> None:
-        return None
-
-    monkeypatch.setattr(ledger_wallet.time, "sleep", no_wait)
+    monkeypatch.setattr(ledger_wallet, "RETRY_WAIT", (0.0, 0.0))
     first = bitcoin_xpub.addresses(BIP84_ZPUB, 0, 0, 1, zcash=True)[0]
     asked: list[str] = []
 
