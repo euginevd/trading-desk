@@ -445,7 +445,7 @@ def test_a_sale_never_exceeds_what_binance_holds() -> None:
     }  # noqa: E501
     held = portfolio(TAO=("1", "400"), USDC=("100", "1"))
     held["holdings"].append(
-        {"asset": "TAO", "source": "TAO wallet", "amount": "20", "price": "400", "value": "8000"}
+        {"asset": "TAO", "source": "Ledger", "amount": "20", "price": "400", "value": "8000"}
     )  # noqa: E501
     held["total"]["value"] = "8500"
     rows = rebalance.drift(held, plan)["rows"]

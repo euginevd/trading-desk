@@ -29,6 +29,7 @@ import {
   CollapseIcon,
   DashboardIcon,
   DcaIcon,
+  HardwareWalletIcon,
   JournalIcon,
   MenuIcon,
   PlanIcon,
@@ -37,6 +38,7 @@ import {
   SettingsIcon,
   TradeIcon,
   RiskIcon,
+  TaxIcon,
   WalletIcon,
 } from "./icons";
 import { CURRENCIES, type Currency, money } from "./money";
@@ -52,6 +54,7 @@ type Page =
   | "trade"
   | "backtest"
   | "risk"
+  | "tax"
   | "bots"
   | "settings"
   | "dca-book";
@@ -60,6 +63,7 @@ const Journal = lazy(() => import("./Journal"));
 const BotsHome = lazy(() => import("./BotsHome"));
 const PotPage = lazy(() => import("./PotPage"));
 const RiskPage = lazy(() => import("./RiskPage"));
+const TaxPage = lazy(() => import("./TaxPage"));
 const ProfilePage = lazy(() => import("./ProfilePage"));
 const Portfolio = lazy(() => import("./Portfolio"));
 const BacktestPage = lazy(() => import("./BacktestPage"));
@@ -94,6 +98,7 @@ const FEATURE_OF: Record<Page, FeatureId> = {
   journal: "journal",
   trade: "trade",
   risk: "risk",
+  tax: "tax",
   bots: "bots",
   settings: "settings",
   "dca-book": "bots",
@@ -125,6 +130,7 @@ const PAGES: { page: Page; hash: string; name: string; Icon: () => React.JSX.Ele
   { page: "trade", hash: "#/trade", name: "Trade", Icon: TradeIcon },
   { page: "backtest", hash: "#/backtest", name: "Backtest", Icon: BacktestIcon },
   { page: "risk", hash: "#/risk", name: "Risk", Icon: RiskIcon },
+  { page: "tax", hash: "#/tax", name: "Tax", Icon: TaxIcon },
 ];
 // DCA and grid bots share one page (decision 68); the old links open it filtered.
 const BOTS_PAGE: (typeof PAGES)[number] = {
@@ -193,11 +199,13 @@ const BINANCE: Record<Status, { word: string; dot: string }> = {
 };
 
 function taoPill(tao: TaoWallet["status"] | null): { word: string; dot: string; title: string } {
-  if (tao === "connected") return { word: "Wallet", dot: "", title: "Read through Taostats" };
-  if (tao === "error") return { word: "Wallet", dot: "off", title: "Taostats couldn't be read" };
+  if (tao === "connected")
+    return { word: "Ledger", dot: "", title: "Read by its public addresses" };
+  if (tao === "error")
+    return { word: "Ledger", dot: "off", title: "Part of the Ledger couldn't be read" };
   if (tao === "not_set")
-    return { word: "No wallet", dot: "quiet", title: "Add TAO_COLDKEY to .env" };
-  return { word: "Wallet", dot: "quiet", title: "Not read yet" };
+    return { word: "No Ledger", dot: "quiet", title: "Add TAO_COLDKEY to .env" };
+  return { word: "Ledger", dot: "quiet", title: "Not read yet" };
 }
 
 // BTC dominance's move over 24 hours, in percentage points. CoinGecko gives today's share only, so
@@ -245,7 +253,7 @@ function Logo() {
   );
 }
 
-// Binance's logo (BNB's) or the TAO logo for the wallet, from the api; a wallet glyph without it.
+// Binance's logo (BNB's), from the api; a wallet glyph without it.
 function PillLogo({ coin }: { coin: string }) {
   const [failed, setFailed] = useState(false);
   return (
@@ -447,11 +455,13 @@ export default function App() {
           </a>
           <a
             className="pill"
-            href="#/portfolio?source=wallet"
+            href="#/portfolio?source=ledger"
             title={wallet.title}
-            aria-label={`${wallet.word}: what your TAO wallet holds. ${wallet.title}`}
+            aria-label={`${wallet.word}: what your Ledger holds. ${wallet.title}`}
           >
-            <PillLogo coin="TAO" />
+            <span className="pill-icon">
+              <HardwareWalletIcon />
+            </span>
             <span className="side-word">{wallet.word}</span>
             <span className={`dot ${wallet.dot}`} aria-hidden="true" />
           </a>
@@ -611,6 +621,8 @@ export default function App() {
                 <BacktestPage />
               ) : current === "risk" ? (
                 <RiskPage />
+              ) : current === "tax" ? (
+                <TaxPage />
               ) : current === "settings" ? (
                 <SettingsPage />
               ) : current === "profile" ? (

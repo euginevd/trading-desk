@@ -24,3 +24,6 @@ To add one: its line here, and its record, in the same form, at the end of the n
 96. The DCA plan is a running total; Monday buys what has no order yet and limits a week old, within free USDC that isn't the Trading account's. [Record](decisions/from-58.md)
 97. The owner's own trades warn past the account's soft rules; no cap on the Trading account; ladders with optional stops; the scan reads macro, mood and dominance as context. [Record](decisions/from-58.md)
 98. Old smart trades deleted; the Trading account trades. [Record](decisions/from-58.md)
+99. The TAO wallet becomes the Ledger: TAO by Taostats, the other coins by public address (Solana, Ethereum, HyperEVM, Sui, NEAR, Bitcoin by xpub); moved coins keep their Binance cost. [Record](decisions/from-58.md)
+100. Tax gets its own page: FY gains, lots and the 12-month countdown moved from the Portfolio, plus a staking income log. [Record](decisions/from-58.md)
+101. The Portfolio is three tabs (All, Binance, Ledger), each with four widgets, an Allocation donut, and Fiat on Binance only. [Record](decisions/from-58.md)

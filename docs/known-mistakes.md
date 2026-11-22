@@ -20,6 +20,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 13a. Git Bash rewrites container paths in `docker compose run` and `exec` arguments (`/tmp/x` became `C:/.../Temp/x`): prefix the command with `MSYS_NO_PATHCONV=1`.
 13b. Freqtrade: FreqAI backtests refuse an open-ended `--timerange`, and `download-data --days` only adds candles newer than those kept: give an end date, and run it again with `--prepend` for older history.
 13c. Containers sharing a `local/` folder run as different users (api 10001, Freqtrade 1000), and Docker Desktop keeps the mode: the folder's maker opens it (`chmod 0o777`, `worker.py`) or the other's writes fail.
+13d. Before writing a new module, check its name isn't taken (`ls` the folder): a new `api/ledger.py` overwrote the tax fills module of that name; the Ledger reader is `ledger_wallet.py`.
 13a. A cloud session's git config can name Claude as author (rule 29): commit with `git -c user.name=… -c user.email=…` from the last human commit, and check `git log -1 --format=%an` before pushing.
 
 ## CI
@@ -61,6 +62,10 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 ## Binance
 
 29 to 29p, on orders, ids, Telegram and the pre-trade check: [known-mistakes/binance.md](known-mistakes/binance.md).
+
+## Chain reads
+
+29r. Free public chain endpoints rate-limit (mempool.space answered 429 to a Bitcoin account scan doubled by two page reads): one read per address at a time, few calls, wait out a 429, and remember a failure for a minute (`ledger_wallet.py`).
 
 ## SQLite
 

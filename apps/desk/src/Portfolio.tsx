@@ -1,114 +1,73 @@
-// The Portfolio (decision 64): what you hold in a sentence, one strip of it against your
-// targets, then the ledgers: targets, money in, and the holdings with orders, trades and tax.
-import { DriftCard, TaxTab } from "./Tax";
-import { useCallback, useEffect, useState } from "react";
+// The Portfolio (decisions 64 and 101): three tabs, All, Binance and Ledger, each with only its own
+// figures: four widgets, an Allocation donut (and Fiat on Binance), then the holdings, whose rows
+// open in place, with orders and trades on Binance's tabs.
+import { Allocation, Widgets } from "./PortfolioViews";
+import { Holding as HoldingCell } from "./PositionCells";
+import "./dca.css";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import { ApiError, cancelOrder, getDcaBook, getDrift, getPortfolio, setCost } from "./api";
 import { toCsv } from "./dcaFormat";
 import CoinIcon from "./CoinIcon";
 import ConfirmCancel from "./ConfirmCancel";
 import OrderDetail from "./OrderDetail";
 import Deposits from "./Deposits";
-import { Live } from "./Figures";
 import {
-  BoltIcon,
   ClockIcon,
   CoinsIcon,
   ExchangeIcon,
   LayersIcon,
   ListIcon,
-  PillWalletIcon,
-  ReceiptIcon,
+  HardwareWalletIcon,
   ResetIcon,
 } from "./icons";
 import { type Currency, type Money, money } from "./money";
-import { amount, amountSleek, dateTime, fetchedAt, percent, price, trend, usd } from "./format";
-import type { Drift, Holding, Order, Portfolio as Data, TaoWallet } from "./types";
+import { amount, amountSleek, dateTime, fetchedAt, percent, trend } from "./format";
+import type { Drift, Holding, Num, Order, Portfolio as Data, TaoWallet } from "./types";
 import type { Status } from "./ui";
 import "./portfolio.css";
 
-const REFRESH_MS = 60_000; // the TAO wallet reading is reused for a minute (tao.py)
+const REFRESH_MS = 60_000; // TAO is re-read each minute (tao.py), the Ledger's other coins every 15
 const DUST = 5; // a holding worth less than this, or nothing, is dust: never shown
 export function isDust(h: Holding): boolean {
   return h.value === null || Number(h.value) < DUST;
 }
 
-// Slice colours in order; the light ones (1, 3, 4) carry dark ink, the deep ones light ink.
-const COLOURS = [1, 2, 3, 4, 5].map((n) => `var(--alloc-${n})`);
-const LIGHT = new Set([0, 2, 3]);
-const REST = "var(--line-2)"; // coins without a target, when there are targets, and the small ones
-type Tab = "bal" | "ord" | "trd" | "tax";
+type Tab = "bal" | "ord" | "trd";
 
 // Where a holding is kept; the page shows one source or all of them.
 export type Source = "all" | Holding["source"];
 const SOURCES: [Source, string][] = [
   ["all", "All"],
   ["Binance", "Binance"],
-  ["TAO wallet", "Wallet"],
+  ["Ledger", "Ledger"],
 ];
 const SOURCE_ICON: Record<Source, () => React.JSX.Element> = {
   all: LayersIcon,
   Binance: ExchangeIcon,
-  "TAO wallet": PillWalletIcon,
-  "Binance Alpha": BoltIcon,
+  Ledger: HardwareWalletIcon,
 };
-// `#/portfolio?source=binance` or `?source=wallet` opens on that source; anything else shows all.
+// `#/portfolio?source=binance` or `?source=ledger` (`wallet` still works) opens on that source;
+// anything else shows all.
 export function sourceFromHash(): Source {
   const query = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
   const asked = query.get("source");
   if (asked === "binance") return "Binance";
-  if (asked === "wallet") return "TAO wallet";
+  if (asked === "ledger" || asked === "wallet") return "Ledger";
   return "all";
 }
 
-// Binance Alpha is part of the Binance account (owner, 21 Nov 2026): it shows under Binance,
-// its row tagged Alpha.
-const inSource = (h: Holding, source: Source) =>
-  h.source === source || (source === "Binance" && h.source === "Binance Alpha");
+const inSource = (h: Holding, source: Source) => h.source === source;
 
 const SOURCE_WORD: Record<Source, string> = {
   all: "all sources",
   Binance: "Binance",
-  "TAO wallet": "Wallet",
-  "Binance Alpha": "Alpha",
+  Ledger: "Ledger",
 };
 
 // How much of the holding the trades account for, as a share.
 function coverage(h: Holding): string {
   const share = (Number(h.covered) / Number(h.amount)) * 100;
   return `${share < 1 ? "<1" : Math.floor(share)}%`;
-}
-
-interface Totals {
-  value: number;
-  change: number;
-  changePercent: number | null;
-  profit: number;
-}
-
-// Totals for the holdings shown. With every source, the api's own figures; for one source,
-// summed from its holdings (dust included, so the parts add up to the whole).
-export function totals(data: Data, source: Source): Totals {
-  if (source === "all") {
-    return {
-      value: Number(data.total.value),
-      change: Number(data.total.change24h),
-      changePercent:
-        data.total.change24hPercent === null ? null : Number(data.total.change24hPercent),
-      profit: Number(data.total.profit),
-    };
-  }
-  let value = 0;
-  let change = 0;
-  let profit = 0;
-  for (const h of data.holdings.filter((x) => inSource(x, source))) {
-    const v = Number(h.value ?? 0);
-    const pct = Number(h.change24h ?? 0);
-    value += v;
-    change += v - v / (1 + pct / 100);
-    profit += Number(h.profit ?? 0);
-  }
-  const before = value - change;
-  return { value, change, changePercent: before > 0 ? (change / before) * 100 : null, profit };
 }
 
 type State =
@@ -120,24 +79,25 @@ function message(error: unknown): string {
   return error instanceof ApiError ? error.message : "Something went wrong.";
 }
 
-function Coin({ symbol, name, tag }: { symbol: string; name?: string; tag?: string }) {
+function Coin({ symbol, name }: { symbol: string; name?: string }) {
   return (
     <span className="coin">
       <CoinIcon coin={symbol} />
       {name ?? symbol}
-      {tag && <small className="coin-tag">{tag}</small>}
     </span>
   );
 }
 
-type SortKey = "coin" | "invested" | "value" | "change" | "pnl";
+type SortKey = "coin" | "invested" | "value" | "change";
 
 function OrderRow({
   o,
+  m,
   onDone,
   onOpen,
 }: {
   o: Order;
+  m: Money;
   onDone: (problem?: string) => void;
   onOpen: (o: Order, at: DOMRect) => void;
 }) {
@@ -169,7 +129,7 @@ function OrderRow({
         <span className={`tag ${o.side === "Buy" ? "buy" : "sell"}`}>{o.side}</span>
       </td>
       <td className="muted">{o.type}</td>
-      <td className="r num">{price(o.price)}</td>
+      <td className="r num">{m.price(o.price)}</td>
       <td className="r num">{amount(o.amount)}</td>
       <td className="r num muted">{amount(o.filled)}</td>
       <td className="r">
@@ -196,14 +156,50 @@ function OrderRow({
   );
 }
 
-// The owner's own average cost for a holding with no trades here, such as the TAO wallet
-// (decision 27): "Add cost" until set, then the cost itself, either opening a small editor.
+// One row per coin across Binance and the Ledger (All): amounts, values and P&L added up, the
+// average cost weighted by what each part's cost covers. An entered cost stays editable on the
+// part it was entered for.
+export function combined(holdings: Holding[]): Holding[] {
+  const groups = new Map<string, Holding[]>();
+  for (const h of holdings) groups.set(h.asset, [...(groups.get(h.asset) ?? []), h]);
+  return [...groups.values()].map((parts) => {
+    const entered = parts.find((h) => h.costEntered);
+    const lead =
+      entered ?? parts.reduce((a, b) => (Number(b.value ?? 0) > Number(a.value ?? 0) ? b : a));
+    if (parts.length === 1) return lead;
+    const add = (pick: (h: Holding) => Num) => {
+      const known = parts.map(pick).filter((v): v is string => v !== null);
+      return known.length ? String(known.reduce((s, v) => s + Number(v), 0)) : null;
+    };
+    const costed = parts.filter((h) => h.averageCost !== null && h.covered !== null);
+    const covered = costed.reduce((s, h) => s + Number(h.covered), 0);
+    const paid = costed.reduce((s, h) => s + Number(h.covered) * Number(h.averageCost), 0);
+    const profit = add((h) => h.profit);
+    return {
+      ...lead,
+      amount: add((h) => h.amount) ?? "0",
+      value: add((h) => h.value),
+      share: add((h) => h.share),
+      averageCost: covered > 0 ? String(paid / covered) : null,
+      covered: costed.length ? String(covered) : null,
+      profit,
+      profitPercent: profit !== null && paid > 0 ? String((Number(profit) / paid) * 100) : null,
+      costEntered: Boolean(entered),
+      // The row's figures use the blend; the cost editor shows and saves the entered part's own
+      // cost, never the blend (review, 22 Nov 2026).
+      enteredCost: entered ? entered.averageCost : undefined,
+    };
+  });
+}
+
 // What a holding cost in US dollars: the amount its cost covers, at that cost; null if no cost.
 function invested(h: Holding): string | null {
   if (h.averageCost === null || h.covered === null) return null;
   return String(Number(h.covered) * Number(h.averageCost));
 }
 
+// The owner's own average cost for a holding with no trades here, such as TAO on the Ledger
+// (decision 27): "Add cost" until set, then the cost itself, either opening a small editor.
 function CostCell({
   holding,
   m,
@@ -214,7 +210,7 @@ function CostCell({
   onSaved: (problem?: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(holding.averageCost ?? "");
+  const [value, setValue] = useState(holding.enteredCost ?? holding.averageCost ?? "");
   const [saving, setSaving] = useState(false);
   const what = `${holding.asset} in ${SOURCE_WORD[holding.source]}`;
   const save = async (next: string | null) => {
@@ -286,29 +282,81 @@ function CostCell({
   );
 }
 
-// What a holding is worth against what it cost, as a short bar under its PnL: full and mint at or
-// above cost, red and as long as what's kept below it.
-function Kept({ holding: h }: { holding: Holding }) {
-  const cost = Number(invested(h) ?? 0);
-  if (!cost || h.value === null) return null;
-  const covered = Number(h.covered ?? 0) * Number(h.price ?? 0);
-  const kept = covered / cost;
+// A holding opened in place: where it's held, what it cost, and where to act on it. Selling or
+// adding runs through the book that owns the coin (the DCA book or Trade), so every order keeps
+// its record; coins on the Ledger are sent to Binance first.
+const DCA_COINS = new Set(["BTC", "ETH", "SOL", "ZEC", "HYPE"]);
+
+function HoldingDetail({
+  holding: h,
+  where,
+  m,
+  onSaved,
+}: {
+  holding: Holding;
+  where: Holding[];
+  m: Money;
+  onSaved: (problem?: string) => void;
+}) {
+  const onBinance = where.find((p) => p.source === "Binance");
+  const onLedger = where.find((p) => p.source === "Ledger");
   return (
-    <span className={`port-kept${kept >= 1 ? " above" : ""}`} aria-hidden="true">
-      <i style={{ width: `${Math.min(100, kept * 100)}%` }} />
-    </span>
+    <div className="port-detail">
+      <dl>
+        {where.map((p) => (
+          <div key={p.source}>
+            <dt>{p.source === "Ledger" ? "On the Ledger" : "On Binance"}</dt>
+            <dd className="num">
+              {amount(p.amount)} {p.asset} · {m.whole(p.value)}
+            </dd>
+          </div>
+        ))}
+        <div>
+          <dt>Average cost</dt>
+          <dd className="num">
+            {h.averageCost === null ? "Not known" : m.price(h.averageCost)}
+            {h.covered !== null && Number(h.covered) < Number(h.amount) && (
+              <small className="muted"> · covers {coverage(h)}</small>
+            )}{" "}
+            <CostCell holding={h} m={m} onSaved={onSaved} />
+          </dd>
+        </div>
+      </dl>
+      <p className="port-detail-acts">
+        {onBinance ? (
+          DCA_COINS.has(h.asset) ? (
+            <a className="btn btn-small" href={`#/dca-book?coin=${h.asset}`}>
+              Take profit or add funds on the DCA book
+            </a>
+          ) : (
+            <a className="btn btn-small" href="#/trade">
+              Take profit or add funds on Trade
+            </a>
+          )
+        ) : null}
+        {onLedger && (
+          <span className="muted">
+            {onBinance ? "The Ledger's part sells" : "To sell, send it"} to Binance first; the desk
+            never moves coins off the Ledger.
+          </span>
+        )}
+      </p>
+    </div>
   );
 }
 
 function Tables({
   data,
   holdings,
+  parts,
   source,
   m,
   onReload,
 }: {
   data: Data;
   holdings: Holding[];
+  // Every holding by source, so an All row can say where its coin is held.
+  parts: Holding[];
   source: Source;
   m: Money;
   onReload: (problem?: string) => void;
@@ -320,6 +368,8 @@ function Tables({
     setOpenOrder(o);
   };
   const [tab, setTab] = useState<Tab>("bal");
+  // The holding row that's open, by coin and source.
+  const [opened, setOpened] = useState<string | null>(null);
   // What each holding cost: the amount its cost covers at that cost; the table's totals.
   const totalInvested = holdings.reduce((s, h) => s + Number(invested(h) ?? 0), 0);
   const totalValue = holdings.reduce((s, h) => s + Number(h.value ?? 0), 0);
@@ -332,7 +382,6 @@ function Tables({
       invested: invested(h),
       value: h.value,
       change: h.change24h,
-      pnl: h.profitPercent,
     })[sort.key];
   const sorted = [...holdings].sort((a, b) => {
     const x = figure(a);
@@ -357,12 +406,15 @@ function Tables({
       </button>
     </th>
   );
-  const tabs: [Tab, string, () => React.JSX.Element][] = [
-    ["bal", "Holdings", CoinsIcon],
-    ["ord", `Open orders (${data.openOrders.length})`, ClockIcon],
-    ["trd", "Recent trades", ListIcon],
-    ["tax", "Tax", ReceiptIcon],
-  ];
+  // Orders and trades are Binance's: the Ledger view leaves them out (owner, 22 Nov 2026).
+  const tabs: [Tab, string, () => React.JSX.Element][] = (
+    [
+      ["bal", "Holdings", CoinsIcon],
+      ["ord", `Open orders (${data.openOrders.length})`, ClockIcon],
+      ["trd", "Recent trades", ListIcon],
+    ] as [Tab, string, () => React.JSX.Element][]
+  ).filter(([key]) => source !== "Ledger" || (key !== "ord" && key !== "trd"));
+  const shownTab = tabs.some(([key]) => key === tab) ? tab : "bal";
   return (
     <section className="port-ledger" aria-label="Holdings and orders">
       <div className="tabs port-tabs" role="tablist">
@@ -371,7 +423,7 @@ function Tables({
             key={key}
             role="tab"
             type="button"
-            aria-selected={tab === key}
+            aria-selected={shownTab === key}
             onClick={() => setTab(key)}
           >
             <Icon />
@@ -379,76 +431,78 @@ function Tables({
           </button>
         ))}
       </div>
-      {tab === "bal" &&
+      {shownTab === "bal" &&
         (holdings.length === 0 ? (
           <p className="empty">
             {source === "all"
               ? "No balances yet. Deposit or buy on Binance, then refresh."
-              : `Nothing over $${DUST} in ${SOURCE_WORD[source]}.`}
+              : source === "Ledger"
+                ? `Nothing over ${m.whole(DUST)} on the Ledger. Add its addresses in Settings.`
+                : `Nothing over ${m.whole(DUST)} on Binance.`}
           </p>
         ) : (
           <div className="scroll">
-            <table>
+            <table className="port-holdings">
               <thead>
                 <tr>
                   {sortable("coin", "Coin")}
                   {sortable("invested", "Invested")}
-                  {sortable("value", "Value")}
-                  {sortable("pnl", "PnL")}
+                  {sortable("value", "Holding")}
                   {sortable("change", "24h")}
-                  <th className="r">Price</th>
-                  <th className="r">Avg cost</th>
                 </tr>
               </thead>
               <tbody>
                 {sorted.map((h) => {
+                  const key = `${h.asset}-${h.source}`;
+                  const open = opened === key;
                   const partial = h.covered !== null && Number(h.covered) < Number(h.amount);
+                  const where = parts.filter((p) => p.asset === h.asset);
                   return (
-                    <tr key={`${h.asset}-${h.source}`}>
-                      <td>
-                        <Coin
-                          symbol={h.asset}
-                          tag={
-                            h.source !== "Binance" ||
-                            holdings.some((o) => o.asset === h.asset && o.source !== h.source)
-                              ? SOURCE_WORD[h.source]
-                              : undefined
-                          }
-                        />
-                        <small className="sub num">{amountSleek(h.amount, h.price)}</small>
-                      </td>
-                      <td className="r num muted">
-                        {invested(h) === null ? "–" : m.whole(invested(h))}
-                      </td>
-                      <td className="r num">{m.whole(h.value)}</td>
-                      <td
-                        className={`r num ${trend(h.profit === null ? null : String(Math.round(Number(h.profit))))}`}
-                      >
-                        {m.whole(h.profit, true)}
-                        {h.profitPercent !== null && (
-                          <small className="sub">{percent(h.profitPercent)}</small>
-                        )}
-                        <Kept holding={h} />
-                      </td>
-                      <td className={`r num ${trend(h.change24h)}`}>{percent(h.change24h)}</td>
-                      <td className="r num">{m.price(h.price)}</td>
-                      <td
-                        className={`r num muted${partial && !h.costEntered ? " partial" : ""}`}
-                        title={
-                          h.feeToken
-                            ? "Fee token: the average price of this year's buys, for all you hold"
-                            : partial && !h.costEntered
-                              ? `From trades for ${coverage(h)}: they cover ${amount(h.covered)} of ${amount(h.amount)}; the rest was deposited or bought another way`
-                              : undefined
-                        }
-                      >
-                        {h.averageCost !== null && !h.costEntered ? (
-                          m.price(h.averageCost)
-                        ) : (
-                          <CostCell holding={h} m={m} onSaved={onReload} />
-                        )}
-                      </td>
-                    </tr>
+                    <Fragment key={key}>
+                      {/* The whole row opens the coin, as on Trade: the name's button is stretched over it. */}
+                      <tr className={`dcb-row-open${open ? " is-open" : ""}`}>
+                        <td>
+                          <button
+                            type="button"
+                            className="dcb-expand"
+                            aria-expanded={open}
+                            aria-label={`${h.asset}: ${open ? "close" : "open"} its details`}
+                            onClick={() => setOpened(open ? null : key)}
+                          >
+                            <Coin symbol={h.asset} />
+                          </button>
+                          <small className="sub num">{amountSleek(h.amount, h.price)}</small>
+                        </td>
+                        <td className="r num muted">
+                          {invested(h) === null ? "–" : m.whole(invested(h))}
+                        </td>
+                        <td>
+                          <HoldingCell
+                            m={m}
+                            value={h.value === null ? null : Number(h.value)}
+                            pnl={Number(h.profit ?? 0)}
+                            pnlPct={h.profitPercent === null ? null : Number(h.profitPercent)}
+                            avg={h.averageCost === null ? null : Number(h.averageCost)}
+                            now={h.price === null ? null : Number(h.price)}
+                            avgTitle={
+                              h.feeToken
+                                ? "Fee token: the average price of this year's buys, for all you hold"
+                                : partial && !h.costEntered
+                                  ? `From trades for ${coverage(h)}: trades since 1 Jul 2026 cover ${amount(h.covered)} of ${amount(h.amount)}; add a cost for the rest`
+                                  : undefined
+                            }
+                          />
+                        </td>
+                        <td className={`r num ${trend(h.change24h)}`}>{percent(h.change24h)}</td>
+                      </tr>
+                      {open && (
+                        <tr className="port-open">
+                          <td colSpan={4}>
+                            <HoldingDetail holding={h} where={where} m={m} onSaved={onReload} />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })}
               </tbody>
@@ -456,29 +510,30 @@ function Tables({
                 <tr>
                   <th scope="row">Total</th>
                   <td className="r num">{m.whole(totalInvested)}</td>
-                  <td className="r num">{m.whole(totalValue)}</td>
-                  <td className={`r num ${trend(String(Math.round(totalProfit)))}`}>
-                    {m.whole(totalProfit, true)}
-                    {totalInvested > 0 && (
-                      <small className="sub">
-                        {percent(String((totalProfit / totalInvested) * 100))}
-                      </small>
-                    )}
+                  <td>
+                    <span className="dcb-hold">
+                      <b>{m.whole(totalValue)}</b>
+                      <span className={trend(String(Math.round(totalProfit)))}>
+                        {m.whole(totalProfit, true)}
+                        {totalInvested > 0 &&
+                          ` (${percent(String((totalProfit / totalInvested) * 100))})`}
+                      </span>
+                    </span>
                   </td>
-                  <td colSpan={3} />
+                  <td />
                 </tr>
               </tfoot>
             </table>
           </div>
         ))}
-      {tab === "ord" && (
+      {shownTab === "ord" && (
         <p className="port-ord-tools">
           <button type="button" className="link" onClick={exportDcaCsv}>
             Export the DCA book's orders (CSV)
           </button>
         </p>
       )}
-      {tab === "ord" &&
+      {shownTab === "ord" &&
         (data.openOrders.length === 0 ? (
           <p className="empty">No open orders.</p>
         ) : (
@@ -500,7 +555,7 @@ function Tables({
               </thead>
               <tbody>
                 {data.openOrders.map((o) => (
-                  <OrderRow key={o.orderId} o={o} onDone={onReload} onOpen={showOrder} />
+                  <OrderRow key={o.orderId} o={o} m={m} onDone={onReload} onOpen={showOrder} />
                 ))}
               </tbody>
             </table>
@@ -512,8 +567,7 @@ function Tables({
         onClose={() => setOpenOrder(null)}
         onDone={(_note, problem) => onReload(problem)}
       />
-      {tab === "tax" && <TaxTab />}
-      {tab === "trd" &&
+      {shownTab === "trd" &&
         (data.recentTrades.length === 0 ? (
           <p className="empty">No trades against USDT, USDC or FDUSD yet.</p>
         ) : (
@@ -538,9 +592,9 @@ function Tables({
                     <td>
                       <span className={`tag ${t.side === "Buy" ? "buy" : "sell"}`}>{t.side}</span>
                     </td>
-                    <td className="r num">{price(t.price)}</td>
+                    <td className="r num">{m.price(t.price)}</td>
                     <td className="r num">{amount(t.amount)}</td>
-                    <td className="r num">{usd(t.total)}</td>
+                    <td className="r num">{m.whole(t.total)}</td>
                     <td className="r num muted">{t.fee}</td>
                   </tr>
                 ))}
@@ -552,244 +606,20 @@ function Tables({
   );
 }
 
-// The TAO wallet in a line: the whole (staked, free and rewards to claim) cut to one place.
-function TaoLine({ tao }: { tao: TaoWallet }) {
-  const tenth = (v: number) =>
-    (Math.floor(v * 10) / 10).toLocaleString("en-AU", {
-      minimumFractionDigits: 1,
-      maximumFractionDigits: 1,
-    });
-  if (tao.status !== "connected") {
-    return (
-      <p className="port-tao">
-        {tao.status === "error"
-          ? `The wallet couldn't be read: ${tao.error ?? "Taostats didn't answer"}.`
-          : "No wallet yet. Add TAO_COLDKEY to .env."}
-      </p>
-    );
-  }
-  const rewards = Number(tao.rewards ?? 0);
-  return (
-    <p
-      className="port-tao"
-      title={`${amount(tao.staked)} staked and ${amount(tao.free)} free${
-        rewards > 0 ? `, with ${amount(tao.rewards ?? "0")} in root rewards to claim` : ""
-      }`}
-    >
-      <span className="num">{tenth(Number(tao.total) + rewards)} τ</span> in the wallet
-      {rewards > 0 && (
-        <>
-          , <span className="num">{tenth(rewards)} τ</span> of it in baskets to claim
-        </>
-      )}
-      .
-    </p>
-  );
+// The side panel's Ledger dot: off when TAO or any of the Ledger's addresses couldn't be read,
+// so a partly read Ledger never shows as fine (audit, 22 Nov 2026).
+function ledgerStatus(data: Data): TaoWallet["status"] {
+  const tao = data.wallets.tao.status;
+  const ledger = data.wallets.ledger;
+  const failed =
+    ledger?.status === "error" ||
+    (ledger?.status === "connected" && (ledger.failedNetworks ?? []).length > 0);
+  if (tao === "error" || failed) return "error";
+  if (tao === "not_set" && (!ledger || ledger.status === "not_set")) return "not_set";
+  return "connected";
 }
 
-// What you hold, in a sentence: the value, against what it cost, then today's move.
-function Hero({
-  data,
-  source,
-  sum,
-  m,
-  accounts,
-}: {
-  data: Data;
-  source: Source;
-  sum: Totals;
-  m: Money;
-  accounts: { binance: number; wallet: number };
-}) {
-  const who =
-    source === "all" ? "You hold" : source === "Binance" ? "Binance holds" : "Your wallet holds";
-  const profit = Math.round(sum.profit);
-  return (
-    <section className="port-hero" aria-label="What you hold">
-      <h2 className="port-headline num">
-        {who}{" "}
-        <Live value={String(Math.round(sum.value))}>
-          <span title={m.whole(sum.value)}>{m.short(sum.value)}</span>
-        </Live>
-        {profit !== 0 && (
-          <>
-            ,{" "}
-            <span className={profit > 0 ? "up" : "down"}>
-              {m.short(Math.abs(profit))} {profit > 0 ? "above" : "under"}
-            </span>{" "}
-            what it cost
-          </>
-        )}
-        .
-      </h2>
-      <p className="port-lead num">
-        {source === "all" && (
-          <>
-            Binance {m.short(accounts.binance)}, the wallet {m.short(accounts.wallet)}.
-          </>
-        )}
-      </p>
-      {source !== "Binance" && <TaoLine tao={data.wallets.tao} />}
-    </section>
-  );
-}
-
-interface Slice {
-  key: string;
-  label: string;
-  value: number;
-  share: number;
-  target: number | null;
-  colour: string;
-  ink: "dark" | "light";
-  coins: string[];
-}
-
-const UNDER = 1; // coins under 1% without a target share one slice at the end
-const LABELLED = 7; // a slice this wide (in %) carries its name inside
-
-// The one bold thing: what you hold as a strip, coin by coin, with your targets under it in the
-// same order and colours, so drift reads at a glance. Move over a slice, focus it or tap it.
-export function Strip({
-  holdings,
-  drift,
-  m,
-}: {
-  holdings: Holding[];
-  drift: Drift | null;
-  m: Money;
-}) {
-  const [picked, setPicked] = useState<string | null>(null);
-  const byCoin = new Map<string, number>();
-  for (const h of holdings) {
-    if (h.value !== null && Number(h.value) > 0)
-      byCoin.set(h.asset, (byCoin.get(h.asset) ?? 0) + Number(h.value));
-  }
-  const whole = [...byCoin.values()].reduce((a, b) => a + b, 0);
-  if (whole <= 0) return null;
-  const targets = new Map(
-    (drift?.hasTargets ? drift.rows : []).map((r) => [r.coin, Number(r.targetPct)]),
-  );
-  // Coins with a target first, largest target first; then the rest by value.
-  const rank = (c: string) => targets.get(c) ?? -1;
-  const coins = [...new Set([...targets.keys(), ...byCoin.keys()])].sort(
-    (a, b) => rank(b) - rank(a) || (byCoin.get(b) ?? 0) - (byCoin.get(a) ?? 0),
-  );
-  const slices: Slice[] = [];
-  const small: string[] = [];
-  let painted = 0;
-  for (const coin of coins) {
-    const value = byCoin.get(coin) ?? 0;
-    const share = (value / whole) * 100;
-    if (share < UNDER && !targets.has(coin)) {
-      small.push(coin);
-      continue;
-    }
-    slices.push({
-      key: coin,
-      label: coin,
-      value,
-      share,
-      target: targets.get(coin) ?? null,
-      // With targets, only coins that have one take a colour: the rest read as unplanned.
-      colour: targets.size && !targets.has(coin) ? REST : (COLOURS[painted++] ?? REST),
-      ink: LIGHT.has(painted - 1) && (!targets.size || targets.has(coin)) ? "dark" : "light",
-      coins: [coin],
-    });
-  }
-  if (small.length) {
-    const value = small.reduce((s, c) => s + (byCoin.get(c) ?? 0), 0);
-    slices.push({
-      key: "rest",
-      label: `${small.length} more`,
-      value,
-      share: (value / whole) * 100,
-      target: null,
-      colour: REST,
-      ink: "light",
-      coins: small,
-    });
-  }
-  const pct = (v: number) => (v > 0 && v < 1 ? "<1%" : `${Math.round(v)}%`);
-  const targeted = slices.filter((s) => s.target !== null);
-  const untargeted = Math.max(0, 100 - targeted.reduce((s, x) => s + (x.target ?? 0), 0));
-  const band = Number(drift?.band ?? 0);
-  const read = (s: Slice) => {
-    const what = s.key === "rest" ? s.coins.join(", ") : s.label;
-    const now = `${what}: ${m.short(s.value)}, ${pct(s.share)} of what you hold`;
-    if (s.target === null) return s.key === "rest" ? `${now}.` : `${now}. No target set.`;
-    const gap = Math.round(s.share - s.target);
-    const side = gap > 0 ? `${gap} points over` : gap < 0 ? `${-gap} points under` : "on target";
-    const inside = Math.abs(s.share - s.target) <= band ? ", inside your band" : "";
-    return `${now}. Target ${pct(s.target)}, ${side}${inside}.`;
-  };
-  const shown = slices.find((s) => s.key === picked);
-  const largest = [...slices].sort((a, b) => b.value - a.value)[0];
-  const outside = drift?.hasTargets ? drift.outside : 0;
-  const idle = drift?.hasTargets
-    ? outside === 0
-      ? "Every coin is inside your band."
-      : `${outside} coin${outside === 1 ? " is" : "s are"} outside your ±${drift.band} point band.`
-    : largest
-      ? `The largest, ${largest.label}, is ${pct(largest.share)} of what you hold.`
-      : "";
-  const slice = (s: Slice, width: number, i: number, now: boolean) => {
-    const style = { flexGrow: width, background: s.colour, "--i": i } as React.CSSProperties;
-    const name =
-      width >= LABELLED ? (
-        <span aria-hidden="true">
-          {s.label} {pct(width)}
-        </span>
-      ) : null;
-    const dim = picked && picked !== s.key ? " dim" : "";
-    return now ? (
-      <button
-        key={s.key}
-        type="button"
-        className={`port-slice ${s.ink}${dim}`}
-        style={style}
-        aria-label={read(s)}
-        onPointerEnter={() => setPicked(s.key)}
-        onFocus={() => setPicked(s.key)}
-        onClick={() => setPicked(s.key)}
-      >
-        {name}
-      </button>
-    ) : (
-      <i
-        key={s.key}
-        className={`port-slice ${s.ink}${dim}`}
-        style={style}
-        onPointerEnter={() => setPicked(s.key)}
-      >
-        {name}
-      </i>
-    );
-  };
-  return (
-    <section className="port-strip" aria-label="What you hold, against your targets">
-      <div className="port-bars" onPointerLeave={() => setPicked(null)}>
-        <span className="port-bar-name">Now</span>
-        <div className="port-bar now" role="group" aria-label="What you hold, by coin">
-          {slices.map((s, i) => slice(s, s.share, i, true))}
-        </div>
-        {targeted.length > 0 && (
-          <>
-            <span className="port-bar-name">Target</span>
-            <div className="port-bar target" aria-hidden="true">
-              {targeted.map((s, i) => slice(s, s.target ?? 0, i, false))}
-              {untargeted > 0 && <i className="port-untargeted" style={{ flexGrow: untargeted }} />}
-            </div>
-          </>
-        )}
-      </div>
-      <p className="port-readout" key={picked ?? "idle"} aria-live="polite">
-        {shown ? read(shown) : idle}
-      </p>
-    </section>
-  );
-}
-
+// The last figures read, shown at once when the page comes back while fresh ones load.
 let lastSeen: Data | null = null;
 
 // Every order the DCA book placed, as a spreadsheet (moved here from the DCA page, owner,
@@ -821,7 +651,7 @@ export default function Portfolio({
   const [state, setState] = useState<State>({ kind: "loading", last: lastSeen });
   const [problem, setProblem] = useState("");
   const [source, setSource] = useState<Source>(sourceFromHash);
-  // The side panel's Binance and Wallet links open the page on that source.
+  // The side panel's Binance and Ledger links open the page on that source.
   useEffect(() => {
     const follow = () => setSource(sourceFromHash());
     window.addEventListener("hashchange", follow);
@@ -836,7 +666,7 @@ export default function Portfolio({
           lastSeen = data;
           setState({ kind: "ready", data });
           onStatus(data.demo ? "demo" : "connected");
-          onTao(data.wallets.tao.status);
+          onTao(ledgerStatus(data));
         },
         (e: unknown) => {
           setState((s) => ({
@@ -876,13 +706,14 @@ export default function Portfolio({
   };
 
   const data = state.kind === "ready" ? state.data : state.last;
-  const valueOf = (where: Holding["source"]) =>
-    (data?.holdings ?? [])
-      .filter((h) => inSource(h, where))
-      .reduce((s, h) => s + Number(h.value ?? 0), 0);
   const held = data?.holdings.filter((h) => !isDust(h)) ?? [];
-  const shown = held.filter((h) => source === "all" || inSource(h, source));
-  const sum = data ? totals(data, source) : null;
+  const everything = data?.holdings ?? [];
+  // Binance and Ledger list their own coins; All adds each coin up across them, one row a coin
+  // and no labels (owner, 22 Nov 2026).
+  const shown =
+    source === "all"
+      ? combined(everything).filter((h) => !isDust(h))
+      : held.filter((h) => inSource(h, source));
   const m = money(
     currency,
     data?.total.rates ?? (data?.total.audRate ? { AUD: data.total.audRate } : undefined),
@@ -941,25 +772,37 @@ export default function Portfolio({
         </div>
       )}
 
-      {data && sum ? (
+      {data ? (
         <>
-          <Hero
-            data={data}
-            source={source}
-            sum={sum}
-            m={m}
-            accounts={{ binance: valueOf("Binance"), wallet: valueOf("TAO wallet") }}
-          />
-          <Strip holdings={shown} drift={source === "all" ? drift : null} m={m} />
-          <div className="port-pair">
-            {source === "all" && <DriftCard drift={drift} />}
-            <Deposits />
+          <Widgets data={data} source={source} m={m} />
+          <div className={`port-pair${source === "Binance" ? "" : " is-one"}`}>
+            <Allocation holdings={shown} all={held} drift={source === "all" ? drift : null} m={m} />
+            {/* Fiat is Binance's: money in by month (owner, 22 Nov 2026). */}
+            {source === "Binance" && <Deposits />}
           </div>
-          <Tables data={data} holdings={shown} source={source} m={m} onReload={reload} />
+          <Tables
+            data={data}
+            holdings={shown}
+            parts={held}
+            source={source}
+            m={m}
+            onReload={reload}
+          />
         </>
       ) : (
         state.kind === "loading" && (
-          <div aria-hidden="true" className="skeleton" style={{ height: 260 }} />
+          // The page's own shape while it loads (code-standards 28): four tiles, the boxes, rows.
+          <div className="port-skeleton" aria-busy="true" aria-label="Loading your holdings">
+            <div className="port-skel-tiles">
+              {[0, 1, 2, 3].map((i) => (
+                <span key={i} className="skeleton" />
+              ))}
+            </div>
+            <span className="skeleton port-skel-box" />
+            {[0, 1, 2, 3, 4].map((i) => (
+              <span key={i} className="skeleton port-skel-row" />
+            ))}
+          </div>
         )
       )}
     </main>

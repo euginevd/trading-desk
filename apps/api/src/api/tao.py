@@ -1,4 +1,4 @@
-"""The TAO wallet, read-only by its public coldkey address, through Taostats (decision 17)."""
+"""TAO on the Ledger, read-only by its public coldkey address, through Taostats (17, 99)."""
 
 import threading
 import time

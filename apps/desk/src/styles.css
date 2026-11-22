@@ -1156,17 +1156,6 @@ td.partial {
   text-align: right;
 }
 
-/* Where a holding is kept, when it isn't Binance: a small tag after the coin (no Source column). */
-.coin-tag {
-  margin-left: 2px;
-  padding: 1px 6px;
-  border-radius: 4px;
-  background: var(--panel-2);
-  color: var(--dim);
-  font-size: 11px;
-  font-weight: 500;
-}
-
 .source-filter button:disabled {
   opacity: 0.4;
   cursor: default;
@@ -2276,6 +2265,101 @@ dialog.in-place .detail-head {
   margin: 14px 0 0;
   font-size: 12px;
 }
+/* Settings › Ledger (decision 99): each public address on a row, tokens not counted under it. */
+.ledger-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+}
+.ledger-row {
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+}
+.ledger-head {
+  display: grid;
+  grid-template-columns: 64px 80px 110px minmax(0, 1fr) auto auto;
+  gap: 8px 12px;
+  align-items: center;
+}
+.ledger-coin {
+  color: var(--text);
+  font-weight: 600;
+}
+.ledger-addr,
+.ledger-token code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 13px;
+}
+.ledger-bal {
+  text-align: right;
+}
+.ledger-stale {
+  color: var(--wait);
+}
+.ledger-counted {
+  list-style: none;
+  margin: 8px 0 0;
+  padding-left: 76px;
+  font-size: 13px;
+}
+.ledger-counted li {
+  margin-bottom: 4px;
+}
+.ledger-unknown {
+  margin-top: 8px;
+  padding-left: 76px;
+}
+.ledger-unknown p {
+  margin: 0 0 6px;
+}
+.ledger-token {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+.ledger-row > .ledger-token {
+  margin: 8px 0 0 76px;
+}
+.ledger-add {
+  display: grid;
+  grid-template-columns: 80px 110px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+.ledger-add input,
+.ledger-add select,
+.ledger-token input {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 7px 10px;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .ledger-head {
+    grid-template-columns: 1fr 1fr;
+  }
+  .ledger-bal {
+    text-align: left;
+  }
+  .ledger-unknown {
+    padding-left: 0;
+  }
+  .ledger-row > .ledger-token {
+    margin-left: 0;
+  }
+  .ledger-add {
+    grid-template-columns: 1fr auto;
+  }
+  .ledger-add input:not(.ledger-coin-input) {
+    grid-column: 1 / -1;
+  }
+}
+
 .settings-error-row {
   display: flex;
   flex-wrap: wrap;
@@ -2397,6 +2481,27 @@ dialog.in-place .detail-head {
   margin: 0 0 8px;
   font-size: 13px;
   font-weight: 600;
+}
+.tax-add {
+  display: grid;
+  grid-template-columns: 150px 80px repeat(3, minmax(0, 1fr)) auto;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+}
+.tax-add input {
+  font: inherit;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--line-2);
+  border-radius: 10px;
+  padding: 7px 10px;
+  min-width: 0;
+}
+@media (max-width: 720px) {
+  .tax-add {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 .tax-note {
   margin: 12px 0 0;

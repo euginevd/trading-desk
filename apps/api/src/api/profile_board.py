@@ -1,7 +1,7 @@
 """The Profile page's four widgets (decision 62): the summary, the road to the first goal, the
 BTC stack and the cash floor, worked out in code from profile.md's figures and the live portfolio.
 
-The goal total is the TAO wallet, Binance and the emergency fund: never parked tax money or
+The goal total is the Ledger, Binance and the emergency fund: never parked tax money or
 super. "On track" compares it with a straight path from the file's own starting point (section
 8's date and total) through each milestone in section 2. Projections use today's price and the
 weekly amounts in section 5, and say so.
@@ -58,9 +58,9 @@ def week_start(today: date, name: str | None) -> date:
 def _by_source(portfolio: dict[str, Any] | None, rate: Decimal) -> dict[str, Decimal] | None:
     if portfolio is None:
         return None
-    found = {"TAO wallet": ZERO, "Binance": ZERO}
+    found = {"Ledger": ZERO, "Binance": ZERO}
     for h in portfolio["holdings"]:
-        source = "Binance" if h["source"] == "Binance Alpha" else h["source"]  # one exchange
+        source = h["source"]
         if source in found:
             found[source] += Decimal(h.get("value") or "0") * rate
     return found
@@ -120,7 +120,7 @@ def road(
     }
     if parts is None:
         return base | {"known": False}
-    total_aud = parts["TAO wallet"] + parts["Binance"] + emergency
+    total_aud = parts["Ledger"] + parts["Binance"] + emergency
     total = total_aud / rate
     passed = [s for s in stops if s[1] <= total]
     ahead = [s for s in stops if s[1] > total]
@@ -145,7 +145,7 @@ def road(
         "totalUsd": _s(total, "1"),
         "totalAud": _s(total_aud, "1"),
         "parts": {
-            "taoAud": _s(parts["TAO wallet"], "1"),
+            "taoAud": _s(parts["Ledger"], "1"),  # the Ledger: TAO and the coins moved there
             "binanceAud": _s(parts["Binance"], "1"),
             "emergencyAud": _s(emergency, "1"),
         },

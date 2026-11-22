@@ -438,7 +438,7 @@ def _year(title: str) -> str | None:
 def _typed_holdings(held: dict[str, Any], cash: dict[str, Any]) -> list[dict[str, Any]]:
     """TAO and Binance live; the emergency fund counts toward goals, parked tax and super don't."""
     rows: list[dict[str, Any]] = [
-        _row("TAO wallet", "taostats", invested=held["taoInvested"]),
+        _row("Ledger", "taostats", invested=held["taoInvested"]),
         _row("Binance", "binance", invested=held["binanceInvested"]),
     ]
     if cash["emergency"] is not None:

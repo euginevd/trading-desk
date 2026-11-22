@@ -5,7 +5,7 @@ import json
 import sqlite3
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -152,6 +152,24 @@ CREATE TABLE IF NOT EXISTS costs (
     source TEXT NOT NULL, asset TEXT NOT NULL, average TEXT NOT NULL,
     PRIMARY KEY (source, asset)
 );
+CREATE TABLE IF NOT EXISTS staking_claims (
+    id INTEGER PRIMARY KEY,
+    day TEXT NOT NULL,
+    coin TEXT NOT NULL,
+    amount TEXT NOT NULL,
+    price_usd TEXT NOT NULL,
+    aud_rate TEXT NOT NULL,
+    added INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ledger_addresses (
+    id INTEGER PRIMARY KEY,
+    coin TEXT NOT NULL,
+    network TEXT NOT NULL,
+    address TEXT NOT NULL,
+    tokens TEXT NOT NULL DEFAULT '{}',
+    added INTEGER NOT NULL,
+    UNIQUE (network, address)
+);
 CREATE TABLE IF NOT EXISTS profile_versions (
     n INTEGER PRIMARY KEY, time INTEGER NOT NULL, author TEXT NOT NULL,
     summary TEXT NOT NULL, reason TEXT NOT NULL, doc TEXT NOT NULL
@@ -241,6 +259,8 @@ CREATE TABLE IF NOT EXISTS pot_orders (
 """
 
 
+LEDGER_SEEDED = "ledger.seeded"
+
 # Columns added after the first databases were made, each with its fixed statement: no SQL is
 # built from strings.
 ADDED_COLUMNS = (
@@ -259,6 +279,7 @@ class Store:
         # orders kept for today's spend, the monthly cap and the ledger (audit 8).
         for table, column, statement in ADDED_COLUMNS:
             self._add_column(table, column, statement)
+        self._ledger_moves()
         # The Markdown made from the Profile on each save, beside the database it came from.
         self.profile_md = path.parent / (
             "profile.md" if path.stem == "desk" else f"{path.stem}-profile.md"
@@ -273,6 +294,95 @@ class Store:
         if column not in {str(r["name"]) for r in rows}:
             with self._db:
                 self._db.execute(statement)  # one of ADDED_COLUMNS' fixed statements
+
+    def _ledger_moves(self) -> None:
+        """The TAO wallet became the Ledger (decision 99): its entered costs move across once,
+        and the Ledger's saved addresses seed the table the first time it's empty."""
+        with self._db:
+            self._db.execute(
+                "UPDATE OR IGNORE costs SET source = 'Ledger' WHERE source = 'TAO wallet'"
+            )
+            self._db.execute("DELETE FROM costs WHERE source = 'TAO wallet'")
+            # Binance Alpha held nothing once its last coin moved; its code went (decision 101).
+            self._db.execute("DELETE FROM costs WHERE source = 'Binance Alpha'")
+            self._db.execute("DELETE FROM settings WHERE key = 'alpha_holdings'")
+        # Seeded once only, so an address the owner removes stays removed: marked done as soon as
+        # the table holds an address, by seeding or by the owner adding one.
+        if self.setting(LEDGER_SEEDED, ""):
+            return
+        if not self._db.execute("SELECT 1 FROM ledger_addresses LIMIT 1").fetchone():
+            raw = self.setting("ledger.device", "")
+            device = cast(dict[str, Any], json.loads(raw)) if raw else {}
+            saved = cast(dict[str, dict[str, Any]], device.get("addresses") or {})
+            for coin, row in saved.items():
+                if row.get("network") == "Solana" and row.get("address"):
+                    self.add_ledger_address(str(coin), "Solana", str(row["address"]), 0)
+        if self._db.execute("SELECT 1 FROM ledger_addresses LIMIT 1").fetchone():
+            self.set_setting(LEDGER_SEEDED, "1")
+
+    def ledger_addresses(self) -> list[dict[str, Any]]:
+        rows = self._db.execute(
+            "SELECT id, coin, network, address, tokens, added FROM ledger_addresses ORDER BY id"
+        )
+        return [
+            {
+                "id": int(r["id"]),
+                "coin": str(r["coin"]),
+                "network": str(r["network"]),
+                "address": str(r["address"]),
+                "tokens": cast(dict[str, str], json.loads(str(r["tokens"]))),
+                "added": int(r["added"]),
+            }
+            for r in rows
+        ]
+
+    def add_ledger_address(self, coin: str, network: str, address: str, added: int) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT OR IGNORE INTO ledger_addresses (coin, network, address, added) "
+                "VALUES (?, ?, ?, ?)",
+                (coin, network, address, added),
+            )
+
+    def remove_ledger_address(self, address_id: int) -> bool:
+        with self._db:
+            done = self._db.execute("DELETE FROM ledger_addresses WHERE id = ?", (address_id,))
+        return done.rowcount > 0
+
+    def set_ledger_tokens(self, address_id: int, tokens: dict[str, str]) -> bool:
+        with self._db:
+            done = self._db.execute(
+                "UPDATE ledger_addresses SET tokens = ? WHERE id = ?",
+                (json.dumps(tokens, sort_keys=True), address_id),
+            )
+        return done.rowcount > 0
+
+    # Staking income the owner records for the Tax page (staking_income.py).
+
+    def staking_claims(self) -> list[dict[str, Any]]:
+        rows = self._db.execute(
+            "SELECT id, day, coin, amount, price_usd, aud_rate FROM staking_claims "
+            "ORDER BY day DESC, id DESC"
+        )
+        return [
+            {k: (int(r[k]) if k == "id" else str(r[k])) for k in r.keys()}  # noqa: SIM118
+            for r in rows
+        ]
+
+    def add_staking_claim(  # noqa: PLR0913, PLR0917 - one claim's fields
+        self, day: str, coin: str, amount: str, price_usd: str, aud_rate: str, added: int
+    ) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT INTO staking_claims (day, coin, amount, price_usd, aud_rate, added) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (day, coin, amount, price_usd, aud_rate, added),
+            )
+
+    def remove_staking_claim(self, claim_id: int) -> bool:
+        with self._db:
+            done = self._db.execute("DELETE FROM staking_claims WHERE id = ?", (claim_id,))
+        return done.rowcount > 0
 
     def close(self) -> None:
         self._db.close()
@@ -728,7 +838,7 @@ class Store:
         rows = self._db.execute("SELECT day, value FROM history ORDER BY day DESC LIMIT ?", (days,))
         return [(str(r["day"]), str(r["value"])) for r in rows][::-1]
 
-    # Average costs the owner enters for holdings with no trades here, such as the TAO wallet.
+    # Average costs the owner enters for holdings with no trades here, such as TAO on the Ledger.
 
     def costs(self) -> dict[tuple[str, str], str]:
         rows = self._db.execute("SELECT source, asset, average FROM costs")

@@ -4,7 +4,11 @@
 // whether each is set. Your name lives in the Profile.
 import { type ReactNode, useEffect, useState } from "react";
 import {
+  addLedgerAddress,
+  countLedgerToken,
   finishSignIn,
+  getLedger,
+  removeLedgerAddress,
   getAiSettings,
   getSettings,
   getTelegram,
@@ -19,7 +23,14 @@ import {
 } from "./api";
 import { day, errorOf } from "./format";
 import { FEATURES, type FeatureInfo, featureOn, isNew, useFeatures } from "./features";
-import type { AiMode, AiSettings, Settings, TelegramSettings } from "./types";
+import type {
+  AiMode,
+  AiSettings,
+  LedgerAddress,
+  LedgerView,
+  Settings,
+  TelegramSettings,
+} from "./types";
 
 const MODES: Record<AiMode, { name: string; title: string; sub: string }> = {
   api_key: { name: "API key (pay per use)", title: "API key", sub: "Pay per use" },
@@ -274,6 +285,7 @@ export default function SettingsPage() {
         )}
       </section>
       <Limits />
+      <Ledger />
       <Telegram onRead={setTg} />
       <Pages />
     </main>
@@ -689,6 +701,283 @@ function Limits() {
             </p>
           )}
         </form>
+      )}
+    </section>
+  );
+}
+
+// Settings › Ledger (decision 99): the Ledger's public addresses, what each holds and when it
+// was read. The desk never holds a key: an address only reads. A token found on an address
+// counts only once named here, so an airdropped scam token never shows as money.
+// The coin a network's own balance is in, and the networks whose tokens the desk reads by contract.
+const NETWORK_COIN: Record<string, string> = {
+  Solana: "SOL",
+  Ethereum: "ETH",
+  HyperEVM: "HYPE",
+  Sui: "SUI",
+  NEAR: "NEAR",
+  Bitcoin: "BTC",
+};
+const EVM_NETWORKS = new Set(["Ethereum", "HyperEVM"]);
+const short = (a: string) => (a.length > 12 ? `${a.slice(0, 4)}…${a.slice(-4)}` : a);
+const hhmm = (ms: number) =>
+  new Date(ms).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
+const qty = (v: string) => Number(v).toLocaleString("en-AU", { maximumFractionDigits: 6 });
+
+function balances(a: LedgerAddress): string {
+  if (a.status === "error") return a.error ?? "Couldn't be read";
+  if (a.status !== "connected" || !a.coins) return "Not read yet";
+  const held = Object.entries(a.coins).filter(([, v]) => Number(v) > 0);
+  return held.length ? held.map(([c, v]) => `${qty(v)} ${c}`).join(" · ") : "Empty";
+}
+
+function Ledger() {
+  const [view, setView] = useState<LedgerView | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [coin, setCoin] = useState("SOL");
+  const [network, setNetwork] = useState("Solana");
+  const [contract, setContract] = useState<Record<number, { at: string; coin: string }>>({});
+  const [address, setAddress] = useState("");
+  const [naming, setNaming] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  useEffect(() => {
+    getLedger().then(setView, () => setFailed(true));
+  }, [attempt]);
+  const act = (action: () => Promise<LedgerView>, done: string, after?: () => void) => {
+    setBusy(true);
+    setNote(null);
+    action().then(
+      (next) => {
+        setView(next);
+        setBusy(false);
+        setNote({ ok: true, text: done });
+        after?.(); // what you typed stays until it's saved
+      },
+      (e: unknown) => {
+        setBusy(false);
+        setNote({ ok: false, text: errorOf(e, "Not saved.") });
+      },
+    );
+  };
+  const failing = view?.addresses.some((a) => a.status === "error");
+  const status: { tone: Tone; word: string } | null = !view
+    ? null
+    : view.addresses.length === 0
+      ? { tone: "idle", word: "No addresses yet" }
+      : failing
+        ? { tone: "down", word: "One didn't answer" }
+        : { tone: "up", word: `${view.addresses.length} read` };
+  return (
+    <section className="set-section" aria-labelledby="settings-ledger">
+      <CardHead id="settings-ledger" title="Ledger">
+        {status && <Status tone={status.tone}>{status.word}</Status>}
+      </CardHead>
+      <p className="settings-intro muted">
+        The desk reads your Ledger by its public addresses, through the api, every 15 minutes. It
+        never holds a key and never asks for your 24 words. TAO comes through Taostats, by
+        TAO_COLDKEY in .env.
+      </p>
+      {!view && !failed && (
+        <p className="muted settings-loading" aria-busy="true">
+          Loading…
+        </p>
+      )}
+      {!view && failed && (
+        <div className="settings-error-row">
+          <p className="settings-error" role="alert">
+            The Ledger&apos;s addresses couldn&apos;t be read.
+          </p>
+          <button
+            type="button"
+            className="settings-btn"
+            onClick={() => {
+              setFailed(false);
+              setAttempt((n) => n + 1);
+            }}
+          >
+            Try again
+          </button>
+        </div>
+      )}
+      {view && view.addresses.length === 0 && (
+        <p className="muted">No Ledger addresses yet. Add one when you move a coin off Binance.</p>
+      )}
+      {view && view.addresses.length > 0 && (
+        <ul className="ledger-list">
+          {view.addresses.map((a) => (
+            <li key={a.id} className="ledger-row">
+              <div className="ledger-head">
+                <span className="ledger-coin">{a.coin}</span>
+                <span className="muted">{a.network}</span>
+                <code className="ledger-addr" title={a.address}>
+                  {short(a.address)}
+                </code>
+                <span className={`ledger-bal num${a.status === "error" ? " down" : ""}`}>
+                  {balances(a)}
+                </span>
+                <span className={a.stale ? "ledger-stale" : "muted"}>
+                  {a.readAt ? `${a.stale ? "Last read " : ""}${hhmm(a.readAt)}` : ""}
+                </span>
+                <button
+                  type="button"
+                  className="settings-btn"
+                  disabled={busy}
+                  onClick={() => act(() => removeLedgerAddress(a.id), "Address removed")}
+                >
+                  Remove
+                </button>
+              </div>
+              {Object.keys(a.tokens).length > 0 && (
+                <ul className="ledger-counted">
+                  {Object.entries(a.tokens).map(([mint, name]) => (
+                    <li key={mint}>
+                      <span>Counted: {name}</span> <code title={mint}>{short(mint)}</code>{" "}
+                      <button
+                        type="button"
+                        className="settings-btn"
+                        disabled={busy}
+                        onClick={() =>
+                          act(() => countLedgerToken(a.id, mint, null), `${name} not counted`)
+                        }
+                      >
+                        Stop counting
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {EVM_NETWORKS.has(a.network) && (
+                // An EVM node can't list an address's tokens: count one by its contract.
+                <form
+                  className="ledger-token"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const t = contract[a.id];
+                    const name = t?.coin.trim().toUpperCase() ?? "";
+                    if (t?.at.trim() && name)
+                      act(() => countLedgerToken(a.id, t.at.trim(), name), `${name} counted`);
+                  }}
+                >
+                  <input
+                    aria-label={`Token contract on ${a.network}`}
+                    placeholder="Token contract (0x…)"
+                    value={contract[a.id]?.at ?? ""}
+                    disabled={busy}
+                    onChange={(e) =>
+                      setContract({
+                        ...contract,
+                        [a.id]: { at: e.target.value, coin: contract[a.id]?.coin ?? "" },
+                      })
+                    }
+                  />
+                  <input
+                    aria-label={`Coin for that contract on ${a.network}`}
+                    placeholder="Coin, such as USDC"
+                    value={contract[a.id]?.coin ?? ""}
+                    disabled={busy}
+                    onChange={(e) =>
+                      setContract({
+                        ...contract,
+                        [a.id]: { at: contract[a.id]?.at ?? "", coin: e.target.value },
+                      })
+                    }
+                  />
+                  <button type="submit" className="settings-btn" disabled={busy}>
+                    Count a token
+                  </button>
+                </form>
+              )}
+              {a.unknown && Object.keys(a.unknown).length > 0 && (
+                <div className="ledger-unknown">
+                  <p className="muted">
+                    Found but not counted. Count one only if you sent it here yourself: an unknown
+                    token is often a scam, so never open its link.
+                  </p>
+                  {Object.entries(a.unknown).map(([mint, v]) => (
+                    <form
+                      key={mint}
+                      className="ledger-token"
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const name = (naming[mint] ?? "").trim().toUpperCase();
+                        if (name) act(() => countLedgerToken(a.id, mint, name), `${name} counted`);
+                      }}
+                    >
+                      <code title={mint}>{short(mint)}</code>
+                      <span className="num">{qty(v)}</span>
+                      <input
+                        aria-label={`Coin for token ${short(mint)}`}
+                        placeholder="Coin, such as USDC"
+                        value={naming[mint] ?? ""}
+                        disabled={busy}
+                        onChange={(e) => setNaming({ ...naming, [mint]: e.target.value })}
+                      />
+                      <button type="submit" className="settings-btn" disabled={busy}>
+                        Count it
+                      </button>
+                    </form>
+                  ))}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {view && (
+        <form
+          className="ledger-add"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!address.trim() || busy) return;
+            act(
+              () => addLedgerAddress(coin, network, address.trim()),
+              "Address added",
+              () => setAddress(""),
+            );
+          }}
+        >
+          <input
+            aria-label="Coin"
+            className="ledger-coin-input"
+            value={coin}
+            disabled={busy}
+            onChange={(e) => setCoin(e.target.value.toUpperCase())}
+          />
+          <select
+            aria-label="Network"
+            value={network}
+            disabled={busy}
+            onChange={(e) => {
+              setNetwork(e.target.value);
+              setCoin(NETWORK_COIN[e.target.value] ?? coin);
+            }}
+          >
+            {view.networks.map((n) => (
+              <option key={n}>{n}</option>
+            ))}
+          </select>
+          <input
+            aria-label="Public address"
+            placeholder={
+              network === "Bitcoin"
+                ? "Account xpub from Ledger Live › Edit account › Advanced (never your 24 words)"
+                : "Public address from Ledger Live (never your 24 words)"
+            }
+            value={address}
+            disabled={busy}
+            onChange={(e) => setAddress(e.target.value)}
+          />
+          <button type="submit" className="settings-btn" disabled={busy || !address.trim()}>
+            Add
+          </button>
+        </form>
+      )}
+      {note && (
+        <p className={note.ok ? "muted" : "settings-error"} role={note.ok ? "status" : "alert"}>
+          {note.text}
+        </p>
       )}
     </section>
   );

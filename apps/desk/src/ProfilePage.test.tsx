@@ -270,7 +270,7 @@ describe("Profile", () => {
     expect(within(road).getByRole("heading").textContent).toBe(
       "US$38K of US$1M. 3.8% of the way, on or above the line.",
     );
-    expect(road.textContent).toContain("A$57K: TAO A$21K, Binance A$24K, emergency fund A$12K.");
+    expect(road.textContent).toContain("A$57K: Ledger A$21K, Binance A$24K, emergency fund A$12K.");
     expect(road.textContent).toContain("Next: US$150K by Dec 2027, US$112K to go in 13 months.");
     expect(road.textContent).toContain("Then US$5M by 2050, 0.8% there.");
     const chart = within(road).getByRole("figure");

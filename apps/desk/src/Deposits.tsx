@@ -37,7 +37,7 @@ export default function Deposits() {
   if (state.kind === "error") {
     return (
       <section className="port-money" aria-label="USDC deposits">
-        <h2>Money in</h2>
+        <h2>Fiat</h2>
         <p className="muted">{state.message}</p>
       </section>
     );
@@ -56,7 +56,7 @@ export default function Deposits() {
   return (
     <section className="port-money" aria-label="USDC deposits">
       <h2>
-        Money in <span className="muted">FY {data.fy}</span>
+        Fiat <span className="muted">FY {data.fy}</span>
       </h2>
       <p className="port-money-total num">
         <strong title={`A$${Math.round(Number(data.total.aud)).toLocaleString("en-AU")}`}>

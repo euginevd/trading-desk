@@ -29,6 +29,7 @@ from api import (
     features,
     journal,
     ledger,
+    ledger_wallet,
     md_files,
     my_agents,
     profile,
@@ -42,6 +43,7 @@ from api import (
     scan_progress,
     schedule,
     screener,
+    staking_income,
     tax,
     telegram,
     trading_agent,
@@ -198,7 +200,7 @@ def store_path() -> Path:
 
 
 def _wallet(client: httpx.Client) -> Wallet | None:
-    """The TAO wallet reader, or None when .env doesn't name a coldkey (decision 17)."""
+    """TAO on the Ledger, read by its coldkey, or None when .env doesn't name one (17, 99)."""
     if _demo():
         return lambda: balance(client, "demo", demo.TAO_ADDRESS, _audit())
     address = os.environ.get("TAO_COLDKEY", "").strip()
@@ -208,8 +210,50 @@ def _wallet(client: httpx.Client) -> Wallet | None:
 
     def read() -> dict[str, Decimal]:
         if not key:
-            raise TaoError("Add TAOSTATS_API_KEY to .env to read the TAO wallet.")
+            raise TaoError("Add TAOSTATS_API_KEY to .env to read TAO on the Ledger.")
         return balance(client, key, address, _audit())
+
+    return read
+
+
+def _ledger_read(client: httpx.Client, store: Store) -> Any:
+    """The Ledger's coins by its saved public addresses (decision 99), or None with none saved.
+    One address that can't be read leaves the others standing; the status says which."""
+    addresses = [a for a in store.ledger_addresses() if a["network"] in ledger_wallet.NETWORKS]
+    if not addresses or _demo():
+        return None
+
+    def read() -> tuple[dict[str, Decimal], dict[str, Any]]:
+        coins: dict[str, Decimal] = {}
+        errors: list[str] = []
+        failed: list[str] = []
+        stale: list[str] = []
+        oldest: float | None = None
+        for a in addresses:
+            try:
+                found = ledger_wallet.read(client, ledger_wallet.Watch.of(a), _audit())
+            except ledger_wallet.LedgerError as error:
+                errors.append(str(error))
+                failed.append(a["network"])
+                continue
+            if found.stale:
+                stale.append(a["network"])
+            oldest = found.read_at if oldest is None else min(oldest, found.read_at)
+            for coin, amount in found.coins.items():
+                coins[coin] = coins.get(coin, Decimal(0)) + amount
+        # Which networks failed or fell back to their last reading, so the page can say so
+        # rather than show a smaller Ledger as if it were whole (audit, 22 Nov 2026).
+        status: dict[str, Any] = {
+            "status": "error" if errors and not coins else "connected",
+            "readAt": int(oldest * 1000) if oldest else None,
+            "stale": bool(stale),
+            "staleNetworks": stale,
+            "failedNetworks": failed,
+            "addresses": len(addresses),
+        }
+        if errors:
+            status["error"] = errors[0]
+        return coins, status
 
     return read
 
@@ -243,9 +287,12 @@ def live_portfolio() -> dict[str, Any]:
             httpx.Client(
                 base_url=TAOSTATS_URL, timeout=TIMEOUT_SECONDS, transport=tao_transport
             ) as tao,
+            httpx.Client(timeout=TIMEOUT_SECONDS) as chain,
         ):
-            rules = CostRules(store.costs(), cost_from_ms(), alpha_holdings(store))
-            portfolio = fetch(binance, fx, _wallet(tao), TRADE_CACHE, rules)
+            rules = CostRules(store.costs(), cost_from_ms())
+            portfolio = fetch(
+                binance, fx, _wallet(tao), TRADE_CACHE, rules, _ledger_read(chain, store)
+            )
         today = datetime.now(SYDNEY).date().isoformat()
         store.record_value(today, portfolio["total"]["value"])
         profile_live.remember_rate(store, portfolio)  # the bots' pre-trade check reads it
@@ -563,15 +610,98 @@ ROUTES: dict[tuple[str, str], Route] = {
 }
 
 
-COST_SOURCES = ("Binance", "TAO wallet", "Binance Alpha")
-ALPHA_KEY = "alpha_holdings"
+COST_SOURCES = ("Binance", "Ledger")
 
 
-def alpha_holdings(store: Store) -> tuple[tuple[str, str], ...]:
-    """The coins the owner holds on Binance Alpha, as entered: [{"asset", "amount"}]."""
-    raw = store.setting(ALPHA_KEY, "")
-    rows = cast(list[dict[str, Any]], json.loads(raw)) if raw else []
-    return tuple((str(r["asset"]), str(r["amount"])) for r in rows if r.get("asset"))
+def ledger_view(store: Store) -> dict[str, Any]:
+    """Settings › Ledger: each saved address with its balances and when they were read, and
+    tokens found on it but not counted (decision 99). Reads are the kept ones where fresh."""
+    rows: list[dict[str, Any]] = []
+    with httpx.Client(timeout=TIMEOUT_SECONDS) as client:
+        for a in store.ledger_addresses():
+            row: dict[str, Any] = {k: a[k] for k in ("id", "coin", "network", "address", "tokens")}
+            if a["network"] not in ledger_wallet.NETWORKS or _demo():
+                rows.append(row | {"status": "not_read"})
+                continue
+            try:
+                found = ledger_wallet.read(client, ledger_wallet.Watch.of(a), _audit())
+            except ledger_wallet.LedgerError as error:
+                rows.append(row | {"status": "error", "error": str(error)})
+                continue
+            rows.append(
+                row
+                | {
+                    "status": "connected",
+                    "coins": {c: plain(v) for c, v in found.coins.items()},
+                    "unknown": {m: plain(v) for m, v in found.unknown.items()},
+                    "readAt": int(found.read_at * 1000),
+                    "stale": found.stale,
+                }
+            )
+    return {"addresses": rows, "networks": sorted(ledger_wallet.NETWORKS)}
+
+
+def ledger_route(method: str, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    """GET /ledger; POST /ledger/address {coin, network, address}; POST /ledger/remove {id};
+    POST /ledger/token {id, mint, coin} counts a token, {id, mint, coin: null} stops."""
+    store = Store(store_path())
+    try:
+        if method == "POST" and path == "/ledger/address":
+            coin = str(body.get("coin") or "").strip().upper()
+            network = str(body.get("network") or "")
+            address = str(body.get("address") or "").strip()
+            if network not in ledger_wallet.NETWORKS:
+                raise Refused(
+                    "The desk reads Solana, Ethereum, HyperEVM, Sui, NEAR and Bitcoin (by xpub)."
+                )
+            if not ledger_wallet.valid_coin(coin) or not ledger_wallet.valid_address(
+                network, address
+            ):
+                raise Refused(f"That isn't a {network} address. Copy it from Ledger Live.")
+            store.add_ledger_address(coin, network, address, int(time.time() * 1000))
+        elif method == "POST" and path == "/ledger/remove":
+            if not store.remove_ledger_address(_id(body)):
+                raise Refused("That address isn't saved.")
+        elif method == "POST" and path == "/ledger/token":
+            _count_token(store, body)
+        elif not (method == "GET" and path == "/ledger"):
+            raise LookupError(path)
+        return ledger_view(store)
+    finally:
+        store.close()
+
+
+def _id(body: dict[str, Any]) -> int:
+    """A record's id from a request body, refused unless it's a whole number."""
+    try:
+        return int(str(body.get("id") or "0"))
+    except ValueError:
+        raise Refused("Name the record by its id.") from None
+
+
+def _ledger_http(method: str, path: str, event: dict[str, object]) -> dict[str, object] | None:
+    if not path.startswith("/ledger"):
+        return None
+    return _reply(200, ledger_route(method, path, _body(event) if method != "GET" else {}))
+
+
+def _count_token(store: Store, body: dict[str, Any]) -> None:
+    saved = {a["id"]: a for a in store.ledger_addresses()}
+    found = saved.get(_id(body))
+    mint = str(body.get("mint") or "").strip()
+    if found is None or found["network"] not in ledger_wallet.TOKEN_NETWORKS:
+        raise Refused("Tokens are counted on Solana, Ethereum and HyperEVM addresses.")
+    if not ledger_wallet.valid_address(found["network"], mint):
+        raise Refused("Name the token's mint or contract, as the explorer shows it.")
+    tokens = dict(found["tokens"])
+    coin = body.get("coin")
+    if coin is None:
+        tokens.pop(mint, None)
+    elif ledger_wallet.valid_coin(str(coin).strip().upper()):
+        tokens[mint] = str(coin).strip().upper()
+    else:
+        raise Refused("Name the coin, such as PUMP.")
+    store.set_ledger_tokens(found["id"], tokens)
 
 
 MAX_COST = Decimal(10_000_000)
@@ -1196,6 +1326,9 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     ("GET", "/my-agents/file"): lambda s, q, _b: my_agents.file(s.store, str(q.get("slug", ""))),
     ("GET", "/tax"): lambda s, _q, _b: _tax(s),
     ("GET", "/tax/sell-check"): lambda s, q, _b: _sell_check(s, q),
+    ("GET", "/tax/staking"): lambda s, _q, _b: staking_income.view(s.store, tax.today_sydney()),
+    ("POST", "/tax/staking"): lambda s, _q, b: _add_staking(s, b),
+    ("POST", "/tax/staking/remove"): lambda s, _q, b: _remove_staking(s, b),
     ("GET", "/rebalance"): lambda s, _q, _b: rebalance.drift(
         (s.portfolio or live_portfolio)(), profile.current(s.store)[1]
     ),
@@ -1343,6 +1476,17 @@ def _ledger(s: Services) -> tuple[list[ledger.Fill], dict[str, Any], date]:
     with httpx.Client(timeout=TIMEOUT_SECONDS, transport=fx_transport) as fx:
         fills = ledger.fills(s.binance, fx, coins, cost_from_ms(), today)
     return fills, portfolio, today
+
+
+def _add_staking(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    staking_income.add(s.store, body, tax.today_sydney(), int(time.time() * 1000))
+    return staking_income.view(s.store, tax.today_sydney())
+
+
+def _remove_staking(s: Services, body: dict[str, Any]) -> dict[str, Any]:
+    if not s.store.remove_staking_claim(_id(body)):
+        raise Refused("That claim isn't recorded.")
+    return staking_income.view(s.store, tax.today_sydney())
 
 
 def _tax(s: Services) -> dict[str, Any]:
@@ -1544,7 +1688,8 @@ def handler(  # noqa: PLR0913, PLR0917 - each factory is a seam the tests replac
         if method == "PUT" and path == "/cost":
             return _reply(200, live_set_cost(_body(event)))
         routed = (
-            _bot_route(method, path, event, bots, portfolio)
+            _ledger_http(method, path, event)
+            or _bot_route(method, path, event, bots, portfolio)
             or _grid_route(method, path, event, grids)
             or _trading_route(method, path, params, event, trading, portfolio)
             or _profile_route(method, path, event, services)

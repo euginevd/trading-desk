@@ -16,6 +16,7 @@ flowchart LR
   subgraph internet ["Internet: untrusted"]
     binance[Binance API]
     taostats[Taostats API]
+    solana[Public RPCs: Solana, Ethereum, HyperEVM, Sui, NEAR; mempool.space]
     anthropic[Anthropic API and web search]
     fx[Frankfurter]
     gecko[CoinGecko]
@@ -27,6 +28,7 @@ flowchart LR
   api --> db
   api -- "TB2: signed reads and orders" --> binance
   api -- "TB3: coldkey address" --> taostats
+  api -- "TB8: Ledger addresses" --> solana
   api -- "TB4: figures, position" --> anthropic
   api -- "TB2: daily rate" --> fx
   api -- "TB5: coin tickers, USDT/AUD" --> gecko
@@ -45,6 +47,7 @@ Circles: processes; cylinders: stores; dashed boxes: trust boundaries.
 | D4 | Watchlists, limits, bots, trades, plans, history | Internal | `local/desk.sqlite` |
 | D5 | Audit log | Confidential | `local/audit.jsonl`, add-only |
 | D6 | The TAO coldkey address | Internal (public on chain) | `.env`, sent to Taostats |
+| D7 | The Ledger's other public addresses, and what each holds; the Bitcoin account's xpub, from which the desk works out each address on the owner's machine (only addresses leave it, never the xpub) | Internal (public on chain; the xpub links the whole Bitcoin history, so it stays in `local/`) | `local/desk.sqlite` (`ledger_addresses`), sent to the public endpoints of Solana, Ethereum, HyperEVM, Sui, NEAR and mempool.space. Accepted risk (prototype): mempool.space sees the account's addresses together from one IP, which links them much as the xpub would |
 
 ## Trust boundaries
 
@@ -56,6 +59,7 @@ In full: [threat-model/boundaries.md](threat-model/boundaries.md).
 - **TB4** `api` to Anthropic, by API key or subscription (decision 48): figures, position and Profile, never keys or ids; replies schema-checked.
 - **TB5** `api` to CoinGecko: tickers, never amounts; logos checked for host, type and size.
 - **TB6** `api` to Telegram: the token only in the URL, never logged; messages, never keys, to the chat linked by code (decision 57); its one-use buttons place orders (decision 74, R12).
+- **TB8** `api` to the public endpoints of Solana, Ethereum (publicnode), HyperEVM (Hyperliquid), Sui (GraphQL), NEAR (FastNEAR) and mempool.space for Bitcoin (decision 99): TLS, the Ledger's public addresses only, from the api, never the browser; addresses never in a log line, Telegram or the repo; a token counts only once the owner names its mint, so an airdropped scam token never shows as money; a failed read keeps the last figure, marked with its time. No key that can sign is held anywhere.
 - **TB7** Freqtrade and `api`: one route in, job files out; nothing placed (decisions 84, 87). The api knows them by network, not Host; image pinned by digest (audit 18).
 
 ## Top risks

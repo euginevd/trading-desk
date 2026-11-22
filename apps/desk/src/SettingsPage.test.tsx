@@ -36,7 +36,30 @@ const limits = {
 const setLimits = vi.fn((perOrder: string, perDay: string) =>
   Promise.resolve({ ...limits, perOrder, perDay }),
 );
+// A made-up Ledger address with SOL, a counted token and an airdrop (decision 99).
+const ledgerView = {
+  networks: ["Solana"],
+  addresses: [
+    {
+      id: 1,
+      coin: "SOL",
+      network: "Solana",
+      address: "7Hq2mB3xQ9vKp4TfYw8RjN5cZ1aLsD6eGuV2hXo3Zp4m",
+      tokens: { "9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin": "PUMP" },
+      status: "connected",
+      coins: { SOL: "20.5", PUMP: "150000" },
+      unknown: { "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R": "1000000" },
+      readAt: 1795312000000,
+      stale: false,
+    },
+  ],
+};
+
 vi.mock("./api", () => ({
+  getLedger: () => Promise.resolve(ledgerView),
+  addLedgerAddress: () => Promise.resolve(ledgerView),
+  removeLedgerAddress: () => Promise.resolve({ addresses: [], networks: ["Solana"] }),
+  countLedgerToken: () => Promise.resolve(ledgerView),
   getTelegram: () =>
     Promise.resolve({ tokenSet: false, chatFound: false, time: "07:30", lastSent: null }),
   saveTelegramToken: () =>
@@ -210,5 +233,14 @@ describe("amPm", () => {
     expect(amPm("00:05")).toBe("12:05 am");
     expect(amPm("12:00")).toBe("12:00 pm");
     expect(amPm("19:45")).toBe("7:45 pm");
+  });
+
+  it("lists the Ledger's addresses, keeps an airdrop out, and never asks for the words", async () => {
+    render(<SettingsPage />);
+    const section = await screen.findByRole("region", { name: "Ledger" });
+    expect(await within(section).findByText("20.5 SOL · 150,000 PUMP")).toBeTruthy();
+    expect(within(section).getByText(/Found but not counted/)).toBeTruthy();
+    expect(within(section).getByText(/never asks for your 24 words/)).toBeTruthy();
+    expect(within(section).getByRole("button", { name: "Count it" })).toBeTruthy();
   });
 });

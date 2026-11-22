@@ -56,7 +56,7 @@ const portfolio: Portfolio = {
     },
     {
       asset: "TAO",
-      source: "TAO wallet",
+      source: "Ledger",
       amount: "97.4",
       price: "412.5",
       value: "40177.5",
@@ -197,6 +197,7 @@ describe("side panel", () => {
       "Trade",
       "Backtest",
       "Risk",
+      "Tax",
       "Bots",
       "Profile",
       "Settings",
@@ -240,6 +241,7 @@ describe("feature flags", () => {
       "Portfolio",
       "Trade",
       "Backtest",
+      "Tax",
       "Bots",
       "Profile",
       "Settings",
@@ -349,21 +351,19 @@ describe("portfolio page", () => {
     await waitFor(() => expect(reads()).toBe(before + 1));
   });
 
-  it("shows Binance and the TAO wallet, the total and the value line", async () => {
+  it("shows Binance and the Ledger, the total and the value line", async () => {
     serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
     render(<App />);
     // AUD first: 42,585 at 1.4738, exact in the header and rounded in the sentence
     expect((await screen.findAllByText("A$62,762")).length).toBeGreaterThan(0);
-    const hero = screen.getByRole("region", { name: "What you hold" });
-    expect(hero.querySelector("h2")?.textContent).toBe("You hold A$63K, A$192 above what it cost.");
-    // 1,500 up today; Binance 2,415.48 and the wallet 40,177.50
-    expect(within(hero).getByText(/Binance A\$3\.6K, the wallet A\$59K\./)).toBeTruthy();
-    expect(within(hero).queryByText(/today/)).toBeNull(); // the Dashboard says the day's move
-    // 85 staked + 12.4 free + 1.5 rewards
-    expect(hero.querySelector(".port-tao")?.textContent).toBe(
-      "98.9 τ in the wallet, 1.5 τ of it in baskets to claim.",
-    );
-    expect(screen.getByText("A$870")).toBeTruthy(); // BNB average cost 590 in AUD, whole at 100 up
+    // All: four widgets for the whole account (owner, 22 Nov 2026), no sentence.
+    const tiles = document.querySelector('[aria-label="The whole account"]') as HTMLElement;
+    expect(within(tiles).getByText("A$63K")).toBeTruthy();
+    expect(within(tiles).getByText("+A$192")).toBeTruthy();
+    expect(within(tiles).getByText("94%")).toBeTruthy(); // on the Ledger
+    expect(within(tiles).getByText(/^A\$59K Ledger · A\$3\.\dK Binance$/)).toBeTruthy();
+    expect(screen.queryByText(/τ on the Ledger/)).toBeNull(); // the TAO line is gone
+    expect(screen.getByText(/^avg A\$870 · now/)).toBeTruthy(); // BNB average cost 590 in AUD
     expect(screen.queryByText(/ at 1.4738 AUD/)).toBeNull(); // the rate line is hidden
     expect(screen.queryByText("Account value")).toBeNull(); // the 30-day box is gone for now
     expect(screen.getByText(/Demo data/)).toBeTruthy();
@@ -376,19 +376,17 @@ describe("portfolio page", () => {
     render(<App />);
     expect((await screen.findAllByText("NEAR")).length).toBeGreaterThan(0); // $7.86: shown, not dust
     expect(screen.queryByText("PEPE")).toBeNull();
-    // The strip: every coin held by share; under 1% they share one slice, read on hover.
-    const strip = screen.getByRole("group", { name: "What you hold, by coin" });
-    const slices = within(strip).getAllByRole("button");
-    expect(slices.map((b) => b.getAttribute("aria-label"))).toEqual([
-      "TAO: A$59K, 94% of what you hold. No target set.", // 40,177.50 of 42,592.86
-      "BNB: A$3.5K, 6% of what you hold. No target set.",
-      "NEAR: A$12, <1% of what you hold.",
-    ]);
-    expect(screen.getByText("The largest, TAO, is 94% of what you hold.")).toBeTruthy();
-    fireEvent.pointerEnter(slices[1] as HTMLElement);
-    expect(
-      screen.getByText("BNB: A$3.5K, 6% of what you hold. No target set.", { selector: "p" }),
-    ).toBeTruthy();
+    // Allocation: every coin by share; under 1% they share one "more" slice.
+    const donut = screen.getByRole("img", { name: "Allocation by coin" });
+    const arcs = Array.from(donut.querySelectorAll("circle")).map((c) =>
+      c.getAttribute("aria-label"),
+    );
+    expect(arcs).toHaveLength(3);
+    expect(arcs[0]).toMatch(/^TAO: 94%, A\$59,2\d\d$/); // 40,177.50 of 42,592.86
+    expect(arcs[1]).toMatch(/^BNB: 5\.\d%/);
+    expect(arcs[2]).toMatch(/^1 more: <0\.1%/); // NEAR
+    fireEvent.mouseEnter(donut.querySelectorAll("circle")[1] as Element);
+    expect(donut.textContent).toContain("BNB");
   });
 
   it("sets your targets under the strip, in the same order, and reads the gap", async () => {
@@ -431,31 +429,23 @@ describe("portfolio page", () => {
       ],
     });
     render(<App />);
-    expect(await screen.findByText("2 coins are outside your ±5 point band.")).toBeTruthy();
-    const strip = screen.getByRole("group", { name: "What you hold, by coin" });
-    const tao = within(strip).getByRole("button", { name: /^TAO/ });
-    expect(tao.getAttribute("aria-label")).toBe(
-      "TAO: A$59K, 94% of what you hold. Target 60%, 34 points over.",
-    );
-    const targets = screen.getByRole("region", { name: "Against your targets" });
-    const trim = within(targets).getByRole("link", { name: "Trim A$150" });
+    // The targets sit in the Allocation legend, with the one order that moves a coin back.
+    const box = await screen.findByRole("region", { name: "Allocation" });
+    expect(await within(box).findByText("target 60% · 34 pts over")).toBeTruthy();
+    const trim = within(box).getByRole("link", { name: "Trim A$150" });
     expect(trim.getAttribute("title")).toMatch(/^A\$21K to reach the target/);
-    expect(
-      within(targets).getByRole("img", { name: "TAO: 94% now, target 60%, 34 pts over" }),
-    ).toBeTruthy();
-    expect(within(targets).getByRole("link", { name: "Add A$150" })).toBeTruthy();
+    expect(within(box).getByRole("link", { name: "Add A$150" })).toBeTruthy();
   });
 
   it("closes the average cost editor when focus leaves it", async () => {
     serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
     render(<App />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Add average cost for TAO in Wallet" }),
-    );
-    const input = screen.getByRole("textbox", { name: "Average cost for TAO in Wallet, in USD" });
+    fireEvent.click(await screen.findByRole("button", { name: "TAO: open its details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add average cost for TAO in Ledger" }));
+    const input = screen.getByRole("textbox", { name: "Average cost for TAO in Ledger, in USD" });
     fireEvent.blur(input, { relatedTarget: document.body });
     expect(screen.queryByRole("textbox", { name: /Average cost for TAO/ })).toBeNull();
-    expect(screen.getByRole("button", { name: "Add average cost for TAO in Wallet" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Add average cost for TAO in Ledger" })).toBeTruthy();
   });
 
   it("lets the owner enter an average cost for the wallet's TAO", async () => {
@@ -465,16 +455,15 @@ describe("portfolio page", () => {
       "PUT /cost": () => [200, { averageCost: "300" }],
     });
     render(<App />);
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Add average cost for TAO in Wallet" }),
-    );
-    const input = screen.getByRole("textbox", { name: "Average cost for TAO in Wallet, in USD" });
+    fireEvent.click(await screen.findByRole("button", { name: "TAO: open its details" }));
+    fireEvent.click(screen.getByRole("button", { name: "Add average cost for TAO in Ledger" }));
+    const input = screen.getByRole("textbox", { name: "Average cost for TAO in Ledger, in USD" });
     fireEvent.change(input, { target: { value: "300.00" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     await waitFor(() => {
       const put = fetch.mock.calls.find(([, init]) => init?.method === "PUT");
       expect(JSON.parse(String(put?.[1]?.body))).toEqual({
-        source: "TAO wallet",
+        source: "Ledger",
         asset: "TAO",
         averageCost: "300.00",
       });
@@ -487,21 +476,25 @@ describe("portfolio page", () => {
     const filter = await screen.findByRole("group", { name: "Show holdings from" });
     expect(screen.getByTitle(/^From trades for 66%/)).toBeTruthy(); // BNB: 2.5 of 3.75
     expect(within(filter).getByRole("button", { name: "All" })).toBeTruthy(); // no counts
-    fireEvent.click(within(filter).getByRole("button", { name: /^Wallet/ }));
-    const said = () => screen.getByRole("region", { name: "What you hold" }).querySelector("h2");
-    expect(said()?.textContent).toBe("Your wallet holds A$59K."); // 40,177.50 at 1.4738, no cost
+    fireEvent.click(within(filter).getByRole("button", { name: /^Ledger/ }));
+    const ledger = () => document.querySelector('[aria-label="The Ledger"]') as HTMLElement;
+    expect(within(ledger()).getByText("A$59K")).toBeTruthy(); // 40,177.50 at 1.4738
+    expect(within(ledger()).getByText("85.0 τ")).toBeTruthy(); // TAO staked
     expect(screen.getAllByText("A$59,214").length).toBeGreaterThan(0); // exact in the table
     expect(screen.queryByText("BNB")).toBeNull();
+    expect(screen.queryByRole("region", { name: "USDC deposits" })).toBeNull(); // Fiat: Binance's
     fireEvent.click(within(filter).getByRole("button", { name: /^Binance/ }));
     expect(screen.getAllByText("BNB").length).toBeGreaterThan(0);
-    expect(said()?.textContent).toBe("Binance holds A$3.6K, A$192 above what it cost.");
-    // The side panel's Wallet row is a link to the same page, on the wallet.
+    const binance = document.querySelector('[aria-label="Binance"]') as HTMLElement;
+    expect(within(binance).getByText("A$3.6K")).toBeTruthy();
+    expect(within(binance).getByText("+A$192")).toBeTruthy();
+    // The side panel's Ledger row is a link to the same page, on the Ledger.
     const status = document.querySelector(".side-status") as HTMLElement;
-    const wallet = within(status).getByRole("link", { name: /^Wallet: what your TAO wallet/ });
-    expect(wallet.getAttribute("href")).toBe("#/portfolio?source=wallet");
-    window.location.hash = "#/portfolio?source=wallet";
+    const wallet = within(status).getByRole("link", { name: /^Ledger: what your Ledger holds/ });
+    expect(wallet.getAttribute("href")).toBe("#/portfolio?source=ledger");
+    window.location.hash = "#/portfolio?source=ledger";
     fireEvent(window, new HashChangeEvent("hashchange"));
-    await waitFor(() => expect(said()?.textContent).toBe("Your wallet holds A$59K."));
+    await waitFor(() => expect(ledger()).toBeTruthy());
     window.location.hash = "";
   });
 
@@ -516,8 +509,9 @@ describe("portfolio page", () => {
     next();
     expect(screen.getAllByText("$42,585")[0]).toBeTruthy();
     expect(screen.queryByText(/ at 1.4738 AUD/)).toBeNull();
-    const hero = screen.getByRole("region", { name: "What you hold" });
-    expect(hero.querySelector("h2")?.textContent).toBe("You hold $43K, $130 above what it cost.");
+    const tiles = document.querySelector('[aria-label="The whole account"]') as HTMLElement;
+    expect(within(tiles).getByText("$43K")).toBeTruthy();
+    expect(within(tiles).getByText("+$130")).toBeTruthy();
     next();
     expect(screen.getAllByText("₹35,86,083")[0]).toBeTruthy(); // 42,585 at 84.21, Indian grouping
     next();
@@ -585,6 +579,9 @@ describe("portfolio page", () => {
       ],
     });
     render(<App />);
+    // Fiat is Binance's: it shows on the Binance tab (owner, 22 Nov 2026).
+    const filter = await screen.findByRole("group", { name: "Show holdings from" });
+    fireEvent.click(within(filter).getByRole("button", { name: /^Binance/ }));
     const card = await screen.findByRole("region", { name: "USDC deposits" });
     await within(card).findByText("FY 2026-27");
     expect(within(card).getAllByText("A$2K")).toHaveLength(3); // the year, over August's bar, the line
@@ -603,7 +600,7 @@ describe("portfolio page", () => {
     expect(within(list).queryByRole("button", { name: /more/ })).toBeNull(); // 5 or fewer
   });
 
-  it("sorts the balances by coin, value, PnL percent or 24h", async () => {
+  it("sorts the balances by coin, holding or 24h", async () => {
     serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
     render(<App />);
     const order = () =>
@@ -611,20 +608,32 @@ describe("portfolio page", () => {
         (c) => c.textContent,
       );
     await screen.findByRole("button", { name: /^24h/ });
-    expect(order().slice(0, 3)).toEqual(["TAOWallet", "BNB", "NEAR"]); // by value, high first
+    expect(order().slice(0, 3)).toEqual(["TAO", "BNB", "NEAR"]); // by value, high first
     fireEvent.click(screen.getByRole("button", { name: /^24h/ }));
-    expect(order().slice(0, 3)).toEqual(["TAOWallet", "NEAR", "BNB"]); // 4.8, 1.5, −0.35
+    expect(order().slice(0, 3)).toEqual(["TAO", "NEAR", "BNB"]); // 4.8, 1.5, −0.35
     fireEvent.click(screen.getByRole("button", { name: /^24h/ }));
     expect(order()[0]).toBe("BNB"); // low first
-    fireEvent.click(screen.getByRole("button", { name: /^PnL/ }));
-    expect(order()[0]).toBe("BNB"); // the only one with a profit; the rest last
     expect(screen.queryByRole("button", { name: /^Amount/ })).toBeNull(); // amount sits under the coin
     // Invested: BNB's 2.5 covered at 590 = 1,475 (A$2,174); total value of what's shown
     const foot = document.querySelector("tfoot tr") as HTMLElement;
     expect(within(foot).getByText("Total")).toBeTruthy();
     expect(within(foot).getByText("A$2,174")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: /^Coin/ }));
-    expect(order().slice(0, 3)).toEqual(["BNB", "NEAR", "TAOWallet"]); // A to Z
+    expect(order().slice(0, 3)).toEqual(["BNB", "NEAR", "TAO"]); // A to Z
+  });
+
+  it("opens a holding in place: where it's held and where to act on it", async () => {
+    serve({ ...basics, "GET /portfolio": () => [200, portfolio] });
+    render(<App />);
+    fireEvent.click(await screen.findByRole("button", { name: "BNB: open its details" }));
+    expect(screen.getByText("On Binance")).toBeTruthy();
+    const act = screen.getByRole("link", { name: "Take profit or add funds on Trade" });
+    expect(act.getAttribute("href")).toBe("#/trade"); // not a DCA coin: its book is Trade
+    fireEvent.click(screen.getByRole("button", { name: "TAO: open its details" }));
+    const open = document.querySelector("tr.port-open") as HTMLElement;
+    expect(within(open).getByText("On the Ledger")).toBeTruthy();
+    expect(within(open).getByText(/send it to Binance first/)).toBeTruthy();
+    expect(within(open).queryByText("On Binance")).toBeNull(); // one row open at a time
   });
 
   it("refreshes from an icon, with no connect buttons", async () => {

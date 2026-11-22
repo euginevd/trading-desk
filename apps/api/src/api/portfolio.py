@@ -105,7 +105,10 @@ def _cost(
         covered = min(Decimal(balance.get("covers") or amount), amount)
         return Decimal(entered), covered, amount
     if asset in STABLES or balance.get("source", "Binance") != "Binance":
-        return None  # a stablecoin or the TAO wallet has a cost only if entered (17, 33)
+        # A coin moved to the Ledger keeps its Binance cost (99); a stablecoin, or TAO on the
+        # Ledger, has a cost only if entered (17, 33).
+        moved = asset not in STABLES and "binanceAmount" in balance
+        return _moved_cost(balance, amount, trades) if moved else None
     if asset in FEE_TOKENS:
         # A fee token (decision 35): spent on fees, so trades can't account for what's held;
         # its cost is the average of the period's buys, for the whole holding.
@@ -119,6 +122,21 @@ def _cost(
     if found.average is None:
         return None
     covered = min(found.covered, amount)
+    return found.average, covered, covered
+
+
+def _moved_cost(
+    balance: dict[str, str], amount: Decimal, trades: dict[str, list[dict[str, Any]]]
+) -> tuple[Decimal, Decimal, Decimal] | None:
+    """A coin moved from Binance to the Ledger keeps its Binance average cost (decision 99):
+    moving isn't selling. The trades cover what's still on Binance first, the Ledger next."""
+    found = average_cost(balance["asset"], trades.get(balance["asset"], []))
+    if found.average is None:
+        return None
+    on_binance = min(found.covered, Decimal(balance["binanceAmount"]))
+    covered = min(max(found.covered - on_binance, Decimal(0)), amount)
+    if covered <= 0:
+        return None
     return found.average, covered, covered
 
 
@@ -153,7 +171,7 @@ def build(
     open_orders: list[dict[str, Any]],
     aud: tuple[Decimal, str] | None,
 ) -> dict[str, Any]:
-    """The portfolio page's data: holdings from Binance and the TAO wallet (a balance with
+    """The portfolio page's data: holdings from Binance and the Ledger (a balance with
     `source`), totals, open orders and recent trades."""
     holdings = [h for b in balances if (h := _holding(b, tickers, trades)) is not None]
     total = sum((h["value"] for h in holdings if h["value"] is not None), ZERO)

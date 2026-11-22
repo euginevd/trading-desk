@@ -15,7 +15,7 @@ from api.binance import Binance, plain
 from api.portfolio import STABLES, build
 from api.tao import TaoError
 
-ALPHA = "Binance Alpha"  # a holding's source, beside "Binance" and "TAO wallet"
+LEDGER = "Ledger"  # the hardware wallet: TAO by Taostats, the rest by public address (99)
 
 FX_URL = "https://api.frankfurter.dev/v1/latest?base=USD&symbols=AUD,INR"
 LIVE_FX_URL = (
@@ -75,6 +75,8 @@ def aud_rate(client: httpx.Client) -> tuple[Decimal, str] | None:
 
 
 Wallet = Callable[[], dict[str, Decimal]]
+# The Ledger's coins by public address, and how the read went: ({coin: amount}, status).
+LedgerRead = Callable[[], tuple[dict[str, Decimal], dict[str, Any]]]
 WORKERS = 8
 
 
@@ -108,6 +110,39 @@ def _history(binance: Binance, coin: str, symbols: set[str]) -> list[dict[str, A
     return found
 
 
+def _tao_rows(tao: dict[str, Decimal] | None) -> list[dict[str, str]]:
+    """TAO on the Ledger, read through Taostats. Unclaimed root rewards count as held
+    (decision 32); an entered cost covers the rest."""
+    if tao is None or tao["total"] <= 0:
+        return []
+    held_tao = tao["total"] + tao.get("rewards", Decimal(0))
+    return [
+        {
+            "asset": "TAO",
+            "free": plain(held_tao),
+            "locked": "0",
+            "covers": plain(tao["total"]),
+            "source": LEDGER,
+        }
+    ]
+
+
+def _ledger_rows(on_ledger: dict[str, Decimal], held: dict[str, str]) -> list[dict[str, str]]:
+    """The Ledger's coins as balances; each carries what's still on Binance, so a coin moved
+    across keeps its Binance cost (decision 99)."""
+    return [
+        {
+            "asset": coin,
+            "free": plain(amount),
+            "locked": "0",
+            "source": LEDGER,
+            "binanceAmount": held.get(coin, "0"),
+        }
+        for coin, amount in sorted(on_ledger.items())
+        if amount > 0
+    ]
+
+
 @dataclass(frozen=True)
 class CostRules:
     """How average cost is worked out: costs the owner entered, by source and coin, and the
@@ -115,35 +150,32 @@ class CostRules:
 
     entered: dict[tuple[str, str], str] = field(default_factory=dict[tuple[str, str], str])
     from_ms: int = 0
-    # Coins held on Binance Alpha, which Binance's spot API doesn't show: (coin, amount), as
-    # the owner entered them (owner, 21 Nov 2026), priced from Binance's USDT perpetual.
-    alpha: tuple[tuple[str, str], ...] = ()
 
 
-def _with_alpha(
-    balances: list[dict[str, Any]],
-    tickers: dict[str, dict[str, str]],
-    alpha: tuple[tuple[str, str], ...],
-) -> tuple[list[dict[str, Any]], dict[str, dict[str, str]]]:
-    """The Binance Alpha holdings as balances of their own source, each priced from spot if
-    Binance has it there, else from its USDT perpetual."""
-    for coin, amount in alpha:
-        found = tickers.get(f"{coin}USDT") or perp.ticker(coin)
-        if found is not None:
-            tickers = {**tickers, f"{coin}USDT": found}
-        balances = [*balances, {"asset": coin, "free": amount, "locked": "0", "source": ALPHA}]
-    return balances, tickers
+def _perp_priced(
+    tickers: dict[str, dict[str, str]], coins: dict[str, Decimal]
+) -> dict[str, dict[str, str]]:
+    """A Ledger coin Binance has no spot pair for (a token moved off Binance Alpha) is priced from
+    its USDT perpetual."""
+    for coin in coins:
+        if coin not in STABLES and f"{coin}USDT" not in tickers:
+            found = perp.ticker(coin)
+            if found is not None:
+                tickers = {**tickers, f"{coin}USDT": found}
+    return tickers
 
 
-def fetch(
+def fetch(  # noqa: PLR0913, PLR0917 - each source is a seam the tests replace
     binance: Binance,
     fx: httpx.Client,
     wallet: Wallet | None = None,
     cache: TradeCache | None = None,
     rules: CostRules | None = None,
+    ledger: LedgerRead | None = None,
 ) -> dict[str, Any]:
-    """The portfolio, with the TAO wallet when one is set up. A TAO wallet that can't be read
-    leaves Binance's figures standing and says why in `wallets`. Binance's calls run side by
+    """The portfolio, with the Ledger when it's set up: TAO through Taostats (`wallet`) and
+    the other coins by public address (`ledger`, decision 99). A source that can't be read
+    leaves the rest standing and says why in `wallets`. Binance's calls run side by
     side, and a cache skips trade histories that can't have changed. `rules` hold the owner's
     entered average costs (decision 27) and the date trades count from (decision 34)."""
     rules = rules or CostRules()
@@ -154,12 +186,18 @@ def fetch(
         orders_job = pool.submit(binance.open_orders)
         fx_job = pool.submit(usd_rates, fx)
         wallet_job = pool.submit(wallet) if wallet is not None else None
+        ledger_job = pool.submit(ledger) if ledger is not None else None
         balances = balances_job.result()
         symbols = symbols_job.result()
         held = {b["asset"]: _held(b) for b in balances if b["asset"] not in STABLES}
+        on_ledger, ledger_status = (
+            ledger_job.result() if ledger_job is not None else ({}, {"status": "not_set"})
+        )
+        # A coin moved to the Ledger keeps its Binance cost, so its trades are read too.
+        histories = held | {c: held.get(c, "0") for c in on_ledger if c not in STABLES}
         trades: dict[str, list[dict[str, Any]]] = {}
         jobs: dict[str, Future[list[dict[str, Any]]]] = {}
-        for coin, amount in held.items():
+        for coin, amount in histories.items():
             kept = cache.get(coin, amount) if cache else None
             if kept is not None:
                 trades[coin] = kept
@@ -173,14 +211,14 @@ def fetch(
                 tao_status = {"status": "connected", **{k: plain(v) for k, v in tao.items()}}
             except TaoError as error:
                 tao_status = {"status": "error", "error": str(error)}
-        priced = {*held, "BTC", *(["TAO"] if tao is not None else [])}
+        priced = {*held, *on_ledger, "BTC", *(["TAO"] if tao is not None else [])}
         tickers_job = pool.submit(
             binance.tickers, sorted(f"{c}USDT" for c in priced if f"{c}USDT" in symbols)
         )
         for coin, job in jobs.items():
             trades[coin] = job.result()
             if cache:
-                cache.put(coin, held[coin], trades[coin])
+                cache.put(coin, histories[coin], trades[coin])
         tickers = tickers_job.result()
         open_orders = orders_job.result()
         rates = fx_job.result()
@@ -190,17 +228,8 @@ def fetch(
         for coin, found in trades.items()
         if (kept := [t for t in found if int(t["time"]) >= cost_from_ms])
     }
-    if tao is not None and tao["total"] > 0:
-        # Unclaimed root rewards count as held (decision 32); an entered cost covers the rest.
-        held_tao = tao["total"] + tao.get("rewards", Decimal(0))
-        wallet_row = {
-            "asset": "TAO",
-            "free": plain(held_tao),
-            "locked": "0",
-            "covers": plain(tao["total"]),
-        }
-        balances = [*balances, {**wallet_row, "source": "TAO wallet"}]
-    balances, tickers = _with_alpha(balances, tickers, rules.alpha)
+    balances = [*balances, *_tao_rows(tao), *_ledger_rows(on_ledger, held)]
+    tickers = _perp_priced(tickers, on_ledger)
     if costs:
         balances = [
             {**b, "cost": entered}
@@ -218,5 +247,9 @@ def fetch(
         **({"BTC": plain(1 / Decimal(btc["lastPrice"]))} if btc else {}),
     }
     portfolio["fetchedAt"] = datetime.now(UTC).isoformat(timespec="seconds")
-    portfolio["wallets"] = {"binance": {"status": "connected"}, "tao": tao_status}
+    portfolio["wallets"] = {
+        "binance": {"status": "connected"},
+        "tao": tao_status,
+        "ledger": ledger_status,
+    }
     return portfolio

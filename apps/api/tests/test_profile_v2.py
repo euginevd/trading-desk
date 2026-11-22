@@ -95,7 +95,7 @@ def portfolio() -> dict[str, Any]:
     return {
         "total": {"value": "30000", "rates": {"AUD": "1.5"}, "audDate": "2026-11-16"},
         "holdings": [
-            {"asset": "TAO", "source": "TAO wallet", "value": "14000", "price": "400"},
+            {"asset": "TAO", "source": "Ledger", "value": "14000", "price": "400"},
             {
                 "asset": "BTC",
                 "source": "Binance",
@@ -161,7 +161,7 @@ def test_the_file_reads_into_figures_and_the_typed_profile() -> None:
         {"coin": "SOL", "pct": "20"},
     ]
     counted = [h["name"] for h in doc["holdings"] if h["counts"]]
-    assert counted == ["TAO wallet", "Binance", "Emergency fund"]  # never parked tax or super
+    assert counted == ["Ledger", "Binance", "Emergency fund"]  # never parked tax or super
 
 
 def test_agents_get_the_file_with_an_age_not_a_birthday() -> None:
