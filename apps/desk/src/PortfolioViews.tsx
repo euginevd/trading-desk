@@ -1,24 +1,23 @@
 // The Portfolio's three tabs, each with only its own figures (owner, 22 Nov 2026): four widgets
-// in the Trade page's tile style, then an Allocation donut of the tab's coins. All sums the
+// in the Trade page's tile style, then Allocation and the tab's second box, one size. All sums the
 // account; Binance has its cash and orders; the Ledger its staking, custody and reads.
 import { useState } from "react";
 import { Live } from "./Figures";
 import type { Money } from "./money";
 import { km } from "./Figures";
-import type { Drift, DriftRow, Holding, Portfolio as Data } from "./types";
+import type { Drift, Holding, Portfolio as Data } from "./types";
 
 type Source = "all" | Holding["source"];
 const STABLES = new Set(["USDT", "USDC", "FDUSD"]);
 // Profile 5.3.2: the 2026 coins, 70% or more of them on the Ledger (Risk page, decision 79).
 const COINS_2026 = new Set(["BTC", "ETH", "SOL", "ZEC", "HYPE"]);
 const COLD_MIN = 70;
+const CUSTODY_ROWS = 6; // and a "more" line: seven, as Allocation shows
 
 // Six hues checked on the desk's dark surface (lightness, chroma, colour-blind and normal-vision
-// separation, 3:1 contrast), in a fixed order; a coin keeps its colour across the three tabs
-// because it's given by the coin's rank in the whole account, not in the tab.
+// separation, 3:1 contrast), given in this order to a tab's six largest coins.
 const HUES = ["#2a9d8f", "#3987e5", "#c98500", "#d55181", "#9085e9", "#d95926"];
 const OTHER = "#4b6470";
-const SMALL = 1; // coins under 1% of the tab share one "more" slice
 
 const sum = (hs: Holding[]) => hs.reduce((s, h) => s + Number(h.value ?? 0), 0);
 const tone = (n: number) => (n > 0 ? "up" : n < 0 ? "down" : "");
@@ -226,41 +225,17 @@ interface Slice {
   value: number;
   share: number;
   colour: string;
-  target: number | null;
-  row: DriftRow | null;
-}
-
-// Each coin's colour, from its rank by value in the whole account: the top six take a hue, the
-// rest share the neutral, so a coin looks the same on every tab.
-export function coinColours(all: Holding[]): Map<string, string> {
-  const byCoin = new Map<string, number>();
-  for (const h of all) {
-    if (!STABLES.has(h.asset))
-      byCoin.set(h.asset, (byCoin.get(h.asset) ?? 0) + Number(h.value ?? 0));
-  }
-  const ranked = [...byCoin.entries()].sort((a, b) => b[1] - a[1]).map(([c]) => c);
-  return new Map(ranked.map((c, i) => [c, HUES[i] ?? OTHER]));
 }
 
 const R = 70; // the ring's radius in the 180-wide view box
 const RING = 2 * Math.PI * R;
 const GAP = 2; // a 2px surface gap between slices
 
-// The tab's coins as a donut: the centre reads the whole, or the slice you point at; the legend
-// names every slice with its share and value, and its target gap where the Profile sets one.
-export function Allocation({
-  holdings,
-  all,
-  drift,
-  m,
-}: {
-  holdings: Holding[];
-  all: Holding[];
-  drift: Drift | null;
-  m: Money;
-}) {
+// The tab's coins as a donut: the six largest take a hue each (by rank in this tab, so no two
+// slices share a colour), the rest one "more" slice; the centre reads the whole, or the slice
+// you point at.
+export function Allocation({ holdings, m }: { holdings: Holding[]; m: Money }) {
   const [picked, setPicked] = useState<string | null>(null);
-  const colours = coinColours(all);
   const byCoin = new Map<string, number>();
   for (const h of holdings) {
     const v = Number(h.value ?? 0);
@@ -268,41 +243,31 @@ export function Allocation({
   }
   const whole = [...byCoin.values()].reduce((a, b) => a + b, 0);
   if (whole <= 0) return null;
-  const rows = new Map((drift?.hasTargets ? drift.rows : []).map((r) => [r.coin, r]));
-  const targets = new Map([...rows.values()].map((r) => [r.coin, Number(r.targetPct)]));
-  const slices: Slice[] = [];
-  const small: string[] = [];
-  for (const [coin, value] of [...byCoin.entries()].sort((a, b) => b[1] - a[1])) {
-    const share = (value / whole) * 100;
-    if (share < SMALL && !targets.has(coin)) {
-      small.push(coin);
-      continue;
-    }
-    const colour = STABLES.has(coin) ? OTHER : (colours.get(coin) ?? OTHER);
-    slices.push({
-      key: coin,
-      label: coin,
-      value,
-      share,
-      colour,
-      target: targets.get(coin) ?? null,
-      row: rows.get(coin) ?? null,
-    });
-  }
-  if (small.length) {
-    const value = small.reduce((s, c) => s + (byCoin.get(c) ?? 0), 0);
+  const ranked = [...byCoin.entries()].sort((a, b) => b[1] - a[1]);
+  const top = ranked.length > HUES.length + 1 ? ranked.slice(0, HUES.length) : ranked;
+  const slices: Slice[] = top.map(([coin, value], i) => ({
+    key: coin,
+    label: coin,
+    value,
+    share: (value / whole) * 100,
+    colour: HUES[i] ?? OTHER,
+  }));
+  const rest = ranked.slice(top.length);
+  if (rest.length) {
+    const value = rest.reduce((t, [, v]) => t + v, 0);
     slices.push({
       key: "more",
-      label: `${small.length} more`,
+      label: `${rest.length} more`,
       value,
       share: (value / whole) * 100,
       colour: OTHER,
-      target: null,
-      row: null,
     });
   }
-  const shown = slices.find((s) => s.key === picked) ?? null;
-  let start = 0;
+  const shown = slices.find((x) => x.key === picked) ?? null;
+  // Where each slice starts round the ring: the shares before it.
+  const starts = slices.map((_, i) =>
+    slices.slice(0, i).reduce((t, x) => t + (x.share / 100) * RING, 0),
+  );
   return (
     <section className="port-box port-alloc" aria-labelledby="port-alloc-title">
       <h2 id="port-alloc-title">Allocation</h2>
@@ -313,31 +278,29 @@ export function Allocation({
           role="img"
           aria-label="Allocation by coin"
         >
-          {slices.map((s) => {
-            const length = (s.share / 100) * RING;
-            const dash = Math.max(length - GAP, 0.5);
-            const offset = -start;
-            start += length;
+          {slices.map((x, i) => {
+            const dash = Math.max((x.share / 100) * RING - GAP, 0.5);
+            const offset = -(starts[i] ?? 0);
             return (
               <circle
-                key={s.key}
+                key={x.key}
                 cx="90"
                 cy="90"
                 r={R}
                 fill="none"
-                stroke={s.colour}
-                strokeWidth={picked === s.key ? 22 : 18}
+                stroke={x.colour}
+                strokeWidth={picked === x.key ? 22 : 18}
                 strokeDasharray={`${dash} ${RING - dash}`}
                 strokeDashoffset={offset}
                 transform="rotate(-90 90 90)"
                 className="port-arc"
                 tabIndex={0}
-                aria-label={`${s.label}: ${pct(s.share)}, ${m.whole(s.value)}`}
-                onMouseEnter={() => setPicked(s.key)}
+                aria-label={`${x.label}: ${pct(x.share)}, ${m.whole(x.value)}`}
+                onMouseEnter={() => setPicked(x.key)}
                 onMouseLeave={() => setPicked(null)}
-                onFocus={() => setPicked(s.key)}
+                onFocus={() => setPicked(x.key)}
                 onBlur={() => setPicked(null)}
-                onClick={() => setPicked((p) => (p === s.key ? null : s.key))}
+                onClick={() => setPicked((k) => (k === x.key ? null : x.key))}
               />
             );
           })}
@@ -349,43 +312,142 @@ export function Allocation({
           </text>
         </svg>
         <ul className="port-legend">
-          {slices.map((s) => (
+          {slices.map((x) => (
             <li
-              key={s.key}
-              className={picked === s.key ? "is-picked" : ""}
-              onMouseEnter={() => setPicked(s.key)}
+              key={x.key}
+              className={picked === x.key ? "is-picked" : ""}
+              onMouseEnter={() => setPicked(x.key)}
               onMouseLeave={() => setPicked(null)}
             >
-              <i style={{ background: s.colour }} aria-hidden="true" />
-              <span className="port-legend-coin">{s.label}</span>
-              <span className="num">{pct(s.share)}</span>
-              <span className="num muted">{m.short(s.value)}</span>
-              {s.target !== null && (
-                <span className="num muted port-legend-target">
-                  target {pct(s.target)}
-                  {Math.abs(s.share - s.target) >= 1 &&
-                    ` · ${Math.round(Math.abs(s.share - s.target))} pts ${s.share > s.target ? "over" : "under"}`}
-                </span>
-              )}
-              {/* Out of its band: the one order that moves it back, filled in on the DCA book
-                  for you to check (decision 55); nothing is sent from here. */}
-              {s.row?.outside && s.row.side && (
-                <a
-                  className="port-legend-act"
-                  href={`#/dca-book?coin=${s.row.coin}&rebalance=${s.row.side}&price=${s.row.price ?? ""}&qty=${s.row.qty ?? ""}`}
-                  title={
-                    s.row.capped
-                      ? `${km(s.row.toTargetAud ?? null)} to reach the target; one order of your per-trade size at a time`
-                      : undefined
-                  }
-                >
-                  {s.row.side === "sell" ? "Trim" : "Add"} {km(s.row.orderAud ?? null)}
-                </a>
-              )}
+              <i style={{ background: x.colour }} aria-hidden="true" />
+              <span className="port-legend-coin">{x.label}</span>
+              <span className="num">{pct(x.share)}</span>
+              <span className="num muted">{m.short(x.value)}</span>
             </li>
           ))}
         </ul>
       </div>
+    </section>
+  );
+}
+
+// All's second box: each Profile target against where the coin is now, the bar its share and
+// the tick its target, with the one order that moves it back when it's out of its band, filled
+// in on the DCA book for you to check (decision 55); nothing is sent from here.
+export function Targets({ drift }: { drift: Drift | null | false }) {
+  const rows = drift && drift.hasTargets ? drift.rows : [];
+  const top = Math.max(1, ...rows.flatMap((r) => [Number(r.targetPct), Number(r.nowPct)]));
+  return (
+    <section className="port-box port-targets" aria-labelledby="port-targets-title">
+      <h2 id="port-targets-title">
+        Targets {drift && drift.hasTargets && <span className="muted">±{drift.band} pts band</span>}
+      </h2>
+      {drift === null ? (
+        <p className="muted">Loading…</p>
+      ) : drift === false ? (
+        <p className="muted">Your targets couldn&apos;t be read. The page tries again shortly.</p>
+      ) : !rows.length ? (
+        <p className="muted">
+          No targets yet. <a href="#/profile">Set them on the Profile</a>
+        </p>
+      ) : (
+        <ul className="port-target-list">
+          {rows.map((r) => {
+            const now = Number(r.nowPct);
+            const target = Number(r.targetPct);
+            return (
+              <li key={r.coin}>
+                <span className="port-legend-coin">{r.coin}</span>
+                <span className="port-target-bar" aria-hidden="true">
+                  <span
+                    className={r.outside ? "is-out" : ""}
+                    style={{ width: `${(now / top) * 100}%` }}
+                  />
+                  <i style={{ left: `${(target / top) * 100}%` }} />
+                </span>
+                <span className="num">
+                  {pct(now)} <span className="muted">of {pct(target)}</span>
+                </span>
+                {r.outside && r.side ? (
+                  <a
+                    className="port-legend-act"
+                    href={`#/dca-book?coin=${r.coin}&rebalance=${r.side}&price=${r.price ?? ""}&qty=${r.qty ?? ""}`}
+                    title={
+                      r.capped
+                        ? `${km(r.toTargetAud ?? null)} to reach the target; one order of your per-trade size at a time`
+                        : undefined
+                    }
+                  >
+                    {r.side === "sell" ? "Trim" : "Add"} {km(r.orderAud ?? null)}
+                  </a>
+                ) : (
+                  <span className={`port-target-ok ${r.outside ? "wait" : "muted"}`}>
+                    {r.outside ? "Out of band" : "In band"}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// The Ledger's second box: for each coin on it, how much of that coin is here rather than on
+// Binance, least moved first, so what's left to move shows at a glance; seven rows at most, to
+// match Allocation beside it. A share rounds down: 100% only when nothing is left on Binance.
+export function Custody({ parts, m }: { parts: Holding[]; m: Money }) {
+  const coins = new Map<string, { ledger: number; binance: number }>();
+  for (const h of parts) {
+    if (STABLES.has(h.asset)) continue;
+    const c = coins.get(h.asset) ?? { ledger: 0, binance: 0 };
+    if (h.source === "Ledger") c.ledger += Number(h.value ?? 0);
+    else c.binance += Number(h.value ?? 0);
+    coins.set(h.asset, c);
+  }
+  const rows = [...coins.entries()]
+    .filter(([, c]) => c.ledger > 0)
+    .map(([coin, c]) => ({
+      coin,
+      ...c,
+      share: c.binance < 1 ? 100 : (c.ledger / (c.ledger + c.binance)) * 100,
+    }))
+    .sort((a, b) => a.share - b.share);
+  const shown = rows.length > CUSTODY_ROWS + 1 ? rows.slice(0, CUSTODY_ROWS) : rows;
+  const rest = rows.length - shown.length;
+  return (
+    <section className="port-box port-custody" aria-labelledby="port-custody-title">
+      <h2 id="port-custody-title">
+        Custody <span className="muted">share of each coin here</span>
+      </h2>
+      {!rows.length ? (
+        <p className="muted">No coins on the Ledger yet.</p>
+      ) : (
+        <ul className="port-target-list">
+          {shown.map(({ coin, binance, share }) => (
+            <li key={coin} className={COINS_2026.has(coin) && share < COLD_MIN ? "is-low" : ""}>
+              <span className="port-legend-coin">{coin}</span>
+              <span className="port-target-bar" aria-hidden="true">
+                <span style={{ width: `${share}%` }} />
+              </span>
+              <span className="num">{Math.floor(share)}%</span>
+              {COINS_2026.has(coin) && share < COLD_MIN ? (
+                <span className="num port-target-ok wait">Under {COLD_MIN}%</span>
+              ) : (
+                <span className="num muted port-target-ok">
+                  {binance >= 1 ? `${m.short(binance)} left` : "All here"}
+                </span>
+              )}
+            </li>
+          ))}
+          {rest > 0 && (
+            <li className="port-target-more muted">
+              {rest} more, each {Math.floor(rows[CUSTODY_ROWS]?.share ?? 0)}% or more here
+            </li>
+          )}
+        </ul>
+      )}
     </section>
   );
 }

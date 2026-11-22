@@ -1944,8 +1944,15 @@ dialog.in-place .detail-head {
   gap: 22px;
   max-width: 820px;
 }
+.set-col {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  min-width: 0;
+}
 /* Wide screens (owner, 20 Nov 2026: more compact, less scrolling): the sentence across the top,
-   How the desk answers beside the Morning summary, then Pages across as a grid of switches. */
+   two columns of cards (how the desk answers and the Ledger; limits and the morning summary),
+   then Pages across as a grid of switches. */
 @media (min-width: 1100px) {
   .settings {
     display: grid;
@@ -1957,6 +1964,9 @@ dialog.in-place .detail-head {
   .settings > .set-hero,
   .settings > .set-wide {
     grid-column: 1 / -1;
+  }
+  .set-col {
+    gap: 14px;
   }
   .settings .feature-rows {
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -2265,99 +2275,52 @@ dialog.in-place .detail-head {
   margin: 14px 0 0;
   font-size: 12px;
 }
-/* Settings › Ledger (decision 99): each public address on a row, tokens not counted under it. */
+/* Settings › Ledger (decision 99): read only, one row per address, its coins on the right. */
 .ledger-list {
   list-style: none;
-  margin: 0 0 14px;
+  margin: 0;
   padding: 0;
 }
 .ledger-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 0;
   border-bottom: 1px solid var(--line);
-  padding: 10px 0;
 }
-.ledger-head {
-  display: grid;
-  grid-template-columns: 64px 80px 110px minmax(0, 1fr) auto auto;
-  gap: 8px 12px;
-  align-items: center;
+.ledger-row:last-child {
+  border-bottom: 0;
 }
-.ledger-coin {
+.ledger-where {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.ledger-net {
   color: var(--text);
   font-weight: 600;
 }
-.ledger-addr,
-.ledger-token code {
+.ledger-addr {
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 13px;
+  font-size: 12px;
+  color: var(--muted);
 }
 .ledger-bal {
-  text-align: right;
-}
-.ledger-stale {
-  color: var(--wait);
-}
-.ledger-counted {
-  list-style: none;
-  margin: 8px 0 0;
-  padding-left: 76px;
-  font-size: 13px;
-}
-.ledger-counted li {
-  margin-bottom: 4px;
-}
-.ledger-unknown {
-  margin-top: 8px;
-  padding-left: 76px;
-}
-.ledger-unknown p {
-  margin: 0 0 6px;
-}
-.ledger-token {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  align-items: center;
-  margin-bottom: 6px;
+  justify-content: flex-end;
+  gap: 2px 14px;
+  text-align: right;
 }
-.ledger-row > .ledger-token {
-  margin: 8px 0 0 76px;
+.ledger-held {
+  white-space: nowrap;
 }
-.ledger-add {
-  display: grid;
-  grid-template-columns: 80px 110px minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: center;
-}
-.ledger-add input,
-.ledger-add select,
-.ledger-token input {
-  font: inherit;
-  color: var(--text);
-  background: var(--panel);
-  border: 1px solid var(--line-2);
-  border-radius: 10px;
-  padding: 7px 10px;
-  min-width: 0;
-}
-@media (max-width: 720px) {
-  .ledger-head {
-    grid-template-columns: 1fr 1fr;
-  }
-  .ledger-bal {
-    text-align: left;
-  }
-  .ledger-unknown {
-    padding-left: 0;
-  }
-  .ledger-row > .ledger-token {
-    margin-left: 0;
-  }
-  .ledger-add {
-    grid-template-columns: 1fr auto;
-  }
-  .ledger-add input:not(.ledger-coin-input) {
-    grid-column: 1 / -1;
-  }
+.ledger-stale {
+  flex-basis: 100%;
+  font-size: 12px;
+  color: var(--wait);
 }
 
 .settings-error-row {

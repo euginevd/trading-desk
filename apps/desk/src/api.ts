@@ -128,12 +128,6 @@ export const getGlobal = () => call<MarketGlobal>("GET", "/global");
 export const getSentimentDetail = () => call<SentimentDetail>("GET", "/sentiment/detail");
 export const getSettings = () => call<Settings>("GET", "/settings");
 export const getLedger = () => call<LedgerView>("GET", "/ledger");
-export const addLedgerAddress = (coin: string, network: string, address: string) =>
-  call<LedgerView>("POST", "/ledger/address", { coin, network, address });
-export const removeLedgerAddress = (id: number) =>
-  call<LedgerView>("POST", "/ledger/remove", { id });
-export const countLedgerToken = (id: number, mint: string, coin: string | null) =>
-  call<LedgerView>("POST", "/ledger/token", { id, mint, coin });
 export const getAiSettings = () => call<AiSettings>("GET", "/settings/ai");
 export const setAiSettings = (
   mode: AiMode,

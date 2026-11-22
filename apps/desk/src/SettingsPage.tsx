@@ -4,11 +4,8 @@
 // whether each is set. Your name lives in the Profile.
 import { type ReactNode, useEffect, useState } from "react";
 import {
-  addLedgerAddress,
-  countLedgerToken,
   finishSignIn,
   getLedger,
-  removeLedgerAddress,
   getAiSettings,
   getSettings,
   getTelegram,
@@ -23,14 +20,7 @@ import {
 } from "./api";
 import { day, errorOf } from "./format";
 import { FEATURES, type FeatureInfo, featureOn, isNew, useFeatures } from "./features";
-import type {
-  AiMode,
-  AiSettings,
-  LedgerAddress,
-  LedgerView,
-  Settings,
-  TelegramSettings,
-} from "./types";
+import type { AiMode, AiSettings, LedgerView, Settings, TelegramSettings } from "./types";
 
 const MODES: Record<AiMode, { name: string; title: string; sub: string }> = {
   api_key: { name: "API key (pay per use)", title: "API key", sub: "Pay per use" },
@@ -177,116 +167,121 @@ export default function SettingsPage() {
   return (
     <main className="wrap settings">
       <Said ai={ai} tg={tg} />
-      <section className="set-section" aria-labelledby="settings-ai">
-        <CardHead id="settings-ai" title="How the desk answers">
-          {status && <Status tone={status.tone}>{status.word}</Status>}
-        </CardHead>
-        {!ai && !error && (
-          <p className="muted settings-loading" aria-busy="true">
-            Loading…
-          </p>
-        )}
-        {error && (
-          <div className="settings-error-row">
-            <p className="settings-error" role="alert">
-              {error}
+      {/* Two columns that stack their own cards, so a short card leaves no gap beside a tall one. */}
+      <div className="set-col">
+        <section className="set-section" aria-labelledby="settings-ai">
+          <CardHead id="settings-ai" title="How the desk answers">
+            {status && <Status tone={status.tone}>{status.word}</Status>}
+          </CardHead>
+          {!ai && !error && (
+            <p className="muted settings-loading" aria-busy="true">
+              Loading…
             </p>
-            {!ai && (
-              <button
-                type="button"
-                className="settings-btn"
-                onClick={() => {
-                  setError(null);
-                  setAttempt((n) => n + 1);
-                }}
-              >
-                Try again
-              </button>
-            )}
-          </div>
-        )}
-        {ai && (
-          <>
-            <fieldset className="settings-group">
-              <legend className="settings-label">Answer with</legend>
-              <div className="settings-providers">
-                <ApiKey ai={ai} saving={saving} run={run} onPick={() => pick("api_key")} />
-                <Subscription
-                  ai={ai}
-                  saving={saving}
-                  run={run}
-                  onError={setError}
-                  onPick={() => pick("subscription")}
-                />
-              </div>
-            </fieldset>
-            <fieldset className="settings-group">
-              <legend className="settings-label">Model</legend>
-              <div className="settings-models">
-                {ai.models.map((m) => {
-                  const on = ai.model === m.id;
-                  const note = modelNote(m.name);
-                  return (
-                    <label key={m.id} className={`settings-option${on ? " on" : ""}`}>
-                      <input
-                        type="radio"
-                        name="ai-model"
-                        value={m.id}
-                        checked={on}
-                        disabled={saving}
-                        aria-label={shortName(m.name)}
-                        aria-describedby={note ? `model-${m.id}` : undefined}
-                        onChange={() =>
-                          void run(() => setAiSettings(ai.mode, ai.fallback, m.id), "Not saved.")
-                        }
-                      />
-                      <span className="settings-option-text">
-                        <strong>{shortName(m.name)}</strong>
-                        {note && (
-                          <span className="muted" id={`model-${m.id}`}>
-                            {note}
-                          </span>
-                        )}
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-            </fieldset>
-            <fieldset className="settings-group">
-              <legend className="settings-label">Effort</legend>
-              <div className="views settings-efforts" role="radiogroup" aria-label="Effort">
-                {ai.efforts.map((level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    role="radio"
-                    aria-checked={ai.effort === level}
-                    disabled={saving}
-                    onClick={() =>
-                      ai.effort !== level &&
-                      void run(
-                        () => setAiSettings(ai.mode, ai.fallback, ai.model, level),
-                        "Not saved.",
-                      )
-                    }
-                  >
-                    {EFFORT_NAMES[level]?.[0] ?? level}
-                  </button>
-                ))}
-              </div>
-              <p className="settings-hint muted">{EFFORT_NAMES[ai.effort]?.[1]}</p>
-            </fieldset>
-            <p className="settings-note muted">
-              Applies to every AI feature: the coach, the desk&apos;s agents, Analyse and the
-              Profile&apos;s command bar. What you enter is saved to .env and never shown again.
-            </p>
-          </>
-        )}
-      </section>
-      <Limits />
-      <Ledger />
-      <Telegram onRead={setTg} />
+          )}
+          {error && (
+            <div className="settings-error-row">
+              <p className="settings-error" role="alert">
+                {error}
+              </p>
+              {!ai && (
+                <button
+                  type="button"
+                  className="settings-btn"
+                  onClick={() => {
+                    setError(null);
+                    setAttempt((n) => n + 1);
+                  }}
+                >
+                  Try again
+                </button>
+              )}
+            </div>
+          )}
+          {ai && (
+            <>
+              <fieldset className="settings-group">
+                <legend className="settings-label">Answer with</legend>
+                <div className="settings-providers">
+                  <ApiKey ai={ai} saving={saving} run={run} onPick={() => pick("api_key")} />
+                  <Subscription
+                    ai={ai}
+                    saving={saving}
+                    run={run}
+                    onError={setError}
+                    onPick={() => pick("subscription")}
+                  />
+                </div>
+              </fieldset>
+              <fieldset className="settings-group">
+                <legend className="settings-label">Model</legend>
+                <div className="settings-models">
+                  {ai.models.map((m) => {
+                    const on = ai.model === m.id;
+                    const note = modelNote(m.name);
+                    return (
+                      <label key={m.id} className={`settings-option${on ? " on" : ""}`}>
+                        <input
+                          type="radio"
+                          name="ai-model"
+                          value={m.id}
+                          checked={on}
+                          disabled={saving}
+                          aria-label={shortName(m.name)}
+                          aria-describedby={note ? `model-${m.id}` : undefined}
+                          onChange={() =>
+                            void run(() => setAiSettings(ai.mode, ai.fallback, m.id), "Not saved.")
+                          }
+                        />
+                        <span className="settings-option-text">
+                          <strong>{shortName(m.name)}</strong>
+                          {note && (
+                            <span className="muted" id={`model-${m.id}`}>
+                              {note}
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+              <fieldset className="settings-group">
+                <legend className="settings-label">Effort</legend>
+                <div className="views settings-efforts" role="radiogroup" aria-label="Effort">
+                  {ai.efforts.map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      role="radio"
+                      aria-checked={ai.effort === level}
+                      disabled={saving}
+                      onClick={() =>
+                        ai.effort !== level &&
+                        void run(
+                          () => setAiSettings(ai.mode, ai.fallback, ai.model, level),
+                          "Not saved.",
+                        )
+                      }
+                    >
+                      {EFFORT_NAMES[level]?.[0] ?? level}
+                    </button>
+                  ))}
+                </div>
+                <p className="settings-hint muted">{EFFORT_NAMES[ai.effort]?.[1]}</p>
+              </fieldset>
+              <p className="settings-note muted">
+                Applies to every AI feature: the coach, the desk&apos;s agents, Analyse and the
+                Profile&apos;s command bar. What you enter is saved to .env and never shown again.
+              </p>
+            </>
+          )}
+        </section>
+        <Ledger />
+      </div>
+      <div className="set-col">
+        <Limits />
+        <Telegram onRead={setTg} />
+      </div>
       <Pages />
     </main>
   );
@@ -706,78 +701,44 @@ function Limits() {
   );
 }
 
-// Settings › Ledger (decision 99): the Ledger's public addresses, what each holds and when it
-// was read. The desk never holds a key: an address only reads. A token found on an address
-// counts only once named here, so an airdropped scam token never shows as money.
-// The coin a network's own balance is in, and the networks whose tokens the desk reads by contract.
-const NETWORK_COIN: Record<string, string> = {
-  Solana: "SOL",
-  Ethereum: "ETH",
-  HyperEVM: "HYPE",
-  Sui: "SUI",
-  NEAR: "NEAR",
-  Bitcoin: "BTC",
-};
-const EVM_NETWORKS = new Set(["Ethereum", "HyperEVM"]);
+// Settings › Ledger (decision 99): read only. Each public address, the network it's on and what
+// it holds. The desk never holds a key; the agent adds an address through the api. A token found
+// on an address but never named is left out, so an airdropped scam token never shows as money.
 const short = (a: string) => (a.length > 12 ? `${a.slice(0, 4)}…${a.slice(-4)}` : a);
 const hhmm = (ms: number) =>
   new Date(ms).toLocaleTimeString("en-AU", { hour: "numeric", minute: "2-digit" });
-const qty = (v: string) => Number(v).toLocaleString("en-AU", { maximumFractionDigits: 6 });
-
-function balances(a: LedgerAddress): string {
-  if (a.status === "error") return a.error ?? "Couldn't be read";
-  if (a.status !== "connected" || !a.coins) return "Not read yet";
-  const held = Object.entries(a.coins).filter(([, v]) => Number(v) > 0);
-  return held.length ? held.map(([c, v]) => `${qty(v)} ${c}`).join(" · ") : "Empty";
-}
+const qty = (v: string) => {
+  const n = Number(v);
+  const places = n >= 100 ? 2 : n >= 1 ? 4 : 6;
+  return n.toLocaleString("en-AU", { maximumFractionDigits: places });
+};
 
 function Ledger() {
   const [view, setView] = useState<LedgerView | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [coin, setCoin] = useState("SOL");
-  const [network, setNetwork] = useState("Solana");
-  const [contract, setContract] = useState<Record<number, { at: string; coin: string }>>({});
-  const [address, setAddress] = useState("");
-  const [naming, setNaming] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   useEffect(() => {
     getLedger().then(setView, () => setFailed(true));
   }, [attempt]);
-  const act = (action: () => Promise<LedgerView>, done: string, after?: () => void) => {
-    setBusy(true);
-    setNote(null);
-    action().then(
-      (next) => {
-        setView(next);
-        setBusy(false);
-        setNote({ ok: true, text: done });
-        after?.(); // what you typed stays until it's saved
-      },
-      (e: unknown) => {
-        setBusy(false);
-        setNote({ ok: false, text: errorOf(e, "Not saved.") });
-      },
-    );
-  };
-  const failing = view?.addresses.some((a) => a.status === "error");
+  const addresses = view?.addresses ?? [];
+  const failing = addresses.some((a) => a.status === "error");
+  const read = Math.max(0, ...addresses.map((a) => a.readAt ?? 0));
   const status: { tone: Tone; word: string } | null = !view
     ? null
-    : view.addresses.length === 0
+    : addresses.length === 0
       ? { tone: "idle", word: "No addresses yet" }
       : failing
         ? { tone: "down", word: "One didn't answer" }
-        : { tone: "up", word: `${view.addresses.length} read` };
+        : { tone: "up", word: `${addresses.length} read${read ? ` · ${hhmm(read)}` : ""}` };
+  const uncounted = addresses.reduce((n, a) => n + Object.keys(a.unknown ?? {}).length, 0);
   return (
     <section className="set-section" aria-labelledby="settings-ledger">
       <CardHead id="settings-ledger" title="Ledger">
         {status && <Status tone={status.tone}>{status.word}</Status>}
       </CardHead>
       <p className="settings-intro muted">
-        The desk reads your Ledger by its public addresses, through the api, every 15 minutes. It
-        never holds a key and never asks for your 24 words. TAO comes through Taostats, by
-        TAO_COLDKEY in .env.
+        Read only, by public address, every 15 minutes. The desk never holds a key or asks for your
+        24 words. TAO comes through Taostats.
       </p>
       {!view && !failed && (
         <p className="muted settings-loading" aria-busy="true">
@@ -801,182 +762,45 @@ function Ledger() {
           </button>
         </div>
       )}
-      {view && view.addresses.length === 0 && (
-        <p className="muted">No Ledger addresses yet. Add one when you move a coin off Binance.</p>
-      )}
-      {view && view.addresses.length > 0 && (
+      {view && addresses.length === 0 && <p className="muted">No Ledger addresses yet.</p>}
+      {addresses.length > 0 && (
         <ul className="ledger-list">
-          {view.addresses.map((a) => (
+          {addresses.map((a) => (
             <li key={a.id} className="ledger-row">
-              <div className="ledger-head">
-                <span className="ledger-coin">{a.coin}</span>
-                <span className="muted">{a.network}</span>
+              <span className="ledger-where">
+                <span className="ledger-net">{a.network}</span>
                 <code className="ledger-addr" title={a.address}>
                   {short(a.address)}
                 </code>
-                <span className={`ledger-bal num${a.status === "error" ? " down" : ""}`}>
-                  {balances(a)}
-                </span>
-                <span className={a.stale ? "ledger-stale" : "muted"}>
-                  {a.readAt ? `${a.stale ? "Last read " : ""}${hhmm(a.readAt)}` : ""}
-                </span>
-                <button
-                  type="button"
-                  className="settings-btn"
-                  disabled={busy}
-                  onClick={() => act(() => removeLedgerAddress(a.id), "Address removed")}
-                >
-                  Remove
-                </button>
-              </div>
-              {Object.keys(a.tokens).length > 0 && (
-                <ul className="ledger-counted">
-                  {Object.entries(a.tokens).map(([mint, name]) => (
-                    <li key={mint}>
-                      <span>Counted: {name}</span> <code title={mint}>{short(mint)}</code>{" "}
-                      <button
-                        type="button"
-                        className="settings-btn"
-                        disabled={busy}
-                        onClick={() =>
-                          act(() => countLedgerToken(a.id, mint, null), `${name} not counted`)
-                        }
-                      >
-                        Stop counting
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-              {EVM_NETWORKS.has(a.network) && (
-                // An EVM node can't list an address's tokens: count one by its contract.
-                <form
-                  className="ledger-token"
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    const t = contract[a.id];
-                    const name = t?.coin.trim().toUpperCase() ?? "";
-                    if (t?.at.trim() && name)
-                      act(() => countLedgerToken(a.id, t.at.trim(), name), `${name} counted`);
-                  }}
-                >
-                  <input
-                    aria-label={`Token contract on ${a.network}`}
-                    placeholder="Token contract (0x…)"
-                    value={contract[a.id]?.at ?? ""}
-                    disabled={busy}
-                    onChange={(e) =>
-                      setContract({
-                        ...contract,
-                        [a.id]: { at: e.target.value, coin: contract[a.id]?.coin ?? "" },
-                      })
-                    }
-                  />
-                  <input
-                    aria-label={`Coin for that contract on ${a.network}`}
-                    placeholder="Coin, such as USDC"
-                    value={contract[a.id]?.coin ?? ""}
-                    disabled={busy}
-                    onChange={(e) =>
-                      setContract({
-                        ...contract,
-                        [a.id]: { at: contract[a.id]?.at ?? "", coin: e.target.value },
-                      })
-                    }
-                  />
-                  <button type="submit" className="settings-btn" disabled={busy}>
-                    Count a token
-                  </button>
-                </form>
-              )}
-              {a.unknown && Object.keys(a.unknown).length > 0 && (
-                <div className="ledger-unknown">
-                  <p className="muted">
-                    Found but not counted. Count one only if you sent it here yourself: an unknown
-                    token is often a scam, so never open its link.
-                  </p>
-                  {Object.entries(a.unknown).map(([mint, v]) => (
-                    <form
-                      key={mint}
-                      className="ledger-token"
-                      onSubmit={(e) => {
-                        e.preventDefault();
-                        const name = (naming[mint] ?? "").trim().toUpperCase();
-                        if (name) act(() => countLedgerToken(a.id, mint, name), `${name} counted`);
-                      }}
-                    >
-                      <code title={mint}>{short(mint)}</code>
-                      <span className="num">{qty(v)}</span>
-                      <input
-                        aria-label={`Coin for token ${short(mint)}`}
-                        placeholder="Coin, such as USDC"
-                        value={naming[mint] ?? ""}
-                        disabled={busy}
-                        onChange={(e) => setNaming({ ...naming, [mint]: e.target.value })}
-                      />
-                      <button type="submit" className="settings-btn" disabled={busy}>
-                        Count it
-                      </button>
-                    </form>
-                  ))}
-                </div>
-              )}
+              </span>
+              <span className="ledger-bal">
+                {a.status === "error" ? (
+                  <span className="down">{a.error ?? "Couldn't be read"}</span>
+                ) : a.status !== "connected" || !a.coins ? (
+                  <span className="muted">Not read yet</span>
+                ) : !Object.values(a.coins).some((v) => Number(v) > 0) ? (
+                  <span className="muted">Empty</span>
+                ) : (
+                  Object.entries(a.coins)
+                    .filter(([, v]) => Number(v) > 0)
+                    .map(([c, v]) => (
+                      <span key={c} className="ledger-held">
+                        <span className="num">{qty(v)}</span> <span className="muted">{c}</span>
+                      </span>
+                    ))
+                )}
+                {a.stale && a.readAt && (
+                  <span className="ledger-stale">Last read {hhmm(a.readAt)}</span>
+                )}
+              </span>
             </li>
           ))}
         </ul>
       )}
-      {view && (
-        <form
-          className="ledger-add"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!address.trim() || busy) return;
-            act(
-              () => addLedgerAddress(coin, network, address.trim()),
-              "Address added",
-              () => setAddress(""),
-            );
-          }}
-        >
-          <input
-            aria-label="Coin"
-            className="ledger-coin-input"
-            value={coin}
-            disabled={busy}
-            onChange={(e) => setCoin(e.target.value.toUpperCase())}
-          />
-          <select
-            aria-label="Network"
-            value={network}
-            disabled={busy}
-            onChange={(e) => {
-              setNetwork(e.target.value);
-              setCoin(NETWORK_COIN[e.target.value] ?? coin);
-            }}
-          >
-            {view.networks.map((n) => (
-              <option key={n}>{n}</option>
-            ))}
-          </select>
-          <input
-            aria-label="Public address"
-            placeholder={
-              network === "Bitcoin"
-                ? "Account xpub from Ledger Live › Edit account › Advanced (never your 24 words)"
-                : "Public address from Ledger Live (never your 24 words)"
-            }
-            value={address}
-            disabled={busy}
-            onChange={(e) => setAddress(e.target.value)}
-          />
-          <button type="submit" className="settings-btn" disabled={busy || !address.trim()}>
-            Add
-          </button>
-        </form>
-      )}
-      {note && (
-        <p className={note.ok ? "muted" : "settings-error"} role={note.ok ? "status" : "alert"}>
-          {note.text}
+      {uncounted > 0 && (
+        <p className="settings-note muted">
+          {uncounted === 1 ? "1 token" : `${uncounted} tokens`} found but not counted: an unknown
+          token is often a scam, so never open its link.
         </p>
       )}
     </section>

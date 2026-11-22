@@ -57,9 +57,6 @@ const ledgerView = {
 
 vi.mock("./api", () => ({
   getLedger: () => Promise.resolve(ledgerView),
-  addLedgerAddress: () => Promise.resolve(ledgerView),
-  removeLedgerAddress: () => Promise.resolve({ addresses: [], networks: ["Solana"] }),
-  countLedgerToken: () => Promise.resolve(ledgerView),
   getTelegram: () =>
     Promise.resolve({ tokenSet: false, chatFound: false, time: "07:30", lastSent: null }),
   saveTelegramToken: () =>
@@ -235,12 +232,14 @@ describe("amPm", () => {
     expect(amPm("19:45")).toBe("7:45 pm");
   });
 
-  it("lists the Ledger's addresses, keeps an airdrop out, and never asks for the words", async () => {
+  it("lists the Ledger read only, keeps an airdrop out, and never asks for the words", async () => {
     render(<SettingsPage />);
     const section = await screen.findByRole("region", { name: "Ledger" });
-    expect(await within(section).findByText("20.5 SOL · 150,000 PUMP")).toBeTruthy();
-    expect(within(section).getByText(/Found but not counted/)).toBeTruthy();
-    expect(within(section).getByText(/never asks for your 24 words/)).toBeTruthy();
-    expect(within(section).getByRole("button", { name: "Count it" })).toBeTruthy();
+    expect(await within(section).findByText("20.5")).toBeTruthy();
+    expect(within(section).getByText("150,000")).toBeTruthy();
+    expect(within(section).queryByText("1,000,000")).toBeNull(); // the airdrop isn't counted
+    expect(within(section).getByText(/1 token found but not counted/)).toBeTruthy();
+    expect(within(section).getByText(/asks for your 24 words/)).toBeTruthy();
+    expect(within(section).queryByRole("button")).toBeNull(); // read only
   });
 });

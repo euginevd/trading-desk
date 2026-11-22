@@ -1,8 +1,9 @@
 """The Ledger, read by its public addresses only (decision 99): never a key, never a signature.
 
 TAO is read through Taostats (tao.py). This module reads Solana (SOL and SPL tokens), Ethereum
-(ETH and ERC-20 tokens), HyperEVM (HYPE), Sui, NEAR and Bitcoin (by the account's xpub, through
-mempool.space), each through a free public endpoint.
+(ETH and ERC-20 tokens), HyperEVM (HYPE), Sui, NEAR, Bitcoin (by the account's xpub, through
+mempool.space) and Zcash (the transparent account by its xpub, through 3xpl), each through a
+free public endpoint.
 A token counts only once the owner names it (its mint or contract), so a token airdropped to
 the address (often a scam with a "claim" link) never shows as money. Readings are kept 15
 minutes; if a network doesn't answer, the last reading stands in with its time, so the Ledger
@@ -30,8 +31,10 @@ RPCS = {
     "Sui": "https://graphql.mainnet.sui.io/graphql",  # Sui's public JSON-RPC is retired
     "NEAR": "https://rpc.mainnet.fastnear.com",
     "Bitcoin": "https://mempool.space/api/address/",
+    # 3xpl's keyless API (Blockchair blocked the IP after a few calls, 22 Nov 2026)
+    "Zcash": "https://sandbox-api.3xpl.com/zcash/address/",
 }
-SATS = Decimal(10) ** 8
+SATS = Decimal(10) ** 8  # a BTC, and a ZEC, is 10^8 of its smallest unit
 GAP = 5  # unused addresses in a row that end a chain's scan: few calls, as mempool.space
 # rate-limits (Ledger Live allows 20; a send's change lands at the next index anyway)
 BUSY = 429
@@ -71,6 +74,7 @@ NETWORKS = {
     "Sui": "SUI",
     "NEAR": "NEAR",
     "Bitcoin": "BTC",  # by the account's xpub: Ledger Live rotates addresses
+    "Zcash": "ZEC",  # the transparent account by its xpub: a shielded balance can't be read
 }
 LABEL = "Ledger"
 
@@ -130,18 +134,13 @@ def _base58_bytes(text: str) -> int | None:
 
 
 def valid_address(network: str, address: str) -> bool:
-    """A Solana address (or token mint) is 32 bytes in base58, 32 to 44 characters; an EVM
-    address (or token contract) is 0x and 40 hex digits."""
-    if network in {"Ethereum", "HyperEVM"}:
-        return bool(EVM_ADDRESS.fullmatch(address))
-    if network == "Sui":
-        return bool(SUI_ADDRESS.fullmatch(address))
-    if network == "Bitcoin":
-        return bitcoin_xpub.valid(address)
-    if network == "NEAR":
-        return _near_account(address)
-    if network != "Solana":
-        return False
+    """Whether the address is well formed for its network (an unknown network never is)."""
+    check = _CHECKS.get(network)
+    return bool(check and check(address))
+
+
+def _solana(address: str) -> bool:
+    """A Solana address (or token mint): 32 bytes in base58, 32 to 44 characters."""
     return 32 <= len(address) <= 44 and _base58_bytes(address) == KEY_BYTES  # noqa: PLR2004
 
 
@@ -157,6 +156,17 @@ def _near_account(address: str) -> bool:
         and parts[-1] == "near"
         and all(p and set(p) <= NEAR_PART for p in parts)
     )
+
+
+_CHECKS: dict[str, Callable[[str], bool]] = {
+    "Solana": _solana,
+    "Ethereum": lambda a: bool(EVM_ADDRESS.fullmatch(a)),  # 0x and 40 hex digits
+    "HyperEVM": lambda a: bool(EVM_ADDRESS.fullmatch(a)),
+    "Sui": lambda a: bool(SUI_ADDRESS.fullmatch(a)),
+    "NEAR": _near_account,
+    "Bitcoin": bitcoin_xpub.valid,
+    "Zcash": bitcoin_xpub.valid,
+}
 
 
 def valid_coin(coin: str) -> bool:
@@ -265,6 +275,54 @@ def _mempool_get(client: httpx.Client, address: str, audit: Audit) -> httpx.Resp
         raise LedgerError("mempool.space didn't answer. The desk tries again shortly.") from error
 
 
+def _read_zcash(client: httpx.Client, xpub: str, audit: Audit) -> Reading:
+    """Every receive and change t1 address of the account, until GAP unused in a row, summed:
+    Ledger Live sends a send's change to a new address, as for Bitcoin."""
+    total = 0
+    for chain in (0, 1):
+        quiet, index = 0, 0
+        while quiet < GAP and index < MOST:
+            for address in bitcoin_xpub.addresses(xpub, chain, index, GAP, zcash=True):
+                if quiet >= GAP:
+                    break
+                used, held = _three_xpl(client, address, audit)
+                quiet = 0 if used else quiet + 1
+                total += held
+            index += GAP
+        if quiet < GAP:
+            audit.record("exchange", "Zcash: Ledger", f"Stopped at {MOST} addresses")
+    audit.record("exchange", "Zcash: Ledger", "OK")
+    return Reading({"ZEC": Decimal(total) / SATS})
+
+
+def _three_xpl(client: httpx.Client, address: str, audit: Audit) -> tuple[int, int]:
+    """One t1 address's events and balance in zatoshi; an address never used has neither."""
+    action = "Zcash: Ledger"
+
+    def ask() -> httpx.Response:
+        try:
+            return client.get(RPCS["Zcash"] + address, params={"data": "balances"})
+        except httpx.HTTPError as error:
+            audit.record("exchange", action, f"Failed: {type(error).__name__}")
+            raise LedgerError("3xpl didn't answer. The desk tries again shortly.") from error
+
+    response = ask()
+    for wait in RETRY_WAIT:
+        if response.status_code != BUSY:
+            break
+        time.sleep(wait)
+        response = ask()
+    if response.status_code != OK:
+        audit.record("exchange", action, f"Refused {response.status_code}")
+        raise LedgerError(f"3xpl refused the request ({response.status_code}).")
+    # An address never used comes back as an empty list where the balance would be.
+    chain = response.json()["data"]["balances"]["zcash-main"]
+    if not chain:
+        return 0, 0
+    found = cast(dict[str, Any], chain["zcash"])
+    return int(found["events"]), int(found["balance"])
+
+
 def _read_near(client: httpx.Client, address: str, audit: Audit) -> Reading:
     params = {"request_type": "view_account", "finality": "final", "account_id": address}
     account = cast(dict[str, Any], _rpc(client, "NEAR", "query", params, audit) or {})
@@ -331,6 +389,8 @@ def _read_one(client: httpx.Client, watch: "Watch", audit: Audit) -> Reading:
         return _read_near(client, watch.address, audit)
     if watch.network == "Bitcoin":
         return _read_bitcoin(client, watch.address, audit)
+    if watch.network == "Zcash":
+        return _read_zcash(client, watch.address, audit)
     return _read_evm(client, watch, audit)
 
 
