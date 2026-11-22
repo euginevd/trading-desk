@@ -65,7 +65,9 @@ Known mistakes 9 to 18, for when hosting comes back (decision 14): [known-mistak
 
 ## Chain reads
 
-29r. Free public chain endpoints rate-limit (mempool.space answered 429 to a Bitcoin account scan doubled by two page reads): one read per address at a time, few calls, wait out a 429, and remember a failure for a minute (`ledger_wallet.py`).
+29r. Free chain endpoints rate-limit (mempool.space 429s, Blockchair blocks the IP): one read per address at a time, few calls, wait out a 429, remember a failure a minute.
+
+29s. Ledger Live sends Bitcoin's and Zcash's change to a new address: read the account by xpub, not one address.
 
 ## SQLite
 

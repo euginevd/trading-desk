@@ -4,7 +4,9 @@ Ledger Live hands out a new receive address each time, and a send's change goes 
 address, so the Ledger's bitcoin is read across the account, not one address. The xpub is the
 account's public key (BIP 32, path 84'/0'/0' for Native SegWit): from it, public derivation
 gives each receive address (chain 0) and change address (chain 1), written as bech32 `bc1q…`
-(BIP 84, BIP 173). Public derivation can't make a private key: nothing here can spend."""
+(BIP 84, BIP 173). A Zcash transparent account (44'/133'/0') derives the same way, its
+addresses written as base58 `t1…` instead. Public derivation can't make a private key: nothing
+here can spend."""
 
 import hashlib
 import hmac
@@ -19,6 +21,7 @@ BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 XPUB = bytes.fromhex("0488b21e")  # mainnet xpub; zpub is the same key, another label
 ZPUB = bytes.fromhex("04b24746")
 BECH32 = "qpzry9x8gf2tvdw0s3jn54khce6mua7l"
+ZCASH_T1 = bytes.fromhex("1cb8")  # the version bytes of a Zcash t1 (pay-to-key) address
 HARDENED = 2**31
 XPUB_LENGTH = 111  # 82 bytes in base58
 Point = tuple[int, int] | None
@@ -124,8 +127,18 @@ def _segwit(program: bytes) -> str:
     return "bc1" + "".join(BECH32[d] for d in [*data, *checksum])
 
 
-def addresses(xpub: str, chain: int, start: int, count: int) -> list[str]:
-    """`count` Native SegWit addresses on a chain (0 receive, 1 change) from index `start`."""
+def _base58check(payload: bytes) -> str:
+    raw = payload + hashlib.sha256(hashlib.sha256(payload).digest()).digest()[:4]
+    n, text = int.from_bytes(raw, "big"), ""
+    while n:
+        n, digit = divmod(n, 58)
+        text = BASE58[digit] + text
+    return "1" * (len(raw) - len(raw.lstrip(b"\0"))) + text
+
+
+def addresses(xpub: str, chain: int, start: int, count: int, zcash: bool = False) -> list[str]:
+    """`count` addresses on a chain (0 receive, 1 change) from index `start`: Native SegWit, or
+    Zcash t1 when `zcash`."""
     if chain not in {0, 1} or start < 0 or start + count >= HARDENED:
         raise XpubError("Ask for receive (0) or change (1) addresses.")
     code, key = _decode(xpub)
@@ -134,7 +147,7 @@ def addresses(xpub: str, chain: int, start: int, count: int) -> list[str]:
     for index in range(start, start + count):
         _, child = _child(code, key, index)
         digest = hashlib.new("ripemd160", hashlib.sha256(child).digest()).digest()
-        found.append(_segwit(digest))
+        found.append(_base58check(ZCASH_T1 + digest) if zcash else _segwit(digest))
     return found
 
 

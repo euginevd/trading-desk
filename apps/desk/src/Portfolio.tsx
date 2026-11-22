@@ -1,7 +1,8 @@
 // The Portfolio (decisions 64 and 101): three tabs, All, Binance and Ledger, each with only its own
-// figures: four widgets, an Allocation donut (and Fiat on Binance), then the holdings, whose rows
+// figures: four widgets, Allocation beside the tab's own box (Targets, Fiat, Custody), then the
+// holdings, whose rows
 // open in place, with orders and trades on Binance's tabs.
-import { Allocation, Widgets } from "./PortfolioViews";
+import { Allocation, Custody, Targets, Widgets } from "./PortfolioViews";
 import { Holding as HoldingCell } from "./PositionCells";
 import "./dca.css";
 import { Fragment, useCallback, useEffect, useState } from "react";
@@ -476,7 +477,7 @@ function Tables({
                         <td className="r num muted">
                           {invested(h) === null ? "–" : m.whole(invested(h))}
                         </td>
-                        <td>
+                        <td className="r port-hold">
                           <HoldingCell
                             m={m}
                             value={h.value === null ? null : Number(h.value)}
@@ -510,7 +511,7 @@ function Tables({
                 <tr>
                   <th scope="row">Total</th>
                   <td className="r num">{m.whole(totalInvested)}</td>
-                  <td>
+                  <td className="r port-hold">
                     <span className="dcb-hold">
                       <b>{m.whole(totalValue)}</b>
                       <span className={trend(String(Math.round(totalProfit)))}>
@@ -657,7 +658,8 @@ export default function Portfolio({
     window.addEventListener("hashchange", follow);
     return () => window.removeEventListener("hashchange", follow);
   }, []);
-  const [drift, setDrift] = useState<Drift | null>(null);
+  // null while loading, false when the first read failed (a failed refresh keeps the last).
+  const [drift, setDrift] = useState<Drift | null | false>(null);
 
   const settle = useCallback(
     (pending: Promise<Data>) => {
@@ -678,7 +680,7 @@ export default function Portfolio({
         },
       );
       // The targets move with prices, so they're read with the balances.
-      getDrift().then(setDrift, () => setDrift(null));
+      getDrift().then(setDrift, () => setDrift((d) => d ?? false));
     },
     [onStatus, onTao],
   );
@@ -775,10 +777,13 @@ export default function Portfolio({
       {data ? (
         <>
           <Widgets data={data} source={source} m={m} />
-          <div className={`port-pair${source === "Binance" ? "" : " is-one"}`}>
-            <Allocation holdings={shown} all={held} drift={source === "all" ? drift : null} m={m} />
-            {/* Fiat is Binance's: money in by month (owner, 22 Nov 2026). */}
+          {/* Two boxes of one size (owner, 22 Nov 2026): Allocation, and beside it the tab's own
+              second box: targets on All, Fiat on Binance, custody on the Ledger. */}
+          <div className="port-pair">
+            <Allocation holdings={shown} m={m} />
+            {source === "all" && <Targets drift={drift} />}
             {source === "Binance" && <Deposits />}
+            {source === "Ledger" && <Custody parts={held} m={m} />}
           </div>
           <Tables
             data={data}

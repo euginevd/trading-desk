@@ -44,7 +44,7 @@ The owner moved coins to the Ledger on 22 Nov 2026 and stakes TAO from it, so "T
 - [x] TAO stays on Taostats by `TAO_COLDKEY`, its rows now under Ledger; entered costs under "TAO wallet" move to "Ledger" in one migration (tax lots follow the coin, whatever its source)
 - [x] The Portfolio: Ledger rows priced like Binance's; a moved coin carries the Binance average cost (Binance's holding is covered first, the Ledger's next); the tabs read All, Binance, Ledger (decision 101); the side panel and Profile say Ledger
 - [x] Risk: "2026 coins on the Ledger" counts the Ledger rows (no longer "Not set up"); the money on Binance drops as coins move
-- [x] Settings › Ledger: each address with its balance, Add and Remove; tokens counted or listed apart
+- [x] Settings › Ledger: each address with its balance, read only (the agent adds addresses through the api); tokens not counted noted apart
 - [x] Threat model, spec and tests
 
 - [x] ETH and ERC-20 tokens from Ethereum's public RPC and HYPE from HyperEVM's, a token counted by its contract; SUI from Sui's GraphQL and NEAR from FastNEAR's RPC

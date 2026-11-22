@@ -113,7 +113,8 @@ export function Holding({
             {value === null ? "—" : whole(value)}
           </Live>
         </b>
-        <span className={pnl > 0 ? "up" : pnl < 0 ? "down" : "muted"}>
+        {/* Its tone follows the figure as shown: one that rounds to 0 reads as neither. */}
+        <span className={!/[1-9]/.test(whole(pnl, true)) ? "muted" : pnl > 0 ? "up" : "down"}>
           {whole(pnl, true)}
           {pnlPct !== null && ` (${percent(String(pnlPct))})`}
         </span>

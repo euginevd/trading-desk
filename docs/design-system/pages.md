@@ -27,4 +27,4 @@ The detail behind [design-system.md](../design-system.md) 9a, 11, 12, 13a to 13j
 
 ## Portfolio (decision 101, 22 Nov 2026)
 
-Three tabs, All, Binance and Ledger, each with four widgets in the Trade tile style and only its own figures; an Allocation donut with six hues checked on the dark surface, `#2a9d8f #3987e5 #c98500 #d55181 #9085e9 #d95926`, given by the coin's rank in the whole account, `#4b6470` for the rest, 2px gaps, the legend always shown; Fiat on Binance only; All adds each coin into one row; no source labels on rows.
+Three tabs, All, Binance and Ledger, each with four widgets in the Trade tile style and only its own figures; then two boxes of one size: an Allocation donut with six hues checked on the dark surface, `#2a9d8f #3987e5 #c98500 #d55181 #9085e9 #d95926`, given to the tab's six largest coins, `#4b6470` for the rest in one "more" slice, 2px gaps, the legend always shown; beside it Targets (All: bars with a tick at the target), Fiat (Binance) or Custody (Ledger: each coin's share here, least moved first, seven rows at most); under 520px the holdings drop Invested; All adds each coin into one row; no source labels on rows.

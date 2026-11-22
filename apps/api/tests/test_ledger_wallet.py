@@ -378,3 +378,48 @@ def test_a_backdated_claim_needs_that_days_rate_and_ids_must_be_numbers(
     monkeypatch.setenv("AUDIT_LOG_PATH", str(tmp_path / "audit.jsonl"))
     monkeypatch.setenv("DESK_DB_DIR", str(tmp_path))
     assert _post("/ledger/remove", {"id": "abc"})["statusCode"] == 400
+
+
+def test_zcash_sums_the_transparent_account_from_its_xpub(tmp_path: Path) -> None:
+    from api import bitcoin_xpub  # noqa: PLC0415 - only these tests need it
+
+    receive = bitcoin_xpub.addresses(BIP84_ZPUB, 0, 0, 2, zcash=True)
+    change = bitcoin_xpub.addresses(BIP84_ZPUB, 1, 0, 1, zcash=True)
+    assert all(a.startswith("t1") and len(a) == 35 for a in receive + change)  # noqa: PLR2004
+    held = {receive[0]: (2, 0), receive[1]: (1, 50_000_000), change[0]: (1, 200_000_000)}
+
+    def reply(request: httpx.Request) -> httpx.Response:
+        events, balance = held.get(request.url.path.rsplit("/", 1)[-1], (0, 0))
+        chain: Any = {"zcash": {"balance": str(balance), "events": events}} if events else []
+        return httpx.Response(200, json={"data": {"balances": {"zcash-main": chain}}})
+
+    client = httpx.Client(transport=httpx.MockTransport(reply))
+    audit = Audit(tmp_path / "audit.jsonl")
+    found = ledger_wallet.read(
+        client, ledger_wallet.Watch("Zcash", BIP84_ZPUB, {}), audit, lambda: 0
+    )
+    assert found.coins == {"ZEC": D("2.5")}  # the change counts, not just the first address
+    assert not ledger_wallet.valid_address("Zcash", receive[0])  # one address misses change
+
+
+def test_a_busy_3xpl_is_waited_out(tmp_path: Path, monkeypatch: Any) -> None:
+    from api import bitcoin_xpub  # noqa: PLC0415 - only these tests need it
+
+    monkeypatch.setattr(ledger_wallet, "RETRY_WAIT", (0.0, 0.0))
+    first = bitcoin_xpub.addresses(BIP84_ZPUB, 0, 0, 1, zcash=True)[0]
+    asked: list[str] = []
+
+    def reply(request: httpx.Request) -> httpx.Response:
+        address = request.url.path.rsplit("/", 1)[-1]
+        asked.append(address)
+        if asked.count(address) == 1 and address == first:
+            return httpx.Response(429)
+        chain: Any = {"zcash": {"balance": "100000000", "events": 1}} if address == first else []
+        return httpx.Response(200, json={"data": {"balances": {"zcash-main": chain}}})
+
+    client = httpx.Client(transport=httpx.MockTransport(reply))
+    audit = Audit(tmp_path / "audit.jsonl")
+    found = ledger_wallet.read(
+        client, ledger_wallet.Watch("Zcash", BIP84_ZPUB, {}), audit, lambda: 0
+    )
+    assert found.coins == {"ZEC": D("1")}

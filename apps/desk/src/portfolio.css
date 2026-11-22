@@ -85,16 +85,16 @@
   background: var(--line-2);
 }
 
-/* Allocation and Fiat: two boxes side by side (Fiat on Binance only). */
+/* Allocation and the tab's second box (Targets, Fiat or Custody): two halves of one height. */
 .port-pair {
   display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
-}
-.port-pair.is-one {
-  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
 }
 .port-pair > section {
+  display: flex;
+  flex-direction: column;
   padding: 14px 18px 16px;
   border: 1px solid var(--line);
   border-radius: var(--r-panel);
@@ -113,6 +113,7 @@
 
 /* The donut: slices 2px apart, the one you point at a little thicker; the centre reads it. */
 .port-alloc-body {
+  flex: 1;
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);
   gap: 18px;
@@ -149,7 +150,7 @@
 }
 .port-legend li {
   display: grid;
-  grid-template-columns: 10px 64px 48px 64px minmax(0, 1fr) auto;
+  grid-template-columns: 10px minmax(0, 1fr) 52px 64px;
   gap: 8px;
   align-items: center;
   padding: 4px 6px;
@@ -170,8 +171,68 @@
 .port-legend .num {
   text-align: right;
 }
-.port-legend-target {
+/* Targets and Custody: a row per coin, its bar (and on Targets, a tick at the target). */
+.port-target-list {
+  flex: 1;
+  display: grid;
+  align-content: space-evenly;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+.port-target-list li {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 82px 96px;
+  gap: 12px;
+  align-items: center;
+  padding: 4px 0;
+}
+.port-target-list li > .num {
+  text-align: right;
+  white-space: nowrap;
+}
+.port-target-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--layer-2);
+}
+.port-target-bar > span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 320ms var(--ease);
+}
+.port-target-bar > span.is-out,
+.port-target-list li.is-low .port-target-bar > span {
+  background: var(--wait);
+}
+.port-target-bar > i {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 14px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text);
+}
+.port-target-list li.port-target-more {
+  display: block;
   font-size: 12px;
+}
+.port-target-list .wait {
+  color: var(--wait);
+}
+.port-target-ok {
+  font-size: 12px;
+  text-align: right;
+  white-space: nowrap;
+}
+.port-target-list .port-legend-act {
+  text-align: right;
 }
 .port-legend-act {
   font-size: 12px;
@@ -186,8 +247,11 @@
   font-size: 22px;
   font-weight: 600;
 }
+/* The month bars take the box's spare height, so Fiat matches Allocation beside it. */
 .port-dep-bars {
-  height: 84px;
+  flex: 1;
+  min-height: 84px;
+  max-height: 150px;
 }
 .port-dep-bars button {
   position: relative;
@@ -234,6 +298,27 @@
 
 /* A holding opened in place (Trade's row-open pattern, dca.css): where it's held, its cost and
    where to act on it. */
+/* The Holding column sits right, under its header, next to 24h. */
+.port-holdings td.port-hold .dcb-hold {
+  justify-content: flex-end;
+}
+.port-holdings th:first-child {
+  width: 34%;
+}
+/* A phone: Invested gives way (the Holding cell's P&L is measured against it) and the
+   Holding cell wraps, so the table fits without scrolling sideways. */
+@media (max-width: 520px) {
+  .port-holdings th:first-child {
+    width: auto;
+  }
+  .port-holdings tr > :nth-child(2) {
+    display: none;
+  }
+  .port-holdings td.port-hold .dcb-hold {
+    flex-wrap: wrap;
+    gap: 0 8px;
+  }
+}
 .port-holdings tr.is-open td {
   background: var(--layer-2);
 }
@@ -306,11 +391,10 @@ tr.port-open td {
   .port-legend {
     width: 100%;
   }
-  .port-legend li {
-    grid-template-columns: 10px 56px 44px minmax(0, 1fr);
+  .port-target-list li {
+    grid-template-columns: 48px minmax(0, 1fr) 72px;
   }
-  .port-legend-target,
-  .port-legend-act {
+  .port-target-list li > :last-child {
     grid-column: 2 / -1;
   }
 }

@@ -376,7 +376,7 @@ describe("portfolio page", () => {
     render(<App />);
     expect((await screen.findAllByText("NEAR")).length).toBeGreaterThan(0); // $7.86: shown, not dust
     expect(screen.queryByText("PEPE")).toBeNull();
-    // Allocation: every coin by share; under 1% they share one "more" slice.
+    // Allocation: the six largest coins by share; past seven, the rest share one "more" slice.
     const donut = screen.getByRole("img", { name: "Allocation by coin" });
     const arcs = Array.from(donut.querySelectorAll("circle")).map((c) =>
       c.getAttribute("aria-label"),
@@ -384,12 +384,12 @@ describe("portfolio page", () => {
     expect(arcs).toHaveLength(3);
     expect(arcs[0]).toMatch(/^TAO: 94%, A\$59,2\d\d$/); // 40,177.50 of 42,592.86
     expect(arcs[1]).toMatch(/^BNB: 5\.\d%/);
-    expect(arcs[2]).toMatch(/^1 more: <0\.1%/); // NEAR
+    expect(arcs[2]).toMatch(/^NEAR: <0\.1%/); // three coins: each its own slice
     fireEvent.mouseEnter(donut.querySelectorAll("circle")[1] as Element);
     expect(donut.textContent).toContain("BNB");
   });
 
-  it("sets your targets under the strip, in the same order, and reads the gap", async () => {
+  it("shows your targets beside Allocation, with the order that moves a coin back", async () => {
     serve({
       ...basics,
       "GET /portfolio": () => [200, portfolio],
@@ -429,9 +429,9 @@ describe("portfolio page", () => {
       ],
     });
     render(<App />);
-    // The targets sit in the Allocation legend, with the one order that moves a coin back.
-    const box = await screen.findByRole("region", { name: "Allocation" });
-    expect(await within(box).findByText("target 60% · 34 pts over")).toBeTruthy();
+    // The targets have their own box beside Allocation, with the one order that moves a coin back.
+    const box = await screen.findByRole("region", { name: /^Targets/ });
+    expect(await within(box).findByText("of 60%")).toBeTruthy();
     const trim = within(box).getByRole("link", { name: "Trim A$150" });
     expect(trim.getAttribute("title")).toMatch(/^A\$21K to reach the target/);
     expect(within(box).getByRole("link", { name: "Add A$150" })).toBeTruthy();
