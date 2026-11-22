@@ -46,7 +46,7 @@ Colours, dark only. Defined on `:root`, with `body` given `bg` explicitly.
 11. Button (secondary `panel-2`, primary `accent`, buy `up`, sell `down`), Input with a unit, segmented Buy/Sell, Tabs, Table, Tag, Pill, Card, Dialog, Toast and Skeleton. A new page follows [new-page.md](design-system/new-page.md).
 12. One primary button per view: Analyse on Trade, Create on a bot page.
 13. Coin mark: the coin's logo, 24px (decision 25), else its letters. The desk's mark: Ledger (decision 78).
-13c. Portfolio (owner, 22 Nov 2026; decision 101): three tabs, All, Binance and Ledger, each with four widgets in the Trade tile style and only its own figures; an Allocation donut (six checked hues `#2a9d8f #3987e5 #c98500 #d55181 #9085e9 #d95926` by the coin's rank in the whole account, `#4b6470` for the rest, 2px gaps, legend always shown); Fiat on Binance only; All adds each coin into one row; no source labels on rows.
+13c. Portfolio: [pages.md](design-system/pages.md) (decision 101).
 13a. Rule-break banner (red, Place anyway (logged) set apart), an Out of date tag (`wait`), agents' icons as avatars (decisions 58, 70).
 13b. Trading agent, off the menu since decision 73: a numbered timeline and the call (decisions 60, 69).
 13c. Reader: Markdown full page, read-only, in a 760px column (decision 61).

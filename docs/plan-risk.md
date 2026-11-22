@@ -40,12 +40,12 @@ risk-agent's file and weekly review lead with the four; alerts stay on a state c
 The owner moved coins to the Ledger on 22 Nov 2026 and stakes TAO from it, so "TAO wallet" becomes **Ledger**: one source beside Binance.
 
 - [x] `ledger_addresses` table (coin, network, address, tokens counted, added), seeded once from the `ledger.device` setting (a removed address stays removed); the device record stays in settings for the security agent later
-- [x] Solana reader (`api/ledger_wallet.py`): SOL and the counted tokens (mint to coin, so an airdropped scam token is never counted) from Solana's public RPC, through the api only; cached 15 minutes; a failed read keeps the last figure and its age
+- [x] Solana reader (`api/ledger_wallet.py`): SOL and counted tokens, through the api only, cached 15 minutes, the last figure kept on a failure
 - [x] TAO stays on Taostats by `TAO_COLDKEY`, its rows now under Ledger; entered costs under "TAO wallet" move to "Ledger" in one migration (tax lots follow the coin, whatever its source)
 - [x] The Portfolio: Ledger rows priced like Binance's; a moved coin carries the Binance average cost (Binance's holding is covered first, the Ledger's next); the tabs read All, Binance, Ledger (decision 101); the side panel and Profile say Ledger
 - [x] Risk: "2026 coins on the Ledger" counts the Ledger rows (no longer "Not set up"); the money on Binance drops as coins move
-- [x] Settings › Ledger: the addresses, each with its balance and last read, Add (coin, network, address, checked for the network's format) and Remove; tokens found but not counted listed apart
-- [x] Threat model (Solana public RPC as a new outbound flow) and spec; tests with the lookups stubbed
+- [x] Settings › Ledger: each address with its balance, Add and Remove; tokens counted or listed apart
+- [x] Threat model, spec and tests
 
 - [x] ETH and ERC-20 tokens from Ethereum's public RPC and HYPE from HyperEVM's, a token counted by its contract; SUI from Sui's GraphQL and NEAR from FastNEAR's RPC
 

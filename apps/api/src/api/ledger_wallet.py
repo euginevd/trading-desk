@@ -40,7 +40,8 @@ MOST = 100  # addresses read on a chain at most
 MIST = Decimal(10) ** 9  # a SUI is a billion mist
 YOCTO = Decimal(10) ** 24  # a NEAR is 10^24 yoctoNEAR
 SUI_ADDRESS = re.compile(r"0x[0-9a-fA-F]{64}")
-NEAR_ACCOUNT = re.compile(r"[0-9a-f]{64}|[a-z0-9_-]+(\.[a-z0-9_-]+)*\.near")
+NEAR_PART = frozenset("abcdefghijklmnopqrstuvwxyz0123456789_-")
+HEX = frozenset("0123456789abcdef")
 SUI_BALANCE = (
     "query($a: SuiAddress!) { address(address: $a) "
     '{ balance(coinType: "0x2::sui::SUI") { totalBalance } } }'
@@ -138,10 +139,24 @@ def valid_address(network: str, address: str) -> bool:
     if network == "Bitcoin":
         return bitcoin_xpub.valid(address)
     if network == "NEAR":
-        return len(address) <= 64 and bool(NEAR_ACCOUNT.fullmatch(address))  # noqa: PLR2004
+        return _near_account(address)
     if network != "Solana":
         return False
     return 32 <= len(address) <= 44 and _base58_bytes(address) == KEY_BYTES  # noqa: PLR2004
+
+
+def _near_account(address: str) -> bool:
+    """An implicit account (64 hex digits) or a named one ending .near, each part letters, digits,
+    - and _ (checked without a regular expression: CodeQL, review of 22 Nov 2026)."""
+    if len(address) == 64 and set(address) <= HEX:  # noqa: PLR2004
+        return True
+    parts = address.split(".")
+    return (
+        len(address) <= 64  # noqa: PLR2004
+        and len(parts) >= 2  # noqa: PLR2004
+        and parts[-1] == "near"
+        and all(p and set(p) <= NEAR_PART for p in parts)
+    )
 
 
 def valid_coin(coin: str) -> bool:
