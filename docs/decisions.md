@@ -28,3 +28,4 @@ To add one: its line here, and its record, in the same form, at the end of the n
 100. Tax gets its own page: FY gains, lots and the 12-month countdown moved from the Portfolio, plus a staking income log. [Record](decisions/from-58.md)
 101. The Portfolio is three tabs (All, Binance, Ledger), each with four widgets, an Allocation donut, and Fiat on Binance only. [Record](decisions/from-58.md)
 102. The subscription's usage: the plan's windows shown for the whole account as last read on a desk run, this app's own runs in tokens and API-equivalent dollars; the API key's runs and spend against the cap. [Record](decisions/from-58.md)
+103. Claude on GitHub: `@claude` answers and may push to PR branches as `claude[bot]`; Claude reviews each PR when it opens. [Record](decisions/from-58.md)
