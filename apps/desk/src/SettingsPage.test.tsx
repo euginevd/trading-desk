@@ -18,6 +18,8 @@ const saved: AiSettings = {
   budget: { spent: "4.1", cap: "20" },
 };
 const LINK = "https://claude.com/cai/oauth/authorize?code=true";
+// What getAiSettings answers; a test may swap it, and afterEach puts it back.
+let shown: AiSettings = saved;
 
 const setAiSettings = vi.fn(
   (mode: AiSettings["mode"], fallback: boolean, model: string, effort?: string) =>
@@ -83,7 +85,7 @@ vi.mock("./api", () => ({
     Promise.resolve({ tokenSet: true, chatFound: true, time: "07:30", lastSent: "2026-11-15" }),
   getProfile: () => Promise.resolve({ name: "" }),
   setProfile: (name: string) => Promise.resolve({ name }),
-  getAiSettings: () => Promise.resolve(saved),
+  getAiSettings: () => Promise.resolve(shown),
   getSettings: () => Promise.resolve(limits),
   setLimits: (perOrder: string, perDay: string) => setLimits(perOrder, perDay),
   // Effort only when the page sends one, as the real call leaves it out.
@@ -98,7 +100,10 @@ vi.mock("./api", () => ({
 
 const { default: SettingsPage } = await import("./SettingsPage");
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  shown = saved;
+});
 
 describe("Settings", () => {
   it("shows the trading limits, and asks once more before raising them (audit 15)", async () => {
@@ -135,6 +140,55 @@ describe("Settings", () => {
       await screen.findByRole("checkbox", { name: "Use the API key if the subscription fails" }),
     );
     expect(setAiSettings).toHaveBeenLastCalledWith("subscription", true, "claude-opus-5-5");
+  });
+
+  it("shows the plan's windows for the whole account and this app's own runs apart", async () => {
+    const soon = Date.now() + 3 * 3600_000;
+    shown = {
+      ...saved,
+      mode: "subscription",
+      tokenSet: true,
+      usage: {
+        windows: [
+          { kind: "five_hour", name: "5-hour", used: 90, resetsAt: soon, status: "allowed" },
+          { kind: "seven_day", name: "Weekly", used: null, resetsAt: null, status: "allowed" },
+        ],
+        checkedAt: Date.now(),
+        today: { runs: 1, tokens: 12000, apiCost: "0.18" },
+        month: { runs: 0, tokens: 0, apiCost: "0.00" },
+      },
+    };
+    render(<SettingsPage />);
+    const five = await screen.findByRole("meter", { name: "5-hour used" });
+    expect(five.getAttribute("aria-valuenow")).toBe("90");
+    expect(screen.getByText("Near your limit")).toBeTruthy();
+    expect(screen.getByRole("meter", { name: "Weekly used" }).getAttribute("aria-valuetext")).toBe(
+      "Not known since it reset",
+    );
+    expect(screen.getByText(/Plan · whole account · as of/)).toBeTruthy();
+    expect(screen.getByText("This app · at API prices")).toBeTruthy();
+    expect(screen.getByText("1 run · 12k tokens · $0.18")).toBeTruthy();
+    expect(screen.getByText("No runs")).toBeTruthy();
+  });
+
+  it("shows the API key's spend against the cap and its runs", async () => {
+    shown = {
+      ...saved,
+      apiKeySet: true,
+      budget: { spent: "17", cap: "20" },
+      apiUsage: {
+        today: { runs: 2, tokens: 30000, apiCost: "0.40" },
+        month: { runs: 40, tokens: 1_200_000, apiCost: "17.00" },
+      },
+    };
+    render(<SettingsPage />);
+    const cap = await screen.findByRole("meter", { name: "Cap used" });
+    expect(cap.getAttribute("aria-valuenow")).toBe("85");
+    expect(cap.closest("li")?.className).toContain("is-near");
+    expect(screen.getAllByText(/\$17\.00 of \$20/)).toHaveLength(1); // the spend, said once on top
+    expect(screen.getByText(/of \$20 cap/)).toBeTruthy();
+    expect(screen.getByText("2 runs · 30k tokens · $0.40")).toBeTruthy();
+    expect(screen.getByText("40 runs · 1.2m tokens · $17.00")).toBeTruthy();
   });
 
   it("sets the effort for whichever model is chosen", async () => {
@@ -220,6 +274,23 @@ describe("Settings", () => {
     // The day it went, as the desk writes dates, and the time in am and pm.
     expect(screen.getByText("15 Nov 2026")).toBeTruthy();
     expect(screen.getByText(/goes to Telegram at 7:30 am\./)).toBeTruthy();
+  });
+});
+
+describe("planTone", () => {
+  it("says reached, near at 80% or Claude's warning, and nothing below", async () => {
+    const { planTone } = await import("./SettingsPage");
+    const w = (used: number | null, status: "allowed" | "allowed_warning" | "rejected") => ({
+      kind: "five_hour",
+      name: "5-hour",
+      used,
+      resetsAt: null,
+      status,
+    });
+    expect(planTone([w(40, "allowed")])).toBeNull();
+    expect(planTone([w(80, "allowed")])?.word).toBe("Near your limit");
+    expect(planTone([w(50, "allowed_warning")])?.word).toBe("Near your limit");
+    expect(planTone([w(null, "rejected")])?.word).toBe("Limit reached");
   });
 });
 

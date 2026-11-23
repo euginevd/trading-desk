@@ -714,6 +714,29 @@ export interface AiSettings {
   effort: string; // how hard the chosen model thinks before answering
   efforts: string[]; // the levels to pick from: low, medium, high, xhigh, max
   budget: { spent: string; cap: string };
+  usage?: SubscriptionUsage;
+  apiUsage?: { today: AppUsage; month: AppUsage }; // the API key's runs, all this app's
+}
+
+// The subscription's usage (decision 102): the plan's windows are the whole account's, as last
+// seen on a desk run; today and month are this app's own runs.
+export interface PlanWindow {
+  kind: string;
+  name: string; // 5-hour, Weekly
+  used: number | null; // percent; null once the window has reset since
+  resetsAt: number | null; // ms
+  status: "allowed" | "allowed_warning" | "rejected";
+}
+export interface AppUsage {
+  runs: number;
+  tokens: number;
+  apiCost: string; // what the runs would have cost on the API key, USD
+}
+export interface SubscriptionUsage {
+  windows: PlanWindow[];
+  checkedAt: number | null; // ms
+  today: AppUsage;
+  month: AppUsage;
 }
 
 // The coach Dashboard (decision 52): every figure worked out by the api; the words kept per day.

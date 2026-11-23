@@ -2275,6 +2275,96 @@ dialog.in-place .detail-head {
   margin: 14px 0 0;
   font-size: 12px;
 }
+
+/* The AI's usage (decision 102): meters for the plan or the cap, then this app's runs. */
+.sub-usage {
+  display: grid;
+  gap: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.sub-usage h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.sub-usage-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.sub-usage-windows {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sub-window {
+  display: grid;
+  grid-template-columns: 44px minmax(24px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.sub-window-used {
+  text-align: right;
+  line-height: 1.25;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sub-window-note {
+  display: block;
+  font-size: 10.5px;
+}
+.sub-meter {
+  position: relative;
+  display: block;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--layer-2);
+  overflow: hidden;
+}
+.sub-meter i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 3px;
+  background: var(--up);
+  transition:
+    width 0.5s var(--ease),
+    background-color 0.3s var(--ease);
+}
+.sub-window.is-near .sub-meter i {
+  background: var(--wait);
+}
+.sub-window.is-full .sub-meter i {
+  background: var(--down);
+}
+.sub-usage-list {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  font-size: 12px;
+}
+.sub-usage-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+}
+.sub-usage-row dt {
+  color: var(--muted);
+}
+.sub-usage-row dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sub-meter i {
+    transition: none;
+  }
+}
 /* Settings › Ledger (decision 99): read only, one row per address, its coins on the right. */
 .ledger-list {
   list-style: none;

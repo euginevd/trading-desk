@@ -20,6 +20,7 @@ from api import (
     account_coins,
     agents,
     ai_client,
+    ai_usage,
     analyse,
     backtest,
     coach,
@@ -490,13 +491,19 @@ def _ask(store: Store | None = None) -> Ask:
         return demo_ask
     chosen = lambda: ai_client.model(store)  # noqa: E731 - read at each run
     level = lambda: ai_client.effort(store)  # noqa: E731 - read at each run
+    record = ai_usage.recorder(store) if store is not None else None
+    billed = ai_usage.recorder(store, source="api") if store is not None else None
     return switched(
-        lambda: _api_ask(chosen, level), subscription(model=chosen, effort=level), store
+        lambda: _api_ask(chosen, level, billed),
+        subscription(model=chosen, effort=level, record=record),
+        store,
     )
 
 
 def _api_ask(
-    model: Callable[[], str] = ai_client.model, effort: Callable[[], str] = ai_client.effort
+    model: Callable[[], str] = ai_client.model,
+    effort: Callable[[], str] = ai_client.effort,
+    record: Callable[[dict[str, Any]], None] | None = None,
 ) -> Ask:
     key = os.environ.get("ANTHROPIC_API_KEY", "").strip()
     if not key:
@@ -515,7 +522,7 @@ def _api_ask(
     client = anthropic.Anthropic(
         api_key=key, timeout=SIGNAL_TIMEOUT_SECONDS, default_headers=headers
     )
-    return claude(client, model, effort)
+    return claude(client, model, effort, record)
 
 
 def _cap() -> Decimal:
