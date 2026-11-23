@@ -8,6 +8,7 @@ rules in code: no adding over the cap a coin, nothing sold that isn't held. Keys
 and order ids never reach the prompt (threat model R7).
 """
 
+import contextlib
 import json
 import re
 import time
@@ -19,6 +20,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, cast
 
+from api import ai_usage
 from api.audit import Audit
 from api.binance import plain
 from api.store import Store
@@ -493,24 +495,32 @@ def claude(
     client: Any,
     model: Callable[[], str] = lambda: MODEL,
     effort: Callable[[], str] = lambda: EFFORT,
+    record: Callable[[dict[str, Any]], None] | None = None,
 ) -> Ask:
-    """The real Ask: the chosen Claude model with web search, through the Anthropic SDK."""
+    """The real Ask: the chosen Claude model with web search, through the Anthropic SDK.
+    `record` is given each billed run's tokens and cost (decision 102)."""
 
     def ask(system: str, text: str, shape: dict[str, Any]) -> tuple[dict[str, Any], Decimal]:
         messages: list[dict[str, Any]] = [{"role": "user", "content": text}]
         chosen = chosen_model(model)
         cost = Decimal(0)
+        tokens = 0
         response: Any = None
         try:
             for _ in range(3):  # a long search turn can pause; send it back to carry on
                 response = _create(client, system, messages, shape, chosen, effort())
                 cost += usage_cost(response.usage, chosen)
+                tokens += ai_usage.tokens(response.usage)
                 if response.stop_reason != "pause_turn":
                     break
                 messages.append({"role": "assistant", "content": response.content})
         except SignalError as error:
             error.cost += cost  # the turns before it were billed
             raise
+        finally:
+            if record is not None and response is not None:
+                with contextlib.suppress(Exception):  # the count never costs the owner a plan
+                    record({"tokens": tokens, "apiCost": cost})
         if response is None or response.stop_reason == "refusal":
             raise SignalError("Claude declined to give a signal for this coin.", cost)
         texts = [b.text for b in response.content if getattr(b, "type", "") == "text"]

@@ -20,7 +20,16 @@ import {
 } from "./api";
 import { day, errorOf } from "./format";
 import { FEATURES, type FeatureInfo, featureOn, isNew, useFeatures } from "./features";
-import type { AiMode, AiSettings, LedgerView, Settings, TelegramSettings } from "./types";
+import type {
+  AiMode,
+  AiSettings,
+  AppUsage,
+  LedgerView,
+  PlanWindow,
+  Settings,
+  SubscriptionUsage,
+  TelegramSettings,
+} from "./types";
 
 const MODES: Record<AiMode, { name: string; title: string; sub: string }> = {
   api_key: { name: "API key (pay per use)", title: "API key", sub: "Pay per use" },
@@ -413,6 +422,7 @@ function ApiKey({
       <p className="settings-hint muted">
         Create a key at console.anthropic.com under API keys, then paste it here.
       </p>
+      {ai.apiKeySet && <ApiUsage ai={ai} />}
     </ProviderCard>
   );
 }
@@ -531,7 +541,143 @@ function Subscription({
       <p className="settings-hint muted">
         Signs in the way Claude Code does; the token lasts a year.
       </p>
+      {ai.tokenSet && ai.usage && <Usage usage={ai.usage} />}
     </ProviderCard>
+  );
+}
+
+// "3 pm" or "11:30 am" today, "Fri 11 pm" another day: when a plan window resets, or was read.
+function at(ms: number): string {
+  const time = new Date(ms);
+  const h = time.getHours();
+  const m = time.getMinutes();
+  const mins = m ? `:${String(m).padStart(2, "0")}` : "";
+  const clock = `${h % 12 || 12}${mins} ${h < 12 ? "am" : "pm"}`;
+  if (time.toDateString() === new Date().toDateString()) return clock;
+  return `${time.toLocaleDateString("en-AU", { weekday: "short" })} ${clock}`;
+}
+const tokenCount = (n: number) =>
+  n.toLocaleString("en-AU", { notation: "compact", maximumFractionDigits: 1 }).toLowerCase();
+const usd = (v: string) => (Number(v) > 0 ? `$${v}` : "<$0.01");
+
+// How close the plan is to a limit: reached, near (80% or Claude's own warning), or fine.
+export function planTone(windows: PlanWindow[]): { tone: Tone; word: string } | null {
+  if (windows.some((w) => w.status === "rejected")) return { tone: "down", word: "Limit reached" };
+  if (windows.some((w) => w.status === "allowed_warning" || (w.used ?? 0) >= 80)) {
+    return { tone: "wait", word: "Near your limit" };
+  }
+  return null;
+}
+
+// One meter row: its name, the bar, then the figure and when it resets.
+function Meter({
+  name,
+  used,
+  tone,
+  note,
+}: {
+  name: string;
+  used: number | null;
+  tone: string;
+  note: string;
+}) {
+  return (
+    <li className={`sub-window ${tone}`}>
+      <span className="sub-window-name">{name}</span>
+      <span
+        className="sub-meter"
+        role="meter"
+        aria-label={`${name} used`}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.min(used ?? 0, 100)}
+        aria-valuetext={used === null ? "Not known since it reset" : `${used}%`}
+      >
+        <i style={{ width: `${Math.min(used ?? 0, 100)}%` }} />
+      </span>
+      <span className="sub-window-used">
+        {used === null ? "—" : `${used}%`}
+        <span className="sub-window-note muted">{note}</span>
+      </span>
+    </li>
+  );
+}
+
+// This app's own runs, today and this month: one line each.
+function AppRows({ title, today, month }: { title: string; today: AppUsage; month: AppUsage }) {
+  const line = (u: AppUsage) =>
+    u.runs === 0
+      ? "No runs"
+      : `${u.runs} ${u.runs === 1 ? "run" : "runs"} · ${tokenCount(u.tokens)} tokens · ${usd(u.apiCost)}`;
+  return (
+    <>
+      <h3>{title}</h3>
+      <dl className="sub-usage-list">
+        <div className="sub-usage-row">
+          <dt>Today</dt>
+          <dd>{line(today)}</dd>
+        </div>
+        <div className="sub-usage-row">
+          <dt>Month</dt>
+          <dd>{line(month)}</dd>
+        </div>
+      </dl>
+    </>
+  );
+}
+
+// The subscription's usage (decision 102): the plan's windows are the whole account's (Claude
+// Code and claude.ai too), as last read on a desk run; below them, this app's own runs, which
+// Anthropic can't split out of the plan's share, so they stay in tokens and API-price dollars.
+function Usage({ usage }: { usage: SubscriptionUsage }) {
+  const warn = planTone(usage.windows);
+  return (
+    <div className="sub-usage">
+      <div className="sub-usage-head">
+        <h3>
+          Plan · whole account
+          {usage.checkedAt ? ` · as of ${at(usage.checkedAt)}` : ""}
+        </h3>
+        {warn && <Status tone={warn.tone}>{warn.word}</Status>}
+      </div>
+      {usage.windows.length === 0 ? (
+        <p className="settings-hint muted">Shows after the desk&apos;s first run on the plan.</p>
+      ) : (
+        <ul className="sub-usage-windows">
+          {usage.windows.map((w) => (
+            <Meter
+              key={w.kind}
+              name={w.name}
+              used={w.used}
+              tone={w.status === "rejected" ? "is-full" : (w.used ?? 0) >= 80 ? "is-near" : ""}
+              note={w.resetsAt ? at(w.resetsAt) : "reset"}
+            />
+          ))}
+        </ul>
+      )}
+      <AppRows title="This app · at API prices" today={usage.today} month={usage.month} />
+    </div>
+  );
+}
+
+// The API key's usage (decision 102): all of it is this app's, against the month's cap.
+function ApiUsage({ ai }: { ai: AiSettings }) {
+  const spent = Number(ai.budget.spent);
+  const cap = Number(ai.budget.cap);
+  const used = cap > 0 ? Math.round((spent / cap) * 100) : 0;
+  return (
+    <div className="sub-usage">
+      <h3>This app · billed</h3>
+      <ul className="sub-usage-windows">
+        <Meter
+          name="Cap"
+          used={used}
+          tone={used >= 100 ? "is-full" : used >= 80 ? "is-near" : ""}
+          note={`of $${cap.toFixed(0)} cap`}
+        />
+      </ul>
+      {ai.apiUsage && <AppRows title="Runs" today={ai.apiUsage.today} month={ai.apiUsage.month} />}
+    </div>
   );
 }
 

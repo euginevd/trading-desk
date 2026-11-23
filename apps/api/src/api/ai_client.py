@@ -21,6 +21,7 @@ from decimal import Decimal
 from typing import Any, cast
 from zoneinfo import ZoneInfo
 
+from api import ai_usage
 from api.ai_signal import (
     EFFORT,
     EFFORTS,
@@ -98,6 +99,8 @@ def view(store: Store, signals: Signals) -> dict[str, Any]:
         "effort": effort(store),
         "efforts": list(EFFORTS),
         "budget": signals.budget(),
+        "usage": ai_usage.view(store),
+        "apiUsage": ai_usage.app(store, "api"),
     }
 
 
@@ -147,9 +150,11 @@ def subscription(
     query: Query | None = None,
     model: Callable[[], str] = lambda: MODEL,
     effort: Callable[[], str] = lambda: EFFORT,
+    record: Callable[[dict[str, Any]], None] | None = None,
 ) -> Ask:
     """The plan through the owner's Claude subscription. Costs nothing per call; it counts
-    against the plan's usage limits instead."""
+    against the plan's usage limits instead, which `record` is given after each run (decision
+    102), answered or not."""
 
     def ask(system: str, text: str, shape: dict[str, Any]) -> tuple[dict[str, Any], Decimal]:
         token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN", "").strip()
@@ -158,10 +163,11 @@ def subscription(
                 "Add CLAUDE_CODE_OAUTH_TOKEN to .env (run `claude setup-token`) "
                 "to use your Claude subscription."
             )
+        seen: dict[str, Any] = {}
         try:
             chosen = chosen_model(model)
             run = asyncio.wait_for(
-                _run(query, system, text, shape, token, chosen, effort()), TIMEOUT_SECONDS
+                _run(query, system, text, shape, token, chosen, effort(), seen), TIMEOUT_SECONDS
             )
             return asyncio.run(run) | {"_model": chosen}, Decimal(0)
         except TimeoutError:
@@ -171,6 +177,10 @@ def subscription(
         except Exception as error:  # noqa: BLE001 - any other failure is a failed run, in words
             detail = " ".join(str(error).replace(token, "[token]").split())[:200]
             raise SignalError(f"Claude Code failed: {detail or type(error).__name__}") from None
+        finally:
+            if record is not None and seen:
+                with contextlib.suppress(Exception):  # the count never costs the owner a plan
+                    record(seen)
 
     return ask
 
@@ -195,6 +205,7 @@ async def _run(  # noqa: PLR0913, PLR0917 - the call's parts, each needed
     token: str,
     model: str,
     effort: str = EFFORT,
+    seen: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     import claude_agent_sdk as sdk  # noqa: PLC0415 - only loaded for the subscription
 
@@ -226,10 +237,12 @@ async def _run(  # noqa: PLR0913, PLR0917 - the call's parts, each needed
                     if isinstance(message, sdk.AssistantMessage) and message.error:
                         error = message.error
                     elif isinstance(message, sdk.RateLimitEvent):
+                        _saw(seen, message)
                         if message.rate_limit_info.status == "rejected":
                             limit = message.rate_limit_info
                     elif isinstance(message, sdk.ResultMessage):
                         result = message
+                        _saw(seen, message)
         except sdk.CLINotFoundError as failure:
             raise SignalError("Claude Code isn't installed in the api image.") from failure
         except sdk.ClaudeSDKError as failure:
@@ -237,6 +250,19 @@ async def _run(  # noqa: PLR0913, PLR0917 - the call's parts, each needed
                 detail = " ".join(str(failure).split())[:200]
                 raise SignalError(f"Claude Code stopped: {detail}") from failure
     return _structured(result, error, limit)
+
+
+def _saw(seen: dict[str, Any] | None, message: Any) -> None:
+    """Keeps what a run tells about the plan (decision 102): the windows from a rate limit event,
+    the tokens and API-equivalent cost from the result."""
+    if seen is None:
+        return
+    info = getattr(message, "rate_limit_info", None)
+    if info is not None:
+        seen["windows"] = seen.get("windows", {}) | ai_usage.windows(info)
+    else:
+        seen["tokens"] = ai_usage.tokens(getattr(message, "usage", None))
+        seen["apiCost"] = getattr(message, "total_cost_usd", None) or 0
 
 
 def _structured(result: Any, error: str | None, limit: Any) -> dict[str, Any]:
