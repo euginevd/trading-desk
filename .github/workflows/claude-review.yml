@@ -1,0 +1,50 @@
+name: claude-review
+
+# Claude reviews each PR when it opens or is marked ready (decision 103), against AGENTS.md,
+# code-standards.md, the threat model and known-mistakes.md, as inline comments that
+# `scripts/pr-findings.sh` lists with the rest (rule 16). Not on every push, to spare the plan's
+# usage; ask for another with @claude. Dependabot's PRs are skipped: the action refuses bots.
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: ${{ !github.event.pull_request.draft && github.event.pull_request.user.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: anthropics/claude-code-action@cc98b3ae241b0fcfb6a42a2690751afffecb4452 # v1.0.278
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review this pull request. First read AGENTS.md, docs/code-standards.md, the top risks
+            in docs/threat-model.md and the sections of docs/known-mistakes.md for the areas the
+            diff touches; for UI, docs/design-system.md.
+
+            Report only real problems: bugs, security issues, broken project rules, missing tests
+            on a main path. Post each as an inline comment on its line, with a one-line fix. Then
+            post one short summary comment with `gh pr comment`, saying plainly if nothing blocks.
+            Don't praise, restate the diff, or comment on style the linters already check.
+          claude_args: >-
+            --max-turns 30
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"

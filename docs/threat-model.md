@@ -1,6 +1,6 @@
 # Threat model
 
-The desk on the owner's machine, in Docker; each later stage extends this first. STRIDE on the data flow below, mapped to OWASP Top 10:2025 (A), API Security 2023 (API), LLM 2025 (LLM) and Agentic 2026 (ASI).
+The desk on the owner's machine, in Docker. STRIDE on the data flow below, mapped to OWASP Top 10:2025 (A), API Security 2023 (API), LLM 2025 (LLM) and Agentic 2026 (ASI).
 
 ## Data flow
 
@@ -37,8 +37,6 @@ flowchart LR
   class internet,machine boundary
 ```
 
-Circles: processes; cylinders: stores; dashed boxes: trust boundaries.
-
 | ID | Data | Class | Where |
 |:-:|------|-------|-------|
 | D1 | Binance key: read and spot trading | Secret | `.env` only |
@@ -58,12 +56,9 @@ In full: [threat-model/boundaries.md](threat-model/boundaries.md).
 - **TB3** `api` to Taostats and chain RPCs (TB8, decision 99): TLS, public addresses only.
 - **TB4** `api` to Anthropic, by API key or subscription (decision 48): figures, position and Profile, never keys or ids; replies schema-checked.
 - **TB5** `api` to CoinGecko: tickers, never amounts; logos checked for host, type and size.
-- **TB6** `api` to Telegram: token only in the URL, unlogged; messages, never keys, to the chat linked by code (decision 57); its one-use buttons place orders (decision 74, R12).
-- **TB7** Freqtrade and `api` (decisions 84, 87).
+- **TB6** `api` to Telegram: token only in the URL, unlogged; messages, never keys, to the chat linked by code (decision 57); its one-use buttons place orders (decision 74, R12).- **TB7** Freqtrade and `api` (decisions 84, 87).
 
 ## Top risks
-
-STRIDE: Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege.
 
 | ID | Risk | STRIDE | OWASP | Rating | Controls | Enforced at |
 |:-:|------|:------:|-------|:------:|----------|-------------|
@@ -79,6 +74,7 @@ STRIDE: Spoofing, Tampering, Repudiation, Information disclosure, Denial of serv
 | R10 | Outside text runs as markup | T | A05 | Low | Fixed-shape parsing; React escapes text; a content security policy *(planned)* | Code |
 | R11 | TradingView's widget, or a fake, acts on the desk | T, I | A08 | Low | Framed from TradingView's own origin, the only one the policy allows; none of its scripts run on the desk (decision 22) | Code |
 | R12 | A stolen or replayed Telegram button places an order | S, T, E | API2, ASI03 | High | A random one-use token per button that expires; taps only from the owner's linked chat (known-mistakes 29c); a tap runs the desk's checks: limits, kill switch, rules; logged (decision 74) | Code, Test |
+| R13 | `@claude` steered by issue text | T, E | LLM01 | Medium | Write-access callers, no bots; `main` only via a PR (decision 103) | Build |
 
 ## Compliance
 
