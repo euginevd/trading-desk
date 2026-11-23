@@ -46,5 +46,6 @@ jobs:
             post one short summary comment with `gh pr comment`, saying plainly if nothing blocks.
             Don't praise, restate the diff, or comment on style the linters already check.
           claude_args: >-
+            --model claude-opus-5-5
             --max-turns 30
             --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*)"
