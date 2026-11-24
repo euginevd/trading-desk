@@ -53,4 +53,4 @@ jobs:
           claude_args: >-
             --model claude-opus-5-5
             --max-turns 40
-            --append-system-prompt "Read AGENTS.md and the docs it lists before working, and follow them: one-line commits, no AI attribution lines, never push to main."
+            --append-system-prompt "Read AGENTS.md and the docs it lists before working, and follow them: one-line commits, no AI attribution lines, never push to main. Keep replies lean: a short list of what you did or found, with links to commits, files and lines; no preamble or restating the request. Asked to fix review findings (fix this, or fix all), fix each at its cause, push to the PR, and reply on each finding's thread with one line and the commit."
