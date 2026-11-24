@@ -56,11 +56,28 @@ jobs:
             - Otherwise keep it: the docs are silent, which is what this pass is for.
             Then add anything the diff does against a project rule that pass 1 missed.
 
-            Post each kept finding as an inline comment on its line: the problem, why it matters,
-            and a one-line fix, marked blocker, should-fix or nit. Then post one short summary
-            with `gh pr comment`: what blocks (or plainly "nothing blocks"), and the findings
-            dropped in pass 2 with what covers each. Don't praise, restate the diff, or comment
-            on style the linters already check.
+            How to post: lean, visual, actionable. Rate each finding 🔴 Blocker, 🟠 Should-fix
+            or ⚪ Nit.
+
+            Inline comments, for 🔴 and 🟠 only, one per finding, at most three short lines:
+              🔴 **Blocker:** <the problem, with a concrete example, in one line>
+              **Why:** <what goes wrong for the owner, in one line>
+              **Fix:** <one line>
+            When the fix is five lines or fewer on the commented lines, give it as a GitHub
+            ```suggestion block instead of the Fix line, so it can be committed in one click.
+
+            Then one summary with `gh pr comment`, in this shape and nothing more:
+              ### 🔴 <n> blocker · 🟠 <n> should-fix · ⚪ <n> nit
+              A table: | | Finding | Where |, one row per finding, a few words each, Where as
+              a link to the file and line in this PR.
+              <details><summary>Dropped in pass 2 (<n>)</summary> one line each: the finding,
+              then "covered by <decision or trade-off>"</details>
+              **Next:** reply `@claude fix this` on a finding, or `@claude fix all` here.
+            Leave out any part with nothing in it. If nothing was found, the whole summary is
+            "✅ Nothing blocks." plus the dropped list if there is one.
+
+            Don't praise, restate the diff, explain what you checked, or comment on style the
+            linters already check.
           claude_args: >-
             --model claude-opus-5-5
             --max-turns 30
