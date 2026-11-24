@@ -37,6 +37,7 @@ Your requirements, features and ideas, numbered, in your own words. In `producti
 32. The Trading account's cap back, once the owner wants one: today it has none (decision 97), trades spend what's free on Binance and the DCA book's ring-fence warning is off (`RING_FENCE` in pot.py). *(Asked 21 Nov 2026, "for now".)*
 33. Features only the old Trade page used, unreachable since the Trading account replaced it (decision 98): the trading agent's step-by-step Analyse (feature 65), price alerts, the Trade page's watchlists and coin ranking, and smart trades as one-off DCA deals (feature 47). Their api routes still answer. To decide: bring each back on a page, or delete it like the smart trades. *(Found 21 Nov 2026 in the audit's #6.)*
 34. Left from the 21 Nov 2026 audit, low risk on a single-owner local desk: a request id on DCA orders and the Trading account's add and reduce, so a resent request never places twice (the buttons are busy-guarded and nothing retries; audit 10); and a grid's stop below retrying the orders its cancel didn't take, as the kill switch now does (audit 3). *(Found 21 Nov 2026.)*
+35. Check Claude's review gate around 8 Dec 2026 (decision 103): how often it blocked wrongly, and how much of the weekly plan the reviews used. If the plan is tight, re-reviews after the first push on Sonnet; if it blocked wrongly more than once or twice, tighten what counts as a blocker. *(Asked 24 Nov 2026, when `review` became a required check.)*
 
 Later, from the project ideas doc, not started until listed above:
 
