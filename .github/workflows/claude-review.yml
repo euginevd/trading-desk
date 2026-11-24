@@ -83,8 +83,9 @@ jobs:
               as a link to the file and line in this PR.
               <details><summary>Dropped in pass 2 (<n>)</summary> one line each: the finding,
               then "covered by <decision or trade-off>"</details>
-              **Next:** reply `@claude fix this` on a finding, or `@claude fix all` here. A 🔴
-              blocks the merge until it's fixed, or you reply accepting it and push.
+              **Next:** reply `@claude fix this` on a finding's thread, or comment
+              `@claude fix all` at the bottom of the PR. A 🔴 blocks the merge until it's fixed,
+              or you reply accepting it on its thread and push.
             Leave out any part with nothing in it. If nothing is open, the whole summary is
             "✅ Nothing blocks." plus the dropped list if there is one.
 
