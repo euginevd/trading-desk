@@ -39,6 +39,7 @@ from api import (
     profile_routes,
     profile_v2,
     rebalance,
+    review_probe,
     risk,
     risk_big,
     scan_progress,
@@ -1302,6 +1303,14 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     },
     ("POST", "/alerts"): lambda s, _, b: _add_alert(s, b),
     ("GET", "/settings/ai"): lambda s, _q, _b: ai_client.view(s.store, s.signals),
+    ("GET", "/split"): lambda _s, q, _b: {
+        "shares": [
+            str(x)
+            for x in review_probe.split_evenly(
+                Decimal(q.get("total", "0")), int(q.get("parts", "1"))
+            )
+        ]
+    },
     ("PUT", "/settings/ai"): lambda s, _, b: ai_client.choose(s.store, s.audit, s.signals, b),
     ("PUT", "/settings/ai/key"): lambda s, _, b: _save_key(s, b),
     ("GET", "/coach"): lambda s, _q, _b: _coach(s, write=False),
