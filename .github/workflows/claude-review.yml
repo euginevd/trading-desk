@@ -69,18 +69,22 @@ jobs:
             How to post: lean, visual, actionable. Rate each finding 🔴 Blocker, 🟠 Should-fix
             or ⚪ Nit.
 
-            Inline comments, for new 🔴 and 🟠 only, one per finding, at most three short lines:
-              🔴 **Blocker:** <the problem, with a concrete example, in one line>
-              **Why:** <what goes wrong for the owner, in one line>
-              **Fix:** <one line>
+            Inline comments, for new 🔴 and 🟠 only, one per finding, blockers first, exactly
+            three lines of at most 20 words each, with only the single worst example:
+              🔴 **Blocker:** <the problem and one concrete example>
+              **Why:** <what goes wrong for the owner>
+              **Fix:** <the change>
             When the fix is five lines or fewer on the commented lines, give it as a GitHub
             ```suggestion block instead of the Fix line, so it can be committed in one click.
 
             Then one summary with `gh pr comment --edit-last --create-if-none`, so a re-review
             updates it, in this shape and nothing more:
-              ### 🔴 <n> blocker · 🟠 <n> should-fix · ⚪ <n> nit
-              A table: | | Finding | Where |, one row per open finding, a few words each, Where
-              as a link to the file and line in this PR.
+              ### ⛔ Merge blocked · <n> blocker · <n> should-fix · <n> nit
+              (or "### ✅ Ready to merge · <n> should-fix · <n> nit" when no 🔴 is open)
+              A table: | Rating | Finding | Where |, one row per open finding, blockers first.
+              Rating is the dot and its word ("🔴 Blocker", "🟠 Should-fix", "⚪ Nit"), never
+              the dot alone. Finding is a few words. Where links to that finding's inline
+              comment (its `html_url`, from the comments list above), shown as file:line.
               <details><summary>Dropped in pass 2 (<n>)</summary> one line each: the finding,
               then "covered by <decision or trade-off>"</details>
               **Next:** reply `@claude fix this` on a finding's thread, or comment
