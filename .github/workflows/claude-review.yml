@@ -62,9 +62,15 @@ jobs:
             A re-review (this PR already has your comments): read the existing review comments
             and their replies first, with
             `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`.
-            Don't post a finding again that's already there. A finding is closed when the code no
-            longer has it, or when the owner replied accepting it or naming what covers it; reply
-            "✅ Fixed" or "✅ Accepted" on its thread once, then leave it.
+            Don't post a finding again that's already there. A finding is closed only when:
+            - the code no longer has it ("✅ Fixed"), or
+            - a decision or trade-off now covers it, such as one added in this PR ("✅ Covered
+              by <decision>"), or
+            - a person accepted it: a reply on its thread whose author_association is OWNER,
+              MEMBER or COLLABORATOR, not a bot, starting "Accepted:" with a reason after it
+              ("✅ Accepted by @<login>: <reason>").
+            Anything else, including a reply with no reason, leaves it open. You never accept a
+            finding yourself. Reply on its thread once when it closes, then leave it.
 
             How to post: lean, visual, actionable. Rate each finding 🔴 Blocker, 🟠 Should-fix
             or ⚪ Nit.
@@ -87,11 +93,14 @@ jobs:
               comment (its `html_url`, from the comments list above), shown as file:line.
               <details><summary>Dropped in pass 2 (<n>)</summary> one line each: the finding,
               then "covered by <decision or trade-off>"</details>
-              **Next:** reply `@claude fix this` on a finding's thread, or comment
-              `@claude fix all` at the bottom of the PR. A 🔴 blocks the merge until it's fixed,
-              or you reply accepting it on its thread and push.
+              <details><summary>Accepted (<n>)</summary> one line each: the finding, then
+              "✅ Accepted by @<login>: <reason>"</details>
+              **Next:** on a finding's thread, reply `@claude fix this`; `Accepted: <reason>` for
+              this PR only; or `@claude record this as an exception: <reason>` to allow it from
+              now on. Or comment `@claude fix all` at the bottom of the PR. A 🔴 blocks the merge
+              until it's closed; push, or close and reopen the PR, to re-check.
             Leave out any part with nothing in it. If nothing is open, the whole summary is
-            "✅ Nothing blocks." plus the dropped list if there is one.
+            "✅ Nothing blocks." plus the dropped and accepted lists if there are any.
 
             Don't praise, restate the diff, explain what you checked, or comment on style the
             linters already check.
