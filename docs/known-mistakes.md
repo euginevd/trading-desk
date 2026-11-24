@@ -25,7 +25,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 
 ## CI
 
-8a to 8d, on workflow inputs, the AWS CLI, the actions allow list and Claude's workflows: [known-mistakes/ci.md](known-mistakes/ci.md).
+8a to 8g, on workflow inputs, the AWS CLI, the actions allow list and Claude's workflows: [known-mistakes/ci.md](known-mistakes/ci.md).
 
 ## AWS and Aurora DSQL
 
