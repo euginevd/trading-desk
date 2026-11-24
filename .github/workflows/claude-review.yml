@@ -5,7 +5,8 @@ name: claude-review
 # decisions, threat model, trade-offs and rules, dropping what they cover. Inline comments that
 # `scripts/pr-findings.sh` lists with the rest (rule 16), and one summary, kept up to date.
 # A gate: the check fails while an open 🔴 blocker remains, so it re-reviews on every push.
-# If Claude can't run (the plan's limit, an outage), it warns and doesn't block. Bots' PRs skip.
+# If Claude can't run (the plan's limit, an outage), it says so on the PR, and FAIL_CLOSED in the
+# gate step decides whether that blocks. Bots' PRs skip; Claude's own pushes are reviewed.
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
@@ -37,6 +38,9 @@ jobs:
         continue-on-error: true # a run that can't happen warns below rather than blocks
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Claude's own fixes are pushed as the claude app: review them too, or its push would
+          # skip the review and open the gate (known-mistakes 8e).
+          allowed_bots: claude
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
@@ -116,10 +120,28 @@ jobs:
         env:
           OUTCOME: ${{ steps.claude.outcome }}
           RESULT: ${{ steps.claude.outputs.structured_output }}
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          # When the review doesn't run: "true" blocks the merge, "false" lets it through. A PR
+          # that changes Claude's workflows always passes, as Claude can't run on it.
+          FAIL_CLOSED: "true"
         run: |
           if [ "$OUTCOME" != "success" ] || [ -z "$RESULT" ]; then
-            echo "::warning::Claude's review didn't run (the plan's limit, an outage, or a workflow change on this PR): not gating. Ask for one with @claude review."
-            exit 0
+            if gh pr diff "$PR" --name-only | grep -q '^\.github/workflows/claude'; then
+              echo "::warning::This PR changes Claude's workflows, so the review can't run on it: passing."
+              exit 0
+            fi
+            if [ "$FAIL_CLOSED" = "true" ]; then
+              note="⚠️ **Claude's review didn't run**, so the merge stays blocked. Push or reopen the PR to retry; see the run's log for why."
+              code=1
+            else
+              note="⚠️ **Claude's review didn't run**, so this PR isn't gated: check it yourself before merging. Push or reopen the PR to retry; see the run's log for why."
+              code=0
+            fi
+            gh pr comment "$PR" --body "$note"
+            echo "::warning::Claude's review didn't run."
+            exit "$code"
           fi
           blockers=$(printf '%s' "$RESULT" | jq -r '.blockers // 0')
           if [ "$blockers" -gt 0 ]; then
