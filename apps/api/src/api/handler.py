@@ -715,6 +715,23 @@ def _count_token(store: Store, body: dict[str, Any]) -> None:
 MAX_COST = Decimal(10_000_000)
 
 
+MAX_SPLIT_PARTS = 50
+
+
+def _split(query: dict[str, str]) -> dict[str, Any]:
+    """A total split into shares; refuses anything but a finite total > 0 and 1-50 parts."""
+    try:
+        total = Decimal(query.get("total", "").strip())
+    except InvalidOperation:
+        raise Refused("Total must be a number.") from None
+    if not total.is_finite() or total <= 0 or total > MAX_COST:
+        raise Refused("Total must be more than 0.")
+    parts = query.get("parts", "").strip()
+    if not parts.isdecimal() or not 1 <= int(parts) <= MAX_SPLIT_PARTS:
+        raise Refused(f"Parts must be a whole number from 1 to {MAX_SPLIT_PARTS}.")
+    return {"shares": [str(x) for x in review_probe.split_evenly(total, int(parts))]}
+
+
 def live_set_cost(body: dict[str, Any]) -> dict[str, Any]:
     """Saves, or clears with null, the owner's average cost for a holding (decision 27)."""
     source = body.get("source")
@@ -1303,14 +1320,7 @@ SERVICE_ROUTES: dict[tuple[str, str], ServiceRoute] = {
     },
     ("POST", "/alerts"): lambda s, _, b: _add_alert(s, b),
     ("GET", "/settings/ai"): lambda s, _q, _b: ai_client.view(s.store, s.signals),
-    ("GET", "/split"): lambda _s, q, _b: {
-        "shares": [
-            str(x)
-            for x in review_probe.split_evenly(
-                Decimal(q.get("total", "0")), int(q.get("parts", "1"))
-            )
-        ]
-    },
+    ("GET", "/split"): lambda _s, q, _b: _split(q),
     ("PUT", "/settings/ai"): lambda s, _, b: ai_client.choose(s.store, s.audit, s.signals, b),
     ("PUT", "/settings/ai/key"): lambda s, _, b: _save_key(s, b),
     ("GET", "/coach"): lambda s, _q, _b: _coach(s, write=False),
