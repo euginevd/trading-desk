@@ -25,8 +25,7 @@ Mistakes an agent has made, each with its one-line fix, by area ([AGENTS.md](../
 
 ## CI
 
-8a. A boolean `workflow_dispatch` input is empty on a push: test the event, as in `github.event_name != 'workflow_dispatch' || inputs.deploy`.
-8b. The AWS CLI on GitHub's runners reads `file:///dev/stdin` as empty: pass a request through a private temporary file, then delete it.
+8a to 8d, on workflow inputs, the AWS CLI, the actions allow list and Claude's workflows: [known-mistakes/ci.md](known-mistakes/ci.md).
 
 ## AWS and Aurora DSQL
 
