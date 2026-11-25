@@ -2,7 +2,7 @@
 # The api (decision 14). Built from the repo root: docker build -f apps/api/Dockerfile .
 
 # Build: uv's own image, the same one CI uses, pinned by digest.
-FROM ghcr.io/astral-sh/uv:0.13.9-python3.13-trixie-slim@sha256:803d2b80b6913e562837d69f037f39bfea80f51ef3f0dd0d8fdffbd95688fd6d AS build
+FROM ghcr.io/astral-sh/uv:0.13.10-python3.13-trixie-slim@sha256:00e2b362982a5ce19eb3a51453ed76af92ccaaedccc0236fae83b27d994ae0f3 AS build
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy UV_PYTHON_DOWNLOADS=never
 WORKDIR /app
 COPY pyproject.toml uv.lock .python-version ./
