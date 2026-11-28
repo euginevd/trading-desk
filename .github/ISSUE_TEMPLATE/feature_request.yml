@@ -1,0 +1,22 @@
+name: Feature request
+description: An idea for a page, an agent, a bot or the rules that keep orders safe.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem it solves
+      description: What's hard or missing today for the owner.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What you'd like
+    validations:
+      required: true
+  - type: textarea
+    id: risk
+    attributes:
+      label: Money or security impact
+      description: Exchange permissions, order or budget limits, model calls or new keys it would need, if any.

@@ -1,0 +1,43 @@
+name: Bug report
+description: A page, an agent, an order or the pipeline doesn't work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: A security problem? Don't file it here; report it privately (see SECURITY.md). Never paste API keys, wallet addresses or balances.
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where
+      options:
+        - Dashboard
+        - Portfolio
+        - Journal
+        - Trade
+        - Risk
+        - Bots
+        - Profile or agents
+        - Settings
+        - Backtest
+        - Infrastructure or the pipeline
+        - Docs
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what you expected
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to reproduce it
+      placeholder: "1. Start the desk on demo data\n2. Open Trade\n3. ..."
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Commit
+      placeholder: e.g. main at 3f2a1c9
